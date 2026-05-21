@@ -38,7 +38,11 @@ public sealed class AutoFilterDialog : Window
     private readonly RadioButton _sortNone = new() { Content = "_No sort", IsChecked = true };
     private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
     private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
+    private readonly Button _clearFilterButton = new() { Content = "_Clear Filter From", Margin = new Thickness(0, 8, 0, 0) };
     private readonly Button _filterByColorButton = new() { Content = "Filter by _Color", Visibility = Visibility.Collapsed };
+    private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
+    private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
+    private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };
     private CellColor? _selectedColorFilter;
 
     public AutoFilterDialogResult Result { get; private set; }
@@ -52,6 +56,8 @@ public sealed class AutoFilterDialog : Window
         : this(CreateDialogItems(menuPlan))
     {
         Title = $"AutoFilter - {menuPlan.HeaderText}";
+        _clearFilterButton.Content = $"_Clear Filter From \"{menuPlan.HeaderText}\"";
+        ShowFilterFamilyButton(menuPlan.FilterKind);
         var suggestions = GetCriteriaSuggestions(menuPlan);
         if (suggestions.Count > 0)
         {
@@ -84,9 +90,24 @@ public sealed class AutoFilterDialog : Window
         stack.Children.Add(_sortNone);
         stack.Children.Add(_sortAscending);
         stack.Children.Add(_sortDescending);
+        _clearFilterButton.Click += (_, _) =>
+        {
+            _selectedColorFilter = null;
+            _criteriaBox.Clear();
+            _searchBox.Clear();
+            _sortNone.IsChecked = true;
+            ReplaceAllItems(SelectAll(_allItems));
+        };
+        stack.Children.Add(_clearFilterButton);
         _filterByColorButton.Margin = new Thickness(0, 8, 0, 0);
         _filterByColorButton.Click += FilterByColorButton_Click;
         stack.Children.Add(_filterByColorButton);
+        foreach (var filterButton in new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton })
+        {
+            filterButton.Margin = new Thickness(0, 8, 0, 0);
+            filterButton.Click += (_, _) => _criteriaBox.Focus();
+            stack.Children.Add(filterButton);
+        }
 
         stack.Children.Add(new Label { Content = "_Search", Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
         _searchBox.Margin = new Thickness(0, 0, 0, 8);
@@ -109,9 +130,9 @@ public sealed class AutoFilterDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         };
         var selectAll = new Button { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
-        selectAll.Click += (_, _) => ReplaceAllItems(SelectAll(_allItems));
+        selectAll.Click += (_, _) => ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected: true));
         var clearAll = new Button { Content = "_Clear All", Width = 88 };
-        clearAll.Click += (_, _) => ReplaceAllItems(ClearAll(_allItems));
+        clearAll.Click += (_, _) => ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected: false));
         selectionRow.Children.Add(selectAll);
         selectionRow.Children.Add(clearAll);
         stack.Children.Add(selectionRow);
@@ -172,6 +193,30 @@ public sealed class AutoFilterDialog : Window
         return items.Select(item => item with { IsSelected = false }).ToList();
     }
 
+    public static IReadOnlyList<AutoFilterDialogItem> SetSelectionForSearch(
+        IEnumerable<AutoFilterDialogItem> items,
+        string? searchText,
+        bool isSelected)
+    {
+        var visibleValues = FilterItems(items, searchText)
+            .Select(item => item.Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return items
+            .Select(item => visibleValues.Contains(item.Value)
+                ? item with { IsSelected = isSelected }
+                : item)
+            .ToList();
+    }
+
+    public static string GetFilterFamilyHeader(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => "Number Filters",
+            AutoFilterMenuFilterKind.Date => "Date Filters",
+            _ => "Text Filters"
+        };
+
     public static AutoFilterDialogResult BuildResult(
         AutoFilterSortDirection sortDirection,
         IEnumerable<AutoFilterDialogItem> items,
@@ -204,6 +249,19 @@ public sealed class AutoFilterDialog : Window
 
     public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
+
+    private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
+    {
+        _textFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Text
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _numberFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Number
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _dateFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Date
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
 
     private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries

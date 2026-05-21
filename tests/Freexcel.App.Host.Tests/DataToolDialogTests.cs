@@ -303,6 +303,21 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_ExposesExcelStyleFunctionLabelsAndLinkOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("_functionBox");
+        source.Should().Contain("_topRowBox");
+        source.Should().Contain("_leftColumnBox");
+        source.Should().Contain("_createLinksBox");
+        source.Should().Contain("_Function:");
+        source.Should().Contain("_Top row");
+        source.Should().Contain("_Left column");
+        source.Should().Contain("Create _links to source data");
+    }
+
+    [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
     {
         var sheetId = SheetId.New();
