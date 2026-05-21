@@ -171,6 +171,19 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_NumberTab_UsesExcelLikeCategoryAndSampleLayout()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("x:Name=\"NumberCategoryList\"");
+        xaml.Should().Contain("Text=\"Category:\"");
+        xaml.Should().Contain("Text=\"Sample\"");
+        xaml.Should().Contain("x:Name=\"NumberDecimalPlacesBox\"");
+        xaml.Should().Contain("x:Name=\"NumberNegativeNumbersList\"");
+        xaml.Should().Contain("x:Name=\"NumberSymbolCombo\"");
+    }
+
+    [Fact]
     public void FormatCellsDialog_DoesNotEmitUnsupportedTextRotation()
     {
         StaTestRunner.Run(() =>
