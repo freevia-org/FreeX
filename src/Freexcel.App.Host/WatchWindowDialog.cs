@@ -43,15 +43,26 @@ public sealed class WatchWindowDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var refresh = new Button { Content = "Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var add = new Button
+        {
+            Content = "_Add Watch",
+            Width = 96,
+            Height = 26,
+            Margin = new Thickness(4, 0, 0, 0),
+            IsEnabled = false,
+            ToolTip = "Select cells in the worksheet, then use Formulas > Add Watch."
+        };
+        buttons.Children.Add(add);
+
+        var refresh = new Button { Content = "_Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
 
-        var delete = new Button { Content = "Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var delete = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         delete.Click += (_, _) => DeleteSelectedWatch();
         buttons.Children.Add(delete);
 
-        var close = new Button { Content = "Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
@@ -63,9 +74,10 @@ public sealed class WatchWindowDialog : Window
             {
                 new GridViewColumn { Header = "Book", Width = 90, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
                 new GridViewColumn { Header = "Sheet", Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
+                new GridViewColumn { Header = "Name", Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
                 new GridViewColumn { Header = "Cell", Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
                 new GridViewColumn { Header = "Value", Width = 120, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
-                new GridViewColumn { Header = "Formula", Width = 190, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
+                new GridViewColumn { Header = "Formula", Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
             }
         };
         root.Children.Add(_listView);
@@ -81,6 +93,7 @@ public sealed class WatchWindowDialog : Window
             _rows.Add(new WatchWindowRow(
                 "This Workbook",
                 entry.SheetName,
+                "",
                 entry.Address.ToA1(),
                 entry.ValueText,
                 entry.FormulaText ?? "",
@@ -115,6 +128,7 @@ public sealed class WatchWindowDialog : Window
     private sealed record WatchWindowRow(
         string Book,
         string Sheet,
+        string Name,
         string Cell,
         string Value,
         string Formula,

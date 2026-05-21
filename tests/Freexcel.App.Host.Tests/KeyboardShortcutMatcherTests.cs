@@ -167,6 +167,20 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.A, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(Key.Oem3, NumberFormatShortcut.General)]
     [InlineData(Key.D1, NumberFormatShortcut.Number)]
     [InlineData(Key.D2, NumberFormatShortcut.Time)]

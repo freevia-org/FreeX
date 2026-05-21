@@ -1,6 +1,7 @@
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -58,6 +59,20 @@ public sealed class RemainingDialogTests
         result.Should().Be(new FillSeriesStepDialogResult(-2));
     }
 
+    [Fact]
+    public void FillSeriesStepDialog_CreateResult_CapturesExcelSeriesOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("enum FillSeriesDirection");
+        source.Should().Contain("enum FillSeriesType");
+        source.Should().Contain("enum FillSeriesDateUnit");
+        source.Should().Contain("FillSeriesDirection.Rows");
+        source.Should().Contain("FillSeriesType.Date");
+        source.Should().Contain("FillSeriesDateUnit.Month");
+        source.Should().Contain("StopValue");
+    }
+
     [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
@@ -74,6 +89,19 @@ public sealed class RemainingDialogTests
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
 
         result.Should().Be(new ZoomDialogResult(125));
+    }
+
+    [Fact]
+    public void ZoomDialog_ExposesExcelPresetPercentsAndCustomPercent()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("ZoomPresets");
+        source.Should().Contain("200");
+        source.Should().Contain("100");
+        source.Should().Contain("75");
+        source.Should().Contain("_customZoomButton");
+        source.Should().Contain("_zoomBox");
     }
 
     [Fact]
@@ -104,6 +132,27 @@ public sealed class RemainingDialogTests
             .Should()
             .Contain("could not find a solution")
             .And.Contain("98.5");
+    }
+
+    [Fact]
+    public void GoalSeekStatusDialog_ExposesKeyboardAccessKeysForButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("Content = \"_Keep Result\"");
+        source.Should().Contain("Content = \"_Restore Original Values\"");
+    }
+
+    [Fact]
+    public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("Target value:");
+        source.Should().Contain("Current value:");
+        source.Should().Contain("Content = \"_Keep Result\"");
+        source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("DialogButtonRowFactory.Create");
     }
 
     [Fact]
@@ -140,6 +189,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void StatusDialogs_UseSharedExcelStyleButtonRows()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_TryCreateResult_RequiresPositivePeriods()
     {
         ForecastSheetDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
@@ -164,6 +222,17 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_ExposesRangePickerButtonsForDataAndLocation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("_dataRangePickerButton");
+        source.Should().Contain("_locationPickerButton");
+        source.Should().Contain("Select Data Range");
+        source.Should().Contain("Select Location Range");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
@@ -181,5 +250,45 @@ public sealed class RemainingDialogTests
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")
             .Should()
             .Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+    }
+
+    [Fact]
+    public void SpellCheckDialog_ExposesExcelLikeIgnoreChangeAndAddActions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("SpellCheckDialogAction.Add");
+        source.Should().Contain("Content = \"_Ignore\"");
+        source.Should().Contain("Content = \"_Change\"");
+        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("CreateAddResult");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_ExposesWorkbookSheetRangePdfAndCsvChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("Content = \"_Workbook\"");
+        source.Should().Contain("Content = \"Active _sheet(s)\"");
+        source.Should().Contain("Content = \"Selected _range\"");
+        source.Should().Contain("PDF options");
+        source.Should().Contain("Content = \"_Ignore print areas\"");
+        source.Should().Contain("CSV options");
+        source.Should().Contain("Content = \"Save _only the active sheet\"");
+        source.Should().Contain("Content = \"CSV _delimiter:\"");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesExcelLikePreviewToolbarAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"_Previous Page\"");
+        source.Should().Contain("Content = \"_Next Page\"");
+        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Content = \"_Margins\"");
+        source.Should().Contain("Content = \"Page _Setup...\"");
+        source.Should().Contain("Content = \"_Print...\"");
     }
 }

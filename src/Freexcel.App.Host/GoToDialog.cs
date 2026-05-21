@@ -8,6 +8,7 @@ public sealed class GoToDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _addressBox = new();
+    private readonly ListBox _historyList = new();
 
     public CellAddress SelectedAddress { get; private set; }
 
@@ -15,29 +16,56 @@ public sealed class GoToDialog : Window
     {
         _sheetId = sheetId;
         Title = "Go To";
-        Width = 320;
-        Height = 150;
+        Width = 380;
+        Height = 300;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new Grid { Margin = new Thickness(12) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         root.Children.Add(new Label
+        {
+            Content = "_Go to:",
+            Target = _historyList,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 8, 4)
+        });
+
+        _historyList.Items.Add(defaultAddress);
+        _historyList.ToolTip = "Selection history";
+        _historyList.MinHeight = 130;
+        _historyList.SelectionChanged += (_, _) =>
+        {
+            if (_historyList.SelectedItem is string reference)
+                _addressBox.Text = reference;
+        };
+        _historyList.SelectedIndex = 0;
+        Grid.SetRow(_historyList, 1);
+        Grid.SetColumnSpan(_historyList, 2);
+        root.Children.Add(_historyList);
+
+        var referenceLabel = new Label
         {
             Content = "_Reference:",
             Target = _addressBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 8, 12)
-        });
+            Margin = new Thickness(0, 8, 8, 12)
+        };
+        Grid.SetRow(referenceLabel, 2);
+        root.Children.Add(referenceLabel);
 
         _addressBox.Text = defaultAddress;
-        _addressBox.Margin = new Thickness(0, 0, 0, 12);
+        _addressBox.Margin = new Thickness(0, 8, 0, 12);
+        Grid.SetRow(_addressBox, 2);
         Grid.SetColumn(_addressBox, 1);
         root.Children.Add(_addressBox);
 
@@ -46,10 +74,13 @@ public sealed class GoToDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
-        Grid.SetRow(buttons, 1);
+        Grid.SetRow(buttons, 3);
         Grid.SetColumnSpan(buttons, 2);
         root.Children.Add(buttons);
 
+        var special = new Button { Content = "S_pecial...", Width = 86, Margin = new Thickness(0, 0, 8, 0) };
+        special.Click += (_, _) => MessageBox.Show(this, "Use Go To Special from the Find & Select menu to choose a selection type.", "Go To", MessageBoxButton.OK, MessageBoxImage.Information);
+        buttons.Children.Add(special);
         var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);

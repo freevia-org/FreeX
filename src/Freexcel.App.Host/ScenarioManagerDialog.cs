@@ -8,8 +8,10 @@ public sealed record ScenarioManagerItem(string Name);
 
 public sealed class ScenarioManagerDialog : Window
 {
-    private readonly ComboBox _scenarioBox = new();
+    private readonly ListBox _scenarioList = new();
     private readonly TextBox _newNameBox = new();
+    private readonly TextBox _changingCellsBox = new();
+    private readonly TextBox _commentBox = new();
 
     public ScenarioManagerAction SelectedAction { get; private set; } = ScenarioManagerAction.Show;
     public string? SelectedScenarioName { get; private set; }
@@ -19,29 +21,72 @@ public sealed class ScenarioManagerDialog : Window
     {
         Title = "Scenario Manager";
         Width = 360;
-        Height = 260;
+        Height = 390;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock { Text = "Scenarios:", Margin = new Thickness(0, 0, 0, 4) });
-        _scenarioBox.ItemsSource = BuildScenarioItems(workbook);
-        _scenarioBox.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
-        _scenarioBox.SelectedIndex = _scenarioBox.Items.Count > 0 ? 0 : -1;
-        root.Children.Add(_scenarioBox);
+        var root = new Grid { Margin = new Thickness(12) };
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        root.Children.Add(new TextBlock { Text = "New scenario name:", Margin = new Thickness(0, 12, 0, 4) });
+        var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetRow(body, 0);
+        root.Children.Add(body);
+
+        var left = new StackPanel();
+        Grid.SetColumn(left, 0);
+        body.Children.Add(left);
+
+        left.Children.Add(new Label { Content = "_Scenarios:", Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        _scenarioList.ItemsSource = BuildScenarioItems(workbook);
+        _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
+        _scenarioList.SelectedIndex = _scenarioList.Items.Count > 0 ? 0 : -1;
+        _scenarioList.Height = 118;
+        left.Children.Add(_scenarioList);
+
+        var editor = new GroupBox
+        {
+            Header = "Add/Edit Scenario",
+            Margin = new Thickness(0, 12, 0, 0),
+            Padding = new Thickness(8)
+        };
+        left.Children.Add(editor);
+
+        var fields = new Grid();
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        fields.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(92) });
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        editor.Content = fields;
+
+        AddField(fields, row: 0, "Scenario _name:", _newNameBox);
         _newNameBox.Text = workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {workbook.Scenarios.Count + 1}";
-        root.Children.Add(_newNameBox);
+        AddField(fields, row: 1, "Changing _cells:", _changingCellsBox);
+        AddField(fields, row: 2, "_Comment:", _commentBox);
 
-        var buttons = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-        root.Children.Add(buttons);
-        AddActionButton(buttons, "Add", ScenarioManagerAction.Save);
-        AddActionButton(buttons, "Show", ScenarioManagerAction.Show);
-        AddActionButton(buttons, "List", ScenarioManagerAction.List);
-        AddActionButton(buttons, "Summary", ScenarioManagerAction.Report);
-        buttons.Children.Add(new Button { Content = "Close", Width = 72, Margin = new Thickness(4), IsCancel = true });
+        var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
+        Grid.SetColumn(sideButtons, 1);
+        body.Children.Add(sideButtons);
+        AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Save);
+        AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Save);
+        AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.List, isEnabled: false);
+        AddActionButton(sideButtons, "_Merge...", ScenarioManagerAction.List, isEnabled: false);
+        AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show);
+        AddActionButton(sideButtons, "S_ummary...", ScenarioManagerAction.Report);
+
+        var closeRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        Grid.SetRow(closeRow, 1);
+        root.Children.Add(closeRow);
+        closeRow.Children.Add(new Button { Content = "_Close", Width = 72, IsCancel = true });
 
         Content = root;
     }
@@ -61,9 +106,29 @@ public sealed class ScenarioManagerDialog : Window
         return false;
     }
 
-    private void AddActionButton(Panel panel, string label, ScenarioManagerAction action)
+    private static void AddField(Grid grid, int row, string label, Control field)
     {
-        var button = new Button { Content = label, Width = 72, Margin = new Thickness(4) };
+        var text = new Label
+        {
+            Content = label,
+            Target = field,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8)
+        };
+        Grid.SetRow(text, row);
+        Grid.SetColumn(text, 0);
+        grid.Children.Add(text);
+
+        field.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(field, row);
+        Grid.SetColumn(field, 1);
+        grid.Children.Add(field);
+    }
+
+    private void AddActionButton(Panel panel, string label, ScenarioManagerAction action, bool isEnabled = true)
+    {
+        var button = new Button { Content = label, Width = 82, Margin = new Thickness(0, 0, 0, 6), IsEnabled = isEnabled };
         button.Click += (_, _) => Accept(action);
         panel.Children.Add(button);
     }
@@ -71,7 +136,7 @@ public sealed class ScenarioManagerDialog : Window
     private void Accept(ScenarioManagerAction action)
     {
         SelectedAction = action;
-        SelectedScenarioName = (_scenarioBox.SelectedItem as ScenarioManagerItem)?.Name;
+        SelectedScenarioName = (_scenarioList.SelectedItem as ScenarioManagerItem)?.Name;
         NewScenarioName = _newNameBox.Text;
         DialogResult = true;
     }

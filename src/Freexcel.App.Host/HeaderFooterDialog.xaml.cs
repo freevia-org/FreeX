@@ -1,10 +1,14 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
 public partial class HeaderFooterDialog : Window
 {
+    private TextBox? _activeTextBox;
+
     public WorksheetHeaderFooter Header { get; private set; }
     public WorksheetHeaderFooter Footer { get; private set; }
     public WorksheetHeaderFooter FirstPageHeader { get; private set; }
@@ -44,6 +48,56 @@ public partial class HeaderFooterDialog : Window
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleWithDocument;
         AlignWithMarginsBox.IsChecked = AlignWithMargins;
+        _activeTextBox = HeaderCenterBox;
+    }
+
+    public static string InsertToken(string text, int caretIndex, string token)
+    {
+        var boundedCaretIndex = Math.Clamp(caretIndex, 0, text.Length);
+        return text.Insert(boundedCaretIndex, token);
+    }
+
+    private void HeaderFooterBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+            _activeTextBox = textBox;
+    }
+
+    private void InsertTokenButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string token })
+            return;
+
+        InsertTokenIntoActiveBox(token);
+    }
+
+    private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyPreset(HeaderCenterBox, HeaderPresetBox.SelectedItem);
+    }
+
+    private void FooterPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyPreset(FooterCenterBox, FooterPresetBox.SelectedItem);
+    }
+
+    private static void ApplyPreset(TextBox target, object? selectedItem)
+    {
+        if (selectedItem is not ComboBoxItem { Tag: string preset })
+            return;
+
+        target.Text = preset;
+        target.CaretIndex = target.Text.Length;
+        target.Focus();
+    }
+
+    private void InsertTokenIntoActiveBox(string token)
+    {
+        var target = _activeTextBox ?? HeaderCenterBox;
+        var caretIndex = target.CaretIndex;
+        target.Text = InsertToken(target.Text, caretIndex, token);
+        target.CaretIndex = caretIndex + token.Length;
+        target.Focus();
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)

@@ -11,20 +11,22 @@ public sealed record ColorPickerThemeColumn(string Name, IReadOnlyList<ColorPick
 public partial class ColorPickerDialog : Window
 {
     private bool _updatingText;
+    private readonly CellColor? _currentColor;
 
     public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false)
     {
         InitializeComponent();
 
         AllowNoColor = allowNoColor;
+        _currentColor = initialColor;
         SelectedColor = initialColor;
         NoColorButton.Visibility = allowNoColor ? Visibility.Visible : Visibility.Collapsed;
         BuildPaletteButtons();
 
+        SetPreview(CurrentForegroundPreview, CurrentBackgroundPreview, CurrentBackgroundText, _currentColor);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, initialColor);
         if (initialColor is { } color)
-            SelectColor(color);
-        else
-            SetPreview(CurrentColorPreview, null);
+            SetCustomColorText(color);
     }
 
     public CellColor? SelectedColor { get; private set; }
@@ -40,16 +42,16 @@ public partial class ColorPickerDialog : Window
     public static IReadOnlyList<ColorPickerThemeColumn> BuildThemePalette() =>
         new[]
         {
-            Column("Text/Background", "#000000", "#FFFFFF", "#F2F2F2", "#D9D9D9", "#808080", "#404040"),
-            Column("Text/Background 2", "#F7F7F7", "#1A1A1A", "#7F7F7F", "#595959", "#262626", "#0D0D0D"),
+            Column("Text/Background Dark 1", "#000000", "#7F7F7F", "#595959", "#3F3F3F", "#262626", "#0D0D0D"),
+            Column("Text/Background Light 1", "#FFFFFF", "#F2F2F2", "#D9D9D9", "#BFBFBF", "#A6A6A6", "#808080"),
+            Column("Text/Background Dark 2", "#44546A", "#D6DCE4", "#ADB9CA", "#8497B0", "#323E4F", "#222A35"),
+            Column("Text/Background Light 2", "#E7E6E6", "#D0CECE", "#AEAAAA", "#757171", "#3A3838", "#171616"),
             Column("Accent 1", "#4472C4", "#D9E2F3", "#B4C6E7", "#8EAADB", "#2F5597", "#1F3864"),
             Column("Accent 2", "#ED7D31", "#FCE4D6", "#F8CBAD", "#F4B183", "#C55A11", "#833C0C"),
             Column("Accent 3", "#A5A5A5", "#EDEDED", "#DBDBDB", "#C9C9C9", "#7B7B7B", "#525252"),
             Column("Accent 4", "#FFC000", "#FFF2CC", "#FFE699", "#FFD966", "#BF9000", "#7F6000"),
             Column("Accent 5", "#5B9BD5", "#DDEBF7", "#BDD7EE", "#9DC3E6", "#2E75B6", "#1F4E79"),
-            Column("Accent 6", "#70AD47", "#E2F0D9", "#C6E0B4", "#A9D18E", "#548235", "#375623"),
-            Column("Hyperlink", "#0563C1", "#DDEBFF", "#B8D6FF", "#8DB8F2", "#154F9C", "#17365D"),
-            Column("Followed Hyperlink", "#954F72", "#EADCF8", "#D6BCEB", "#B48AD6", "#7030A0", "#4C1D73")
+            Column("Accent 6", "#70AD47", "#E2F0D9", "#C6E0B4", "#A9D18E", "#548235", "#375623")
         };
 
     public static IReadOnlyList<ColorPickerSwatch> BuildStandardSwatches() =>
@@ -78,7 +80,7 @@ public partial class ColorPickerDialog : Window
             return;
 
         SelectedColor = color;
-        SetPreview(NewColorPreview, color);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -95,7 +97,7 @@ public partial class ColorPickerDialog : Window
         }
 
         SelectedColor = color;
-        SetPreview(NewColorPreview, color);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         DialogResult = true;
     }
 
@@ -121,14 +123,18 @@ public partial class ColorPickerDialog : Window
 
     private void BuildPaletteButtons()
     {
-        foreach (var swatch in BuildThemePalette().SelectMany(column => column.Shades))
-            ThemeColorsPanel.Children.Add(CreateSwatchButton(swatch));
+        var themeColumns = BuildThemePalette();
+        for (var row = 0; row < themeColumns[0].Shades.Count; row++)
+        {
+            foreach (var column in themeColumns)
+                ThemeColorsPanel.Children.Add(CreateSwatchButton(column.Shades[row], column.Name));
+        }
 
         foreach (var swatch in BuildStandardSwatches())
             StandardColorsPanel.Children.Add(CreateSwatchButton(swatch));
     }
 
-    private Button CreateSwatchButton(ColorPickerSwatch swatch)
+    private Button CreateSwatchButton(ColorPickerSwatch swatch, string? groupName = null)
     {
         var button = new Button
         {
@@ -138,7 +144,7 @@ public partial class ColorPickerDialog : Window
             Padding = new Thickness(0),
             Background = ToBrush(swatch.Color),
             BorderBrush = Brushes.Gray,
-            ToolTip = swatch.Hex,
+            ToolTip = groupName is null ? swatch.Hex : $"{groupName} {swatch.Hex}",
             Tag = swatch.Color
         };
         button.Click += SwatchButton_Click;
@@ -154,20 +160,38 @@ public partial class ColorPickerDialog : Window
     private void SelectColor(CellColor color)
     {
         SelectedColor = color;
-        SetPreview(CurrentColorPreview, color);
-        SetPreview(NewColorPreview, color);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
+        SetCustomColorText(color);
+    }
+
+    private void SetCustomColorText(CellColor color)
+    {
         _updatingText = true;
         CustomColorTextBox.Text = ColorInputParser.FormatHexColor(color);
         _updatingText = false;
     }
 
-    private static void SetPreview(Border border, CellColor? color)
+    private static void SetPreview(TextBlock foregroundPreview, Border backgroundPreview, TextBlock backgroundText, CellColor? color)
     {
-        border.Background = color is { } selected
-            ? ToBrush(selected)
-            : Brushes.Transparent;
+        if (color is not { } selected)
+        {
+            foregroundPreview.Foreground = SystemColors.GrayTextBrush;
+            backgroundPreview.Background = Brushes.Transparent;
+            backgroundText.Foreground = SystemColors.ControlTextBrush;
+            return;
+        }
+
+        foregroundPreview.Foreground = ToBrush(selected);
+        backgroundPreview.Background = ToBrush(selected);
+        backgroundText.Foreground = GetReadableBrush(selected);
     }
 
     private static SolidColorBrush ToBrush(CellColor color) =>
         new(Color.FromRgb(color.R, color.G, color.B));
+
+    private static Brush GetReadableBrush(CellColor color)
+    {
+        var luminance = (0.299 * color.R) + (0.587 * color.G) + (0.114 * color.B);
+        return luminance > 140 ? Brushes.Black : Brushes.White;
+    }
 }

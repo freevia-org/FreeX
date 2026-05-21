@@ -23,6 +23,50 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialog_ExposesExcelWizardStepStateAndSourceModeChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        source.Should().Contain("_stepOneIndicator");
+        source.Should().Contain("_stepTwoIndicator");
+        source.Should().Contain("_stepThreeIndicator");
+        source.Should().Contain("Step 1 of 3");
+        source.Should().Contain("_delimitedButton");
+        source.Should().Contain("_fixedWidthButton");
+        source.Should().Contain("Delimited");
+        source.Should().Contain("Fixed width");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_ExposesExcelDelimiterQualifierPreviewAndDestinationAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Tab",
+            "_Semicolon",
+            "_Comma",
+            "S_pace",
+            "_Other:",
+            "Text _qualifier:",
+            "Data preview",
+            "_Destination:",
+            "CreateReferenceEditor(_destinationBox",
+            "ReferencePickerButton_Click"
+        })
+            source.Should().Contain(content);
+
+        source.Should().Contain("_previewGrid");
+        source.Should().Contain("_textQualifierBox");
+        source.Should().Contain("_destinationBox");
+        source.Should().Contain("var label = new Label");
+        source.Should().Contain("Content = \"Text _qualifier:\"");
+        source.Should().Contain("Target = _textQualifierBox");
+        source.Should().Contain("new Label { Content = \"_Destination:\", Target = _destinationBox");
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_BuildsColumnOffsetSelectionAndBulkToggleStates()
     {
         var columns = RemoveDuplicatesDialog.SelectAll(4);
@@ -114,6 +158,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialog_ExposesExcelStyleFunctionDropdownAndSubtotalChecklist()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("_functionBox = new ComboBox");
+        source.Should().Contain("SubtotalFunctionChoices");
+        source.Should().Contain("ItemsSource = SubtotalFunctionChoices");
+        source.Should().Contain("SelectedItem = \"Sum\"");
+        source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
+        source.Should().Contain("_subtotalColumnPanel");
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_ParsesRangesAndOptionalCopyToCellOnCurrentSheet()
     {
         var sheetId = SheetId.New();
@@ -199,11 +256,16 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
-        source.Should().Contain("Filter the list, in-place");
-        source.Should().Contain("Copy to another location");
-        source.Should().Contain("CreateReferenceEditor(_listRangeBox");
-        source.Should().Contain("CreateReferenceEditor(_criteriaRangeBox");
-        source.Should().Contain("CreateReferenceEditor(_copyToBox");
+        source.Should().Contain("Content = \"_Filter the list, in-place\"");
+        source.Should().Contain("Content = \"_Copy to another location\"");
+        source.Should().Contain("Content = \"_Unique records only\"");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 0, \"_List range:\", _listRangeBox");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"_Criteria range:\", _criteriaRangeBox");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
+        source.Should().Contain("var labelBlock = new Label");
+        source.Should().Contain("Target = textBox");
+        source.Should().Contain("Header = \"Action\"");
+        source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("ReferencePickerButton_Click");
     }
 
@@ -256,10 +318,30 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("_referenceBox");
         source.Should().Contain("_referencesList");
-        source.Should().Contain("All references:");
+        source.Should().Contain("_Reference:");
+        source.Should().Contain("_All references:");
+        source.Should().Contain("_Destination cell:");
+        source.Should().Contain("Use _labels in:");
+        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = \"_Delete\"");
         source.Should().Contain("AddReferenceButton_Click");
         source.Should().Contain("DeleteReferenceButton_Click");
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_ExposesExcelStyleFunctionLabelsAndLinkOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("_functionBox");
+        source.Should().Contain("_topRowBox");
+        source.Should().Contain("_leftColumnBox");
+        source.Should().Contain("_createLinksBox");
+        source.Should().Contain("_Function:");
+        source.Should().Contain("_Top row");
+        source.Should().Contain("_Left column");
+        source.Should().Contain("Create _links to source data");
     }
 
     [Fact]
@@ -385,13 +467,32 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
 
-        source.Should().Contain("CreateReferenceEditor(_formulaBox");
-        source.Should().Contain("CreateReferenceEditor(_rowInputBox");
-        source.Should().Contain("CreateReferenceEditor(_columnInputBox");
+        source.Should().Contain("AddReferenceRow(grid, 0, \"_Formula cell:\", _formulaBox");
+        source.Should().Contain("AddReferenceRow(grid, 1, \"_Row input cell:\", _rowInputBox");
+        source.Should().Contain("AddReferenceRow(grid, 2, \"_Column input cell:\", _columnInputBox");
         source.Should().Contain("ReferencePickerButton_Click");
         source.Should().Contain("Select formula cell");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
+        source.Should().Contain("new Label { Content = \"_Type:\", Target = _modeBox");
+        source.Should().Contain("var labelBlock = new Label");
+        source.Should().Contain("Target = textBox");
+        source.Should().Contain("Header = \"Inputs\"");
+        source.Should().Contain("One-variable data tables use either");
+        source.Should().Contain("Two-variable data tables require both");
+    }
+
+    [Fact]
+    public void CreateTableDialog_ExposesHeadersCheckboxAndRangePicker()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("_headersBox");
+        source.Should().Contain("Content = \"_My table has headers\"");
+        source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
+        source.Should().Contain("CreateReferenceEditor(_rangeBox");
+        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("Select table range");
     }
 
     [Fact]
@@ -411,5 +512,19 @@ public sealed class DataToolDialogTests
         result.Range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 3)));
         result.FirstRowHasHeaders.Should().BeFalse();
         result.TableStyleName.Should().Be("TableStyleMedium2");
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+
+        source.Should().Contain("_Select All");
+        source.Should().Contain("_Unselect All");
+        source.Should().Contain("_My data has headers");
+        source.Should().Contain("_columnsPanel");
+        source.Should().Contain("Columns:");
+        source.Should().Contain("SelectAllButton_Click");
+        source.Should().Contain("UnselectAllButton_Click");
     }
 }

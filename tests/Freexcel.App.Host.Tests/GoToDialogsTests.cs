@@ -31,8 +31,11 @@ public sealed class GoToDialogsTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
 
+        source.Should().Contain("Content = \"_Go to:\"");
+        source.Should().Contain("Selection history");
         source.Should().Contain("Content = \"_Reference:\"");
         source.Should().Contain("Target = _addressBox");
+        source.Should().Contain("Content = \"S_pecial...\"");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
     }
@@ -64,6 +67,18 @@ public sealed class GoToDialogsTests
             "new(GoToSpecialKind.Comments, \"Co_mments\")",
             "new(GoToSpecialKind.DataValidation, \"_Data validation\")",
             "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
+        })
+            source.Should().Contain(expected);
+
+        foreach (var expected in new[]
+        {
+            "_Current region",
+            "Current _array",
+            "_Objects",
+            "Row _differences",
+            "Column di_fferences",
+            "_Last cell",
+            "_Conditional formats"
         })
             source.Should().Contain(expected);
 

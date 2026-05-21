@@ -17,4 +17,16 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         source.Should().Contain("foreach (var sameCellIssue in sameCellIssues)");
         source.Should().Contain("_issues.Remove(sameCellIssue)");
     }
+
+    [Fact]
+    public void EvaluateFormulaDialog_ExposesExcelLikeStepRestartAndHelpControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
+
+        source.Should().Contain("Evaluation:");
+        source.Should().Contain("Step _In");
+        source.Should().Contain("Step _Out");
+        source.Should().Contain("_Restart");
+        source.Should().Contain("_Help on this formula");
+    }
 }

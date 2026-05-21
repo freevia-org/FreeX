@@ -20,6 +20,16 @@ public sealed class GoalSeekDialogXamlTests
             .Should()
             .Contain(["_OK", "_Cancel"]);
 
+        document.Descendants(presentation + "Button")
+            .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
+            .Should()
+            .Contain("Collapse Dialog");
+
+        document.Descendants(presentation + "Button")
+            .Select(element => element.Attribute("CommandParameter")?.Value)
+            .Should()
+            .Contain(["SetCellBox", "ChangingCellBox"]);
+
         static void AssertLabelTargets(XDocument document, XNamespace presentation, string content, string target)
         {
             var label = document

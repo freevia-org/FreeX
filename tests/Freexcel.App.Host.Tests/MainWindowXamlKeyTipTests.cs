@@ -230,7 +230,10 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void MainWindowPreviewKeys_HandleWorksheetKeytipAndContextMenuEntryPoints()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
 
         source.Should().Contain("this.PreviewKeyDown += MainWindow_PreviewKeyDown;");
         source.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
@@ -240,7 +243,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void EscapeFromVisibleBackstage_ReturnsToWorkbookBeforeTransientCancellation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
 
         source.Should().Contain("IsStartScreenVisible()");
         source.Should().Contain("HideStartScreen();");
@@ -265,6 +268,9 @@ public sealed class MainWindowXamlKeyTipTests
         exportButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Export PDF/XPS");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PDF");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("XPS");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("selection");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("workbook");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("active sheet");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("PDF printer");
     }
 
@@ -705,6 +711,23 @@ public sealed class MainWindowXamlKeyTipTests
             .ToList();
 
         missing.Should().BeEmpty("File/Backstage commands should be reachable through Excel-style Alt keytips");
+    }
+
+    [Fact]
+    public void BackstageCommandButtons_ExposeVisibleAccessKeysForSaveAndClose()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var startScreen = document
+            .Descendants(presentation + "Grid")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
+
+        startScreen.Descendants(presentation + "Button")
+            .Select(button => button.Attribute("Content")?.Value)
+            .Should()
+            .Contain(["_Save", "_Close"]);
     }
 
     [Fact]
@@ -1297,7 +1320,9 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("e.ClickCount == 2");
         source.Should().Contain("TryShowPivotTableDetails(showMessage: false)");
@@ -1383,6 +1408,20 @@ public sealed class MainWindowXamlKeyTipTests
 
         searchBox.Attribute("AutomationProperties.Name")?.Value.Should().Be("Search PivotTable Fields");
         searchBox.IsBefore(availableFieldsList).Should().BeTrue("search should be above the available fields list");
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_RemoveButton_ExposesVisibleAccessKey()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click")
+            .Attribute("Content")?.Value
+            .Should()
+            .Be("_Remove");
     }
 
     [Fact]
