@@ -1,6 +1,7 @@
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -104,6 +105,15 @@ public sealed class RemainingDialogTests
             .Should()
             .Contain("could not find a solution")
             .And.Contain("98.5");
+    }
+
+    [Fact]
+    public void GoalSeekStatusDialog_ExposesKeyboardAccessKeysForButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
     }
 
     [Fact]
