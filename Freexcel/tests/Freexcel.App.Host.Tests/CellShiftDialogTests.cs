@@ -51,8 +51,8 @@ public sealed class CellShiftDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CellShiftDialog.cs"));
 
-        source.Should().Contain("Choose how Excel should make room");
-        source.Should().Contain("Choose how Excel should close the gap");
+        source.Should().NotContain("Choose how Excel should make room");
+        source.Should().NotContain("Choose how Excel should close the gap");
         source.Should().Contain("DialogButtonRowFactory.Create");
     }
 }

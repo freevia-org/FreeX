@@ -238,6 +238,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 {
                     if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
                     {
+                        chart.Name = chartPart.Name;
                     XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                         ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                         sheet.Charts.Add(chart);
@@ -252,6 +253,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             picturePart.Anchor?.FromRowZeroBased + 1 ?? 1,
                             picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                         Kind = PictureKind.Image,
+                        Name = picturePart.Name,
                         ImageBytes = picturePart.ImageBytes.ToArray(),
                         ContentType = picturePart.ContentType,
                         AltText = picturePart.AltText,
@@ -272,6 +274,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             textBoxPart.Anchor?.FromRowZeroBased + 1 ?? 1,
                             textBoxPart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                         Text = textBoxPart.Text,
+                        Name = textBoxPart.Name,
                         AltText = textBoxPart.AltText,
                         RotationDegrees = textBoxPart.RotationDegrees,
                         FillColor = textBoxPart.FillColor,
@@ -289,6 +292,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             shapePart.Anchor?.FromRowZeroBased + 1 ?? 1,
                             shapePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                         Kind = shapePart.Kind,
+                        Name = shapePart.Name,
                         AltText = shapePart.AltText,
                         RotationDegrees = shapePart.RotationDegrees,
                         FillColor = shapePart.FillColor,
@@ -1390,116 +1394,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         sanitized.Position = 0;
         using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
         {
-            RemoveWorkbookPivotCacheReferences(archive);
-            RemoveWorksheetPivotTableReferences(archive);
-            RemovePivotRelationships(archive);
-            RemovePivotPackageParts(archive);
+            XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
             RemoveUnsupportedConditionalFormattingBlocks(archive);
         }
 
         sanitized.Position = 0;
         return sanitized;
-    }
-
-    private static void RemoveWorkbookPivotCacheReferences(ZipArchive archive)
-    {
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var workbookXml = LoadXml(workbookEntry);
-        workbookXml.Root?.Elements(workbookNs + "pivotCaches").Remove();
-        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-    }
-
-    private static void RemoveWorksheetPivotTableReferences(ZipArchive archive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        foreach (var worksheetEntry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                     .ToList())
-        {
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            var pivotReferences = root.Elements(workbookNs + "pivotTableDefinition").ToList();
-            if (pivotReferences.Count == 0)
-                continue;
-
-            pivotReferences.Remove();
-            ReplacePackageXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
-    }
-
-    private static void RemovePivotRelationships(ZipArchive archive)
-    {
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        foreach (var relsEntry in archive.Entries
-                     .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
-                     .ToList())
-        {
-            var relsXml = LoadXml(relsEntry);
-            var root = relsXml.Root;
-            if (root is null)
-                continue;
-
-            var pivotRelationships = root
-                .Elements(packageRelNs + "Relationship")
-                .Where(relationship =>
-                {
-                    var type = relationship.Attribute("Type")?.Value ?? "";
-                    return type.EndsWith("/pivotCacheDefinition", StringComparison.OrdinalIgnoreCase) ||
-                           type.EndsWith("/pivotTable", StringComparison.OrdinalIgnoreCase);
-                })
-                .ToList();
-            if (pivotRelationships.Count == 0)
-                continue;
-
-            pivotRelationships.Remove();
-            ReplacePackageXml(archive, relsEntry.FullName, relsXml);
-        }
-    }
-
-    private static void RemovePivotPackageParts(ZipArchive archive)
-    {
-        foreach (var entry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
-                         entry.FullName.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
-                     .ToList())
-        {
-            entry.Delete();
-        }
-
-        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
-        if (contentTypesEntry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var contentTypesXml = LoadXml(contentTypesEntry);
-        var root = contentTypesXml.Root;
-        if (root is null)
-            return;
-
-        var pivotOverrides = root
-            .Elements(contentTypeNs + "Override")
-            .Where(element =>
-            {
-                var partName = element.Attribute("PartName")?.Value ?? "";
-                return partName.StartsWith("/xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
-                       partName.StartsWith("/xl/pivotTables/", StringComparison.OrdinalIgnoreCase);
-            })
-            .ToList();
-        if (pivotOverrides.Count == 0)
-            return;
-
-        pivotOverrides.Remove();
-        ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
     }
 
     private static void RemoveUnsupportedConditionalFormattingBlocks(ZipArchive archive)
@@ -1549,9 +1449,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             CfThresholdType.Formula => "formula",
             _ => "min"
         };
-
-    private static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
-        => XlsxPackageXmlEditor.NextRelationshipId(relsXml, packageRelNs);
 
     private static void EnsureContentType(ZipArchive archive, string extension, string contentType)
         => XlsxPackageXmlEditor.EnsureDefaultContentType(archive, extension, contentType);
@@ -2462,11 +2359,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.IsStructureProtected)
         {
             packageStream.Position = 0;
-            SaveWorkbookProtection(packageStream, workbook);
+            XlsxWorkbookMetadataWriter.SaveProtection(packageStream, workbook);
         }
 
         packageStream.Position = 0;
-        SaveWorkbookCalculationProperties(packageStream, workbook);
+        XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);
 
         if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
         {
@@ -2519,7 +2416,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => !string.IsNullOrWhiteSpace(sheet.CodeName)))
         {
             packageStream.Position = 0;
-            SaveWorksheetCodeNames(packageStream, workbook);
+            XlsxWorksheetCodeNameWriter.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.GetUsedCells().Any(pair => pair.Value.IgnoreFormulaError)))
@@ -2553,21 +2450,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         packageStream.Position = 0;
-        SaveWorkbookTheme(packageStream, workbook.Theme);
+        XlsxWorkbookThemeWriter.Save(packageStream, workbook.Theme);
 
-        if (workbook.Sheets.Any(sheet => sheet.Charts.Any(IsSupportedXlsxChart)))
+        if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, IsSupportedXlsxChart))
         {
             packageStream.Position = 0;
-            SaveWorksheetCharts(packageStream, workbook);
+            XlsxWorksheetChartWriter.Save(packageStream, workbook, IsSupportedXlsxChart, ToChartXml);
         }
 
-        if (workbook.Sheets.Any(sheet =>
-                sheet.Pictures.Any(IsSupportedXlsxPicture) ||
-                sheet.TextBoxes.Any(IsSupportedXlsxTextBox) ||
-                sheet.DrawingShapes.Any(IsSupportedXlsxDrawingShape)))
+        if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))
         {
             packageStream.Position = 0;
-            SaveWorksheetDrawingObjects(packageStream, workbook);
+            XlsxWorksheetDrawingObjectWriter.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.StructuredTables.Count > 0))
@@ -2579,7 +2473,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.PivotTableStyles.Count > 0)
         {
             packageStream.Position = 0;
-            SavePivotTableStyles(packageStream, workbook);
+            XlsxSlicerTimelineWriter.SavePivotTableStyles(packageStream, workbook);
         }
 
         IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
@@ -2604,7 +2498,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             (workbook.Slicers.Count > 0 || workbook.Timelines.Count > 0))
         {
             packageStream.Position = 0;
-            SaveSlicerTimelines(packageStream, workbook);
+            XlsxSlicerTimelineWriter.SaveSlicerTimelines(packageStream, workbook);
         }
 
         packageStream.Position = 0;
@@ -2628,27 +2522,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var sourceStream = new MemoryStream(sourcePackage.Bytes, writable: false);
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
-        var generatedEntriesBeforeMerge = generatedArchive.Entries
-            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
 
-        foreach (var sourceEntry in sourceArchive.Entries)
-        {
-            if (IsPackageMetadataEntry(sourceEntry.FullName))
-                continue;
-            if (generatedArchive.GetEntry(sourceEntry.FullName) is not null)
-                continue;
-
-            CopyZipEntry(sourceEntry, generatedArchive);
-        }
-
-        MergeContentTypes(sourceArchive, generatedArchive);
-        MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
-        PreserveDocumentProperties(sourceArchive, generatedArchive);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive, workbook);
-        PreserveStylesheetMetadata(sourceArchive, generatedArchive);
-        PreservePivotXmlReferences(sourceArchive, generatedArchive);
-        PreserveStructuredTableXmlReferences(sourceArchive, generatedArchive);
+        XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
+        XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive);
+        XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive);
         PreserveExternalLinkReferences(sourceArchive, generatedArchive);
         PreserveUnsupportedSheetReferences(sourceArchive, generatedArchive);
         MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
@@ -2658,677 +2540,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         PreserveLegacyCommentParts(sourceArchive, generatedArchive, workbook);
         PreserveSharedStringRichTextAndPhonetics(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
-    }
-
-    private static void PreserveDocumentProperties(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        PreserveDocumentPropertyElements(
-            sourceArchive,
-            targetArchive,
-            "docProps/core.xml",
-            [
-                XName.Get("subject", "http://purl.org/dc/elements/1.1/"),
-                XName.Get("keywords", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
-                XName.Get("category", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
-                XName.Get("contentStatus", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
-                XName.Get("language", "http://purl.org/dc/elements/1.1/"),
-                XName.Get("version", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties")
-            ]);
-
-        PreserveDocumentPropertyElements(
-            sourceArchive,
-            targetArchive,
-            "docProps/app.xml",
-            [
-                XName.Get("Application", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("Manager", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("PresentationFormat", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
-                XName.Get("Template", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")
-            ]);
-    }
-
-    private static void PreserveDocumentPropertyElements(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
-        string partName,
-        IReadOnlyCollection<XName> stableElementNames)
-    {
-        var sourceEntry = sourceArchive.GetEntry(partName);
-        var targetEntry = targetArchive.GetEntry(partName);
-        if (sourceEntry is null)
-            return;
-
-        if (targetEntry is null)
-        {
-            CopyZipEntry(sourceEntry, targetArchive);
-            return;
-        }
-
-        var sourceXml = LoadXml(sourceEntry);
-        var targetXml = LoadXml(targetEntry);
-        var sourceRoot = sourceXml.Root;
-        var targetRoot = targetXml.Root;
-        if (sourceRoot is null || targetRoot is null)
-            return;
-
-        var changed = false;
-        foreach (var stableElementName in stableElementNames)
-        {
-            var sourceElement = sourceRoot.Element(stableElementName);
-            if (sourceElement is null)
-                continue;
-
-            var targetElement = targetRoot.Element(stableElementName);
-            if (targetElement is null)
-            {
-                targetRoot.Add(new XElement(sourceElement));
-                changed = true;
-                continue;
-            }
-
-            if (XNode.DeepEquals(targetElement, sourceElement))
-                continue;
-
-            targetElement.ReplaceWith(new XElement(sourceElement));
-            changed = true;
-        }
-
-        if (changed)
-            ReplacePackageXml(targetArchive, partName, targetXml);
-    }
-
-    private static void PreserveStylesheetMetadata(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-        var sourceStylesEntry = sourceArchive.GetEntry("xl/styles.xml");
-        var targetStylesEntry = targetArchive.GetEntry("xl/styles.xml");
-        if (sourceStylesEntry is null || targetStylesEntry is null)
-            return;
-
-        var sourceStylesXml = LoadXml(sourceStylesEntry);
-        var targetStylesXml = LoadXml(targetStylesEntry);
-        var targetRoot = targetStylesXml.Root;
-        if (targetRoot is null)
-            return;
-
-        var changed = false;
-        if (MergeStylesheetColors(sourceStylesXml.Root?.Element(workbookNs + "colors"), targetRoot, workbookNs))
-            changed = true;
-        if (MergeStylesheetTableStyles(sourceStylesXml.Root?.Element(workbookNs + "tableStyles"), targetRoot, workbookNs))
-            changed = true;
-        if (MergeExtensionList(sourceStylesXml.Root?.Element(workbookNs + "extLst"), targetRoot, workbookNs))
-            changed = true;
-
-        if (changed)
-            ReplacePackageXml(targetArchive, "xl/styles.xml", targetStylesXml);
-    }
-
-    private static bool MergeStylesheetColors(XElement? sourceColors, XElement targetRoot, XNamespace workbookNs)
-    {
-        if (sourceColors is null)
-            return false;
-
-        var targetColors = targetRoot.Element(workbookNs + "colors");
-        if (targetColors is null)
-        {
-            targetRoot.Add(new XElement(sourceColors));
-            return true;
-        }
-
-        return MergeElementNativeAttributesAndChildren(sourceColors, targetColors);
-    }
-
-    private static bool MergeStylesheetTableStyles(XElement? sourceTableStyles, XElement targetRoot, XNamespace workbookNs)
-    {
-        if (sourceTableStyles is null)
-            return false;
-
-        var targetTableStyles = targetRoot.Element(workbookNs + "tableStyles");
-        if (targetTableStyles is null)
-        {
-            targetRoot.Add(new XElement(sourceTableStyles));
-            return true;
-        }
-
-        var changed = false;
-        foreach (var attribute in sourceTableStyles.Attributes())
-        {
-            if (targetTableStyles.Attribute(attribute.Name)?.Value == attribute.Value)
-                continue;
-
-            targetTableStyles.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var targetStylesByName = targetTableStyles
-            .Elements(workbookNs + "tableStyle")
-            .Select(element => (Name: element.Attribute("name")?.Value, Element: element))
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Name))
-            .ToDictionary(pair => pair.Name!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceStyle in sourceTableStyles.Elements(workbookNs + "tableStyle"))
-        {
-            var name = sourceStyle.Attribute("name")?.Value;
-            if (string.IsNullOrWhiteSpace(name) || !targetStylesByName.TryGetValue(name, out var targetStyle))
-            {
-                targetTableStyles.Add(new XElement(sourceStyle));
-                if (!string.IsNullOrWhiteSpace(name))
-                    targetStylesByName[name] = targetTableStyles.Elements(workbookNs + "tableStyle").Last();
-                changed = true;
-                continue;
-            }
-
-            if (MergeElementNativeAttributesAndChildren(sourceStyle, targetStyle))
-                changed = true;
-        }
-
-        targetTableStyles.SetAttributeValue(
-            "count",
-            targetTableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
-        return changed;
-    }
-
-    private static void SavePivotTableStyles(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var stylesEntry = archive.GetEntry("xl/styles.xml");
-        if (stylesEntry is null)
-            return;
-
-        var stylesXml = LoadXml(stylesEntry);
-        var targetRoot = stylesXml.Root;
-        if (targetRoot is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var tableStyles = targetRoot.Element(workbookNs + "tableStyles");
-        if (tableStyles is null)
-        {
-            tableStyles = new XElement(workbookNs + "tableStyles");
-            targetRoot.Add(tableStyles);
-        }
-
-        var existingStylesByName = tableStyles
-            .Elements(workbookNs + "tableStyle")
-            .Select(element => (Name: element.Attribute("name")?.Value, Element: element))
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Name))
-            .ToDictionary(pair => pair.Name!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var style in workbook.PivotTableStyles.Where(style => !string.IsNullOrWhiteSpace(style.Name)))
-        {
-            var styleXml = ToPivotTableStyleXml(style, workbookNs);
-            if (existingStylesByName.TryGetValue(style.Name, out var existingStyle))
-                existingStyle.ReplaceWith(styleXml);
-            else
-                tableStyles.Add(styleXml);
-        }
-
-        tableStyles.SetAttributeValue(
-            "count",
-            tableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
-        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
-    }
-
-    private static XElement ToPivotTableStyleXml(PivotTableStyleModel style, XNamespace workbookNs) =>
-        new(
-            workbookNs + "tableStyle",
-            new XAttribute("name", style.Name),
-            new XAttribute("pivot", style.AppliesToPivotTables ? "1" : "0"),
-            new XAttribute("table", style.AppliesToTables ? "1" : "0"),
-            new XAttribute("count", style.Elements.Count.ToString(CultureInfo.InvariantCulture)),
-            style.Elements
-                .Where(element => !string.IsNullOrWhiteSpace(element.Type))
-                .Select(element => new XElement(
-                    workbookNs + "tableStyleElement",
-                    new XAttribute("type", element.Type),
-                    element.DifferentialFormatId is { } dxfId ? new XAttribute("dxfId", dxfId.ToString(CultureInfo.InvariantCulture)) : null,
-                    element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null)));
-
-    private static void SaveSlicerTimelines(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        XNamespace slicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
-        XNamespace freexcelNs = "https://freexcel.local/xlsx/slicerTimelineState";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var slicerIndex = 1;
-        foreach (var slicer in workbook.Slicers)
-        {
-            var slicerPath = string.IsNullOrWhiteSpace(slicer.PackagePart)
-                ? $"xl/slicers/slicer{slicerIndex}.xml"
-                : slicer.PackagePart.TrimStart('/').Replace('\\', '/');
-            var cachePath = $"xl/slicerCaches/slicerCache{slicerIndex}.xml";
-
-            ReplacePackageXml(archive, slicerPath, new XDocument(
-                new XElement(slicerNs + "slicer",
-                    new XAttribute("name", slicer.Name),
-                    OptionalAttribute("caption", slicer.Caption),
-                    OptionalAttribute("style", slicer.StyleName),
-                    new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName))));
-            ReplacePackageXml(archive, cachePath, new XDocument(
-                new XElement(slicerNs + "slicerCacheDefinition",
-                    new XAttribute("name", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName),
-                    OptionalAttribute("sourceName", slicer.SourceFieldName),
-                    new XElement(slicerNs + "pivotTables",
-                        new XElement(slicerNs + "pivotTable", OptionalAttribute("name", slicer.SourcePivotTableName))),
-                    new XElement(freexcelNs + "selectedItems",
-                        slicer.SelectedItems.Select(item =>
-                            new XElement(freexcelNs + "selectedItem", new XAttribute("value", item)))))));
-            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(slicerPath), new XDocument(
-                new XElement(packageRelNs + "Relationships",
-                    new XElement(packageRelNs + "Relationship",
-                        new XAttribute("Id", "rIdSlicerCache"),
-                        new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicerCache"),
-                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(slicerPath, cachePath))))));
-            EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
-            EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.slicerCache+xml");
-            slicerIndex++;
-        }
-
-        var timelineIndex = 1;
-        foreach (var timeline in workbook.Timelines)
-        {
-            var timelinePath = string.IsNullOrWhiteSpace(timeline.PackagePart)
-                ? $"xl/timelines/timeline{timelineIndex}.xml"
-                : timeline.PackagePart.TrimStart('/').Replace('\\', '/');
-            var cachePath = $"xl/timelineCaches/timelineCache{timelineIndex}.xml";
-
-            ReplacePackageXml(archive, timelinePath, new XDocument(
-                new XElement(slicerNs + "timeline",
-                    new XAttribute("name", timeline.Name),
-                    OptionalAttribute("caption", timeline.Caption),
-                    OptionalAttribute("style", timeline.StyleName),
-                    new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName))));
-            ReplacePackageXml(archive, cachePath, new XDocument(
-                new XElement(slicerNs + "timelineCacheDefinition",
-                    new XAttribute("name", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName),
-                    OptionalAttribute("sourceName", timeline.SourceFieldName),
-                    OptionalAttribute("startDate", timeline.StartDate),
-                    OptionalAttribute("endDate", timeline.EndDate),
-                    OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
-                    OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
-                    new XElement(slicerNs + "pivotTables",
-                        new XElement(slicerNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
-            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(timelinePath), new XDocument(
-                new XElement(packageRelNs + "Relationships",
-                    new XElement(packageRelNs + "Relationship",
-                        new XAttribute("Id", "rIdTimelineCache"),
-                        new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/timelineCache"),
-                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(timelinePath, cachePath))))));
-            EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.timeline+xml");
-            EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.timelineCache+xml");
-            timelineIndex++;
-        }
-
-        static XAttribute? OptionalAttribute(string name, string? value) =>
-            string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value);
-    }
-
-    private static bool IsPackageMetadataEntry(string entryName) =>
-        string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
-        entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
-
-    private static void CopyZipEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive)
-    {
-        var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
-        targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
-        using var sourceStream = sourceEntry.Open();
-        using var targetStream = targetEntry.Open();
-        sourceStream.CopyTo(targetStream);
-    }
-
-    private static void MergeContentTypes(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        var sourceEntry = sourceArchive.GetEntry("[Content_Types].xml");
-        var targetEntry = targetArchive.GetEntry("[Content_Types].xml");
-        if (sourceEntry is null || targetEntry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var sourceXml = LoadXml(sourceEntry);
-        var targetXml = LoadXml(targetEntry);
-        var targetRoot = targetXml.Root;
-        var sourceRoot = sourceXml.Root;
-        if (targetRoot is null || sourceRoot is null)
-            return;
-
-        var existingDefaults = targetRoot
-            .Elements(contentTypeNs + "Default")
-            .Select(element => element.Attribute("Extension")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceDefault in sourceRoot.Elements(contentTypeNs + "Default"))
-        {
-            var extension = sourceDefault.Attribute("Extension")?.Value;
-            if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(extension))
-                targetRoot.Add(new XElement(sourceDefault));
-        }
-
-        var existingOverrides = targetRoot
-            .Elements(contentTypeNs + "Override")
-            .Select(element => element.Attribute("PartName")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceOverride in sourceRoot.Elements(contentTypeNs + "Override"))
-        {
-            var partName = sourceOverride.Attribute("PartName")?.Value;
-            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(partName))
-                targetRoot.Add(new XElement(sourceOverride));
-        }
-
-        ReplacePackageXml(targetArchive, "[Content_Types].xml", targetXml);
-    }
-
-    private static void MergeRelationshipParts(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
-        IReadOnlySet<string> generatedEntriesBeforeMerge)
-    {
-        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        foreach (var sourceEntry in sourceArchive.Entries.Where(entry =>
-                     entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
-        {
-            var targetEntry = targetArchive.GetEntry(sourceEntry.FullName);
-            if (targetEntry is null)
-            {
-                CopyZipEntry(sourceEntry, targetArchive);
-                continue;
-            }
-
-            var sourceXml = LoadXml(sourceEntry);
-            var targetXml = LoadXml(targetEntry);
-            var sourceRoot = sourceXml.Root;
-            var targetRoot = targetXml.Root;
-            if (sourceRoot is null || targetRoot is null)
-                continue;
-
-            var existingRelationships = targetRoot
-                .Elements(relationshipNs + "Relationship")
-                .Select(RelationshipSignature)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var existingIds = targetRoot
-                .Elements(relationshipNs + "Relationship")
-                .Select(element => element.Attribute("Id")?.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
-            {
-                if (!ShouldPreserveRelationship(sourceEntry.FullName, sourceRelationship, targetArchive, generatedEntriesBeforeMerge))
-                    continue;
-
-                if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)))
-                    continue;
-
-                var copy = new XElement(sourceRelationship);
-                var id = copy.Attribute("Id")?.Value;
-                if (!string.IsNullOrWhiteSpace(id) && existingIds.Contains(id))
-                    copy.SetAttributeValue("Id", NextRelationshipId(targetXml, relationshipNs));
-                targetRoot.Add(copy);
-                var copiedId = copy.Attribute("Id")?.Value;
-                if (!string.IsNullOrWhiteSpace(copiedId))
-                    existingIds.Add(copiedId);
-            }
-
-            ReplacePackageXml(targetArchive, sourceEntry.FullName, targetXml);
-        }
-    }
-
-    private static bool ShouldPreserveRelationship(
-        string relationshipPartPath,
-        XElement relationship,
-        ZipArchive targetArchive,
-        IReadOnlySet<string> generatedEntriesBeforeMerge)
-    {
-        var targetMode = relationship.Attribute("TargetMode")?.Value;
-        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var relationshipType = relationship.Attribute("Type")?.Value;
-        if (string.Equals(
-                relationshipType,
-                "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var target = relationship.Attribute("Target")?.Value;
-        if (string.IsNullOrWhiteSpace(target))
-            return false;
-
-        var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
-        return !string.IsNullOrWhiteSpace(targetPart) &&
-               !generatedEntriesBeforeMerge.Contains(targetPart) &&
-               targetArchive.GetEntry(targetPart) is not null;
-    }
-
-    private static string RelationshipSignature(XElement relationship) =>
-        string.Join("|",
-            relationship.Attribute("Type")?.Value ?? "",
-            relationship.Attribute("Target")?.Value ?? "",
-            relationship.Attribute("TargetMode")?.Value ?? "");
-
-    private static string RelationshipPartToSourcePart(string relationshipPartPath)
-    {
-        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
-        if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
-            return "";
-
-        const string relsSegment = "/_rels/";
-        var relsIndex = normalized.IndexOf(relsSegment, StringComparison.OrdinalIgnoreCase);
-        if (relsIndex < 0 || !normalized.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
-            return normalized;
-
-        var directory = normalized[..relsIndex];
-        var fileName = normalized[(relsIndex + relsSegment.Length)..^".rels".Length];
-        return string.IsNullOrEmpty(directory) ? fileName : $"{directory}/{fileName}";
-    }
-
-    private static void PreservePivotXmlReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        PreserveWorkbookPivotCaches(sourceArchive, targetArchive, workbookNs);
-        PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, workbookNs, relNs, packageRelNs);
-    }
-
-    private static void PreserveWorkbookPivotCaches(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
-        XNamespace workbookNs)
-    {
-        var sourceEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var targetEntry = targetArchive.GetEntry("xl/workbook.xml");
-        if (sourceEntry is null || targetEntry is null)
-            return;
-
-        var sourceXml = LoadXml(sourceEntry);
-        var sourcePivotCaches = sourceXml.Root?.Element(workbookNs + "pivotCaches");
-        if (sourcePivotCaches is null)
-            return;
-
-        var targetXml = LoadXml(targetEntry);
-        var targetRoot = targetXml.Root;
-        if (targetRoot is null || targetRoot.Element(workbookNs + "pivotCaches") is not null)
-            return;
-
-        var sheetsElement = targetRoot.Element(workbookNs + "sheets");
-        if (sheetsElement is not null)
-            sheetsElement.AddBeforeSelf(new XElement(sourcePivotCaches));
-        else
-            targetRoot.Add(new XElement(sourcePivotCaches));
-
-        ReplacePackageXml(targetArchive, "xl/workbook.xml", targetXml);
-    }
-
-    private static void PreserveWorksheetPivotTableDefinitions(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
-        XNamespace workbookNs,
-        XNamespace relNs,
-        XNamespace packageRelNs)
-    {
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
-            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
-        {
-            return;
-        }
-
-        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
-        var sourceWorkbookRels = LoadRelationshipTargets(
-            sourceArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
-        var targetWorkbookRels = LoadRelationshipTargets(
-            targetArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-
-        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
-        {
-            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
-                continue;
-
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
-            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
-                continue;
-
-            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
-            var sourcePivotDefinitions = sourceWorksheetXml.Root?
-                .Elements(workbookNs + "pivotTableDefinition")
-                .ToList() ?? [];
-            if (sourcePivotDefinitions.Count == 0)
-                continue;
-
-            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
-            var targetRoot = targetWorksheetXml.Root;
-            if (targetRoot is null || targetRoot.Elements(workbookNs + "pivotTableDefinition").Any())
-                continue;
-
-            foreach (var pivotDefinition in sourcePivotDefinitions)
-                targetRoot.Add(new XElement(pivotDefinition));
-
-            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
-        }
-    }
-
-    private static void PreserveStructuredTableXmlReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
-            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
-        {
-            return;
-        }
-
-        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
-        var sourceWorkbookRels = LoadRelationshipTargets(
-            sourceArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
-        var targetWorkbookRels = LoadRelationshipTargets(
-            targetArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-
-        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
-        {
-            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
-                continue;
-
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
-            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
-                continue;
-
-            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
-            var sourceTableParts = sourceWorksheetXml.Root?
-                .Element(workbookNs + "tableParts")?
-                .Elements(workbookNs + "tablePart")
-                .ToList() ?? [];
-            if (sourceTableParts.Count == 0)
-                continue;
-
-            var sourceWorksheetRels = LoadRelationshipTargets(
-                sourceArchive,
-                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
-                sourceWorksheetPath,
-                packageRelNs);
-            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
-            var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
-                ? LoadXml(targetWorksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
-
-            var preservedTableParts = new List<XElement>();
-            foreach (var sourceTablePart in sourceTableParts)
-            {
-                var sourceRelId = sourceTablePart.Attribute(relNs + "id")?.Value;
-                if (string.IsNullOrWhiteSpace(sourceRelId) ||
-                    !sourceWorksheetRels.TryGetValue(sourceRelId, out var tablePath))
-                {
-                    continue;
-                }
-
-                var targetRelId = EnsureRelationshipForPackagePart(
-                    targetWorksheetRelsXml,
-                    packageRelNs,
-                    targetWorksheetPath,
-                    tablePath,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table");
-                preservedTableParts.Add(new XElement(workbookNs + "tablePart", new XAttribute(relNs + "id", targetRelId)));
-            }
-
-            if (preservedTableParts.Count == 0)
-                continue;
-
-            ReplacePackageXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
-
-            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
-            var targetRoot = targetWorksheetXml.Root;
-            if (targetRoot is null)
-                continue;
-
-            targetRoot.Elements(workbookNs + "tableParts").Remove();
-            targetRoot.Add(new XElement(
-                workbookNs + "tableParts",
-                new XAttribute("count", preservedTableParts.Count.ToString(CultureInfo.InvariantCulture)),
-                preservedTableParts));
-            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
-        }
     }
 
     private static string EnsureRelationshipForPackagePart(
@@ -3774,7 +2985,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             changed = true;
         if (MergeWorkbookChildBlock(sourceWebPublishObjects, targetRoot, workbookNs + "webPublishObjects"))
             changed = true;
-        if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+        if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
             changed = true;
 
         if (changed)
@@ -4015,7 +3226,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 : null;
             if (targetView is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
                     changed = true;
                 mergedTargetViewKeys.Add(sourceViewKey);
                 continue;
@@ -4352,7 +3563,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
                 changed = true;
 
             if (changed)
@@ -4669,7 +3880,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeExtensionList(sourceRow.Element(workbookNs + "extLst"), targetRow, workbookNs))
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceRow.Element(workbookNs + "extLst"), targetRow, workbookNs))
                 changed = true;
         }
 
@@ -4711,7 +3922,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
                 changed = true;
         }
 
@@ -5167,7 +4378,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -5205,7 +4416,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -5265,7 +4476,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
                     if (targetChild is not null)
                     {
-                        if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                        if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                             changed = true;
                         continue;
                     }
@@ -5381,7 +4592,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
                 if (targetChild is not null)
                 {
-                    if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                         changed = true;
                     continue;
                 }
@@ -5397,7 +4608,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -5502,7 +4713,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -5533,7 +4744,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
                 if (targetChild is not null)
                 {
-                    if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                         changed = true;
                     continue;
                 }
@@ -5856,7 +5067,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 : null;
             if (targetView is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
                     changed = true;
                 continue;
             }
@@ -5864,40 +5075,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetSheetViews.Add(new XElement(sourceView));
             if (!string.IsNullOrWhiteSpace(viewId))
                 existingViewIds.Add(viewId);
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool MergeElementNativeAttributesAndChildren(XElement sourceElement, XElement targetElement)
-    {
-        var changed = false;
-        foreach (var attribute in sourceElement.Attributes())
-        {
-            if (targetElement.Attribute(attribute.Name) is not null)
-                continue;
-
-            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var existingChildrenByKey = targetElement
-            .Elements()
-            .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        foreach (var sourceChild in sourceElement.Elements())
-        {
-            var key = ElementIdentityKey(sourceChild);
-            if (existingChildrenByKey.TryGetValue(key, out var targetChild))
-            {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
-                    changed = true;
-                continue;
-            }
-
-            targetElement.Add(new XElement(sourceChild));
-            existingChildrenByKey[key] = targetElement.Elements().Last();
             changed = true;
         }
 
@@ -6109,46 +5286,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             targetSheetProperties.Add(new XElement(sourceChild));
             existingChildNames.Add(sourceChild.Name);
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool MergeExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
-    {
-        if (sourceExtensionList is null)
-            return false;
-
-        var sourceExtensions = sourceExtensionList
-            .Elements(workbookNs + "ext")
-            .ToList();
-        if (sourceExtensions.Count == 0)
-            return false;
-
-        var targetExtensionList = targetRoot.Element(workbookNs + "extLst");
-        if (targetExtensionList is null)
-        {
-            targetRoot.Add(new XElement(sourceExtensionList));
-            return true;
-        }
-
-        var existingUris = targetExtensionList
-            .Elements(workbookNs + "ext")
-            .Select(extension => extension.Attribute("uri")?.Value)
-            .Where(uri => !string.IsNullOrWhiteSpace(uri))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var changed = false;
-        foreach (var sourceExtension in sourceExtensions)
-        {
-            var uri = sourceExtension.Attribute("uri")?.Value;
-            if (!string.IsNullOrWhiteSpace(uri) && existingUris.Contains(uri))
-                continue;
-
-            targetExtensionList.Add(new XElement(sourceExtension));
-            if (!string.IsNullOrWhiteSpace(uri))
-                existingUris.Add(uri);
             changed = true;
         }
 
@@ -6467,143 +5604,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static void SaveWorkbookTheme(Stream xlsxStream, WorkbookTheme theme)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        const string themePath = "xl/theme/theme1.xml";
-        archive.GetEntry(themePath)?.Delete();
-        var themeEntry = archive.CreateEntry(themePath);
-        using var stream = themeEntry.Open();
-        ToThemeXml(theme).Save(stream);
-    }
-
-    private static void SaveWorksheetCodeNames(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                string.IsNullOrWhiteSpace(sheet.CodeName) ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            var sheetPr = root.Element(workbookNs + "sheetPr");
-            if (sheetPr is null)
-            {
-                sheetPr = new XElement(workbookNs + "sheetPr");
-                root.AddFirst(sheetPr);
-            }
-
-            sheetPr.SetAttributeValue("codeName", sheet.CodeName);
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static void SaveWorkbookProtection(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        root.Element(workbookNs + "workbookProtection")?.Remove();
-        var protection = new XElement(workbookNs + "workbookProtection",
-            new XAttribute("lockStructure", "1"));
-        if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
-            protection.SetAttributeValue("workbookPassword", ToLegacyPasswordHash(workbook.StructureProtectionPassword));
-
-        var sheets = root.Element(workbookNs + "sheets");
-        if (sheets is not null)
-            sheets.AddBeforeSelf(protection);
-        else
-            root.Add(protection);
-
-        workbookEntry.Delete();
-        var replacement = archive.CreateEntry("xl/workbook.xml");
-        using var stream = replacement.Open();
-        workbookXml.Save(stream);
-    }
-
-    private static void SaveWorkbookCalculationProperties(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        var calcPr = root.Element(workbookNs + "calcPr");
-        if (calcPr is null)
-        {
-            calcPr = new XElement(workbookNs + "calcPr");
-            root.Add(calcPr);
-        }
-
-        calcPr.SetAttributeValue("calcMode", workbook.CalculationMode == WorkbookCalculationMode.Manual ? "manual" : "auto");
-        SetBooleanAttribute(calcPr, "fullCalcOnLoad", workbook.FullCalculationOnLoad);
-        SetBooleanAttribute(calcPr, "forceFullCalc", workbook.ForceFullCalculation);
-        SetBooleanAttribute(calcPr, "iterate", workbook.IterativeCalculation);
-        calcPr.SetAttributeValue(
-            "iterateCount",
-            workbook.MaxCalculationIterations is { } maxIterations ? maxIterations.ToString(CultureInfo.InvariantCulture) : null);
-        calcPr.SetAttributeValue(
-            "iterateDelta",
-            workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
-
-        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-
-        static void SetBooleanAttribute(XElement element, string name, bool value) =>
-            element.SetAttributeValue(name, value ? "1" : null);
-    }
-
     private static void SaveAdvancedConditionalFormats(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -6800,7 +5800,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (targetElement is null)
                     dxf.Add(sourceElement);
                 else
-                    MergeElementNativeAttributesAndChildren(sourceElement, targetElement);
+                    XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceElement, targetElement);
             }
             catch
             {
@@ -7718,636 +6718,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => throw new InvalidOperationException("Conditional format is not an advanced rule.")
         };
 
-    private static string ToLegacyPasswordHash(string passwordOrHash)
-    {
-        if (IsLegacyPasswordHash(passwordOrHash))
-            return passwordOrHash.ToUpperInvariant();
-
-        var hash = 0;
-        for (var i = 0; i < passwordOrHash.Length; i++)
-        {
-            var value = passwordOrHash[i] << (i + 1);
-            var rotatedBits = value >> 15;
-            value &= 0x7fff;
-            hash ^= value | rotatedBits;
-        }
-
-        hash ^= passwordOrHash.Length;
-        hash ^= 0xCE4B;
-        return hash.ToString("X4", CultureInfo.InvariantCulture);
-    }
-
-    private static bool IsLegacyPasswordHash(string value) =>
-        value.Length is > 0 and <= 4 &&
-        value.All(ch =>
-            ch is >= '0' and <= '9' ||
-            ch is >= 'A' and <= 'F' ||
-            ch is >= 'a' and <= 'f');
-
-    private static XDocument ToThemeXml(WorkbookTheme theme)
-    {
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(drawingNs + "theme",
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                new XAttribute("name", theme.Name),
-                new XElement(drawingNs + "themeElements",
-                    new XElement(drawingNs + "clrScheme",
-                        new XAttribute("name", $"{theme.Name} Colors"),
-                        XlsxWorkbookThemeReader.ColorElements.Select(color =>
-                            new XElement(drawingNs + color.ElementName,
-                                new XElement(drawingNs + "srgbClr",
-                                    new XAttribute("val", FormatThemeColor(theme.GetColor(color.Slot))))))),
-                    new XElement(drawingNs + "fontScheme",
-                        new XAttribute("name", $"{theme.Name} Fonts"),
-                        new XElement(drawingNs + "majorFont",
-                            new XElement(drawingNs + "latin",
-                                new XAttribute("typeface", theme.MajorFontName))),
-                        new XElement(drawingNs + "minorFont",
-                            new XElement(drawingNs + "latin",
-                                new XAttribute("typeface", theme.MinorFontName)))),
-                    new XElement(drawingNs + "fmtScheme",
-                        new XAttribute("name", theme.EffectsName)))));
-    }
-
-    private static string FormatThemeColor(CellColor color) =>
-        $"{color.R:X2}{color.G:X2}{color.B:X2}";
-
-    private static void SaveWorksheetCharts(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-        var drawingIndex = 1;
-        var chartIndex = 1;
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
-                continue;
-            if (!sheetsByName.TryGetValue(name, out var sheet))
-                continue;
-            var supportedCharts = sheet.Charts
-                .Where(IsSupportedXlsxChart)
-                .ToList();
-            if (supportedCharts.Count == 0)
-                continue;
-            if (!relTargets.TryGetValue(relId, out var worksheetPath))
-                continue;
-
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex);
-        }
-    }
-
-    private static void WriteWorksheetCharts(
-        ZipArchive archive,
-        string worksheetPath,
-        Sheet sheet,
-        IReadOnlyList<ChartModel> charts,
-        int drawingIndex,
-        ref int chartIndex)
-    {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return;
-
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-
-        var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
-        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
-        archive.GetEntry(drawingPath)?.Delete();
-        archive.GetEntry(drawingRelsPath)?.Delete();
-
-        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
-        var anchors = new List<XElement>();
-        foreach (var chart in charts)
-        {
-            var currentChartIndex = chartIndex++;
-            var chartPath = $"xl/charts/chart{currentChartIndex}.xml";
-            archive.GetEntry(chartPath)?.Delete();
-            var chartEntry = archive.CreateEntry(chartPath);
-            using (var chartStream = chartEntry.Open())
-                ToChartXml(chart, sheet).Save(chartStream);
-            WriteChartExternalDataRelationships(archive, chartPath, chart, packageRelNs);
-
-            var chartRelId = $"rIdFreexcelChart{currentChartIndex}";
-            drawingRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", chartRelId),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
-                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
-
-            anchors.Add(ToAbsoluteChartAnchor(chart, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
-        }
-
-        var drawingXml = new XDocument(
-            new XElement(spreadsheetDrawingNs + "wsDr",
-                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                new XAttribute(XNamespace.Xmlns + "c", chartNs),
-                new XAttribute(XNamespace.Xmlns + "r", relNs),
-                anchors));
-        var drawingEntry = archive.CreateEntry(drawingPath);
-        using (var drawingStream = drawingEntry.Open())
-            drawingXml.Save(drawingStream);
-
-        var drawingRelsEntry = archive.CreateEntry(drawingRelsPath);
-        using (var drawingRelsStream = drawingRelsEntry.Open())
-            drawingRelsXml.Save(drawingRelsStream);
-
-        EnsureContentTypeOverride(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
-        for (var i = chartIndex - charts.Count; i < chartIndex; i++)
-            EnsureContentTypeOverride(archive, $"/xl/charts/chart{i}.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
-
-        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
-        var relsEntry = archive.GetEntry(relsPath);
-        XDocument worksheetRelsXml;
-        if (relsEntry is null)
-        {
-            worksheetRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
-        }
-        else
-        {
-            worksheetRelsXml = LoadXml(relsEntry);
-            relsEntry.Delete();
-        }
-
-        var drawingRelId = NextRelationshipId(worksheetRelsXml, packageRelNs);
-        worksheetRelsXml.Root!.Add(new XElement(
-            packageRelNs + "Relationship",
-            new XAttribute("Id", drawingRelId),
-            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
-            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, drawingPath))));
-        var updatedRelsEntry = archive.CreateEntry(relsPath);
-        using (var relsStream = updatedRelsEntry.Open())
-            worksheetRelsXml.Save(relsStream);
-
-        var worksheetXml = LoadXml(worksheetEntry);
-        var root = worksheetXml.Root;
-        if (root is null)
-            return;
-
-        root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
-        root.Elements(worksheetNs + "drawing").Remove();
-        root.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", drawingRelId)));
-
-        worksheetEntry.Delete();
-        var updatedWorksheetEntry = archive.CreateEntry(worksheetPath);
-        using var worksheetStream = updatedWorksheetEntry.Open();
-        worksheetXml.Save(worksheetStream);
-    }
-
-    private static void WriteChartExternalDataRelationships(
-        ZipArchive archive,
-        string chartPath,
-        ChartModel chart,
-        XNamespace packageRelNs)
-    {
-        if (chart.ExternalData is not { } externalData ||
-            string.IsNullOrWhiteSpace(externalData.RelationshipId) ||
-            string.IsNullOrWhiteSpace(externalData.RelationshipType) ||
-            string.IsNullOrWhiteSpace(externalData.Target))
-        {
-            return;
-        }
-
-        var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
-        archive.GetEntry(relsPath)?.Delete();
-        ReplacePackageXml(archive, relsPath, new XDocument(new XElement(
-            packageRelNs + "Relationships",
-            new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", externalData.RelationshipId),
-                new XAttribute("Type", externalData.RelationshipType),
-                new XAttribute("Target", externalData.Target),
-                string.IsNullOrWhiteSpace(externalData.TargetMode)
-                    ? null
-                    : new XAttribute("TargetMode", externalData.TargetMode)))));
-    }
-
-    private static XElement ToAbsoluteChartAnchor(
-        ChartModel chart,
-        int chartIndex,
-        string chartRelId,
-        XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs,
-        XNamespace chartNs,
-        XNamespace relNs) =>
-        new(spreadsheetDrawingNs + "absoluteAnchor",
-            new XElement(spreadsheetDrawingNs + "pos",
-                new XAttribute("x", PixelsToEmus(chart.Left)),
-                new XAttribute("y", PixelsToEmus(chart.Top))),
-            new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(chart.Width)),
-                new XAttribute("cy", PixelsToEmus(chart.Height))),
-            new XElement(spreadsheetDrawingNs + "graphicFrame",
-                new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
-                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                        new XAttribute("id", chartIndex + 1),
-                        new XAttribute("name", $"Chart {chartIndex}")),
-                    new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
-                new XElement(spreadsheetDrawingNs + "xfrm"),
-                new XElement(drawingNs + "graphic",
-                    new XElement(drawingNs + "graphicData",
-                        new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
-                        new XElement(chartNs + "chart", new XAttribute(relNs + "id", chartRelId))))),
-            new XElement(spreadsheetDrawingNs + "clientData"));
-
-    private static void SaveWorksheetDrawingObjects(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        var drawingIndex = 1;
-        var pictureIndex = 1;
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var pictures = sheet.Pictures.Where(IsSupportedXlsxPicture).ToList();
-            var textBoxes = sheet.TextBoxes.Where(IsSupportedXlsxTextBox).ToList();
-            var shapes = sheet.DrawingShapes.Where(IsSupportedXlsxDrawingShape).ToList();
-            if (pictures.Count == 0 && textBoxes.Count == 0 && shapes.Count == 0)
-                continue;
-
-            WriteWorksheetDrawingObjects(archive, worksheetPath, pictures, textBoxes, shapes, drawingIndex++, ref pictureIndex);
-        }
-    }
-
-    private static void WriteWorksheetDrawingObjects(
-        ZipArchive archive,
-        string worksheetPath,
-        IReadOnlyList<PictureModel> pictures,
-        IReadOnlyList<TextBoxModel> textBoxes,
-        IReadOnlyList<DrawingShapeModel> shapes,
-        int drawingIndex,
-        ref int pictureIndex)
-    {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return;
-
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-
-        var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
-        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
-        archive.GetEntry(drawingPath)?.Delete();
-        archive.GetEntry(drawingRelsPath)?.Delete();
-
-        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
-        var anchors = new List<XElement>();
-        foreach (var picture in pictures)
-        {
-            var currentPictureIndex = pictureIndex++;
-            var contentType = string.IsNullOrWhiteSpace(picture.ContentType) ? "image/png" : picture.ContentType;
-            var extension = XlsxPackagePath.GetImageExtension(contentType).TrimStart('.');
-            var mediaPath = $"xl/media/freexcelPicture{currentPictureIndex}.{extension}";
-            archive.GetEntry(mediaPath)?.Delete();
-            var mediaEntry = archive.CreateEntry(mediaPath);
-            using (var mediaStream = mediaEntry.Open())
-                mediaStream.Write(picture.ImageBytes!);
-            EnsureContentType(archive, extension, contentType);
-
-            var imageRelId = $"rIdFreexcelPicture{currentPictureIndex}";
-            drawingRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", imageRelId),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, mediaPath))));
-            anchors.Add(ToOneCellPictureAnchor(
-                picture,
-                currentPictureIndex,
-                imageRelId,
-                spreadsheetDrawingNs,
-                drawingNs,
-                relNs));
-        }
-        var shapeIndex = 1;
-        foreach (var textBox in textBoxes)
-        {
-            anchors.Add(ToOneCellTextBoxAnchor(
-                textBox,
-                shapeIndex++,
-                spreadsheetDrawingNs,
-                drawingNs));
-        }
-        foreach (var shape in shapes)
-        {
-            anchors.Add(ToOneCellDrawingShapeAnchor(
-                shape,
-                shapeIndex++,
-                spreadsheetDrawingNs,
-                drawingNs));
-        }
-
-        ReplacePackageXml(archive, drawingPath, new XDocument(
-            new XElement(spreadsheetDrawingNs + "wsDr",
-                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                new XAttribute(XNamespace.Xmlns + "r", relNs),
-                anchors)));
-        ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
-        EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
-
-        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
-        var worksheetRelsXml = archive.GetEntry(relsPath) is { } relsEntry
-            ? LoadXml(relsEntry)
-            : new XDocument(new XElement(packageRelNs + "Relationships"));
-        var drawingRelId = EnsureRelationshipForPackagePart(
-            worksheetRelsXml,
-            packageRelNs,
-            worksheetPath,
-            drawingPath,
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
-        ReplacePackageXml(archive, relsPath, worksheetRelsXml);
-
-        var worksheetXml = LoadXml(worksheetEntry);
-        var root = worksheetXml.Root;
-        if (root is null)
-            return;
-
-        root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
-        root.Elements(worksheetNs + "drawing").Remove();
-        root.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", drawingRelId)));
-        ReplacePackageXml(archive, worksheetPath, worksheetXml);
-    }
-
-    private static XElement ToOneCellPictureAnchor(
-        PictureModel picture,
-        int pictureIndex,
-        string imageRelId,
-        XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs,
-        XNamespace relNs) =>
-        new(spreadsheetDrawingNs + "oneCellAnchor",
-            new XElement(spreadsheetDrawingNs + "from",
-                new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "colOff", "0"),
-                new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
-            new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(picture.Width)),
-                new XAttribute("cy", PixelsToEmus(picture.Height))),
-            new XElement(spreadsheetDrawingNs + "pic",
-                new XElement(spreadsheetDrawingNs + "nvPicPr",
-                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                        new XAttribute("id", pictureIndex + 1),
-                        new XAttribute("name", $"Picture {pictureIndex}"),
-                        string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
-                    new XElement(spreadsheetDrawingNs + "cNvPicPr")),
-                new XElement(spreadsheetDrawingNs + "blipFill",
-                    new XElement(drawingNs + "blip", new XAttribute(relNs + "embed", imageRelId)),
-                    HasPictureCrop(picture)
-                        ? new XElement(drawingNs + "srcRect",
-                            new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
-                            new XAttribute("t", ToSourceRectanglePercent(picture.CropTop)),
-                            new XAttribute("r", ToSourceRectanglePercent(picture.CropRight)),
-                            new XAttribute("b", ToSourceRectanglePercent(picture.CropBottom)))
-                        : null,
-                    new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
-                new XElement(spreadsheetDrawingNs + "spPr",
-                    new XElement(drawingNs + "xfrm"),
-                    new XElement(drawingNs + "prstGeom",
-                        new XAttribute("prst", "rect"),
-                        new XElement(drawingNs + "avLst")))),
-            new XElement(spreadsheetDrawingNs + "clientData"));
-
-    private static bool HasPictureCrop(PictureModel picture) =>
-        picture.CropLeft > 0 ||
-        picture.CropTop > 0 ||
-        picture.CropRight > 0 ||
-        picture.CropBottom > 0;
-
-    private static string ToSourceRectanglePercent(double ratio) =>
-        ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
-
-    private static XElement ToOneCellTextBoxAnchor(
-        TextBoxModel textBox,
-        int shapeIndex,
-        XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs) =>
-        new(spreadsheetDrawingNs + "oneCellAnchor",
-            ToDrawingAnchorFrom(textBox.Anchor, spreadsheetDrawingNs),
-            new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(textBox.Width)),
-                new XAttribute("cy", PixelsToEmus(textBox.Height))),
-            new XElement(spreadsheetDrawingNs + "sp",
-                new XElement(spreadsheetDrawingNs + "nvSpPr",
-                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                        new XAttribute("id", shapeIndex + 100),
-                        new XAttribute("name", $"TextBox {shapeIndex}"),
-                        string.IsNullOrWhiteSpace(textBox.AltText) ? null : new XAttribute("descr", textBox.AltText)),
-                    new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
-                ToShapePropertiesForDrawingObject(
-                    "rect",
-                    textBox.RotationDegrees,
-                    textBox.FillThemeColor,
-                    textBox.FillColor,
-                    textBox.OutlineThemeColor,
-                    textBox.OutlineColor,
-                    spreadsheetDrawingNs,
-                    drawingNs),
-                new XElement(spreadsheetDrawingNs + "txBody",
-                    new XElement(drawingNs + "bodyPr"),
-                    new XElement(drawingNs + "lstStyle"),
-                    new XElement(drawingNs + "p",
-                        new XElement(drawingNs + "r",
-                            new XElement(drawingNs + "t", textBox.Text))))),
-            new XElement(spreadsheetDrawingNs + "clientData"));
-
-    private static XElement ToOneCellDrawingShapeAnchor(
-        DrawingShapeModel shape,
-        int shapeIndex,
-        XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs) =>
-        new(spreadsheetDrawingNs + "oneCellAnchor",
-            ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs),
-            new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", PixelsToEmus(shape.Width)),
-                new XAttribute("cy", PixelsToEmus(shape.Height))),
-            new XElement(spreadsheetDrawingNs + "sp",
-                new XElement(spreadsheetDrawingNs + "nvSpPr",
-                    new XElement(spreadsheetDrawingNs + "cNvPr",
-                        new XAttribute("id", shapeIndex + 200),
-                        new XAttribute("name", $"Shape {shapeIndex}"),
-                        string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
-                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
-                ToShapePropertiesForDrawingObject(
-                    ToDrawingPreset(shape.Kind),
-                    shape.RotationDegrees,
-                    shape.FillThemeColor,
-                    shape.FillColor,
-                    shape.OutlineThemeColor,
-                    shape.OutlineColor,
-                    spreadsheetDrawingNs,
-                    drawingNs,
-                    shape.GradientFillEndColor,
-                    shape.HasShadowEffect)),
-            new XElement(spreadsheetDrawingNs + "clientData"));
-
-    private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
-        new(spreadsheetDrawingNs + "from",
-            new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
-            new XElement(spreadsheetDrawingNs + "colOff", "0"),
-            new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
-            new XElement(spreadsheetDrawingNs + "rowOff", "0"));
-
-    private static XElement ToShapePropertiesForDrawingObject(
-        string preset,
-        double rotationDegrees,
-        WorkbookThemeColorReference? fillThemeColor,
-        CellColor? fillColor,
-        WorkbookThemeColorReference? outlineThemeColor,
-        CellColor? outlineColor,
-        XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs,
-        CellColor? gradientFillEndColor = null,
-        bool hasShadowEffect = false)
-    {
-        var rotation = NormalizeRotation(rotationDegrees);
-        return new XElement(spreadsheetDrawingNs + "spPr",
-            new XElement(drawingNs + "xfrm",
-                rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000))),
-            new XElement(drawingNs + "prstGeom",
-                new XAttribute("prst", preset),
-                new XElement(drawingNs + "avLst")),
-            gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
-                ? ToGradientFill(gradientStartColor, gradientEndColor, drawingNs)
-                : ToSolidFill(fillThemeColor, fillColor, drawingNs),
-            ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
-            hasShadowEffect ? ToOuterShadowEffect(drawingNs) : null);
-    }
-
-    private static XElement ToGradientFill(CellColor startColor, CellColor endColor, XNamespace drawingNs) =>
-        new(drawingNs + "gradFill",
-            new XElement(drawingNs + "gsLst",
-                new XElement(drawingNs + "gs",
-                    new XAttribute("pos", "0"),
-                    ToRgbColorElement(startColor, drawingNs)),
-                new XElement(drawingNs + "gs",
-                    new XAttribute("pos", "100000"),
-                    ToRgbColorElement(endColor, drawingNs))),
-            new XElement(drawingNs + "lin",
-                new XAttribute("ang", "5400000"),
-                new XAttribute("scaled", "1")));
-
-    private static XElement ToOuterShadowEffect(XNamespace drawingNs) =>
-        new(drawingNs + "effectLst",
-            new XElement(drawingNs + "outerShdw",
-                new XAttribute("blurRad", "40000"),
-                new XAttribute("dist", "20000"),
-                new XAttribute("dir", "5400000"),
-                ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
-
-    private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>
-        new(drawingNs + "srgbClr", new XAttribute("val", FormatThemeColor(color)));
-
-    private static XElement? ToLineProperties(
-        WorkbookThemeColorReference? outlineThemeColor,
-        CellColor? outlineColor,
-        XNamespace drawingNs)
-    {
-        var fill = ToSolidFill(outlineThemeColor, outlineColor, drawingNs);
-        return fill is null ? null : new XElement(drawingNs + "ln", fill);
-    }
-
-    private static string ToDrawingPreset(DrawingShapeKind kind) =>
-        kind switch
-        {
-            DrawingShapeKind.Ellipse => "ellipse",
-            DrawingShapeKind.Line => "line",
-            _ => "rect"
-        };
-
-    private static double NormalizeRotation(double rotationDegrees)
-    {
-        if (!double.IsFinite(rotationDegrees))
-            return 0;
-        var normalized = rotationDegrees % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
-
-    private static bool IsSupportedXlsxPicture(PictureModel picture) =>
-        picture.Kind == PictureKind.Image &&
-        picture.ImageBytes is { Length: > 0 } &&
-        double.IsFinite(picture.Width) &&
-        double.IsFinite(picture.Height) &&
-        picture.Width > 0 &&
-        picture.Height > 0;
-
-    private static bool IsSupportedXlsxTextBox(TextBoxModel textBox) =>
-        double.IsFinite(textBox.Width) &&
-        double.IsFinite(textBox.Height) &&
-        textBox.Width > 0 &&
-        textBox.Height > 0;
-
-    private static bool IsSupportedXlsxDrawingShape(DrawingShapeModel shape) =>
-        Enum.IsDefined(shape.Kind) &&
-        double.IsFinite(shape.Width) &&
-        double.IsFinite(shape.Height) &&
-        shape.Width > 0 &&
-        shape.Height > 0;
-
     private static XDocument ToChartXml(ChartModel chart, Sheet sheet)
     {
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -9123,6 +7493,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             : new XElement(drawingNs + "solidFill", colorElement);
     }
 
+    private static string FormatThemeColor(CellColor color) =>
+        $"{color.R:X2}{color.G:X2}{color.B:X2}";
+
     private static void ApplyTint(XElement colorElement, double tint, XNamespace drawingNs)
     {
         if (tint > 0)
@@ -9853,39 +8226,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             : $"{quotedSheet}!{start}:{end}";
     }
 
-    private static long PixelsToEmus(double pixels) =>
-        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
-
-    private static void EnsureContentTypeOverride(ZipArchive archive, string partName, string contentType)
-    {
-        const string contentTypesPath = "[Content_Types].xml";
-        var entry = archive.GetEntry(contentTypesPath);
-        if (entry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var xml = LoadXml(entry);
-        var existing = xml.Root?
-            .Elements(contentTypeNs + "Override")
-            .FirstOrDefault(e => string.Equals(e.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
-        {
-            existing.SetAttributeValue("ContentType", contentType);
-        }
-        else
-        {
-            xml.Root?.Add(new XElement(
-                contentTypeNs + "Override",
-                new XAttribute("PartName", partName),
-                new XAttribute("ContentType", contentType)));
-        }
-
-        entry.Delete();
-        var updatedEntry = archive.CreateEntry(contentTypesPath);
-        using var stream = updatedEntry.Open();
-        xml.Save(stream);
-    }
-
     private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
     {
         foreach (var xlMerge in xlSheet.MergedRanges)
@@ -9941,3 +8281,4 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<PivotSortModel> Sorts);
 
 }
+

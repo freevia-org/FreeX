@@ -30,7 +30,7 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="Validation criteria" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Allow:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="_Allow:" Target="{Binding ElementName=TypeCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="TypeCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
                               SelectionChanged="TypeCombo_SelectionChanged">
                         <ComboBoxItem Content="Any Value" Tag="Any"/>
@@ -43,8 +43,9 @@
                         <ComboBoxItem Content="Custom" Tag="Custom"/>
                     </ComboBox>
 
-                    <TextBlock x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Text="Data:" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                    <Label x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Content="_Data:" Target="{Binding ElementName=OperatorCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                              SelectionChanged="OperatorCombo_SelectionChanged">
                         <ComboBoxItem Content="Between" Tag="Between"/>
                         <ComboBoxItem Content="Not Between" Tag="NotBetween"/>
                         <ComboBoxItem Content="Equal To" Tag="Equal"/>
@@ -55,7 +56,7 @@
                         <ComboBoxItem Content="Less Than Or Equal" Tag="LessThanOrEqual"/>
                     </ComboBox>
 
-                    <TextBlock x:Name="Formula1Label" Grid.Row="3" Grid.Column="0" Text="Minimum:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label x:Name="Formula1Label" Grid.Row="3" Grid.Column="0" Content="_Minimum:" Target="{Binding ElementName=Formula1Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
                         <Button x:Name="SourcePickerButton" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
@@ -67,7 +68,7 @@
                         <TextBox x:Name="Formula1Box"/>
                     </DockPanel>
 
-                    <TextBlock x:Name="Formula2Label" Grid.Row="4" Grid.Column="0" Text="Maximum:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label x:Name="Formula2Label" Grid.Row="4" Grid.Column="0" Content="Ma_ximum:" Target="{Binding ElementName=Formula2Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,0,0,8">
                         <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
                                 Content="Use _Selection" Width="104" Margin="6,0,0,0"
@@ -100,10 +101,10 @@
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="When selecting cell, show this input message"
                                Margin="22,24,0,12" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Input title:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="Input _title:" Target="{Binding ElementName=PromptTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <TextBox x:Name="PromptTitleBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Input message:" VerticalAlignment="Top" Margin="0,3,8,8"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="Input _message:" Target="{Binding ElementName=PromptMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
                     <TextBox x:Name="PromptMessageBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
                              AcceptsReturn="True" TextWrapping="Wrap"/>
                 </Grid>
@@ -127,17 +128,17 @@
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="When user enters invalid data, show this error alert"
                                Margin="22,24,0,12" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Alert style:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="_Alert style:" Target="{Binding ElementName=AlertStyleCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="AlertStyleCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
                         <ComboBoxItem Content="Stop" Tag="Stop"/>
                         <ComboBoxItem Content="Warning" Tag="Warning"/>
                         <ComboBoxItem Content="Information" Tag="Information"/>
                     </ComboBox>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Error title:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="Error _title:" Target="{Binding ElementName=ErrorTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <TextBox x:Name="ErrorTitleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Error message:" VerticalAlignment="Top" Margin="0,3,8,8"/>
+                    <Label Grid.Row="3" Grid.Column="0" Content="Error _message:" Target="{Binding ElementName=ErrorMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
                     <TextBox x:Name="ErrorMessageBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
                              AcceptsReturn="True" TextWrapping="Wrap"/>
                 </Grid>

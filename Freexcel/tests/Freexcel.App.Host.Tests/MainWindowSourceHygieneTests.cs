@@ -616,6 +616,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InlineEditing_StartsWithCaretAtEndInsteadOfSelectingAll()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var editingSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Editing.cs"));
+
+        editingSource.Should().NotContain("_inlineEditor.SelectAll();");
+        editingSource.Should().Contain("_inlineEditor.CaretIndex = _inlineEditor.Text.Length;");
+        editingSource.Should().Contain("_inlineEditor.SelectionLength = 0;");
+    }
+
+    [Fact]
     public void GridStatusAndResizeController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;

@@ -69,15 +69,16 @@ public static class FilterInputParser
     public static bool TryParseAverage(string input, out bool above)
     {
         var trimmed = input.Trim();
-        if (trimmed.Equals("aboveavg", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("aboveaverage", StringComparison.OrdinalIgnoreCase))
+        var compact = trimmed.Replace(" ", "", StringComparison.Ordinal);
+        if (compact.Equals("aboveavg", StringComparison.OrdinalIgnoreCase) ||
+            compact.Equals("aboveaverage", StringComparison.OrdinalIgnoreCase))
         {
             above = true;
             return true;
         }
 
-        if (trimmed.Equals("belowavg", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("belowaverage", StringComparison.OrdinalIgnoreCase))
+        if (compact.Equals("belowavg", StringComparison.OrdinalIgnoreCase) ||
+            compact.Equals("belowaverage", StringComparison.OrdinalIgnoreCase))
         {
             above = false;
             return true;
@@ -223,6 +224,7 @@ public static class FilterInputParser
         const string endsPrefix = "ends:";
         const string textNotEqualsPrefix = "text<>";
         const string textEqualsPrefix = "text=";
+        const string equalsPrefix = "equals:";
 
         if (trimmed.StartsWith(notContainsPrefix, StringComparison.OrdinalIgnoreCase))
         {
@@ -273,6 +275,15 @@ public static class FilterInputParser
         {
             return TryParseTextCriterion(
                 trimmed[textEqualsPrefix.Length..],
+                text => new TextEqualsFilterCriterion(text),
+                out criterion,
+                out error);
+        }
+
+        if (trimmed.StartsWith(equalsPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryParseTextCriterion(
+                trimmed[equalsPrefix.Length..],
                 text => new TextEqualsFilterCriterion(text),
                 out criterion,
                 out error);

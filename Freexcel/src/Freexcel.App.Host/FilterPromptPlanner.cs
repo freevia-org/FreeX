@@ -88,6 +88,7 @@ public static class FilterPromptPlanner
         filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
+        filterText.StartsWith("equals:", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
         filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||

@@ -142,6 +142,16 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseCriterion_AcceptsMenuTextEqualsAlias()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("equals: Red Apple", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<TextEqualsFilterCriterion>()
+            .Which.Matches(new TextValue("red apple")).Should().BeTrue();
+    }
+
+    [Fact]
     public void TryParseCriterion_AcceptsTextNotEqualsSyntax()
     {
         var parsed = FilterInputParser.TryParseCriterion("text<> Red Apple", out var criterion, out var error);
@@ -293,9 +303,27 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseAverage_AcceptsMenuAboveAverageSyntax()
+    {
+        var parsed = FilterInputParser.TryParseAverage("above average", out var above);
+
+        parsed.Should().BeTrue();
+        above.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryParseAverage_AcceptsBelowAverageSyntax()
     {
         var parsed = FilterInputParser.TryParseAverage("belowaverage", out var above);
+
+        parsed.Should().BeTrue();
+        above.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryParseAverage_AcceptsMenuBelowAverageSyntax()
+    {
+        var parsed = FilterInputParser.TryParseAverage("below average", out var above);
 
         parsed.Should().BeTrue();
         above.Should().BeFalse();

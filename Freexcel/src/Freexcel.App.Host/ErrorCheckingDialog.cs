@@ -63,7 +63,7 @@ public sealed class ErrorCheckingDialog : Window
             Margin = new Thickness(0, 0, 0, 8)
         });
         var help = new Button { Content = "_Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
-        help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
+        help.Click += (_, _) => ShowSelectedIssueHelp();
         actionStack.Children.Add(help);
         var showSteps = new Button { Content = "Show _Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
         showSteps.Click += (_, _) => TraceSelected();
@@ -196,4 +196,13 @@ public sealed class ErrorCheckingDialog : Window
     }
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e) => NavigateSelected();
+
+    private void ShowSelectedIssueHelp()
+    {
+        var message = _listView.SelectedItem is FormulaErrorIssue issue
+            ? $"{issue.ErrorCode}\n\n{issue.Description}\n\nUse Show Calculation Steps to trace the formula, Ignore Error to suppress this issue, or Edit in Formula Bar to correct the formula."
+            : "Select an issue to see its description and available correction actions.";
+
+        MessageBox.Show(this, message, "Error Checking Help", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 }

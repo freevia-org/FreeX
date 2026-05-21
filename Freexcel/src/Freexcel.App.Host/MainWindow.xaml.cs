@@ -74,12 +74,14 @@ public partial class MainWindow : Window
         new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 153, 153))
     ];
     private System.Windows.Controls.TextBox? _inlineEditor;
+    private System.Windows.Controls.Border? _inlineEditorMask;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
+    private bool _formulaRangeEntryMode;
     private readonly List<UIElement> _formulaReferenceGridOverlays = [];
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
@@ -142,7 +144,16 @@ public partial class MainWindow : Window
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
-        FormulaBar.TextChanged += (_, _) => RefreshFormulaReferenceHighlights();
+        FormulaBar.TextChanged += (_, _) =>
+        {
+            if (ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar) &&
+                FormulaBar.Text == "=")
+            {
+                _formulaRangeEntryMode = true;
+            }
+
+            RefreshFormulaReferenceHighlights();
+        };
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;

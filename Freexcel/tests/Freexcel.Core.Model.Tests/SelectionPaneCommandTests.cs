@@ -69,6 +69,52 @@ public sealed class SelectionPaneCommandTests
     }
 
     [Fact]
+    public void RenameSelectionPaneObjectCommand_RenamesTextBoxAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Notes",
+            Name = "Text Box 1"
+        };
+        sheet.TextBoxes.Add(textBox);
+
+        var command = new RenameSelectionPaneObjectCommand(
+            sheet.Id,
+            SelectionPaneObjectKind.TextBox,
+            textBox.Id,
+            "  Quarter Notes  ");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        textBox.Name.Should().Be("Quarter Notes");
+
+        command.Revert(ctx);
+
+        textBox.Name.Should().Be("Text Box 1");
+    }
+
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Chart)]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    public void RenameSelectionPaneObjectCommand_RenamesEveryVisualObjectKind(SelectionPaneObjectKind kind)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var id = AddObject(sheet, kind, isVisible: true);
+
+        var command = new RenameSelectionPaneObjectCommand(sheet.Id, kind, id, "Dashboard Object");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        GetName(sheet, kind, id).Should().Be("Dashboard Object");
+    }
+
+    [Fact]
     public void SetSelectionPaneObjectVisibilityCommand_RejectsMissingObject()
     {
         var wb = new Workbook("test");
@@ -120,6 +166,16 @@ public sealed class SelectionPaneCommandTests
             SelectionPaneObjectKind.Picture => sheet.Pictures.Single(item => item.Id == id).IsVisible,
             SelectionPaneObjectKind.TextBox => sheet.TextBoxes.Single(item => item.Id == id).IsVisible,
             SelectionPaneObjectKind.Shape => sheet.DrawingShapes.Single(item => item.Id == id).IsVisible,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+
+    private static string? GetName(Sheet sheet, SelectionPaneObjectKind kind, Guid id) =>
+        kind switch
+        {
+            SelectionPaneObjectKind.Chart => sheet.Charts.Single(item => item.Id == id).Name,
+            SelectionPaneObjectKind.Picture => sheet.Pictures.Single(item => item.Id == id).Name,
+            SelectionPaneObjectKind.TextBox => sheet.TextBoxes.Single(item => item.Id == id).Name,
+            SelectionPaneObjectKind.Shape => sheet.DrawingShapes.Single(item => item.Id == id).Name,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
 

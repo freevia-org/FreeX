@@ -140,7 +140,7 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Fact]
-    public void PivotFieldFilterDialog_UsesExcelLikeFilterTabs()
+    public void PivotFieldFilterDialog_UsesSupportedItemChecklistOnly()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -148,12 +148,17 @@ public sealed class PivotFilterDialogXamlTests
         document.Descendants(presentation + "TabItem")
             .Select(element => element.Attribute("Header")?.Value)
             .Should()
-            .Contain(["Select _Items", "_Label Filters", "_Value Filters"]);
+            .Equal("Select _Items");
 
         document.Descendants(presentation + "TextBlock")
             .Select(element => element.Attribute("Text")?.Value)
             .Should()
-            .Contain(["Choose items to show:", "Show items for which the label", "Show items for which the value"]);
+            .Contain("Choose items to show:");
+
+        document.Descendants(presentation + "ComboBox")
+            .Any(element => element.Attribute("IsEnabled")?.Value == "False")
+            .Should()
+            .BeFalse("the field checklist should not show disabled label/value filter previews");
     }
 
     [Theory]

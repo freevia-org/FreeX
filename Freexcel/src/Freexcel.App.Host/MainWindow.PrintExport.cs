@@ -41,7 +41,10 @@ public partial class MainWindow
         };
         if (saveDlg.ShowDialog() != true) return;
 
-        var request = ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result);
+        var selectedFormat = saveDlg.FilterIndex == 2
+            ? ExportFormat.Xps
+            : ExportFormat.Pdf;
+        var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
         var exported = request.Format == ExportFormat.Pdf
             ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
             : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);

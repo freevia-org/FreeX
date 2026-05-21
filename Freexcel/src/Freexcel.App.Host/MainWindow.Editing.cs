@@ -55,10 +55,17 @@ public partial class MainWindow
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         var text = FormatFormulaBarText(cell, addr);
         _formulaEditCell = addr;
+        _formulaRangeEntryMode = false;
         ClearFormulaReferenceEntrySpan();
 
         if (_inlineEditor == null)
         {
+            _inlineEditorMask = new System.Windows.Controls.Border
+            {
+                Background = System.Windows.Media.Brushes.White,
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
             _inlineEditor = new System.Windows.Controls.TextBox
             {
                 BorderThickness = new System.Windows.Thickness(2),
@@ -85,13 +92,14 @@ public partial class MainWindow
                 FontFamily = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize = 15.0,
                 IsHitTestVisible = false,
-                Margin = new Thickness(4, 3, 2, 2),
-                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Margin = new Thickness(0),
+                VerticalAlignment = System.Windows.VerticalAlignment.Top,
                 Visibility = Visibility.Collapsed
             };
             TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
             TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
+            EditOverlay.Children.Add(_inlineEditorMask);
             EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
             EditOverlay.Children.Add(_inlineEditor);
         }
@@ -102,31 +110,45 @@ public partial class MainWindow
         double cy = (rowMetric.TopOffset  + Freexcel.App.UI.GridView.ColHeaderHeight) * zoom;
         double cellW = colMetric.Width  * zoom;
         double cellH = rowMetric.Height * zoom;
+        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
-        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, cx - 2);
-        System.Windows.Controls.Canvas.SetTop(_inlineEditor,  cy - 2);
-        _inlineEditor.Width  = cellW + 4;
-        _inlineEditor.Height = Math.Max(cellH + 4, 20);
-        if (_inlineFormulaReferenceOverlay is not null)
+        if (_inlineEditorMask is not null)
         {
-            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, cx + 2);
-            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, cy + 1);
-            _inlineFormulaReferenceOverlay.Width = cellW;
-            _inlineFormulaReferenceOverlay.Height = Math.Max(cellH, 18);
+            System.Windows.Controls.Canvas.SetLeft(_inlineEditorMask, layout.EditorRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineEditorMask, layout.EditorRect.Top);
+            _inlineEditorMask.Width = layout.EditorRect.Width;
+            _inlineEditorMask.Height = layout.EditorRect.Height;
         }
 
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.EditorRect.Left);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
+        _inlineEditor.Width  = layout.EditorRect.Width;
+        _inlineEditor.Height = layout.EditorRect.Height;
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Top);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+            _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
+        }
+
+        if (_inlineEditorMask is not null)
+            _inlineEditorMask.Visibility = Visibility.Visible;
         _inlineEditor.Visibility  = Visibility.Visible;
         EditOverlay.IsHitTestVisible = true;
         RefreshFormulaReferenceHighlights();
         _inlineEditor.Focus();
-        _inlineEditor.SelectAll();
+        _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+        _inlineEditor.SelectionLength = 0;
     }
 
     private void HideInlineEditor(bool commit)
     {
         if (_inlineEditor == null) return;
         _inlineEditor.Visibility = Visibility.Collapsed;
+        if (_inlineEditorMask is not null)
+            _inlineEditorMask.Visibility = Visibility.Collapsed;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();
         EditOverlay.IsHitTestVisible = false;
@@ -336,7 +358,8 @@ public partial class MainWindow
             current,
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
             allowFormulaBarNavigationKeys: false,
-            formulaRangeEntryActive: formulaRangeEntryActive);
+            formulaRangeEntryActive: formulaRangeEntryActive,
+            emptyInlineEditorActive: !formulaRangeEntryActive && string.IsNullOrEmpty(_inlineEditor?.Text));
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -422,6 +445,7 @@ public partial class MainWindow
     {
         _formulaEditCell = null;
         _formulaRangeSelectionAnchor = null;
+        _formulaRangeEntryMode = false;
         ClearFormulaReferenceEntrySpan();
         ClearFormulaReferenceHighlights();
     }
@@ -437,6 +461,14 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
+        return _formulaRangeEntryMode && editor.Text.StartsWith("=", StringComparison.Ordinal);
+    }
+
+    private bool IsFormulaReferenceHighlightActive(System.Windows.Controls.TextBox? editor)
+    {
+        if (editor is null || _formulaEditCell is null)
+            return false;
+
         return editor.Text.StartsWith("=", StringComparison.Ordinal);
     }
 
@@ -446,6 +478,14 @@ public partial class MainWindow
             return _inlineEditor;
 
         return IsFormulaRangeEntryActive(FormulaBar) ? FormulaBar : null;
+    }
+
+    private System.Windows.Controls.TextBox? GetFormulaReferenceHighlightEditor()
+    {
+        if (_inlineEditor?.IsVisible == true && IsFormulaReferenceHighlightActive(_inlineEditor))
+            return _inlineEditor;
+
+        return IsFormulaReferenceHighlightActive(FormulaBar) ? FormulaBar : null;
     }
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
@@ -508,7 +548,7 @@ public partial class MainWindow
 
     private void RefreshFormulaReferenceHighlights()
     {
-        var editor = GetFormulaRangeEntryEditor();
+        var editor = GetFormulaReferenceHighlightEditor();
         if (editor is null)
         {
             ClearFormulaReferenceHighlights();
