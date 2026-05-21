@@ -28,7 +28,11 @@ public sealed partial class CustomViewsDialog : Window
     {
         _items.Clear();
         foreach (var view in _workbook.CustomViews)
-            _items.Add(new CustomViewViewModel(view.Name, view.Sheets.Count));
+            _items.Add(new CustomViewViewModel(
+                view.Name,
+                view.Sheets.Count,
+                "Included",
+                "Included"));
 
         if (_items.Count > 0 && ViewsList.SelectedIndex < 0)
             ViewsList.SelectedIndex = 0;
@@ -109,10 +113,12 @@ public sealed partial class CustomViewsDialog : Window
     }
 }
 
-internal sealed class CustomViewViewModel(string name, int sheetCount)
+internal sealed class CustomViewViewModel(string name, int sheetCount, string printSettingsIndicator, string filterSettingsIndicator)
 {
     public string Name { get; } = name;
     public int SheetCount { get; } = sheetCount;
+    public string PrintSettingsIndicator { get; } = printSettingsIndicator;
+    public string FilterSettingsIndicator { get; } = filterSettingsIndicator;
 }
 
 public sealed record CustomViewNameDialogResult(string ViewName);

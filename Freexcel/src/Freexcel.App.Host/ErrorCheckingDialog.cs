@@ -31,7 +31,7 @@ public sealed class ErrorCheckingDialog : Window
 
         Title = "Error Checking";
         Width = 720;
-        Height = 360;
+        Height = 420;
         MinWidth = 540;
         MinHeight = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -45,6 +45,36 @@ public sealed class ErrorCheckingDialog : Window
         };
         DockPanel.SetDock(_header, Dock.Top);
         root.Children.Add(_header);
+
+        var actionPanel = new GroupBox
+        {
+            Header = "Error help",
+            Width = 180,
+            Margin = new Thickness(10, 0, 0, 0),
+            Padding = new Thickness(8)
+        };
+        DockPanel.SetDock(actionPanel, Dock.Right);
+        var actionStack = new StackPanel();
+        actionPanel.Content = actionStack;
+        actionStack.Children.Add(new TextBlock
+        {
+            Text = "Choose an action for the selected issue.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        var help = new Button { Content = "Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
+        actionStack.Children.Add(help);
+        var showSteps = new Button { Content = "Show Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        showSteps.Click += (_, _) => TraceSelected();
+        actionStack.Children.Add(showSteps);
+        var ignoreAction = new Button { Content = "Ignore Error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        ignoreAction.Click += (_, _) => IgnoreSelected();
+        actionStack.Children.Add(ignoreAction);
+        var editFormula = new Button { Content = "Edit in Formula Bar", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        editFormula.Click += (_, _) => NavigateSelected();
+        actionStack.Children.Add(editFormula);
+        root.Children.Add(actionPanel);
 
         var buttons = new StackPanel
         {

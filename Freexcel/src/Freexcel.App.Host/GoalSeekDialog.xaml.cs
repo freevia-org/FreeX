@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -50,4 +51,14 @@ public partial class GoalSeekDialog : Window
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { CommandParameter: string targetName })
+            return;
+
+        var target = targetName == nameof(SetCellBox) ? SetCellBox : ChangingCellBox;
+        target.Focus();
+        target.SelectAll();
+    }
 }
