@@ -23,8 +23,8 @@ public partial class ColorPickerDialog : Window
         NoColorButton.Visibility = allowNoColor ? Visibility.Visible : Visibility.Collapsed;
         BuildPaletteButtons();
 
-        SetPreview(CurrentColorPreview, _currentColor);
-        SetPreview(NewColorPreview, initialColor);
+        SetPreview(CurrentForegroundPreview, CurrentBackgroundPreview, CurrentBackgroundText, _currentColor);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, initialColor);
         if (initialColor is { } color)
             SetCustomColorText(color);
     }
@@ -80,7 +80,7 @@ public partial class ColorPickerDialog : Window
             return;
 
         SelectedColor = color;
-        SetPreview(NewColorPreview, color);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -97,7 +97,7 @@ public partial class ColorPickerDialog : Window
         }
 
         SelectedColor = color;
-        SetPreview(NewColorPreview, color);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         DialogResult = true;
     }
 
@@ -160,7 +160,7 @@ public partial class ColorPickerDialog : Window
     private void SelectColor(CellColor color)
     {
         SelectedColor = color;
-        SetPreview(NewColorPreview, color);
+        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         SetCustomColorText(color);
     }
 
@@ -171,13 +171,27 @@ public partial class ColorPickerDialog : Window
         _updatingText = false;
     }
 
-    private static void SetPreview(Border border, CellColor? color)
+    private static void SetPreview(TextBlock foregroundPreview, Border backgroundPreview, TextBlock backgroundText, CellColor? color)
     {
-        border.Background = color is { } selected
-            ? ToBrush(selected)
-            : Brushes.Transparent;
+        if (color is not { } selected)
+        {
+            foregroundPreview.Foreground = SystemColors.GrayTextBrush;
+            backgroundPreview.Background = Brushes.Transparent;
+            backgroundText.Foreground = SystemColors.ControlTextBrush;
+            return;
+        }
+
+        foregroundPreview.Foreground = ToBrush(selected);
+        backgroundPreview.Background = ToBrush(selected);
+        backgroundText.Foreground = GetReadableBrush(selected);
     }
 
     private static SolidColorBrush ToBrush(CellColor color) =>
         new(Color.FromRgb(color.R, color.G, color.B));
+
+    private static Brush GetReadableBrush(CellColor color)
+    {
+        var luminance = (0.299 * color.R) + (0.587 * color.G) + (0.114 * color.B);
+        return luminance > 140 ? Brushes.Black : Brushes.White;
+    }
 }
