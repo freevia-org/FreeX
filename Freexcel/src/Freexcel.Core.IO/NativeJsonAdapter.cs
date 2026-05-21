@@ -53,52 +53,52 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 sheet.CustomProperties.Add(new WorksheetCustomProperty(property.Name, property.Id));
             }
             foreach (var entry in sDto.RowHeights ?? [])
-                if (IsValidRowIndex(entry.Index) && IsPositiveFinite(entry.Value))
+                if (NativeJsonValueSanitizer.IsValidRowIndex(entry.Index) && NativeJsonValueSanitizer.IsPositiveFinite(entry.Value))
                     sheet.RowHeights[entry.Index] = entry.Value;
             foreach (var entry in sDto.ColumnWidths ?? [])
-                if (IsValidColumnIndex(entry.Index) && IsPositiveFinite(entry.Value))
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index) && NativeJsonValueSanitizer.IsPositiveFinite(entry.Value))
                     sheet.ColumnWidths[entry.Index] = entry.Value;
             foreach (var row in sDto.HiddenRows ?? [])
-                if (IsValidRowIndex(row))
+                if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.HiddenRows.Add(row);
             foreach (var row in sDto.FilterHiddenRows ?? [])
-                if (IsValidRowIndex(row))
+                if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.FilterHiddenRows.Add(row);
             foreach (var column in sDto.HiddenCols ?? [])
-                if (IsValidColumnIndex(column))
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.HiddenCols.Add(column);
             foreach (var entry in sDto.RowOutlineLevels ?? [])
-                if (IsValidRowIndex(entry.Index) && IsValidOutlineLevel(entry.Value))
+                if (NativeJsonValueSanitizer.IsValidRowIndex(entry.Index) && NativeJsonValueSanitizer.IsValidOutlineLevel(entry.Value))
                     sheet.RowOutlineLevels[entry.Index] = entry.Value;
             foreach (var entry in sDto.ColOutlineLevels ?? [])
-                if (IsValidColumnIndex(entry.Index) && IsValidOutlineLevel(entry.Value))
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index) && NativeJsonValueSanitizer.IsValidOutlineLevel(entry.Value))
                     sheet.ColOutlineLevels[entry.Index] = entry.Value;
             foreach (var row in sDto.GroupHiddenRows ?? [])
-                if (IsValidRowIndex(row))
+                if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.GroupHiddenRows.Add(row);
             foreach (var column in sDto.GroupHiddenCols ?? [])
-                if (IsValidColumnIndex(column))
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.GroupHiddenCols.Add(column);
             sheet.ViewMode = Enum.IsDefined(sDto.ViewMode) ? sDto.ViewMode : WorksheetViewMode.Normal;
             sheet.ShowGridlines = sDto.ShowGridlines ?? true;
             sheet.ShowHeadings = sDto.ShowHeadings ?? true;
             sheet.ShowRulers = sDto.ShowRulers ?? true;
-            sheet.ZoomPercent = ValidZoomPercentOrDefault(sDto.ZoomPercent);
+            sheet.ZoomPercent = NativeJsonValueSanitizer.ValidZoomPercentOrDefault(sDto.ZoomPercent);
             sheet.ShowFormulas = sDto.ShowFormulas ?? false;
             sheet.FullCalculationOnLoad = sDto.FullCalculationOnLoad;
             sheet.PhoneticProperties = ToWorksheetPhoneticProperties(sDto.PhoneticProperties);
-            sheet.FrozenRows = ValidFrozenRowsOrZero(sDto.FrozenRows);
-            sheet.FrozenCols = ValidFrozenColumnsOrZero(sDto.FrozenCols);
-            sheet.ViewTopRow = ValidRowPaneOrNull(sDto.ViewTopRow);
-            sheet.ViewLeftCol = ValidColumnPaneOrNull(sDto.ViewLeftCol);
-            sheet.ActiveRow = ValidRowPaneOrNull(sDto.ActiveRow);
-            sheet.ActiveCol = ValidColumnPaneOrNull(sDto.ActiveCol);
+            sheet.FrozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(sDto.FrozenRows);
+            sheet.FrozenCols = NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(sDto.FrozenCols);
+            sheet.ViewTopRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(sDto.ViewTopRow);
+            sheet.ViewLeftCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(sDto.ViewLeftCol);
+            sheet.ActiveRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(sDto.ActiveRow);
+            sheet.ActiveCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(sDto.ActiveCol);
             sheet.SplitRow = sheet.FrozenRows > 0 || sheet.FrozenCols > 0
                 ? null
-                : ValidRowPaneOrNull(sDto.SplitRow);
+                : NativeJsonValueSanitizer.ValidRowPaneOrNull(sDto.SplitRow);
             sheet.SplitColumn = sheet.FrozenRows > 0 || sheet.FrozenCols > 0
                 ? null
-                : ValidColumnPaneOrNull(sDto.SplitColumn);
+                : NativeJsonValueSanitizer.ValidColumnPaneOrNull(sDto.SplitColumn);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }
@@ -109,11 +109,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
             if (sDto.PaperSize is { } paperSize && Enum.IsDefined(paperSize))
                 sheet.PaperSize = paperSize;
             if (sDto.PageMargins is { } margins)
-                sheet.PageMargins = ValidPageMarginsOrDefault(
+                sheet.PageMargins = NativeJsonValueSanitizer.ValidPageMarginsOrDefault(
                     new WorksheetPageMargins(margins.Left, margins.Right, margins.Top, margins.Bottom),
                     WorksheetPageMargins.Narrow);
-            sheet.HeaderMargin = NonNegativeFiniteOrDefault(sDto.HeaderMargin, 0.3);
-            sheet.FooterMargin = NonNegativeFiniteOrDefault(sDto.FooterMargin, 0.3);
+            sheet.HeaderMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(sDto.HeaderMargin, 0.3);
+            sheet.FooterMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(sDto.FooterMargin, 0.3);
             sheet.PrintGridlines = sDto.PrintGridlines;
             sheet.PrintHeadings = sDto.PrintHeadings;
             sheet.PrintTitleRows = ToRepeatRange(sDto.PrintTitleRows);
@@ -141,7 +141,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             if (sDto.PrintComments is { } printComments && Enum.IsDefined(printComments))
                 sheet.PrintComments = printComments;
             if (sDto.ScaleToFit is { } scaleToFit)
-                sheet.ScaleToFit = ValidScaleToFitOrDefault(
+                sheet.ScaleToFit = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(
                     new WorksheetScaleToFit(scaleToFit.ScalePercent, scaleToFit.FitToPagesWide, scaleToFit.FitToPagesTall),
                     WorksheetScaleToFit.Default);
             foreach (var rowBreak in sDto.RowPageBreaks ?? [])
@@ -388,7 +388,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             Theme = FromWorkbookTheme(workbook.Theme),
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
-            WindowArrangement = ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
+            WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
             DisabledFormulaErrorCodes = workbook.DisabledFormulaErrorCodes
                 .Where(IsSupportedFormulaErrorCode)
                 .OrderBy(code => code)
@@ -454,52 +454,52 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     })
                     .ToList(),
                 RowHeights = s.RowHeights
-                    .Where(pair => IsValidRowIndex(pair.Key) && IsPositiveFinite(pair.Value))
+                    .Where(pair => NativeJsonValueSanitizer.IsValidRowIndex(pair.Key) && NativeJsonValueSanitizer.IsPositiveFinite(pair.Value))
                     .Select(pair => new UIntDoubleDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
                 ColumnWidths = s.ColumnWidths
-                    .Where(pair => IsValidColumnIndex(pair.Key) && IsPositiveFinite(pair.Value))
+                    .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key) && NativeJsonValueSanitizer.IsPositiveFinite(pair.Value))
                     .Select(pair => new UIntDoubleDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
-                HiddenRows = s.HiddenRows.Where(IsValidRowIndex).OrderBy(row => row).ToList(),
-                FilterHiddenRows = s.FilterHiddenRows.Where(IsValidRowIndex).OrderBy(row => row).ToList(),
-                HiddenCols = s.HiddenCols.Where(IsValidColumnIndex).OrderBy(column => column).ToList(),
+                HiddenRows = s.HiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                FilterHiddenRows = s.FilterHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                HiddenCols = s.HiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 RowOutlineLevels = s.RowOutlineLevels
-                    .Where(pair => IsValidRowIndex(pair.Key) && IsValidOutlineLevel(pair.Value))
+                    .Where(pair => NativeJsonValueSanitizer.IsValidRowIndex(pair.Key) && NativeJsonValueSanitizer.IsValidOutlineLevel(pair.Value))
                     .Select(pair => new UIntIntDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
                 ColOutlineLevels = s.ColOutlineLevels
-                    .Where(pair => IsValidColumnIndex(pair.Key) && IsValidOutlineLevel(pair.Value))
+                    .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key) && NativeJsonValueSanitizer.IsValidOutlineLevel(pair.Value))
                     .Select(pair => new UIntIntDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
-                GroupHiddenRows = s.GroupHiddenRows.Where(IsValidRowIndex).OrderBy(row => row).ToList(),
-                GroupHiddenCols = s.GroupHiddenCols.Where(IsValidColumnIndex).OrderBy(column => column).ToList(),
-                ViewMode = ValidEnumOrDefault(s.ViewMode, WorksheetViewMode.Normal),
+                GroupHiddenRows = s.GroupHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
+                GroupHiddenCols = s.GroupHiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
+                ViewMode = NativeJsonValueSanitizer.ValidEnumOrDefault(s.ViewMode, WorksheetViewMode.Normal),
                 ShowGridlines = s.ShowGridlines,
                 ShowHeadings = s.ShowHeadings,
                 ShowRulers = s.ShowRulers,
-                ZoomPercent = ValidZoomPercentOrDefault(s.ZoomPercent),
+                ZoomPercent = NativeJsonValueSanitizer.ValidZoomPercentOrDefault(s.ZoomPercent),
                 ShowFormulas = s.ShowFormulas,
                 FullCalculationOnLoad = s.FullCalculationOnLoad,
                 PhoneticProperties = ToWorksheetPhoneticPropertiesDto(s.PhoneticProperties),
-                FrozenRows = ValidFrozenRowsOrZero(s.FrozenRows),
-                FrozenCols = ValidFrozenColumnsOrZero(s.FrozenCols),
-                ViewTopRow = ValidRowPaneOrNull(s.ViewTopRow),
-                ViewLeftCol = ValidColumnPaneOrNull(s.ViewLeftCol),
-                ActiveRow = ValidRowPaneOrNull(s.ActiveRow),
-                ActiveCol = ValidColumnPaneOrNull(s.ActiveCol),
-                SplitRow = ValidFrozenRowsOrZero(s.FrozenRows) > 0 || ValidFrozenColumnsOrZero(s.FrozenCols) > 0
+                FrozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(s.FrozenRows),
+                FrozenCols = NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(s.FrozenCols),
+                ViewTopRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(s.ViewTopRow),
+                ViewLeftCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.ViewLeftCol),
+                ActiveRow = NativeJsonValueSanitizer.ValidRowPaneOrNull(s.ActiveRow),
+                ActiveCol = NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.ActiveCol),
+                SplitRow = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(s.FrozenRows) > 0 || NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(s.FrozenCols) > 0
                     ? null
-                    : ValidRowPaneOrNull(s.SplitRow),
-                SplitColumn = ValidFrozenRowsOrZero(s.FrozenRows) > 0 || ValidFrozenColumnsOrZero(s.FrozenCols) > 0
+                    : NativeJsonValueSanitizer.ValidRowPaneOrNull(s.SplitRow),
+                SplitColumn = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(s.FrozenRows) > 0 || NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(s.FrozenCols) > 0
                     ? null
-                    : ValidColumnPaneOrNull(s.SplitColumn),
+                    : NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.SplitColumn),
                 PrintArea = s.PrintArea?.ToString(),
-                PageOrientation = ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
-                PaperSize = ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
-                PageMargins = FromPageMargins(ValidPageMarginsOrDefault(s.PageMargins, WorksheetPageMargins.Narrow)),
-                HeaderMargin = NonNegativeFiniteOrDefault(s.HeaderMargin, 0.3),
-                FooterMargin = NonNegativeFiniteOrDefault(s.FooterMargin, 0.3),
+                PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
+                PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
+                PageMargins = FromPageMargins(NativeJsonValueSanitizer.ValidPageMarginsOrDefault(s.PageMargins, WorksheetPageMargins.Narrow)),
+                HeaderMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(s.HeaderMargin, 0.3),
+                FooterMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(s.FooterMargin, 0.3),
                 PrintGridlines = s.PrintGridlines,
                 PrintHeadings = s.PrintHeadings,
                 PrintTitleRows = FromValidRepeatRange(s.PrintTitleRows, CellAddress.MaxRow),
@@ -516,18 +516,18 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 HeaderFooterAlignWithMargins = s.HeaderFooterAlignWithMargins,
                 CenterHorizontallyOnPage = s.CenterHorizontallyOnPage,
                 CenterVerticallyOnPage = s.CenterVerticallyOnPage,
-                PageOrder = ValidEnumOrDefault(s.PageOrder, WorksheetPageOrder.DownThenOver),
+                PageOrder = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrder, WorksheetPageOrder.DownThenOver),
                 FirstPageNumber = s.FirstPageNumber is > 0 ? s.FirstPageNumber : null,
                 PrintBlackAndWhite = s.PrintBlackAndWhite,
                 PrintDraftQuality = s.PrintDraftQuality,
                 PrintQualityDpi = s.PrintQualityDpi is > 0 ? s.PrintQualityDpi : null,
-                PrintErrorValue = ValidEnumOrDefault(s.PrintErrorValue, WorksheetPrintErrorValue.Displayed),
-                PrintComments = ValidEnumOrDefault(s.PrintComments, WorksheetPrintComments.None),
+                PrintErrorValue = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintErrorValue, WorksheetPrintErrorValue.Displayed),
+                PrintComments = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintComments, WorksheetPrintComments.None),
                 ScaleToFit = new ScaleToFitDto
                 {
-                    ScalePercent = ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).ScalePercent,
-                    FitToPagesWide = ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).FitToPagesWide,
-                    FitToPagesTall = ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).FitToPagesTall
+                    ScalePercent = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).ScalePercent,
+                    FitToPagesWide = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).FitToPagesWide,
+                    FitToPagesTall = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).FitToPagesTall
                 },
                 RowPageBreaks = s.RowPageBreaks.Where(rowBreak => rowBreak is >= 2 and <= CellAddress.MaxRow).ToList(),
                 ColumnPageBreaks = s.ColumnPageBreaks.Where(columnBreak => columnBreak is >= 2 and <= CellAddress.MaxCol).ToList(),
@@ -603,7 +603,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     Style = FromCellStyle(workbook.GetStyle(pair.Value.StyleId))
                 }).ToList(),
                 StyleOnlyCells = s.GetStyleOnlyEntries()
-                    .Where(entry => IsValidRowIndex(entry.Key.Row) && IsValidColumnIndex(entry.Key.Col))
+                    .Where(entry => NativeJsonValueSanitizer.IsValidRowIndex(entry.Key.Row) && NativeJsonValueSanitizer.IsValidColumnIndex(entry.Key.Col))
                     .Select(entry => new StyleOnlyCellDto
                     {
                         Address = new CellAddress(s.Id, entry.Key.Row, entry.Key.Col).ToA1(),
@@ -646,7 +646,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
 
     private static void PopulateCalculationOptions(Workbook workbook, WorkbookDto dto)
     {
-        dto.CalculationMode = ValidEnumOrDefault(workbook.CalculationMode, WorkbookCalculationMode.Automatic);
+        dto.CalculationMode = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.CalculationMode, WorkbookCalculationMode.Automatic);
         dto.FullCalculationOnLoad = workbook.FullCalculationOnLoad;
         dto.ForceFullCalculation = workbook.ForceFullCalculation;
         dto.IterativeCalculation = workbook.IterativeCalculation;
@@ -869,8 +869,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 UseComboLineForSecondarySeries = chartDto.UseComboLineForSecondarySeries,
                 Left = chartDto.Left,
                 Top = chartDto.Top,
-                Width = PositiveFiniteOrDefault(chartDto.Width, 400),
-                Height = PositiveFiniteOrDefault(chartDto.Height, 300)
+                Width = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Width, 400),
+                Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Height, 300)
             };
             SanitizeLoadedChart(chart);
             return chart;
@@ -1036,7 +1036,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
 
     private static void SanitizeLoadedChart(ChartModel chart)
     {
-        chart.Type = ValidEnumOrDefault(chart.Type, ChartType.Column);
+        chart.Type = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.Type, ChartType.Column);
         chart.ChartTitleFontSize = Math.Clamp(chart.ChartTitleFontSize, 6, 72);
         chart.AxisTitleFontSize = Math.Clamp(chart.AxisTitleFontSize, 6, 72);
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
@@ -1063,19 +1063,19 @@ public sealed class NativeJsonAdapter : IFileAdapter
         }
         chart.XAxisMajorUnit = ClampPositiveAxisUnit(chart.XAxisMajorUnit);
         chart.XAxisMinorUnit = ClampPositiveAxisUnit(chart.XAxisMinorUnit);
-        chart.XAxisNumberFormat = ValidEnumOrDefault(chart.XAxisNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.XAxisNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisNumberFormat, ChartDataLabelNumberFormat.General);
         chart.XAxisGridlineThickness = Math.Clamp(chart.XAxisGridlineThickness, 0.25, 10);
-        chart.XAxisMajorTickStyle = ValidEnumOrDefault(chart.XAxisMajorTickStyle, ChartAxisTickStyle.Outside);
-        chart.XAxisMinorTickStyle = ValidEnumOrDefault(chart.XAxisMinorTickStyle, ChartAxisTickStyle.None);
+        chart.XAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMajorTickStyle, ChartAxisTickStyle.Outside);
+        chart.XAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMinorTickStyle, ChartAxisTickStyle.None);
         chart.XAxisLabelFontSize = Math.Clamp(chart.XAxisLabelFontSize, 6, 72);
         chart.XAxisLabelAngle = Math.Clamp(chart.XAxisLabelAngle, -90, 90);
         chart.XAxisLineThickness = Math.Clamp(chart.XAxisLineThickness, 0.5, 10);
         chart.YAxisMajorUnit = ClampPositiveAxisUnit(chart.YAxisMajorUnit);
         chart.YAxisMinorUnit = ClampPositiveAxisUnit(chart.YAxisMinorUnit);
-        chart.YAxisNumberFormat = ValidEnumOrDefault(chart.YAxisNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.YAxisNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisNumberFormat, ChartDataLabelNumberFormat.General);
         chart.YAxisGridlineThickness = Math.Clamp(chart.YAxisGridlineThickness, 0.25, 10);
-        chart.YAxisMajorTickStyle = ValidEnumOrDefault(chart.YAxisMajorTickStyle, ChartAxisTickStyle.Outside);
-        chart.YAxisMinorTickStyle = ValidEnumOrDefault(chart.YAxisMinorTickStyle, ChartAxisTickStyle.None);
+        chart.YAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMajorTickStyle, ChartAxisTickStyle.Outside);
+        chart.YAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMinorTickStyle, ChartAxisTickStyle.None);
         chart.YAxisLabelFontSize = Math.Clamp(chart.YAxisLabelFontSize, 6, 72);
         chart.YAxisLabelAngle = Math.Clamp(chart.YAxisLabelAngle, -90, 90);
         chart.YAxisLineThickness = Math.Clamp(chart.YAxisLineThickness, 0.5, 10);
@@ -1083,20 +1083,20 @@ public sealed class NativeJsonAdapter : IFileAdapter
             ClearXAxisBounds(chart);
         if (!ChartTypeSupport.SupportsYAxisBounds(chart.Type))
             ClearYAxisBounds(chart);
-        chart.LegendPosition = ValidEnumOrDefault(chart.LegendPosition, ChartLegendPosition.Right);
-        chart.DataLabelPosition = ValidEnumOrDefault(chart.DataLabelPosition, ChartDataLabelPosition.BestFit);
-        chart.DataLabelSeparator = ValidEnumOrDefault(chart.DataLabelSeparator, ChartDataLabelSeparator.Comma);
-        chart.DataLabelNumberFormat = ValidEnumOrDefault(chart.DataLabelNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.LegendPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.LegendPosition, ChartLegendPosition.Right);
+        chart.DataLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelPosition, ChartDataLabelPosition.BestFit);
+        chart.DataLabelSeparator = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelSeparator, ChartDataLabelSeparator.Comma);
+        chart.DataLabelNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelNumberFormat, ChartDataLabelNumberFormat.General);
         chart.DataLabelBorderThickness = Math.Clamp(chart.DataLabelBorderThickness, 0, 10);
         chart.DataLabelFontSize = Math.Clamp(chart.DataLabelFontSize, 6, 72);
         chart.DataLabelAngle = Math.Clamp(chart.DataLabelAngle, -90, 90);
         if (!ChartTypeSupport.SupportsPercentageDataLabels(chart.Type))
             chart.ShowDataLabelPercentage = false;
-        chart.TrendlineType = ValidEnumOrDefault(chart.TrendlineType, ChartTrendlineType.Linear);
+        chart.TrendlineType = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineType, ChartTrendlineType.Linear);
         chart.TrendlinePeriod = Math.Max(2, chart.TrendlinePeriod);
         chart.TrendlineOrder = Math.Clamp(chart.TrendlineOrder, 2, 6);
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
-        chart.TrendlineDashStyle = ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
+        chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;
@@ -1224,8 +1224,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             MarkerSize = supportsMarkers && format.MarkerSize is { } markerSize
                 ? Math.Clamp(markerSize, 1, 30)
                 : null,
-            DashStyle = ValidNullableEnumOrNull(format.DashStyle),
-            MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null
+            DashStyle = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.DashStyle),
+            MarkerStyle = supportsMarkers ? NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.MarkerStyle) : null
         };
     }
 
@@ -1335,7 +1335,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         return new CellStyle
         {
             FontName = string.IsNullOrWhiteSpace(dto.FontName) ? CellStyle.Default.FontName : dto.FontName,
-            FontSize = PositiveFiniteOrDefault(dto.FontSize, CellStyle.Default.FontSize),
+            FontSize = NativeJsonValueSanitizer.PositiveFiniteOrDefault(dto.FontSize, CellStyle.Default.FontSize),
             Bold = dto.Bold,
             Italic = dto.Italic,
             Underline = dto.Underline,
@@ -1349,13 +1349,13 @@ public sealed class NativeJsonAdapter : IFileAdapter
             BorderBottom = ToCellBorder(dto.BorderBottom),
             BorderLeft = ToCellBorder(dto.BorderLeft),
             NumberFormat = string.IsNullOrWhiteSpace(dto.NumberFormat) ? CellStyle.Default.NumberFormat : dto.NumberFormat,
-            HorizontalAlignment = ValidEnumOrDefault(dto.HorizontalAlignment, HorizontalAlignment.General),
-            VerticalAlignment = ValidEnumOrDefault(dto.VerticalAlignment, VerticalAlignment.Bottom),
+            HorizontalAlignment = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.HorizontalAlignment, HorizontalAlignment.General),
+            VerticalAlignment = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.VerticalAlignment, VerticalAlignment.Bottom),
             WrapText = dto.WrapText,
             ShrinkToFit = dto.ShrinkToFit,
             DoubleUnderline = dto.DoubleUnderline,
             IndentLevel = Math.Clamp(dto.IndentLevel, 0, 15),
-            TextRotation = ValidTextRotationOrDefault(dto.TextRotation),
+            TextRotation = NativeJsonValueSanitizer.ValidTextRotationOrDefault(dto.TextRotation),
             Locked = dto.Locked,
             NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls,
@@ -1432,109 +1432,50 @@ public sealed class NativeJsonAdapter : IFileAdapter
     private static CellBorder ToCellBorder(CellBorderDto? border) =>
         border is null
             ? default
-            : new CellBorder(ValidEnumOrDefault(border.Style, BorderStyle.None), border.Color);
+            : new CellBorder(NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None), border.Color);
 
     private static CellBorderDto FromCellBorder(CellBorder border) => new()
     {
-        Style = ValidEnumOrDefault(border.Style, BorderStyle.None),
+        Style = NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None),
         Color = border.Color
     };
 
-    private static int ValidTextRotationOrDefault(int rotation) =>
-        rotation is >= -90 and <= 90 or 255 ? rotation : 0;
-
-    private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
-        where TEnum : struct, Enum =>
-        Enum.IsDefined(value) ? value : defaultValue;
-
-    private static TEnum? ValidNullableEnumOrNull<TEnum>(TEnum? value)
-        where TEnum : struct, Enum =>
-        value is { } enumValue && Enum.IsDefined(enumValue) ? enumValue : null;
-
-    private static double PositiveFiniteOrDefault(double value, double defaultValue) =>
-        double.IsFinite(value) && value > 0 ? value : defaultValue;
-
-    private static bool IsPositiveFinite(double value) =>
-        double.IsFinite(value) && value > 0;
-
-    private static bool IsValidRowIndex(uint row) =>
-        row is >= 1 and <= CellAddress.MaxRow;
-
-    private static bool IsValidColumnIndex(uint column) =>
-        column is >= 1 and <= CellAddress.MaxCol;
-
-    private static bool IsValidOutlineLevel(int level) =>
-        level is >= 1 and <= 8;
-
-    private static double NonNegativeFiniteOrDefault(double? value, double defaultValue) =>
-        value is { } number && double.IsFinite(number) && number >= 0 ? number : defaultValue;
-
-    private static WorksheetPageMargins ValidPageMarginsOrDefault(WorksheetPageMargins margins, WorksheetPageMargins defaultValue) =>
-        IsNonNegativeFinite(margins.Left) &&
-        IsNonNegativeFinite(margins.Right) &&
-        IsNonNegativeFinite(margins.Top) &&
-        IsNonNegativeFinite(margins.Bottom)
-            ? margins
-            : defaultValue;
-
-    private static WorksheetScaleToFit ValidScaleToFitOrDefault(WorksheetScaleToFit scaleToFit, WorksheetScaleToFit defaultValue) =>
-        scaleToFit.ScalePercent is < 10 or > 400 ||
-        scaleToFit.FitToPagesWide is < 1 ||
-        scaleToFit.FitToPagesTall is < 1
-            ? defaultValue
-            : scaleToFit;
-
-    private static int ValidZoomPercentOrDefault(int value) =>
-        value is >= 10 and <= 400 ? value : 100;
-
-    private static uint? ValidRowPaneOrNull(uint? row) =>
-        row is >= 1 and <= CellAddress.MaxRow ? row : null;
-
-    private static uint? ValidColumnPaneOrNull(uint? column) =>
-        column is >= 1 and <= CellAddress.MaxCol ? column : null;
-
-    private static uint ValidFrozenRowsOrZero(uint row) =>
-        row <= CellAddress.MaxRow ? row : 0;
-
-    private static uint ValidFrozenColumnsOrZero(uint column) =>
-        column <= CellAddress.MaxCol ? column : 0;
-
     private static WorksheetCustomViewState ToWorksheetCustomViewState(CustomViewSheetDto sheetDto)
     {
-        var frozenRows = ValidFrozenRowsOrZero(sheetDto.FrozenRows);
-        var frozenCols = ValidFrozenColumnsOrZero(sheetDto.FrozenCols);
+        var frozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(sheetDto.FrozenRows);
+        var frozenCols = NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(sheetDto.FrozenCols);
         var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
         return new WorksheetCustomViewState(
             sheetDto.SheetName,
             Enum.IsDefined(sheetDto.ViewMode) ? sheetDto.ViewMode : WorksheetViewMode.Normal,
             frozenRows,
             frozenCols,
-            hasFrozenPanes ? null : ValidRowPaneOrNull(sheetDto.SplitRow),
-            hasFrozenPanes ? null : ValidColumnPaneOrNull(sheetDto.SplitColumn),
+            hasFrozenPanes ? null : NativeJsonValueSanitizer.ValidRowPaneOrNull(sheetDto.SplitRow),
+            hasFrozenPanes ? null : NativeJsonValueSanitizer.ValidColumnPaneOrNull(sheetDto.SplitColumn),
             sheetDto.ShowGridlines ?? true,
             sheetDto.ShowHeadings ?? true,
             sheetDto.ShowRulers ?? true,
-            ValidZoomPercentOrDefault(sheetDto.ZoomPercent),
+            NativeJsonValueSanitizer.ValidZoomPercentOrDefault(sheetDto.ZoomPercent),
             sheetDto.ShowFormulas ?? false);
     }
 
     private static CustomViewSheetDto ToCustomViewSheetDto(WorksheetCustomViewState state)
     {
-        var frozenRows = ValidFrozenRowsOrZero(state.FrozenRows);
-        var frozenCols = ValidFrozenColumnsOrZero(state.FrozenCols);
+        var frozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(state.FrozenRows);
+        var frozenCols = NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(state.FrozenCols);
         var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
         return new CustomViewSheetDto
         {
             SheetName = state.SheetName,
-            ViewMode = ValidEnumOrDefault(state.ViewMode, WorksheetViewMode.Normal),
+            ViewMode = NativeJsonValueSanitizer.ValidEnumOrDefault(state.ViewMode, WorksheetViewMode.Normal),
             FrozenRows = frozenRows,
             FrozenCols = frozenCols,
-            SplitRow = hasFrozenPanes ? null : ValidRowPaneOrNull(state.SplitRow),
-            SplitColumn = hasFrozenPanes ? null : ValidColumnPaneOrNull(state.SplitColumn),
+            SplitRow = hasFrozenPanes ? null : NativeJsonValueSanitizer.ValidRowPaneOrNull(state.SplitRow),
+            SplitColumn = hasFrozenPanes ? null : NativeJsonValueSanitizer.ValidColumnPaneOrNull(state.SplitColumn),
             ShowGridlines = state.ShowGridlines,
             ShowHeadings = state.ShowHeadings,
             ShowRulers = state.ShowRulers,
-            ZoomPercent = ValidZoomPercentOrDefault(state.ZoomPercent),
+            ZoomPercent = NativeJsonValueSanitizer.ValidZoomPercentOrDefault(state.ZoomPercent),
             ShowFormulas = state.ShowFormulas
         };
     }
@@ -1569,21 +1510,6 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 Alignment = alignment
             };
     }
-
-    private static int ValidZoomPercentOrDefault(int? zoomPercent) =>
-        zoomPercent is >= 10 and <= 400 ? zoomPercent.Value : 100;
-
-    private static bool IsNonNegativeFinite(double value) =>
-        double.IsFinite(value) && value >= 0;
-
-    private static double NormalizeRotation(double value)
-    {
-        var normalized = value % 360;
-        return normalized < 0 ? normalized + 360 : normalized;
-    }
-
-    private static double SanitizeCropEdge(double value) =>
-        double.IsFinite(value) && value > 0 ? Math.Min(0.99, value) : 0;
 
     private static void NormalizePictureCrop(PictureModel picture)
     {
