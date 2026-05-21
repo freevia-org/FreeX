@@ -15,7 +15,7 @@ public sealed class AdvancedFilterDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _listRangeBox = new();
-    private readonly TextBox _criteriaRangeBox = new() { Text = "E1:F2" };
+    private readonly TextBox _criteriaRangeBox = new();
     private readonly TextBox _copyToBox = new();
     private readonly RadioButton _filterInPlaceButton = new() { Content = "_Filter the list, in-place", IsChecked = true };
     private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "_Copy to another location" };
@@ -148,7 +148,8 @@ public sealed class AdvancedFilterDialog : Window
             Content = "...",
             Width = 28,
             Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox
+            Tag = textBox,
+            ToolTip = automationName
         };
         AutomationProperties.SetName(pickerButton, automationName);
         pickerButton.Click += ReferencePickerButton_Click;
