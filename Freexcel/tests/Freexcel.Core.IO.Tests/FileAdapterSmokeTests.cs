@@ -10167,6 +10167,12 @@ public partial class FileAdapterSmokeTests
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
         pageSetup.Attribute("copies")!.Value.Should().Be("3");
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        pageSetup.Element(worksheetNs + "nativePageSetupChild").Should().NotBeNull();
+        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -14850,6 +14856,9 @@ public partial class FileAdapterSmokeTests
             pageSetup.SetAttributeValue("usePrinterDefaults", "1");
             pageSetup.SetAttributeValue("copies", "3");
             pageSetup.SetAttributeValue("customAttr", "page-setup-native");
+            pageSetup.Add(new XElement(
+                worksheetNs + "nativePageSetupChild",
+                new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
