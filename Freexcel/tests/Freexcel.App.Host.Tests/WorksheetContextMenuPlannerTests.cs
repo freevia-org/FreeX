@@ -130,9 +130,12 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Select(command => command.Header).Should().ContainInOrder(
             "Format Picture...",
             "Crop...",
-            "Reset Crop");
+            "Reset Crop",
+            "Edit Alt Text...");
         commands.Single(command => command.Header == "Format Picture...")
             .Action.Should().Be(WorksheetContextMenuAction.FormatPicture);
+        commands.Single(command => command.Header == "Edit Alt Text...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditAltText);
     }
 
     [Theory]
@@ -150,7 +153,8 @@ public sealed class WorksheetContextMenuPlannerTests
             "Size and Properties...",
             "Rotate...",
             "Shape Fill...",
-            "Shape Outline...");
+            "Shape Outline...",
+            "Edit Alt Text...");
         if (includesReorder)
         {
             commands.Select(command => command.Header).Should().ContainInOrder(
