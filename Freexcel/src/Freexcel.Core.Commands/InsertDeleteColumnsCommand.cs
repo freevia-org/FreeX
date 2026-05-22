@@ -18,7 +18,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
-    private Dictionary<string, GridRange>? _namedRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
@@ -158,7 +158,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
-    private Dictionary<string, GridRange>? _namedRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
