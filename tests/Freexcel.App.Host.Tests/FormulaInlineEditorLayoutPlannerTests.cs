@@ -28,12 +28,30 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
     }
 
     [Fact]
-    public void GetChromeBorderThickness_RemovesRightBorderOnlyWhenTextSpillsRight()
+    public void GetChromeBorderThickness_RemovesOverflowSideBorders()
     {
-        FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(textSpillsRight: false)
+        FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(FormulaInlineEditorOverflow.None)
             .Should().Be(new Thickness(1));
 
-        FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(textSpillsRight: true)
+        FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(new FormulaInlineEditorOverflow(Left: false, Right: true))
             .Should().Be(new Thickness(1, 1, 0, 1));
+
+        FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(new FormulaInlineEditorOverflow(Left: true, Right: false))
+            .Should().Be(new Thickness(0, 1, 1, 1));
+    }
+
+    [Fact]
+    public void GetChromeRect_ExtendsOnlyUnderHiddenOverflowEdges()
+    {
+        var editorRect = new Rect(100, 40, 64, 20);
+
+        FormulaInlineEditorLayoutPlanner.GetChromeRect(editorRect, FormulaInlineEditorOverflow.None)
+            .Should().Be(editorRect);
+
+        FormulaInlineEditorLayoutPlanner.GetChromeRect(editorRect, new FormulaInlineEditorOverflow(Left: false, Right: true))
+            .Should().Be(new Rect(100, 40, 66, 20));
+
+        FormulaInlineEditorLayoutPlanner.GetChromeRect(editorRect, new FormulaInlineEditorOverflow(Left: true, Right: false))
+            .Should().Be(new Rect(98, 40, 66, 20));
     }
 }
