@@ -61,14 +61,17 @@ public sealed class ObjectDialogTests
     public void ObjectSizeDialog_ExposesExcelLikeWidthHeightAndAspectRatioControls()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var objectSizeSource = source[
+            source.IndexOf("public sealed class ObjectSizeDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record RotationDialogResult", StringComparison.Ordinal)];
 
-        source.Should().Contain("_widthBox");
-        source.Should().Contain("_heightBox");
-        source.Should().Contain("Height:");
-        source.Should().Contain("Width:");
-        source.Should().Contain("Lock aspect ratio is hidden until proportional resizing is wired");
-        source.Should().NotContain("_lockAspectRatioBox");
-        source.Should().NotContain("Content = \"_Lock aspect ratio\"");
+        objectSizeSource.Should().Contain("_widthBox");
+        objectSizeSource.Should().Contain("_heightBox");
+        objectSizeSource.Should().Contain("Height:");
+        objectSizeSource.Should().Contain("Width:");
+        objectSizeSource.Should().Contain("Lock aspect ratio is hidden until proportional resizing is wired");
+        objectSizeSource.Should().NotContain("_lockAspectRatioBox");
+        objectSizeSource.Should().NotContain("Content = \"_Lock aspect ratio\"");
     }
 
     [Fact]
@@ -150,6 +153,51 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_cropBottomBox");
         source.Should().Contain("Left:");
         source.Should().Contain("Right:");
+    }
+
+    [Fact]
+    public void FormatPictureDialog_TryCreateResult_CapturesSizeRotationCropAndAltText()
+    {
+        FormatPictureDialog.TryCreateResult(
+                "320x180",
+                "45",
+                "10, 5, 0, 20",
+                " Revenue chart ",
+                out var result,
+                out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().BeNull();
+        result.Should().Be(new FormatPictureDialogResult(
+            320,
+            180,
+            45,
+            0.10,
+            0.05,
+            0,
+            0.20,
+            "Revenue chart"));
+    }
+
+    [Fact]
+    public void FormatPictureDialog_ExposesExcelStyleTabsAndAspectRatioControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        source.Should().Contain("public sealed class FormatPictureDialog");
+        source.Should().Contain("Header = \"_Size\"");
+        source.Should().Contain("Header = \"_Crop\"");
+        source.Should().Contain("Header = \"_Alt Text\"");
+        source.Should().Contain("Content = \"_Lock aspect ratio\"");
+        source.Should().Contain("SyncAspectFromWidth");
+        source.Should().Contain("SyncAspectFromHeight");
+        source.Should().Contain("Crop is available for inserted image pictures.");
+        drawingSource.Should().Contain("new FormatPictureDialog(picture)");
+        drawingSource.Should().Contain("CreateFormatPictureCommand");
+        drawingSource.Should().Contain("new SetPictureAltTextCommand");
+        drawingSource.Should().Contain("new CompositeWorkbookCommand(\"Format Picture\", commands)");
     }
 
     [Fact]

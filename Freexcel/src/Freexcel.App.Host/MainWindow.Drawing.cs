@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -56,19 +57,43 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ObjectSizeDialog(picture.Width, picture.Height, "Picture Size") { Owner = this };
+        var dialog = new FormatPictureDialog(picture) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Picture Size",
-                sheetId => new ResizePictureCommand(
-                    sheetId,
-                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    dialog.Result.Width,
-                    dialog.Result.Height)))
+                "Format Picture",
+                sheetId => CreateFormatPictureCommand(sheetId, GetTargetPicture(sheetId), dialog.Result)))
             return;
 
         UpdateViewport();
+    }
+
+    private static IWorkbookCommand CreateFormatPictureCommand(
+        SheetId sheetId,
+        PictureModel? picture,
+        FormatPictureDialogResult result)
+    {
+        if (picture is null)
+            return new FailedWorkbookCommand("Picture was not found.");
+
+        var commands = new List<IWorkbookCommand>
+        {
+            new ResizePictureCommand(sheetId, picture.Id, result.Width, result.Height),
+            new RotatePictureCommand(sheetId, picture.Id, result.RotationDegrees),
+            new SetPictureAltTextCommand(sheetId, picture.Id, result.AltText)
+        };
+        if (picture.Kind == PictureKind.Image)
+        {
+            commands.Add(new SetPictureCropCommand(
+                sheetId,
+                picture.Id,
+                result.CropLeft,
+                result.CropTop,
+                result.CropRight,
+                result.CropBottom));
+        }
+
+        return new CompositeWorkbookCommand("Format Picture", commands);
     }
 
     private void PictureRotateBtn_Click(object sender, RoutedEventArgs e)
