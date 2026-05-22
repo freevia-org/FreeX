@@ -14,6 +14,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Copy",
             "Paste",
             "Paste Special...",
+            "Insert Copied Cells...",
             "Insert...",
             "Insert Row Above",
             "Delete...",
@@ -64,6 +65,8 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.PickFromDropDown);
         commands.Single(command => command.Header == "Quick Analysis")
             .Action.Should().Be(WorksheetContextMenuAction.QuickAnalysis);
+        commands.Single(command => command.Header == "Insert Copied Cells...")
+            .Action.Should().Be(WorksheetContextMenuAction.InsertCopiedCells);
         commands.Single(command => command.Header == "Define Name...")
             .Action.Should().Be(WorksheetContextMenuAction.DefineName);
         commands.Single(command => command.Header == "Create Table...")
@@ -105,6 +108,7 @@ public sealed class WorksheetContextMenuPlannerTests
     [InlineData("Copy", "_Copy")]
     [InlineData("Paste", "_Paste")]
     [InlineData("Paste Special...", "Paste _Special...")]
+    [InlineData("Insert Copied Cells...", "Insert Copied _Cells...")]
     [InlineData("Quick Analysis", "_Quick Analysis")]
     [InlineData("Edit Comment...", "_Edit Comment...")]
     [InlineData("Delete Comment", "Delete _Comment")]
