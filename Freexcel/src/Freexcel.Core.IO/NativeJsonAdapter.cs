@@ -124,6 +124,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.FirstPageFooter = ToHeaderFooter(sDto.FirstPageFooter);
             sheet.EvenPageHeader = ToHeaderFooter(sDto.EvenPageHeader);
             sheet.EvenPageFooter = ToHeaderFooter(sDto.EvenPageFooter);
+            sheet.PageHeaderPictures = ToHeaderFooterPictures(sDto.PageHeaderPictures);
+            sheet.PageFooterPictures = ToHeaderFooterPictures(sDto.PageFooterPictures);
+            sheet.FirstPageHeaderPictures = ToHeaderFooterPictures(sDto.FirstPageHeaderPictures);
+            sheet.FirstPageFooterPictures = ToHeaderFooterPictures(sDto.FirstPageFooterPictures);
+            sheet.EvenPageHeaderPictures = ToHeaderFooterPictures(sDto.EvenPageHeaderPictures);
+            sheet.EvenPageFooterPictures = ToHeaderFooterPictures(sDto.EvenPageFooterPictures);
             sheet.DifferentFirstPageHeaderFooter = sDto.DifferentFirstPageHeaderFooter;
             sheet.DifferentOddEvenHeaderFooter = sDto.DifferentOddEvenHeaderFooter;
             sheet.HeaderFooterScaleWithDocument = sDto.HeaderFooterScaleWithDocument ?? true;
@@ -510,6 +516,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 FirstPageFooter = FromHeaderFooter(s.FirstPageFooter),
                 EvenPageHeader = FromHeaderFooter(s.EvenPageHeader),
                 EvenPageFooter = FromHeaderFooter(s.EvenPageFooter),
+                PageHeaderPictures = FromHeaderFooterPictures(s.PageHeaderPictures),
+                PageFooterPictures = FromHeaderFooterPictures(s.PageFooterPictures),
+                FirstPageHeaderPictures = FromHeaderFooterPictures(s.FirstPageHeaderPictures),
+                FirstPageFooterPictures = FromHeaderFooterPictures(s.FirstPageFooterPictures),
+                EvenPageHeaderPictures = FromHeaderFooterPictures(s.EvenPageHeaderPictures),
+                EvenPageFooterPictures = FromHeaderFooterPictures(s.EvenPageFooterPictures),
                 DifferentFirstPageHeaderFooter = s.DifferentFirstPageHeaderFooter,
                 DifferentOddEvenHeaderFooter = s.DifferentOddEvenHeaderFooter,
                 HeaderFooterScaleWithDocument = s.HeaderFooterScaleWithDocument,
