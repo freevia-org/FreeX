@@ -29,7 +29,10 @@ public static class PasteSpecialPlanner
         if (selection.Mode == PasteSpecialDialogMode.Validation)
             return new PasteSpecialPlan(PasteSpecialAction.Validation, PasteMode.All, options, selection.KeepColumnWidths);
 
-        if (selection.Mode is PasteSpecialDialogMode.Picture or PasteSpecialDialogMode.LinkedPicture)
+        if (selection.Mode == PasteSpecialDialogMode.LinkedPicture)
+            return new PasteSpecialPlan(PasteSpecialAction.LinkedPicture, PasteMode.All, options, selection.KeepColumnWidths);
+
+        if (selection.Mode == PasteSpecialDialogMode.Picture)
             return new PasteSpecialPlan(PasteSpecialAction.Picture, PasteMode.All, options, selection.KeepColumnWidths);
 
         if (selection.PasteLink)
@@ -77,5 +80,6 @@ public enum PasteSpecialAction
     Comments,
     Validation,
     Picture,
+    LinkedPicture,
     Link
 }
