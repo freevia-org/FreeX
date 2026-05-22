@@ -10590,6 +10590,17 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "cols")!
             .Elements(worksheetNs + "col")
             .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
+        worksheetXml.Root!
+            .Element(worksheetNs + "cols")!
+            .Attribute("nativeColsAttr")
+            .Should()
+            .NotBeNull();
+        worksheetXml.Root!
+            .Element(worksheetNs + "cols")!
+            .Attribute("nativeColsAttr")!
+            .Value
+            .Should()
+            .Be("kept");
         column.Attribute("bestFit")!.Value.Should().Be("1");
         column.Attribute("phonetic")!.Value.Should().Be("1");
         column.Attribute("customAttr")!.Value.Should().Be("column-native");
@@ -15190,6 +15201,7 @@ public partial class FileAdapterSmokeTests
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var columns = worksheetXml.Root!.Element(worksheetNs + "cols");
             columns.Should().NotBeNull();
+            columns!.SetAttributeValue("nativeColsAttr", "kept");
             var column = columns!.Elements(worksheetNs + "col")
                 .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
             column.SetAttributeValue("bestFit", "1");
