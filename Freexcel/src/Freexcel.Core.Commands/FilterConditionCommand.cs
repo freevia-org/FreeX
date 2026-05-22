@@ -7,6 +7,17 @@ public interface IFilterCriterion
     bool Matches(ScalarValue value);
 }
 
+public sealed record CompositeFilterCriterion(
+    IFilterCriterion First,
+    IFilterCriterion Second,
+    bool UseAnd) : IFilterCriterion
+{
+    public bool Matches(ScalarValue value) =>
+        UseAnd
+            ? First.Matches(value) && Second.Matches(value)
+            : First.Matches(value) || Second.Matches(value);
+}
+
 public sealed record BlankFilterCriterion : IFilterCriterion
 {
     public bool Matches(ScalarValue value) => value is BlankValue;
