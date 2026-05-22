@@ -95,6 +95,9 @@ public sealed class GoToDialogsTests
             GoToSpecialKind.ColumnDifferences,
             GoToSpecialKind.LastCell,
             GoToSpecialKind.ConditionalFormats,
+            GoToSpecialKind.Objects,
+            GoToSpecialKind.Precedents,
+            GoToSpecialKind.Dependents,
             GoToSpecialKind.DataValidation,
             GoToSpecialKind.VisibleCellsOnly]);
     }
@@ -115,6 +118,9 @@ public sealed class GoToDialogsTests
             "new(GoToSpecialKind.ColumnDifferences, \"Column dif_ferences\")",
             "new(GoToSpecialKind.LastCell, \"_Last cell\")",
             "new(GoToSpecialKind.ConditionalFormats, \"Conditional _formats\")",
+            "new(GoToSpecialKind.Objects, \"_Objects\")",
+            "new(GoToSpecialKind.Precedents, \"_Precedents\")",
+            "new(GoToSpecialKind.Dependents, \"_Dependents\")",
             "new(GoToSpecialKind.DataValidation, \"_Data validation\")",
             "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
         })
@@ -138,5 +144,17 @@ public sealed class GoToDialogsTests
         GoToSpecialDialog.TryParseChoice("conditional formats", out kind).Should().BeTrue();
 
         kind.Should().Be(GoToSpecialKind.ConditionalFormats);
+
+        GoToSpecialDialog.TryParseChoice("objects", out kind).Should().BeTrue();
+
+        kind.Should().Be(GoToSpecialKind.Objects);
+
+        GoToSpecialDialog.TryParseChoice("precedents", out kind).Should().BeTrue();
+
+        kind.Should().Be(GoToSpecialKind.Precedents);
+
+        GoToSpecialDialog.TryParseChoice("dependents", out kind).Should().BeTrue();
+
+        kind.Should().Be(GoToSpecialKind.Dependents);
     }
 }

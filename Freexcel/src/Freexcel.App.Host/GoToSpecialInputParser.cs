@@ -17,6 +17,9 @@ public static class GoToSpecialInputParser
             "current region" => GoToSpecialKind.CurrentRegion,
             "last cell" => GoToSpecialKind.LastCell,
             "conditional format" or "conditional formats" => GoToSpecialKind.ConditionalFormats,
+            "object" or "objects" => GoToSpecialKind.Objects,
+            "precedent" or "precedents" => GoToSpecialKind.Precedents,
+            "dependent" or "dependents" => GoToSpecialKind.Dependents,
             _ => GoToSpecialKind.Blanks
         };
 }

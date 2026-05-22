@@ -22,6 +22,12 @@ public sealed class GoToSpecialInputParserTests
     [InlineData("current region", GoToSpecialKind.CurrentRegion)]
     [InlineData("last cell", GoToSpecialKind.LastCell)]
     [InlineData("conditional formats", GoToSpecialKind.ConditionalFormats)]
+    [InlineData("object", GoToSpecialKind.Objects)]
+    [InlineData("objects", GoToSpecialKind.Objects)]
+    [InlineData("precedent", GoToSpecialKind.Precedents)]
+    [InlineData("precedents", GoToSpecialKind.Precedents)]
+    [InlineData("dependent", GoToSpecialKind.Dependents)]
+    [InlineData("dependents", GoToSpecialKind.Dependents)]
     [InlineData("unknown", GoToSpecialKind.Blanks)]
     public void Parse_MapsPromptTextToGoToSpecialKind(string input, GoToSpecialKind expected)
     {
