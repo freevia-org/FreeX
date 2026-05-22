@@ -75,7 +75,7 @@ public class XlsxCorpusScaffoldTests
 
         report.Should().Contain("## Pass Rate Summary");
         report.Should().Contain("| Workbook set | Executed | Passing | Pass rate |");
-        report.Should().Contain("| Generated supported-pass workbooks | 16 | 16 | 100% |");
+        report.Should().Contain("| Generated supported-pass workbooks | 26 | 26 | 100% |");
         report.Should().Contain("| Public redistributed workbooks | 25 | 25 | 100% |");
         report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
         report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
