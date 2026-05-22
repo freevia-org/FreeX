@@ -141,6 +141,12 @@ public sealed partial class NativeJsonAdapter
         public HeaderFooterDto? FirstPageFooter { get; set; }
         public HeaderFooterDto? EvenPageHeader { get; set; }
         public HeaderFooterDto? EvenPageFooter { get; set; }
+        public HeaderFooterPictureSetDto? PageHeaderPictures { get; set; }
+        public HeaderFooterPictureSetDto? PageFooterPictures { get; set; }
+        public HeaderFooterPictureSetDto? FirstPageHeaderPictures { get; set; }
+        public HeaderFooterPictureSetDto? FirstPageFooterPictures { get; set; }
+        public HeaderFooterPictureSetDto? EvenPageHeaderPictures { get; set; }
+        public HeaderFooterPictureSetDto? EvenPageFooterPictures { get; set; }
         public bool DifferentFirstPageHeaderFooter { get; set; }
         public bool DifferentOddEvenHeaderFooter { get; set; }
         public bool? HeaderFooterScaleWithDocument { get; set; }
@@ -323,6 +329,22 @@ public sealed partial class NativeJsonAdapter
         public string? Left { get; set; }
         public string? Center { get; set; }
         public string? Right { get; set; }
+    }
+
+    private class HeaderFooterPictureSetDto
+    {
+        public HeaderFooterPictureDto? Left { get; set; }
+        public HeaderFooterPictureDto? Center { get; set; }
+        public HeaderFooterPictureDto? Right { get; set; }
+    }
+
+    private class HeaderFooterPictureDto
+    {
+        public string ImageBase64 { get; set; } = "";
+        public string ContentType { get; set; } = "image/png";
+        public string? FileName { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
     }
 
     private class WorksheetBackgroundDto

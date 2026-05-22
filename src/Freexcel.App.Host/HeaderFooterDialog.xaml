@@ -149,8 +149,8 @@
                 <Button Content="File _path" Tag="&amp;[Path]&amp;[File]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
                 <Button Content="File _name" Tag="&amp;[File]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
                 <Button Content="_Sheet name" Tag="&amp;[Tab]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
-                <Button Content="P_icture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
-                <Button Content="For_mat picture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
+                <Button Content="P_icture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="PictureButton_Click"/>
+                <Button Content="For_mat picture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="FormatPictureButton_Click"/>
             </StackPanel>
         </Grid>
 
