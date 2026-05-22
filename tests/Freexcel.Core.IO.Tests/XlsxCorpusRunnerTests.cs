@@ -459,6 +459,9 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("data-bars"))
             summary.Sheets.Sum(sheet => sheet.DataBarConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
 
+        if (tags.Contains("icon-sets"))
+            summary.Sheets.Sum(sheet => sheet.IconSetConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
         if (tags.Contains("charts") && !tags.Contains("unsupported-chart-family"))
             summary.Sheets.Sum(sheet => sheet.ChartCount).Should().BeGreaterThan(0, row.Id);
 
@@ -544,6 +547,7 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count,
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
             sheet.Comments.Count,
             sheet.Hyperlinks.Count,
             sheet.Charts.Count,
@@ -821,6 +825,7 @@ public class XlsxCorpusRunnerTests
         int ConditionalFormatCount,
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
+        int IconSetConditionalFormatCount,
         int CommentCount,
         int HyperlinkCount,
         int ChartCount,
