@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Decrease Indent" shape-rendering="crispEdges">
 <rect width="20" height="20" fill="none"/>
-<rect x="8" y="5" width="10" height="1" fill="#202124"/>
-<rect x="8" y="10" width="8" height="1" fill="#202124"/>
-<rect x="8" y="15" width="10" height="1" fill="#202124"/>
-<path d="M2 10l5-4v3h6v2H7v3z" fill="#202124"/>
+<rect x="8" y="5" width="10" height="1" fill="#242424"/>
+<rect x="8" y="10" width="8" height="1" fill="#242424"/>
+<rect x="8" y="15" width="10" height="1" fill="#242424"/>
+<path d="M2 10l5-4v3h6v2H7v3z" fill="#242424"/>
 </svg>
