@@ -1,6 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Format Painter">
 <defs><style>
-.bg{fill:#fff}.paper{fill:#ffffff}.soft{fill:#f3f6f4}.grid{stroke:#6b7280;stroke-width:1.25;fill:none;stroke-linecap:square}.line{stroke:#202124;stroke-width:1.25;fill:none;stroke-linecap:round;stroke-linejoin:round}.thin{stroke:#202124;stroke-width:1.25;fill:none;stroke-linecap:round;stroke-linejoin:round}.heavy{stroke:#202124;stroke-width:1.25;fill:none;stroke-linecap:round;stroke-linejoin:round}.txt{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#202124}.txtb{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#202124}.green{fill:#217346}.greenLine{stroke:#217346}.blue{fill:#2b78d4}.blueLine{stroke:#2b78d4}.yellow{fill:#f7d14a}.red{fill:#d83b01}.orange{fill:#f4a340}.purple{fill:#8b5cf6}.gray{fill:#6b7280}.palegreen{fill:#d9eadf}.paleblue{fill:#dcecff}.paleyellow{fill:#fff2b8}.palered{fill:#ffd7d7}
+      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
+      .green{fill:#107c41}
+      .green2{fill:#dff6dd}
+      .blue{fill:#0078d4}
+      .yellow{fill:#ffb900}
+      .orange{fill:#f7630c}
+      .red{fill:#d32f2f}
+      .purple{fill:#8b5cf6}
+      .gray{fill:#5c5c5c}
+      .paper{fill:#ffffff}
+      .none{fill:none}
 </style></defs>
 <rect width="32" height="32" fill="none"/>
 <g>

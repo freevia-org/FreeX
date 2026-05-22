@@ -1,11 +1,20 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Options">
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Options">
   <defs>
     <style>
-      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
-      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
-    </style>
+      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
+      .green{fill:#107c41}
+      .green2{fill:#dff6dd}
+      .blue{fill:#0078d4}
+      .yellow{fill:#ffb900}
+      .orange{fill:#f7630c}
+      .red{fill:#d32f2f}
+      .purple{fill:#8b5cf6}
+      .gray{fill:#5c5c5c}
+      .paper{fill:#ffffff}
+      .none{fill:none}
+</style>
   </defs>
   <rect width="54" height="54" fill="none"/>
   <g><polygon points="27,8.64 30.71,13.17 34.16,14.6 39.98,14.02 39.4,19.84 40.83,23.29 45.36,27 40.83,30.71 39.4,34.16 39.98,39.98 34.16,39.4 30.71,40.83 27,45.36 23.29,40.83 19.84,39.4 14.02,39.98 14.6,34.16 13.17,30.71 8.64,27 13.17,23.29 14.6,19.84 14.02,14.02 19.84,14.6 23.29,13.17" fill="#f8fafc" stroke="#202124" stroke-width="2" stroke-linejoin="round"/><circle cx="27" cy="27" r="5.14" fill="none" stroke="#202124" stroke-width="2"/>  </g>
