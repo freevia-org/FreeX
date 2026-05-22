@@ -684,6 +684,40 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_NumberTab_UpdatesSamplePreviewFromResolvedNumberFormat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var type = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Currency";
+                decimals.Text = "3";
+                symbols.SelectedItem = "EUR";
+                preview.Text.Should().Be("EUR1,234.560");
+
+                categories.SelectedItem = "Percentage";
+                decimals.Text = "1";
+                preview.Text.Should().Be("123456.0%");
+
+                categories.SelectedItem = "Custom";
+                type.Text = "m/d/yyyy";
+                preview.Text.Should().Be("5/21/2026");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_NumberTab_EnablesOnlyControlsThatAffectSelectedCategory()
     {
         StaTestRunner.Run(() =>
