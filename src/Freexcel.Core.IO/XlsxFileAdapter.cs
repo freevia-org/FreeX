@@ -116,16 +116,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (!style.Equals(CellStyle.Default))
                     cell.StyleId = workbook.RegisterStyle(style);
 
+                if (cell.Value is BlankValue && !cell.HasFormula)
+                {
+                    if (cell.StyleId != StyleId.Default)
+                        sheet.SetStyleOnly(addr.Row, addr.Col, cell.StyleId);
+
+                    continue;
+                }
+
                 sheet.SetCell(addr, cell);
             }
 
-            foreach (var xlCell in xlSheet.CellsUsed(XLCellsUsedOptions.AllFormats))
+            foreach (var (row, col) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {
-                var row = (uint)xlCell.Address.RowNumber;
-                var col = (uint)xlCell.Address.ColumnNumber;
                 if (sheet.GetCell(row, col) is not null)
                     continue;
 
+                var xlCell = xlSheet.Cell((int)row, (int)col);
                 var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
                 if (!style.Equals(CellStyle.Default))
                     sheet.SetStyleOnly(row, col, workbook.RegisterStyle(style));
