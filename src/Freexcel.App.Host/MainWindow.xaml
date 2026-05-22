@@ -724,9 +724,9 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,2,0">
                                 <!-- Conditional Formatting -->
-                                <Button Width="94" Height="64" Margin="1,0" Tag="RibbonCompact:94:36"
+                                <Button Width="94" Height="76" Margin="1,0" Tag="RibbonCompact:94:36"
                                         Style="{StaticResource RibbonTallButton}" Click="CfPickerBtn_Click"
                                         local:RibbonTooltip.Title="Conditional Formatting"
                                         local:RibbonTooltip.KeyTip="L"
@@ -796,7 +796,7 @@
                                     </StackPanel>
                                 </Button>
                                 <!-- Format as Table -->
-                                <Button Width="78" Height="64" Margin="1,0" Tag="RibbonCompact:78:36"
+                                <Button Width="78" Height="76" Margin="1,0" Tag="RibbonCompact:78:36"
                                         Style="{StaticResource RibbonTallButton}" Click="FormatTableBtn_Click"
                                         local:RibbonTooltip.Title="Format as Table"
                                         local:RibbonTooltip.KeyTip="T"
@@ -812,7 +812,7 @@
                                     </StackPanel>
                                 </Button>
                                 <!-- Cell Styles -->
-                                <Button Width="66" Height="64" Margin="1,0" Tag="RibbonCompact:66:36"
+                                <Button Width="66" Height="76" Margin="1,0" Tag="RibbonCompact:66:36"
                                         Style="{StaticResource RibbonTallButton}" Click="CellStylesBtn_Click"
                                         local:RibbonTooltip.Title="Cell Styles"
                                         local:RibbonTooltip.KeyTip="J"
@@ -867,8 +867,8 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Style="{StaticResource RibbonCommandButton}" Tag="RibbonCompact:92:28"
+                            <StackPanel Grid.Row="0" Margin="0,0,2,0">
+                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" Tag="RibbonCompact:92:24"
                                         Click="InsertPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert"
                                         local:RibbonTooltip.KeyTip="I"
@@ -887,7 +887,7 @@
                                         <TextBlock Text="Insert" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource RibbonCommandButton}" Tag="RibbonCompact:92:28"
+                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" Tag="RibbonCompact:92:24"
                                         Click="DeletePickerBtn_Click"
                                         local:RibbonTooltip.Title="Delete"
                                         local:RibbonTooltip.KeyTip="D"
@@ -906,7 +906,7 @@
                                         <TextBlock Text="Delete" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource RibbonCommandButton}" Tag="RibbonCompact:92:28"
+                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" Tag="RibbonCompact:92:24"
                                         Click="FormatPickerBtn_Click"
                                         local:RibbonTooltip.Title="Format"
                                         local:RibbonTooltip.KeyTip="O"
@@ -949,13 +949,13 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <Grid Grid.Row="0" Margin="0,0,2,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- AutoSum: tall left button -->
-                                <Button Grid.Column="0" Width="64" Height="64" Margin="1,0,3,0" Tag="RibbonCompact:64:36"
+                                <Button Grid.Column="0" Width="64" Height="76" Margin="1,0,3,0" Tag="RibbonCompact:64:36"
                                         Style="{StaticResource RibbonTallButton}" Click="AutoSumPickerBtn_Click"
                                         local:RibbonTooltip.Title="AutoSum"
                                         local:RibbonTooltip.KeyTip="U"
