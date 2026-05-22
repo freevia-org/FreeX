@@ -350,7 +350,10 @@ public partial class MainWindow
                 ExecutePasteValidation(plan.Options.Transpose);
                 return;
             case PasteSpecialAction.Picture:
-                ExecutePasteAsPicture();
+                ExecutePasteAsPicture(isLinkedPicture: false);
+                return;
+            case PasteSpecialAction.LinkedPicture:
+                ExecutePasteAsPicture(isLinkedPicture: true);
                 return;
             case PasteSpecialAction.Link:
                 ExecutePasteLink(plan.Options.Transpose, plan.KeepColumnWidths);
@@ -437,9 +440,15 @@ public partial class MainWindow
         RefreshToolbar();
     }
 
-    private void ExecutePasteAsPicture()
+    private void ExecutePasteAsPicture(bool isLinkedPicture)
     {
         if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var sourceSheet = isLinkedPicture
+            ? _workbook.GetSheet(clip.SourceRange.Start.Sheet)
+            : null;
+        if (isLinkedPicture && sourceSheet is null)
             return;
 
         var sourceCells = clip.Cells
@@ -448,7 +457,13 @@ public partial class MainWindow
         IWorkbookCommand CreatePastePictureCommand()
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
-            return new PasteRangeAsPictureCommand(_currentSheetId, clip.SourceRange, sourceCells, currentRange.Start);
+            return new PasteRangeAsPictureCommand(
+                _currentSheetId,
+                clip.SourceRange,
+                sourceCells,
+                currentRange.Start,
+                isLinkedPicture,
+                sourceSheet?.Name);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePastePictureCommand);

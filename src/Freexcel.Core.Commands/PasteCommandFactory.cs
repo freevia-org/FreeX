@@ -179,6 +179,13 @@ public static class PasteCommandFactory
             return valueCell;
         }
 
+        if (contentKind == PasteSpecialContentKind.ValuesAndSourceFormatting)
+        {
+            var valueCell = Cell.FromValue(sourceCell.Value);
+            valueCell.StyleId = sourceCell.StyleId;
+            return valueCell;
+        }
+
         if (contentKind == PasteSpecialContentKind.FormulasAndNumberFormats)
         {
             var formulaCell = BuildFormulaOrValueCell(

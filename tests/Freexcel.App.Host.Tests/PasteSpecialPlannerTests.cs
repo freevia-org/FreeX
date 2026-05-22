@@ -27,6 +27,7 @@ public sealed class PasteSpecialPlannerTests
     [InlineData(PasteSpecialDialogMode.AllMergingConditionalFormats, PasteSpecialContentKind.AllMergingConditionalFormats)]
     [InlineData(PasteSpecialDialogMode.FormulasAndNumberFormats, PasteSpecialContentKind.FormulasAndNumberFormats)]
     [InlineData(PasteSpecialDialogMode.ValuesAndNumberFormats, PasteSpecialContentKind.ValuesAndNumberFormats)]
+    [InlineData(PasteSpecialDialogMode.ValuesAndSourceFormatting, PasteSpecialContentKind.ValuesAndSourceFormatting)]
     [InlineData(PasteSpecialDialogMode.All, PasteSpecialContentKind.Default)]
     public void CreatePlan_MapsContentKind(PasteSpecialDialogMode mode, PasteSpecialContentKind expected)
     {
@@ -40,7 +41,7 @@ public sealed class PasteSpecialPlannerTests
     [InlineData(PasteSpecialDialogMode.Comments, PasteSpecialAction.Comments, PasteMode.All)]
     [InlineData(PasteSpecialDialogMode.Validation, PasteSpecialAction.Validation, PasteMode.All)]
     [InlineData(PasteSpecialDialogMode.Picture, PasteSpecialAction.Picture, PasteMode.All)]
-    [InlineData(PasteSpecialDialogMode.LinkedPicture, PasteSpecialAction.Picture, PasteMode.All)]
+    [InlineData(PasteSpecialDialogMode.LinkedPicture, PasteSpecialAction.LinkedPicture, PasteMode.All)]
     [InlineData(PasteSpecialDialogMode.Values, PasteSpecialAction.Paste, PasteMode.Values)]
     [InlineData(PasteSpecialDialogMode.Formulas, PasteSpecialAction.Paste, PasteMode.Formulas)]
     [InlineData(PasteSpecialDialogMode.Formats, PasteSpecialAction.Paste, PasteMode.Formats)]

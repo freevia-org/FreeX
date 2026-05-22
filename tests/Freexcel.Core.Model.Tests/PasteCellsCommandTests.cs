@@ -542,6 +542,57 @@ public sealed class PasteCellsCommandTests
     }
 
     [Fact]
+    public void PasteCommandFactory_ValuesAndSourceFormattingCopiesValueAndFullSourceStyle()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 2, 1);
+        var sourceStyle = wb.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(12, 34, 56),
+            NumberFormat = "0.00%",
+            BorderBottom = new CellBorder(BorderStyle.Double, new CellColor(1, 2, 3))
+        });
+        var destinationStyle = wb.RegisterStyle(new CellStyle
+        {
+            Italic = true,
+            FillColor = new CellColor(255, 255, 0),
+            NumberFormat = "General"
+        });
+        var sourceCell = Cell.FromFormula("B1+1");
+        sourceCell.Value = new NumberValue(0.25);
+        sourceCell.StyleId = sourceStyle;
+        var destinationCell = Cell.FromValue(new TextValue("old"));
+        destinationCell.StyleId = destinationStyle;
+        sheet.SetCell(source, sourceCell);
+        sheet.SetCell(destination, destinationCell);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(source, source),
+            [(source, sourceCell.Clone())],
+            destination,
+            PasteCellsMode.All,
+            new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.GetCell(destination)!;
+        pasted.FormulaText.Should().BeNull();
+        pasted.Value.Should().Be(new NumberValue(0.25));
+        var style = wb.GetStyle(pasted.StyleId);
+        style.Bold.Should().BeTrue();
+        style.Italic.Should().BeFalse();
+        style.FillColor.Should().Be(new CellColor(12, 34, 56));
+        style.NumberFormat.Should().Be("0.00%");
+        style.BorderBottom.Should().Be(new CellBorder(BorderStyle.Double, new CellColor(1, 2, 3)));
+    }
+
+    [Fact]
     public void PasteCommandFactory_FormulasAndNumberFormatsRebasesFormulaAndCopiesNumberFormatOnly()
     {
         var wb = new Workbook("test");
