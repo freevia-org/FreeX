@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -121,7 +122,7 @@ public static class PrintRenderer
                 (uint)pageRows.Count,
                 (uint)pageColumns.Count,
                 sheet.PrintHeadings);
-            var (pageHeader, pageFooter) = ResolveHeaderFooterForPage(sheet, pageNumber);
+            var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
             var visual = RenderPageVisual(
                 pageW,
                 pageH,
@@ -138,6 +139,8 @@ public static class PrintRenderer
                 sheet.PrintHeadings,
                 pageHeader,
                 pageFooter,
+                pageHeaderPictures,
+                pageFooterPictures,
                 workbook.Name,
                 sheet.Name,
                 sheet.HeaderFooterAlignWithMargins,
@@ -299,17 +302,17 @@ public static class PrintRenderer
         }
     }
 
-    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer) ResolveHeaderFooterForPage(
+    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer, WorksheetHeaderFooterPictureSet HeaderPictures, WorksheetHeaderFooterPictureSet FooterPictures) ResolveHeaderFooterForPage(
         Sheet sheet,
         int pageNumber)
     {
         if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeader, sheet.FirstPageFooter);
+            return (sheet.FirstPageHeader, sheet.FirstPageFooter, sheet.FirstPageHeaderPictures, sheet.FirstPageFooterPictures);
 
         if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeader, sheet.EvenPageFooter);
+            return (sheet.EvenPageHeader, sheet.EvenPageFooter, sheet.EvenPageHeaderPictures, sheet.EvenPageFooterPictures);
 
-        return (sheet.PageHeader, sheet.PageFooter);
+        return (sheet.PageHeader, sheet.PageFooter, sheet.PageHeaderPictures, sheet.PageFooterPictures);
     }
 
     private static DrawingVisual RenderPageVisual(
@@ -328,6 +331,8 @@ public static class PrintRenderer
         bool printHeadings,
         WorksheetHeaderFooter pageHeader,
         WorksheetHeaderFooter pageFooter,
+        WorksheetHeaderFooterPictureSet pageHeaderPictures,
+        WorksheetHeaderFooterPictureSet pageFooterPictures,
         string workbookName,
         string sheetName,
         bool alignHeaderFooterWithMargins,
@@ -355,6 +360,8 @@ public static class PrintRenderer
             footerMargin,
             pageHeader,
             pageFooter,
+            pageHeaderPictures,
+            pageFooterPictures,
             workbookName,
             sheetName,
             alignHeaderFooterWithMargins,
@@ -652,6 +659,8 @@ public static class PrintRenderer
         double footerMargin,
         WorksheetHeaderFooter header,
         WorksheetHeaderFooter footer,
+        WorksheetHeaderFooterPictureSet headerPictures,
+        WorksheetHeaderFooterPictureSet footerPictures,
         string workbookName,
         string sheetName,
         bool alignWithMargins,
@@ -663,13 +672,14 @@ public static class PrintRenderer
         var footerY = Math.Max(4, pageH - footerMargin - PrintFontSize);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, header, pageW, leftInset, rightInset, headerY, typeface, pageNumber, totalPages, workbookName, sheetName);
-        DrawHeaderFooterLine(dc, footer, pageW, leftInset, rightInset, footerY, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, typeface, pageNumber, totalPages, workbookName, sheetName);
     }
 
     private static void DrawHeaderFooterLine(
         DrawingContext dc,
         WorksheetHeaderFooter value,
+        WorksheetHeaderFooterPictureSet pictures,
         double pageW,
         double leftInset,
         double rightInset,
@@ -686,10 +696,43 @@ public static class PrintRenderer
         var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
         var sectionWidth = Math.Max(1, availableWidth / 3);
 
-        DrawHeaderFooterText(dc, left, new Rect(leftInset, y, sectionWidth, 18), typeface, TextAlignment.Left);
-        DrawHeaderFooterText(dc, center, new Rect((pageW - sectionWidth) / 2, y, sectionWidth, 18), typeface, TextAlignment.Center);
-        DrawHeaderFooterText(dc, right, new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, 18), typeface, TextAlignment.Right);
+        var leftRect = new Rect(leftInset, y, sectionWidth, 18);
+        var centerRect = new Rect((pageW - sectionWidth) / 2, y, sectionWidth, 18);
+        var rightRect = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, 18);
+
+        DrawHeaderFooterPicture(dc, HasHeaderFooterPictureToken(value.Left) ? pictures.Left : null, leftRect, TextAlignment.Left);
+        DrawHeaderFooterPicture(dc, HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null, centerRect, TextAlignment.Center);
+        DrawHeaderFooterPicture(dc, HasHeaderFooterPictureToken(value.Right) ? pictures.Right : null, rightRect, TextAlignment.Right);
+        DrawHeaderFooterText(dc, left, leftRect, typeface, TextAlignment.Left);
+        DrawHeaderFooterText(dc, center, centerRect, typeface, TextAlignment.Center);
+        DrawHeaderFooterText(dc, right, rightRect, typeface, TextAlignment.Right);
     }
+
+    private static void DrawHeaderFooterPicture(
+        DrawingContext dc,
+        WorksheetHeaderFooterPicture? picture,
+        Rect sectionRect,
+        TextAlignment alignment)
+    {
+        if (picture is null)
+            return;
+
+        using var stream = new MemoryStream(picture.ImageBytes);
+        var image = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
+        var width = Math.Min(Math.Max(1, picture.Width), sectionRect.Width);
+        var height = Math.Min(Math.Max(1, picture.Height), Math.Max(sectionRect.Height, picture.Height));
+        var left = alignment switch
+        {
+            TextAlignment.Center => sectionRect.Left + (sectionRect.Width - width) / 2,
+            TextAlignment.Right => sectionRect.Right - width - 2,
+            _ => sectionRect.Left + 2
+        };
+        dc.DrawImage(image, new Rect(left, sectionRect.Top + (sectionRect.Height - Math.Min(height, sectionRect.Height)) / 2, width, height));
+    }
+
+    private static bool HasHeaderFooterPictureToken(string text) =>
+        text.Contains("&[Picture]", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("&G", StringComparison.Ordinal);
 
     private static void DrawHeaderFooterText(
         DrawingContext dc,
@@ -734,7 +777,8 @@ public static class PrintRenderer
             .Replace("&[File]", workbookName, StringComparison.OrdinalIgnoreCase)
             .Replace("&[Path]", workbookName, StringComparison.OrdinalIgnoreCase)
             .Replace("&[Tab]", sheetName, StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Picture]", "[Picture]", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Picture]", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("&G", "", StringComparison.Ordinal)
             .Replace("&P", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("&N", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 

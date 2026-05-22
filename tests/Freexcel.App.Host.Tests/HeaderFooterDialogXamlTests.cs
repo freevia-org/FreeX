@@ -93,6 +93,30 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void PictureButtons_UseDedicatedPictureHandlers()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Content")?.Value == "P_icture")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("PictureButton_Click");
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Content")?.Value == "For_mat picture")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("FormatPictureButton_Click");
+
+        source.Should().Contain("new OpenFileDialog");
+        source.Should().Contain("HeaderFooterPictureFormatDialog");
+        source.Should().Contain("SetPictureForActiveBox");
+    }
+
+
+    [Fact]
     public void FirstAndEvenHeadersAndFooters_UseSectionBoxesWithoutPipeParsing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
