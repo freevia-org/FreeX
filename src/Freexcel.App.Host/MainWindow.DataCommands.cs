@@ -297,7 +297,7 @@ public partial class MainWindow
             case ScenarioManagerAction.Add:
             case ScenarioManagerAction.Edit:
             case ScenarioManagerAction.Save:
-                SaveScenarioFromSelection(dialog.NewScenarioName);
+                SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText);
                 break;
             case ScenarioManagerAction.Show:
                 ShowScenarioByName(dialog.SelectedScenarioName);
@@ -314,9 +314,18 @@ public partial class MainWindow
         }
     }
 
-    private void SaveScenarioFromSelection(string? scenarioName)
+    private void SaveScenarioFromDialog(string? scenarioName, string? changingCellsText, string? comment)
     {
-        if (SheetGrid.SelectedRange is not { } range)
+        GridRange range;
+        if (TryParseScenarioChangingCells(changingCellsText, out var parsedRange))
+        {
+            range = parsedRange;
+        }
+        else if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            range = selectedRange;
+        }
+        else
         {
             MessageBox.Show("Select the changing cells for the scenario.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -335,11 +344,21 @@ public partial class MainWindow
         var changes = range.AllCells()
             .Select(address => new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)))
             .ToList();
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes), "Scenario Manager"))
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment), "Scenario Manager"))
             return;
 
         MessageBox.Show(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count),
             "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private bool TryParseScenarioChangingCells(string? changingCellsText, out GridRange range)
+    {
+        if (!string.IsNullOrWhiteSpace(changingCellsText) &&
+            WorkbookRangeTextCodec.TryParse(_currentSheetId, changingCellsText, ResolveSheetIdByName, out range))
+            return true;
+
+        range = default;
+        return false;
     }
 
     private void ShowScenarioByName(string? scenarioName)
