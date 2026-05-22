@@ -17,6 +17,7 @@ public enum PasteSpecialContentKind
     AllExceptBorders,
     AllMergingConditionalFormats,
     ValuesAndNumberFormats,
+    ValuesAndSourceFormatting,
     FormulasAndNumberFormats
 }
 
