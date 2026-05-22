@@ -150,7 +150,13 @@ public partial class PivotValueFieldSettingsDialog : Window
         if (!string.IsNullOrWhiteSpace(customCode))
             return customCode;
 
-        return NumberFormatPresetBox.SelectedItem as string
+        if (NumberFormatPresetBox.SelectedItem is string selectedPreset &&
+            PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(selectedPreset) is { } selectedCode)
+        {
+            return selectedCode;
+        }
+
+        return PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(NumberFormatPresetBox.Text)
             ?? NumberFormatPresetBox.Text
             ?? "General";
     }

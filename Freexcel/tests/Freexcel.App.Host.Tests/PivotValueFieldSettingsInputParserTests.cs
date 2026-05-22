@@ -78,6 +78,21 @@ public sealed class PivotValueFieldSettingsInputParserTests
         PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(label).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("General", "General")]
+    [InlineData("Number", "0.00")]
+    [InlineData("Number with thousands", "#,##0.00")]
+    [InlineData("Currency", "$#,##0.00")]
+    [InlineData("Currency red negatives", "$#,##0.00;[Red]($#,##0.00)")]
+    [InlineData("Short Date", "m/d/yy")]
+    [InlineData("Elapsed Time", "[h]:mm:ss")]
+    [InlineData("Scientific compact", "##0.0E+0")]
+    [InlineData("Text", "@")]
+    public void ResolvePresetNumberFormatCode_MapsExcelStylePresetLabels(string label, string expected)
+    {
+        PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(label).Should().Be(expected);
+    }
+
     [Fact]
     public void NumberFormatPresets_ExposeExcelStyleLabels()
     {
