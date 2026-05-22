@@ -10,6 +10,8 @@ public static class WorksheetContextMenuPlanner
             WorksheetContextMenuTargetKind.Picture => BuildPictureCommands(),
             WorksheetContextMenuTargetKind.Shape => BuildDrawingObjectCommands("Format Shape...", includeReorder: true),
             WorksheetContextMenuTargetKind.TextBox => BuildDrawingObjectCommands("Format Text Box...", includeReorder: false),
+            WorksheetContextMenuTargetKind.RowSelection => BuildRowSelectionCommands(),
+            WorksheetContextMenuTargetKind.ColumnSelection => BuildColumnSelectionCommands(),
             _ => BuildWorksheetCommands()
         };
     }
@@ -79,6 +81,38 @@ public static class WorksheetContextMenuPlanner
         new("Format Picture...", WorksheetContextMenuAction.FormatPicture, AccessHeader: "_Format Picture..."),
         new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop")
+    ];
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSelectionCommands() =>
+    [
+        new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
+        new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
+        new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+        new("Insert Row Above", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "Insert Row _Above"),
+        new("Delete Row(s)", WorksheetContextMenuAction.DeleteRows, AccessHeader: "Delete _Row(s)"),
+        WorksheetContextMenuCommand.Separator,
+        new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
+        new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
+        new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
+        new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws"),
+        WorksheetContextMenuCommand.Separator,
+        new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
+    ];
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildColumnSelectionCommands() =>
+    [
+        new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
+        new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
+        new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+        new("Insert Column Left", WorksheetContextMenuAction.InsertColumnLeft, AccessHeader: "Insert Column _Left"),
+        new("Delete Column(s)", WorksheetContextMenuAction.DeleteColumns, AccessHeader: "Delete _Column(s)"),
+        WorksheetContextMenuCommand.Separator,
+        new("Column Width...", WorksheetContextMenuAction.ColumnWidth, AccessHeader: "Column _Width..."),
+        new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
+        new("Hide Columns", WorksheetContextMenuAction.HideColumns, AccessHeader: "Hide Col_umns"),
+        new("Unhide Columns", WorksheetContextMenuAction.UnhideColumns, AccessHeader: "Unhide Co_lumns"),
+        WorksheetContextMenuCommand.Separator,
+        new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildDrawingObjectCommands(
@@ -186,5 +220,7 @@ public enum WorksheetContextMenuTargetKind
     Worksheet,
     Picture,
     Shape,
-    TextBox
+    TextBox,
+    RowSelection,
+    ColumnSelection
 }

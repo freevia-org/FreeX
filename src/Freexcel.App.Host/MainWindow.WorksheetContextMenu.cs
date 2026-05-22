@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -243,6 +244,14 @@ public partial class MainWindow
 
     private WorksheetContextMenuTargetKind GetWorksheetContextMenuTargetKind(CellAddress address)
     {
+        if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            if (SelectionRangeService.IsWholeRowSelection(selectedRange))
+                return WorksheetContextMenuTargetKind.RowSelection;
+            if (SelectionRangeService.IsWholeColumnSelection(selectedRange))
+                return WorksheetContextMenuTargetKind.ColumnSelection;
+        }
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (DrawingTargetResolver.GetTargetPicture(sheet, address) is not null)
             return WorksheetContextMenuTargetKind.Picture;
