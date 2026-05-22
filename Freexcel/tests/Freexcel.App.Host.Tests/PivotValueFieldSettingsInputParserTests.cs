@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -148,5 +149,17 @@ public sealed class PivotValueFieldSettingsInputParserTests
             .First(preset => preset.NumberFormatId == 14);
 
         firstBuiltIn14.Label.Should().Be("Short Date");
+    }
+
+    [Fact]
+    public void NumberFormatPresets_UseSharedBuiltInCatalogCodes()
+    {
+        foreach (var preset in PivotValueFieldSettingsInputParser.NumberFormatPresets)
+        {
+            BuiltInNumberFormatCatalog.TryResolveFormatCode(preset.NumberFormatId, out var formatCode)
+                .Should().BeTrue();
+
+            preset.FormatCode.Should().Be(formatCode);
+        }
     }
 }
