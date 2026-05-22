@@ -91,6 +91,8 @@ internal static class StyleDiffValidator
             return new CommandOutcome(false, "Font size is not supported.");
         if (diff.TextRotation is { } rotation && !IsSupportedTextRotation(rotation))
             return new CommandOutcome(false, "Text rotation is not supported.");
+        if (diff.FillPatternStyle is { } fillPatternStyle && !Enum.IsDefined(fillPatternStyle))
+            return new CommandOutcome(false, "Fill pattern style is not supported.");
         if (HasInvalidBorderStyle(diff.BorderTop) ||
             HasInvalidBorderStyle(diff.BorderRight) ||
             HasInvalidBorderStyle(diff.BorderBottom) ||
