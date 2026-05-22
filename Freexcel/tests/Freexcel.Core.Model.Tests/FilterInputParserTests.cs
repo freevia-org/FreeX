@@ -252,6 +252,29 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseCriterion_AcceptsAndCompositeSyntax()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("and:>10|<20", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<CompositeFilterCriterion>()
+            .Which.Matches(new NumberValue(15)).Should().BeTrue();
+        criterion!.Matches(new NumberValue(25)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryParseCriterion_AcceptsOrCompositeSyntax()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("or:begins:Red|ends:Apple", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<CompositeFilterCriterion>()
+            .Which.Matches(new TextValue("Red Pear")).Should().BeTrue();
+        criterion!.Matches(new TextValue("Green Apple")).Should().BeTrue();
+        criterion.Matches(new TextValue("Green Pear")).Should().BeFalse();
+    }
+
+    [Fact]
     public void TryParseTopBottom_AcceptsTopSyntax()
     {
         var parsed = FilterInputParser.TryParseTopBottom("top:10", out var count, out var top, out var error);
