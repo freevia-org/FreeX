@@ -27,6 +27,13 @@ public enum TextToColumnsTextQualifier
     None
 }
 
+public enum TextToColumnsColumnFormat
+{
+    General,
+    Text,
+    Skip
+}
+
 public sealed record TextToColumnsDialogResult(
     TextToColumnsDelimiterKind DelimiterKind,
     string Delimiter,
@@ -34,7 +41,8 @@ public sealed record TextToColumnsDialogResult(
     IReadOnlyList<int>? FixedWidthBreakPositions = null,
     TextToColumnsTextQualifier TextQualifier = TextToColumnsTextQualifier.DoubleQuote,
     bool TreatConsecutiveDelimitersAsOne = false,
-    CellAddress? Destination = null)
+    CellAddress? Destination = null,
+    IReadOnlyList<TextToColumnsColumnFormat>? ColumnFormats = null)
 {
     public string Delimiters => Delimiter;
     public char? TextQualifierChar => TextQualifier switch
@@ -59,9 +67,16 @@ public sealed class TextToColumnsDialog : Window
     private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = "_Treat consecutive delimiters as one", Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
     private readonly TextBox _destinationBox = new() { Width = 120 };
+    private readonly ComboBox _formatColumnBox = new() { Width = 110, Margin = new Thickness(0, 0, 10, 0) };
+    private readonly RadioButton _formatGeneralButton = new() { Content = "_General", IsChecked = true };
+    private readonly RadioButton _formatTextButton = new() { Content = "_Text" };
+    private readonly RadioButton _formatSkipButton = new() { Content = "Do not import column (_skip)" };
     private readonly ListView _previewGrid = new() { Height = 88 };
     private readonly IReadOnlyList<string> _previewRows;
+    private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
     private readonly CellAddress _defaultDestination;
+    private int _previewColumnCount = 1;
+    private bool _suppressColumnFormatSync;
 
     public TextToColumnsDialogResult? Result { get; private set; }
 
@@ -91,6 +106,10 @@ public sealed class TextToColumnsDialog : Window
         _treatConsecutiveDelimitersBox.Checked += (_, _) => RefreshPreview();
         _treatConsecutiveDelimitersBox.Unchecked += (_, _) => RefreshPreview();
         _fixedWidthBreaksBox.TextChanged += (_, _) => RefreshPreview();
+        _formatColumnBox.SelectionChanged += (_, _) => SyncColumnFormatControls();
+        _formatGeneralButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.General);
+        _formatTextButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Text);
+        _formatSkipButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Skip);
 
         var root = new DockPanel { Margin = new Thickness(12) };
         var buttons = CreateWizardButtonRow(Accept);
@@ -117,6 +136,7 @@ public sealed class TextToColumnsDialog : Window
         body.Children.Add(CreateFixedWidthPanel());
         body.Children.Add(new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) });
         body.Children.Add(_previewGrid);
+        body.Children.Add(CreateColumnFormatPanel());
         body.Children.Add(CreateDestinationPanel());
 
         Content = root;
@@ -127,7 +147,8 @@ public sealed class TextToColumnsDialog : Window
     public static TextToColumnsDialogResult CreateResult(
         TextToColumnsDelimiterKind delimiterKind,
         string? customDelimiter = null,
-        CellAddress? destination = null)
+        CellAddress? destination = null,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
         var delimiter = delimiterKind switch
         {
@@ -141,7 +162,11 @@ public sealed class TextToColumnsDialog : Window
             _ => throw new ArgumentOutOfRangeException(nameof(delimiterKind), delimiterKind, "Unsupported delimiter.")
         };
 
-        return new TextToColumnsDialogResult(delimiterKind, delimiter, Destination: destination);
+        return new TextToColumnsDialogResult(
+            delimiterKind,
+            delimiter,
+            Destination: destination,
+            ColumnFormats: NormalizeColumnFormats(columnFormats));
     }
 
     public static TextToColumnsDialogResult CreateResult(
@@ -149,7 +174,8 @@ public sealed class TextToColumnsDialog : Window
         string? customDelimiter = null,
         TextToColumnsTextQualifier textQualifier = TextToColumnsTextQualifier.DoubleQuote,
         bool treatConsecutiveDelimitersAsOne = false,
-        CellAddress? destination = null)
+        CellAddress? destination = null,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
         var kinds = delimiterKinds.Distinct().ToList();
         if (kinds.Count == 0)
@@ -164,12 +190,14 @@ public sealed class TextToColumnsDialog : Window
             delimiters,
             TextQualifier: textQualifier,
             TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne,
-            Destination: destination);
+            Destination: destination,
+            ColumnFormats: NormalizeColumnFormats(columnFormats));
     }
 
     public static TextToColumnsDialogResult CreateFixedWidthResult(
         string? breakPositionsText,
-        CellAddress? destination = null)
+        CellAddress? destination = null,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
         var positions = ParseFixedWidthBreakPositions(breakPositionsText);
         if (positions.Count == 0)
@@ -180,7 +208,8 @@ public sealed class TextToColumnsDialog : Window
             string.Empty,
             TextToColumnsSplitMode.FixedWidth,
             positions,
-            Destination: destination);
+            Destination: destination,
+            ColumnFormats: NormalizeColumnFormats(columnFormats));
     }
 
     public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
@@ -295,6 +324,32 @@ public sealed class TextToColumnsDialog : Window
         return panel;
     }
 
+    private GroupBox CreateColumnFormatPanel()
+    {
+        var root = new StackPanel();
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(new Label
+        {
+            Content = "_Column:",
+            Target = _formatColumnBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 4, 8, 0)
+        });
+        row.Children.Add(_formatColumnBox);
+        root.Children.Add(row);
+        root.Children.Add(_formatGeneralButton);
+        root.Children.Add(_formatTextButton);
+        root.Children.Add(_formatSkipButton);
+
+        return new GroupBox
+        {
+            Header = "Column data format",
+            Content = root,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+    }
+
     private IReadOnlyList<TextToColumnsDelimiterKind> SelectedDelimiterKinds()
     {
         var kinds = new List<TextToColumnsDelimiterKind>();
@@ -320,13 +375,14 @@ public sealed class TextToColumnsDialog : Window
                 throw new ArgumentException("Enter a single destination cell, such as F2.");
 
             Result = _fixedWidthButton.IsChecked == true
-                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination)
+                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount))
                 : CreateResult(
                     SelectedDelimiterKinds(),
                     _customBox.Text,
                     SelectedTextQualifier(),
                     _treatConsecutiveDelimitersBox.IsChecked == true,
-                    destination);
+                    destination,
+                    BuildColumnFormats(_previewColumnCount));
             DialogResult = true;
         }
         catch (Exception ex)
@@ -344,6 +400,18 @@ public sealed class TextToColumnsDialog : Window
         }
 
         return CellAddress.TryParse(input.Trim(), defaultDestination.Sheet, out destination);
+    }
+
+    public static IReadOnlyList<TextToColumnsColumnFormat> NormalizeColumnFormats(
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats)
+    {
+        if (columnFormats is null || columnFormats.Count == 0)
+            return [];
+
+        var normalized = columnFormats.ToList();
+        while (normalized.Count > 0 && normalized[^1] == TextToColumnsColumnFormat.General)
+            normalized.RemoveAt(normalized.Count - 1);
+        return normalized;
     }
 
     private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
@@ -477,6 +545,7 @@ public sealed class TextToColumnsDialog : Window
         }
 
         var columnCount = Math.Max(1, rows.Count == 0 ? 1 : rows.Max(row => row.Length));
+        _previewColumnCount = columnCount;
         var view = new GridView();
         for (var index = 0; index < columnCount; index++)
         {
@@ -490,6 +559,7 @@ public sealed class TextToColumnsDialog : Window
 
         _previewGrid.View = view;
         _previewGrid.ItemsSource = rows.Select(row => PadRow(row, columnCount)).ToList();
+        RefreshColumnFormatChoices(columnCount);
     }
 
     private static string[] PadRow(IReadOnlyList<string> row, int columnCount)
@@ -507,6 +577,70 @@ public sealed class TextToColumnsDialog : Window
             2 => TextToColumnsTextQualifier.None,
             _ => TextToColumnsTextQualifier.DoubleQuote
         };
+
+    private void RefreshColumnFormatChoices(int columnCount)
+    {
+        var selectedIndex = Math.Max(0, _formatColumnBox.SelectedIndex);
+        _suppressColumnFormatSync = true;
+        try
+        {
+            _formatColumnBox.ItemsSource = Enumerable.Range(1, columnCount)
+                .Select(index => $"Column {index}")
+                .ToList();
+            _formatColumnBox.SelectedIndex = Math.Min(selectedIndex, columnCount - 1);
+        }
+        finally
+        {
+            _suppressColumnFormatSync = false;
+        }
+
+        SyncColumnFormatControls();
+    }
+
+    private void SyncColumnFormatControls()
+    {
+        if (_suppressColumnFormatSync)
+            return;
+
+        var columnIndex = Math.Max(0, _formatColumnBox.SelectedIndex);
+        var format = _columnFormats.TryGetValue(columnIndex, out var stored)
+            ? stored
+            : TextToColumnsColumnFormat.General;
+
+        _suppressColumnFormatSync = true;
+        try
+        {
+            _formatGeneralButton.IsChecked = format == TextToColumnsColumnFormat.General;
+            _formatTextButton.IsChecked = format == TextToColumnsColumnFormat.Text;
+            _formatSkipButton.IsChecked = format == TextToColumnsColumnFormat.Skip;
+        }
+        finally
+        {
+            _suppressColumnFormatSync = false;
+        }
+    }
+
+    private void StoreSelectedColumnFormat(TextToColumnsColumnFormat format)
+    {
+        if (_suppressColumnFormatSync || _formatColumnBox.SelectedIndex < 0)
+            return;
+
+        var columnIndex = _formatColumnBox.SelectedIndex;
+        if (format == TextToColumnsColumnFormat.General)
+            _columnFormats.Remove(columnIndex);
+        else
+            _columnFormats[columnIndex] = format;
+    }
+
+    private IReadOnlyList<TextToColumnsColumnFormat> BuildColumnFormats(int columnCount)
+    {
+        var formats = Enumerable.Range(0, columnCount)
+            .Select(index => _columnFormats.TryGetValue(index, out var format)
+                ? format
+                : TextToColumnsColumnFormat.General)
+            .ToList();
+        return NormalizeColumnFormats(formats);
+    }
 
     public static IReadOnlyList<int> ParseFixedWidthBreakPositions(string? text) =>
         (text ?? string.Empty)
