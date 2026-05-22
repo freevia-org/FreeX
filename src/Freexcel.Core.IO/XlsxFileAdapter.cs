@@ -82,6 +82,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
+            sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
             sheet.IsVeryHidden = xlSheet.Visibility == XLWorksheetVisibility.VeryHidden;
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)
@@ -103,6 +104,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     var cached = XlsxClosedXmlCellMapper.MapValue(xlCell);
                     if (cached is not BlankValue)
                         cell.Value = cached;
+                    else if (xmlLayout?.CachedFormulaErrors.TryGetValue(((uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber), out var cachedFormulaError) == true)
+                        cell.Value = cachedFormulaError;
                 }
                 else
                 {
@@ -175,7 +178,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     sheet.HiddenCols.Add(colNumber);
             }
 
-            if (sheetXmlLayout.TryGetValue(xlSheet.Name, out var layout))
+            if (xmlLayout is { } layout)
             {
                 sheet.HiddenRows.UnionWith(layout.HiddenRows);
                 sheet.HiddenCols.UnionWith(layout.HiddenCols);
@@ -371,28 +374,28 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 }
             }
 
-            if (layout?.PaneState is "frozen" or "frozenSplit")
+            if (xmlLayout?.PaneState is "frozen" or "frozenSplit")
             {
-                sheet.FrozenRows = layout.PaneRowSplit ?? 0;
-                sheet.FrozenCols = layout.PaneColumnSplit ?? 0;
+                sheet.FrozenRows = xmlLayout.PaneRowSplit ?? 0;
+                sheet.FrozenCols = xmlLayout.PaneColumnSplit ?? 0;
             }
             else
             {
                 var splitRow = xlSheet.SheetView.SplitRow > 0
                     ? (uint)xlSheet.SheetView.SplitRow
-                    : layout?.PaneRowSplit;
+                    : xmlLayout?.PaneRowSplit;
                 var splitColumn = xlSheet.SheetView.SplitColumn > 0
                     ? (uint)xlSheet.SheetView.SplitColumn
-                    : layout?.PaneColumnSplit;
+                    : xmlLayout?.PaneColumnSplit;
                 if (splitRow > 0)
                     sheet.SplitRow = splitRow;
                 if (splitColumn > 0)
                     sheet.SplitColumn = splitColumn;
             }
-            sheet.ViewTopRow = layout?.ViewTopRow;
-            sheet.ViewLeftCol = layout?.ViewLeftCol;
-            sheet.ActiveRow = layout?.ActiveRow;
-            sheet.ActiveCol = layout?.ActiveCol;
+            sheet.ViewTopRow = xmlLayout?.ViewTopRow;
+            sheet.ViewLeftCol = xmlLayout?.ViewLeftCol;
+            sheet.ActiveRow = xmlLayout?.ActiveRow;
+            sheet.ActiveCol = xmlLayout?.ActiveCol;
 
             try { XlsxWorksheetPageSetupMapper.LoadPrintArea(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
@@ -487,8 +490,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             // Load data validation rules (best-effort)
             try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] DV load failed: {ex.Message}"); }
-            if (layout is not null)
-                XlsxDataValidationNativeMetadataMapper.Apply(sheet, layout.DataValidationNativeMetadata);
+            if (xmlLayout is not null)
+                XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
 
             // Load merged regions (best-effort)
             try { LoadMergedRegions(xlSheet, sheet); }
