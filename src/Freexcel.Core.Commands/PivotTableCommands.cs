@@ -486,6 +486,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
+    private readonly bool _printTitles;
+    private readonly bool _printExpandCollapseButtons;
+    private readonly string? _altTextTitle;
+    private readonly string? _altTextDescription;
     private PivotOptionsSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
@@ -507,7 +511,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         string? emptyValueText = null,
         bool updateEmptyValueText = false,
         bool? refreshOnOpen = null,
-        bool? saveSourceData = null)
+        bool? saveSourceData = null,
+        bool printTitles = false,
+        bool printExpandCollapseButtons = false,
+        string? altTextTitle = null,
+        string? altTextDescription = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -527,6 +535,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
+        _printTitles = printTitles;
+        _printExpandCollapseButtons = printExpandCollapseButtons;
+        _altTextTitle = NormalizeEmptyValueText(altTextTitle);
+        _altTextDescription = NormalizeEmptyValueText(altTextDescription);
     }
 
     public string Label => "Configure PivotTable Options";
@@ -557,6 +569,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         pivotTable.ShowColumnStripes = _showColumnStripes;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
+        pivotTable.PrintTitles = _printTitles;
+        pivotTable.PrintExpandCollapseButtons = _printExpandCollapseButtons;
+        pivotTable.AltTextTitle = _altTextTitle;
+        pivotTable.AltTextDescription = _altTextDescription;
         if (cache is not null)
         {
             if (_refreshOnOpen is { } refreshOnOpen)
@@ -600,7 +616,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
-        bool? EnableRefresh)
+        bool? EnableRefresh,
+        bool PrintTitles,
+        bool PrintExpandCollapseButtons,
+        string? AltTextTitle,
+        string? AltTextDescription)
     {
         public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
@@ -619,7 +639,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
-                cache?.EnableRefresh);
+                cache?.EnableRefresh,
+                pivotTable.PrintTitles,
+                pivotTable.PrintExpandCollapseButtons,
+                pivotTable.AltTextTitle,
+                pivotTable.AltTextDescription);
 
         public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
         {
@@ -636,6 +660,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowRowStripes = ShowRowStripes;
             pivotTable.ShowColumnStripes = ShowColumnStripes;
             pivotTable.EmptyValueText = EmptyValueText;
+            pivotTable.PrintTitles = PrintTitles;
+            pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
+            pivotTable.AltTextTitle = AltTextTitle;
+            pivotTable.AltTextDescription = AltTextDescription;
             if (cache is not null)
             {
                 if (RefreshOnLoad is { } refreshOnLoad)

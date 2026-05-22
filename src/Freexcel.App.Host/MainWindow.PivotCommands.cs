@@ -722,7 +722,11 @@ public partial class MainWindow
         string? emptyValueText = null,
         bool updateEmptyValueText = false,
         bool? refreshOnOpen = null,
-        bool? saveSourceData = null)
+        bool? saveSourceData = null,
+        bool printTitles = false,
+        bool printExpandCollapseButtons = false,
+        string? altTextTitle = null,
+        string? altTextDescription = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -743,7 +747,11 @@ public partial class MainWindow
                     emptyValueText,
                     updateEmptyValueText,
                     refreshOnOpen,
-                    saveSourceData),
+                    saveSourceData,
+                    printTitles,
+                    printExpandCollapseButtons,
+                    altTextTitle,
+                    altTextDescription),
                 "PivotTable Options"))
             return;
 
@@ -948,7 +956,11 @@ public partial class MainWindow
             result.EmptyValueText,
             updateEmptyValueText: true,
             result.RefreshOnOpen,
-            result.SaveSourceData);
+            result.SaveSourceData,
+            result.PrintTitles,
+            result.PrintExpandCollapseButtons,
+            result.AltTextTitle,
+            result.AltTextDescription);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {

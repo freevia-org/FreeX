@@ -369,23 +369,29 @@ public sealed class PivotWorkflowDialogTests
             "Totals & Filters",
             "Display",
             "Data",
+            "Printing",
+            "Alt Text",
             "_emptyCellsBox",
             "_autofitColumnsBox",
             "_preserveFormattingBox",
-            "_refreshOnOpenBox"
+            "_refreshOnOpenBox",
+            "_printTitlesBox",
+            "_printExpandCollapseBox",
+            "_altTextTitleBox",
+            "_altTextDescriptionBox"
         })
             source.Should().Contain(content);
-
-        source.Should().NotContain("Alt Text");
         source.Should().NotContain("Title and description metadata can be added in a future pass.");
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_HidesUnsupportedPrintingTab()
+    public void PivotTableOptionsDialog_ExposesPrintingTab()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
-        source.Should().NotContain("Header = \"Printing\"");
+        source.Should().Contain("Header = \"Printing\"");
+        source.Should().Contain("Set print _titles");
+        source.Should().Contain("Print expand/collapse _buttons when displayed on PivotTable");
         source.Should().NotContain("Print titles and print expand/collapse buttons are not yet available.");
     }
 
@@ -401,6 +407,8 @@ public sealed class PivotWorkflowDialogTests
             "Grand totals",
             "PivotTable Style Options",
             "Data options",
+            "Print options",
+            "Alt Text",
             "Preserve source sort and _filter settings"
         })
             source.Should().Contain(content);
@@ -444,9 +452,41 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"Banded c_olumns\"",
             "Content = \"_Autofit column widths on update\"",
             "Content = \"_Preserve cell formatting on update\"",
-            "Content = \"_Refresh data when opening the file\""
+            "Content = \"_Refresh data when opening the file\"",
+            "Content = \"Set print _titles\"",
+            "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
         })
             source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ResultIncludesPrintingAndAltText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            PivotSubtotalPlacement.Top,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            " PivotStyleMedium4 ",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: true,
+            PivotReportLayout.Outline,
+            emptyValueText: " - ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            printTitles: true,
+            printExpandCollapseButtons: true,
+            altTextTitle: "  Sales pivot ",
+            altTextDescription: " Quarterly sales summary ");
+
+        result.PrintTitles.Should().BeTrue();
+        result.PrintExpandCollapseButtons.Should().BeTrue();
+        result.AltTextTitle.Should().Be("Sales pivot");
+        result.AltTextDescription.Should().Be("Quarterly sales summary");
     }
 
     [Fact]
