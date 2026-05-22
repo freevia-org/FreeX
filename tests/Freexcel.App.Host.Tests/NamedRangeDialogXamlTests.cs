@@ -81,19 +81,20 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
-    public void Source_ProvidesNewEditNameDialogWithPersistedFieldsOnly()
+    public void Source_ProvidesNewEditNameDialogWithExcelNameFields()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
 
         source.Should().Contain("NameDefinitionDialog");
+        source.Should().Contain("_scopeBox");
+        source.Should().Contain("_commentBox");
         source.Should().Contain("_refersToBox");
         source.Should().Contain("_rangePickerButton");
         source.Should().Contain("_rangePickerButton.Click");
         source.Should().Contain("_refersToBox.SelectAll");
         source.Should().NotContain("IsEnabled = false");
-        source.Should().NotContain("_scopeBox");
-        source.Should().NotContain("_commentBox");
-        source.Should().NotContain("ScopeOptions");
+        source.Should().Contain("GetScopeOptions");
+        source.Should().Contain("NamedRangeMetadata");
     }
 
     [Fact]

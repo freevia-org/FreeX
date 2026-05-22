@@ -25,6 +25,10 @@ public sealed class Workbook
     public Dictionary<string, GridRange> NamedRanges { get; } =
         new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Excel-style metadata for named ranges, keyed by defined name.</summary>
+    public Dictionary<string, NamedRangeMetadata> NamedRangeMetadataByName { get; } =
+        new Dictionary<string, NamedRangeMetadata>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Pivot cache metadata loaded from XLSX packages.</summary>
     public List<PivotCacheModel> PivotCaches { get; } = [];
 
@@ -88,19 +92,34 @@ public sealed class Workbook
     /// <summary>Define or replace a named range.</summary>
     public void DefineNamedRange(string name, GridRange range)
     {
+        DefineNamedRange(name, range, null);
+    }
+
+    /// <summary>Define or replace a named range and its Excel-style metadata.</summary>
+    public void DefineNamedRange(string name, GridRange range, NamedRangeMetadata? metadata)
+    {
         var error = ValidateNamedRangeName(name);
         if (error is not null)
             throw new ArgumentException(error, nameof(name));
 
         NamedRanges[name] = range;
+        NamedRangeMetadataByName[name] = metadata ?? NamedRangeMetadata.WorkbookScope;
     }
 
     /// <summary>Remove a named range. Returns true if found and removed.</summary>
-    public bool RemoveNamedRange(string name) => NamedRanges.Remove(name);
+    public bool RemoveNamedRange(string name)
+    {
+        NamedRangeMetadataByName.Remove(name);
+        return NamedRanges.Remove(name);
+    }
 
     /// <summary>Try to get a named range. Returns false if not found.</summary>
     public bool TryGetNamedRange(string name, out GridRange range) =>
         NamedRanges.TryGetValue(name, out range);
+
+    /// <summary>Try to get Excel-style metadata for a named range.</summary>
+    public bool TryGetNamedRangeMetadata(string name, out NamedRangeMetadata metadata) =>
+        NamedRangeMetadataByName.TryGetValue(name, out metadata!);
 
     public Workbook(string name = "Untitled")
     {
@@ -266,6 +285,11 @@ public sealed class Workbook
         _sheets.RemoveAt(fromIndex);
         _sheets.Insert(toIndex, sheet);
     }
+}
+
+public sealed record NamedRangeMetadata(string Scope, string Comment)
+{
+    public static NamedRangeMetadata WorkbookScope { get; } = new("Workbook", "");
 }
 
 public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets, string? Id = null);

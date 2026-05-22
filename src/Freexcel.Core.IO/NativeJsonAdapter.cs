@@ -318,7 +318,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             try
             {
-                workbook.DefineNamedRange(namedRangeDto.Name, GridRange.Parse(namedRangeDto.Range, sheet.Id));
+                workbook.DefineNamedRange(
+                    namedRangeDto.Name,
+                    GridRange.Parse(namedRangeDto.Range, sheet.Id),
+                    new NamedRangeMetadata(
+                        string.IsNullOrWhiteSpace(namedRangeDto.Scope) ? "Workbook" : namedRangeDto.Scope.Trim(),
+                        namedRangeDto.Comment?.Trim() ?? ""));
             }
             catch (ArgumentException) { /* skip invalid defined names */ }
             catch (FormatException) { /* skip unparseable named ranges */ }
@@ -406,13 +411,18 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 .Select(pair =>
                 {
                     var sheet = workbook.GetSheet(pair.Value.Start.Sheet);
+                    var metadata = workbook.TryGetNamedRangeMetadata(pair.Key, out var savedMetadata)
+                        ? savedMetadata
+                        : NamedRangeMetadata.WorkbookScope;
                     return sheet is null || pair.Value.End.Sheet != sheet.Id
                         ? null
                         : new NamedRangeDto
                         {
                             Name = pair.Key,
                             SheetName = sheet.Name,
-                            Range = pair.Value.ToString()
+                            Range = pair.Value.ToString(),
+                            Scope = metadata.Scope,
+                            Comment = metadata.Comment
                         };
                 })
                 .OfType<NamedRangeDto>()

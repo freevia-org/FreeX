@@ -18,7 +18,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
-    private Dictionary<string, GridRange>? _namedRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
@@ -428,17 +428,23 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         }
     }
 
-    internal static Dictionary<string, GridRange> CaptureNamedRanges(Workbook workbook) =>
-        workbook.NamedRanges.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+    internal static Dictionary<string, NamedRangeSnapshot> CaptureNamedRanges(Workbook workbook) =>
+        workbook.NamedRanges.ToDictionary(
+            pair => pair.Key,
+            pair => new NamedRangeSnapshot(
+                pair.Value,
+                workbook.TryGetNamedRangeMetadata(pair.Key, out var metadata) ? metadata : NamedRangeMetadata.WorkbookScope),
+            StringComparer.OrdinalIgnoreCase);
 
-    internal static void RestoreNamedRanges(Workbook workbook, Dictionary<string, GridRange>? snapshot)
+    internal static void RestoreNamedRanges(Workbook workbook, Dictionary<string, NamedRangeSnapshot>? snapshot)
     {
         if (snapshot is null)
             return;
 
         workbook.NamedRanges.Clear();
-        foreach (var (name, range) in snapshot)
-            workbook.NamedRanges[name] = range;
+        workbook.NamedRangeMetadataByName.Clear();
+        foreach (var (name, namedRange) in snapshot)
+            workbook.DefineNamedRange(name, namedRange.Range, namedRange.Metadata);
     }
 
     internal static void ShiftNamedRangeRowsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
@@ -456,7 +462,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         {
             if (range.Start.Sheet != sheetId) continue;
             var shifted = ShiftRangeRowsDown(range, start, count);
-            if (shifted is null) workbook.NamedRanges.Remove(name);
+            if (shifted is null) workbook.RemoveNamedRange(name);
             else workbook.NamedRanges[name] = shifted.Value;
         }
     }
@@ -476,7 +482,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         {
             if (range.Start.Sheet != sheetId) continue;
             var shifted = ShiftRangeColumnsDown(range, start, count);
-            if (shifted is null) workbook.NamedRanges.Remove(name);
+            if (shifted is null) workbook.RemoveNamedRange(name);
             else workbook.NamedRanges[name] = shifted.Value;
         }
     }
@@ -634,7 +640,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
-    private Dictionary<string, GridRange>? _namedRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
@@ -782,3 +788,5 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 }
+
+internal sealed record NamedRangeSnapshot(GridRange Range, NamedRangeMetadata Metadata);

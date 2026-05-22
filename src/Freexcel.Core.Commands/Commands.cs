@@ -168,7 +168,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private Sheet? _removedSheet;
     private int _removedIndex;
-    private Dictionary<string, GridRange>? _namedRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
 
     public string Label => "Delete Sheet";
 
