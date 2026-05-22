@@ -199,20 +199,20 @@
                     <TextBox x:Name="PrintAreaBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="PrintAreaPickerButton" Grid.Row="0" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="PrintAreaBox" Click="RangePickerButton_Click"
-                            ToolTip="Focuses and selects the print area box until worksheet range picking is available."
-                            AutomationProperties.Name="Focus print area range"/>
+                            ToolTip="Inserts the current worksheet selection as the print area."
+                            AutomationProperties.Name="Insert current selection as print area"/>
                     <Label Grid.Row="1" Grid.Column="0" Content="_Rows to repeat at top:" Target="{Binding ElementName=RowsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="RowsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="RowsRepeatPickerButton" Grid.Row="1" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="RowsRepeatBox" Click="RangePickerButton_Click"
-                            ToolTip="Focuses and selects the rows-to-repeat box until worksheet range picking is available."
-                            AutomationProperties.Name="Focus rows to repeat range"/>
+                            ToolTip="Inserts the current selection rows."
+                            AutomationProperties.Name="Insert current selection rows"/>
                     <Label Grid.Row="2" Grid.Column="0" Content="_Columns to repeat at left:" Target="{Binding ElementName=ColumnsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="ColumnsRepeatBox" Grid.Row="2" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="ColumnsRepeatPickerButton" Grid.Row="2" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="ColumnsRepeatBox" Click="RangePickerButton_Click"
-                            ToolTip="Focuses and selects the columns-to-repeat box until worksheet range picking is available."
-                            AutomationProperties.Name="Focus columns to repeat range"/>
+                            ToolTip="Inserts the current selection columns."
+                            AutomationProperties.Name="Insert current selection columns"/>
                     <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="_Print gridlines" Margin="0,0,0,8"/>
                     <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="Print row and column _headings" Margin="0,0,0,8"/>
                     <Label Grid.Row="5" Grid.Column="0" Content="Pa_ge order:" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
