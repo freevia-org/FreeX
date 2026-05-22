@@ -92,20 +92,38 @@ public sealed class Sheet
     /// <summary>Worksheet printed page header text.</summary>
     public WorksheetHeaderFooter PageHeader { get; set; } = new("", "", "");
 
+    /// <summary>Pictures used by the left, center, and right page header sections.</summary>
+    public WorksheetHeaderFooterPictureSet PageHeaderPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
+
     /// <summary>Worksheet printed page footer text.</summary>
     public WorksheetHeaderFooter PageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Pictures used by the left, center, and right page footer sections.</summary>
+    public WorksheetHeaderFooterPictureSet PageFooterPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
 
     /// <summary>Optional first-page header used when different first-page headers/footers are enabled.</summary>
     public WorksheetHeaderFooter FirstPageHeader { get; set; } = new("", "", "");
 
+    /// <summary>Pictures used by first-page header sections.</summary>
+    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
+
     /// <summary>Optional first-page footer used when different first-page headers/footers are enabled.</summary>
     public WorksheetHeaderFooter FirstPageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Pictures used by first-page footer sections.</summary>
+    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
 
     /// <summary>Optional even-page header used when different odd/even headers/footers are enabled.</summary>
     public WorksheetHeaderFooter EvenPageHeader { get; set; } = new("", "", "");
 
+    /// <summary>Pictures used by even-page header sections.</summary>
+    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
+
     /// <summary>Optional even-page footer used when different odd/even headers/footers are enabled.</summary>
     public WorksheetHeaderFooter EvenPageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Pictures used by even-page footer sections.</summary>
+    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
 
     /// <summary>Whether the first printed page uses separate header/footer text.</summary>
     public bool DifferentFirstPageHeaderFooter { get; set; }
@@ -559,11 +577,17 @@ public sealed class Sheet
             PrintTitleRows                = PrintTitleRows,
             PrintTitleColumns             = PrintTitleColumns,
             PageHeader                    = PageHeader,
+            PageHeaderPictures            = PageHeaderPictures.DeepClone(),
             PageFooter                    = PageFooter,
+            PageFooterPictures            = PageFooterPictures.DeepClone(),
             FirstPageHeader               = FirstPageHeader,
+            FirstPageHeaderPictures       = FirstPageHeaderPictures.DeepClone(),
             FirstPageFooter               = FirstPageFooter,
+            FirstPageFooterPictures       = FirstPageFooterPictures.DeepClone(),
             EvenPageHeader                = EvenPageHeader,
+            EvenPageHeaderPictures        = EvenPageHeaderPictures.DeepClone(),
             EvenPageFooter                = EvenPageFooter,
+            EvenPageFooterPictures        = EvenPageFooterPictures.DeepClone(),
             DifferentFirstPageHeaderFooter = DifferentFirstPageHeaderFooter,
             DifferentOddEvenHeaderFooter  = DifferentOddEvenHeaderFooter,
             HeaderFooterScaleWithDocument = HeaderFooterScaleWithDocument,

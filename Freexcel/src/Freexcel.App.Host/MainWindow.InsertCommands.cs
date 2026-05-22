@@ -111,7 +111,13 @@ public partial class MainWindow
                     dialog.DifferentFirstPage,
                     dialog.DifferentOddEvenPages,
                     dialog.ScaleWithDocument,
-                    dialog.AlignWithMargins)))
+                    dialog.AlignWithMargins,
+                    dialog.HeaderPictures,
+                    dialog.FooterPictures,
+                    dialog.FirstPageHeaderPictures,
+                    dialog.FirstPageFooterPictures,
+                    dialog.EvenPageHeaderPictures,
+                    dialog.EvenPageFooterPictures)))
             return;
 
         UpdateViewport();

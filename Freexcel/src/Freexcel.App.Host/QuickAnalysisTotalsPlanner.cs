@@ -4,6 +4,13 @@ namespace Freexcel.App.Host;
 
 public static class QuickAnalysisTotalsPlanner
 {
+    public static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildAggregateEdits(
+        GridRange range,
+        string functionName) =>
+        BuildAdjacentFormulaEdits(
+            range,
+            row => $"{functionName}({RowRangeReference(range, row)})");
+
     public static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildPercentTotalEdits(GridRange range)
     {
         var denominator = AbsoluteRangeReference(range);

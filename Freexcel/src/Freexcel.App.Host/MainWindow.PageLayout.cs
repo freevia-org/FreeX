@@ -374,7 +374,13 @@ public partial class MainWindow
                             dialog.DifferentFirstPage,
                             dialog.DifferentOddEvenPages,
                             dialog.ScaleHeaderFooterWithDocument,
-                            dialog.AlignHeaderFooterWithMargins)
+                            dialog.AlignHeaderFooterWithMargins,
+                            dialog.HeaderPictures,
+                            dialog.FooterPictures,
+                            dialog.FirstPageHeaderPictures,
+                            dialog.FirstPageFooterPictures,
+                            dialog.EvenPageHeaderPictures,
+                            dialog.EvenPageFooterPictures)
                     ])))
             return;
 
