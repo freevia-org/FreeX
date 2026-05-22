@@ -1,14 +1,13 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:600;text-anchor:middle;dominant-baseline:central}
-    </style>
-  </defs>
-  <rect class="f s" x="4.8" y="4.8" width="22.4" height="22.4" stroke-width="1.6"/>
-  <path class="s" d="M10.4 4.8 L10.4 27.2" stroke-width="1.12"/>
-  <path class="s" d="M16 4.8 L16 27.2" stroke-width="1.12"/>
-  <path class="s" d="M21.6 4.8 L21.6 27.2" stroke-width="1.12"/>
-  <path class="s" d="M4.8 10.4 L27.2 10.4" stroke-width="1.12"/>
-  <path class="s" d="M4.8 16 L27.2 16" stroke-width="1.12"/>
-  <path class="s" d="M4.8 21.6 L27.2 21.6" stroke-width="1.12"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
+<rect width="32" height="32" fill="none"/>
+<rect x="6" y="6" width="20" height="20" fill="#ffffff"/>
+<rect x="6" y="6" width="20" height="1" fill="#202124"/>
+<rect x="6" y="13" width="20" height="1" fill="#202124"/>
+<rect x="6" y="19" width="20" height="1" fill="#202124"/>
+<rect x="6" y="25" width="20" height="1" fill="#202124"/>
+<rect x="6" y="6" width="1" height="20" fill="#202124"/>
+<rect x="13" y="6" width="1" height="20" fill="#202124"/>
+<rect x="19" y="6" width="1" height="20" fill="#202124"/>
+<rect x="25" y="6" width="1" height="20" fill="#202124"/>
+<rect x="7" y="7" width="6" height="6" fill="#d9eadf"/>
 </svg>

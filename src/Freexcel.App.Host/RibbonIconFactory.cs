@@ -373,7 +373,7 @@ public static class RibbonIconFactory
 
     private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
     {
-        if (UseBaseHomeIconArtwork(slug))
+        if (size <= 22 && UseBaseHomeIconArtwork(slug))
         {
             yield return slug;
             yield break;
