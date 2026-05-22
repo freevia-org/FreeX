@@ -10478,6 +10478,17 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "sheetData")!
             .Elements(worksheetNs + "row")
             .Single(element => element.Attribute("r")?.Value == "2");
+        worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Attribute("nativeSheetDataAttr")
+            .Should()
+            .NotBeNull();
+        worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Attribute("nativeSheetDataAttr")!
+            .Value
+            .Should()
+            .Be("kept");
         row.Attribute("thickTop")!.Value.Should().Be("1");
         row.Attribute("ph")!.Value.Should().Be("1");
         row.Attribute("customAttr")!.Value.Should().Be("row-native");
@@ -15125,6 +15136,9 @@ public partial class FileAdapterSmokeTests
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .SetAttributeValue("nativeSheetDataAttr", "kept");
             var row = worksheetXml.Root!
                 .Element(worksheetNs + "sheetData")!
                 .Elements(worksheetNs + "row")

@@ -466,6 +466,8 @@ internal static class XlsxWorksheetMetadataPreserver
         if (targetSheetData is null)
             return false;
 
+        var changed = MergeMissingAttributes(sourceSheetData, targetSheetData);
+
         var targetRowsByNumber = targetSheetData
             .Elements(workbookNs + "row")
             .Where(row => !string.IsNullOrWhiteSpace(row.Attribute("r")?.Value))
@@ -473,7 +475,6 @@ internal static class XlsxWorksheetMetadataPreserver
                 row => row.Attribute("r")!.Value,
                 StringComparer.OrdinalIgnoreCase);
 
-        var changed = false;
         foreach (var sourceRow in sourceSheetData.Elements(workbookNs + "row"))
         {
             var rowNumber = sourceRow.Attribute("r")?.Value;
