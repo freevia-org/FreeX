@@ -668,12 +668,14 @@ public static class PrintRenderer
         int totalPages)
     {
         var typeface = new Typeface("Segoe UI");
-        var headerY = Math.Max(4, headerMargin - PrintFontSize);
-        var footerY = Math.Max(4, pageH - footerMargin - PrintFontSize);
+        var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures);
+        var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures);
+        var headerY = Math.Max(4, headerMargin - headerHeight);
+        var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, typeface, pageNumber, totalPages, workbookName, sheetName);
-        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
     }
 
     private static void DrawHeaderFooterLine(
@@ -684,6 +686,7 @@ public static class PrintRenderer
         double leftInset,
         double rightInset,
         double y,
+        double lineHeight,
         Typeface typeface,
         int pageNumber,
         int totalPages,
@@ -696,16 +699,20 @@ public static class PrintRenderer
         var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
         var sectionWidth = Math.Max(1, availableWidth / 3);
 
-        var leftRect = new Rect(leftInset, y, sectionWidth, 18);
-        var centerRect = new Rect((pageW - sectionWidth) / 2, y, sectionWidth, 18);
-        var rightRect = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, 18);
+        var leftRect = new Rect(leftInset, y, sectionWidth, lineHeight);
+        var centerRect = new Rect((pageW - sectionWidth) / 2, y, sectionWidth, lineHeight);
+        var rightRect = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
 
-        DrawHeaderFooterPicture(dc, HasHeaderFooterPictureToken(value.Left) ? pictures.Left : null, leftRect, TextAlignment.Left);
-        DrawHeaderFooterPicture(dc, HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null, centerRect, TextAlignment.Center);
-        DrawHeaderFooterPicture(dc, HasHeaderFooterPictureToken(value.Right) ? pictures.Right : null, rightRect, TextAlignment.Right);
-        DrawHeaderFooterText(dc, left, leftRect, typeface, TextAlignment.Left);
-        DrawHeaderFooterText(dc, center, centerRect, typeface, TextAlignment.Center);
-        DrawHeaderFooterText(dc, right, rightRect, typeface, TextAlignment.Right);
+        var leftPicture = HasHeaderFooterPictureToken(value.Left) ? pictures.Left : null;
+        var centerPicture = HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null;
+        var rightPicture = HasHeaderFooterPictureToken(value.Right) ? pictures.Right : null;
+
+        DrawHeaderFooterPicture(dc, leftPicture, leftRect, TextAlignment.Left);
+        DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
+        DrawHeaderFooterPicture(dc, rightPicture, rightRect, TextAlignment.Right);
+        DrawHeaderFooterText(dc, left, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), typeface, TextAlignment.Left);
+        DrawHeaderFooterText(dc, center, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), typeface, TextAlignment.Center);
+        DrawHeaderFooterText(dc, right, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), typeface, TextAlignment.Right);
     }
 
     private static void DrawHeaderFooterPicture(
@@ -719,20 +726,68 @@ public static class PrintRenderer
 
         using var stream = new MemoryStream(picture.ImageBytes);
         var image = BitmapFrame.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnLoad);
+        dc.DrawImage(image, CalculateHeaderFooterPictureRect(picture, sectionRect, alignment));
+    }
+
+    internal static Rect CalculateHeaderFooterPictureRect(
+        WorksheetHeaderFooterPicture picture,
+        Rect sectionRect,
+        TextAlignment alignment)
+    {
         var width = Math.Min(Math.Max(1, picture.Width), sectionRect.Width);
-        var height = Math.Min(Math.Max(1, picture.Height), Math.Max(sectionRect.Height, picture.Height));
+        var height = Math.Min(Math.Max(1, picture.Height), sectionRect.Height);
         var left = alignment switch
         {
             TextAlignment.Center => sectionRect.Left + (sectionRect.Width - width) / 2,
-            TextAlignment.Right => sectionRect.Right - width - 2,
+            TextAlignment.Right => Math.Max(sectionRect.Left, sectionRect.Right - width - 2),
             _ => sectionRect.Left + 2
         };
-        dc.DrawImage(image, new Rect(left, sectionRect.Top + (sectionRect.Height - Math.Min(height, sectionRect.Height)) / 2, width, height));
+        return new Rect(left, sectionRect.Top + (sectionRect.Height - height) / 2, width, height);
+    }
+
+    internal static Rect CalculateHeaderFooterTextRect(
+        Rect sectionRect,
+        WorksheetHeaderFooterPicture? picture,
+        TextAlignment alignment)
+    {
+        if (picture is null)
+            return sectionRect;
+
+        var pictureWidth = Math.Min(Math.Max(1, picture.Width), sectionRect.Width);
+        const double gap = 4;
+        return alignment switch
+        {
+            TextAlignment.Left => new Rect(
+                sectionRect.Left + pictureWidth + gap,
+                sectionRect.Top,
+                Math.Max(1, sectionRect.Width - pictureWidth - gap),
+                sectionRect.Height),
+            TextAlignment.Right => new Rect(
+                sectionRect.Left,
+                sectionRect.Top,
+                Math.Max(1, sectionRect.Width - pictureWidth - gap),
+                sectionRect.Height),
+            _ => sectionRect
+        };
+    }
+
+    internal static double CalculateHeaderFooterLineHeight(
+        WorksheetHeaderFooter value,
+        WorksheetHeaderFooterPictureSet pictures)
+    {
+        var height = 18.0;
+        if (HasHeaderFooterPictureToken(value.Left) && pictures.Left is { } left)
+            height = Math.Max(height, Math.Max(1, left.Height));
+        if (HasHeaderFooterPictureToken(value.Center) && pictures.Center is { } center)
+            height = Math.Max(height, Math.Max(1, center.Height));
+        if (HasHeaderFooterPictureToken(value.Right) && pictures.Right is { } right)
+            height = Math.Max(height, Math.Max(1, right.Height));
+        return height;
     }
 
     private static bool HasHeaderFooterPictureToken(string text) =>
         text.Contains("&[Picture]", StringComparison.OrdinalIgnoreCase) ||
-        text.Contains("&G", StringComparison.Ordinal);
+        text.Contains("&G", StringComparison.OrdinalIgnoreCase);
 
     private static void DrawHeaderFooterText(
         DrawingContext dc,
