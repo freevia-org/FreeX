@@ -150,6 +150,27 @@ public sealed class ExcelCachedFormulaFixtureTests
                     <row r="5">
                       <c r="C5" t="e"><f>NA()</f><v>#N/A</v></c>
                     </row>
+                    <row r="6">
+                      <c r="A6"><v>1</v></c>
+                      <c r="B6"><v>2</v></c>
+                      <c r="C6"><v>3</v></c>
+                      <c r="D6"><f>XLOOKUP(2,A6:C6,A6:C6)</f><v>2</v></c>
+                    </row>
+                    <row r="7">
+                      <c r="A7"><v>1</v></c>
+                      <c r="B7"><v>2</v></c>
+                      <c r="C7"><v>3</v></c>
+                      <c r="D7"><f>XMATCH(3,A7:C7)</f><v>3</v></c>
+                    </row>
+                    <row r="8">
+                      <c r="C8"><f>SUM(SEQUENCE(3))</f><v>6</v></c>
+                    </row>
+                    <row r="9">
+                      <c r="C9"><f>LET(x,5,x*2)</f><v>10</v></c>
+                    </row>
+                    <row r="10">
+                      <c r="C10" t="str"><f>TEXTJOIN("|",TRUE,"A","","B")</f><v>A|B</v></c>
+                    </row>
                   </sheetData>
                 </worksheet>
                 """);
