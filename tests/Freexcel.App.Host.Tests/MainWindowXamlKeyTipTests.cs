@@ -957,13 +957,20 @@ public sealed class MainWindowXamlKeyTipTests
             .Should()
             .Equal("Auto", "*", "Auto");
 
-        var statsPanel = statusBarGrid
+        var statsViewport = statusBarGrid
+            .Descendants(presentation + "Border")
+            .Single(border => border.Attribute(x + "Name")?.Value == "StatusStatsViewport");
+
+        statsViewport.Attribute("Grid.Column")?.Value.Should().Be("1");
+        statsViewport.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsViewport.Attribute("Margin")?.Value.Should().NotContain("180");
+
+        var statsPanel = statsViewport
             .Descendants(presentation + "StackPanel")
             .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusStatsPanel");
 
-        statsPanel.Attribute("Grid.Column")?.Value.Should().Be("1");
+        statsPanel.Attribute("HorizontalAlignment")?.Value.Should().Be("Right");
         statsPanel.Attribute("ClipToBounds")?.Value.Should().Be("True");
-        statsPanel.Attribute("Margin")?.Value.Should().NotContain("180");
 
         var zoomControls = statusBarGrid
             .Descendants(presentation + "StackPanel")
@@ -971,6 +978,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
         zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
+        zoomControls.Attribute("Background")?.Value.Should().Be("{StaticResource FreexcelStatusSurfaceBrush}");
+        zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
     }
 
     [Theory]
