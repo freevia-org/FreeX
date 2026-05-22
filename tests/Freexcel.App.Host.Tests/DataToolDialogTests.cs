@@ -178,6 +178,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsCommand_WarnsBeforeOverwritingDestinationData()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("FindOverwriteTargets");
+        source.Should().Contain("There's already data here. Do you want to replace it?");
+        source.Should().Contain("MessageBoxButton.YesNo");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("BuildTextToColumnsEdits");
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_BuildsColumnOffsetSelectionAndBulkToggleStates()
     {
         var columns = RemoveDuplicatesDialog.SelectAll(4);

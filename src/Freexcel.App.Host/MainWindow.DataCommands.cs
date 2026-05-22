@@ -58,12 +58,26 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+
+        var currentRange = SheetGrid.SelectedRange ?? range;
+        var edits = BuildTextToColumnsEdits(currentRange, dialog.Result);
+        if (sheet is not null &&
+            TextToColumnsPlanner.FindOverwriteTargets(sheet, edits, currentRange).Count > 0 &&
+            MessageBox.Show(
+                "There's already data here. Do you want to replace it?",
                 "Text to Columns",
-                range,
-                currentRange => CreateTextToColumnsCommand(currentRange, dialog.Result),
-                out var outcome))
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
             return;
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => CreateTextToColumnsCommand(edits));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Text to Columns");
+            return;
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
@@ -71,11 +85,26 @@ public partial class MainWindow
 
     private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
     {
+        return CreateTextToColumnsCommand(BuildTextToColumnsEdits(range, result));
+    }
+
+    private IWorkbookCommand CreateTextToColumnsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        return targetSheetIds.Count > 1
+            ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
+            : new EditCellsCommand(_currentSheetId, edits);
+    }
+
+    private IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildTextToColumnsEdits(
+        GridRange range,
+        TextToColumnsDialogResult result)
+    {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
-            return new EditCellsCommand(_currentSheetId, []);
+            return [];
 
-        var edits = result.SplitMode == TextToColumnsSplitMode.FixedWidth
+        return result.SplitMode == TextToColumnsSplitMode.FixedWidth
             ? TextToColumnsPlanner.BuildFixedWidthEdits(
                 sheet,
                 range,
@@ -90,11 +119,6 @@ public partial class MainWindow
                 result.TextQualifierChar,
                 result.TreatConsecutiveDelimitersAsOne,
                 result.ColumnFormats);
-
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        return targetSheetIds.Count > 1
-            ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
-            : new EditCellsCommand(_currentSheetId, edits);
     }
 
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
