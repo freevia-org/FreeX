@@ -294,7 +294,7 @@ public sealed record NamedRangeMetadata(string Scope, string Comment)
 
 public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets, string? Id = null);
 
-public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells);
+public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells, string? Comment = null);
 
 public sealed record ScenarioCellValue(CellAddress Address, ScalarValue Value);
 
