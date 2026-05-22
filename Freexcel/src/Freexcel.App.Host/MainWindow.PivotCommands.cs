@@ -720,7 +720,9 @@ public partial class MainWindow
         bool showColumnStripes,
         PivotReportLayout reportLayout,
         string? emptyValueText = null,
-        bool updateEmptyValueText = false)
+        bool updateEmptyValueText = false,
+        bool? refreshOnOpen = null,
+        bool? saveSourceData = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -739,7 +741,9 @@ public partial class MainWindow
                     showColumnStripes,
                     reportLayout,
                     emptyValueText,
-                    updateEmptyValueText),
+                    updateEmptyValueText,
+                    refreshOnOpen,
+                    saveSourceData),
                 "PivotTable Options"))
             return;
 
@@ -751,7 +755,8 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out _, out var pivotTable))
             return;
 
-        var dialog = new PivotTableOptionsDialog(pivotTable) { Owner = this };
+        var cache = _workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        var dialog = new PivotTableOptionsDialog(pivotTable, cache) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -941,7 +946,9 @@ public partial class MainWindow
             result.ShowColumnStripes,
             result.ReportLayout,
             result.EmptyValueText,
-            updateEmptyValueText: true);
+            updateEmptyValueText: true,
+            result.RefreshOnOpen,
+            result.SaveSourceData);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
