@@ -5314,6 +5314,43 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesMergedCellNativeMetadata()
+    {
+        var workbook = new Workbook("MergedCellNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("merged"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2)));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMergedCellNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells");
+        mergeCells.Should().NotBeNull();
+        mergeCells!.Attribute("nativeMergeContainerAttr").Should().NotBeNull();
+        mergeCells.Attribute("nativeMergeContainerAttr")!.Value.Should().Be("kept");
+        var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+            .Single(element => element.Attribute("ref")?.Value == "A1:B2");
+        mergeCell.Attribute("nativeMergeCellAttr").Should().NotBeNull();
+        mergeCell.Attribute("nativeMergeCellAttr")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_ReadsWorkbookThemePart()
     {
         var workbook = new Workbook("ThemeLoadTest");
@@ -14695,6 +14732,25 @@ public partial class FileAdapterSmokeTests
             pageMargins.SetAttributeValue("header", "0.35");
             pageMargins.SetAttributeValue("footer", "0.45");
             pageMargins.SetAttributeValue("customAttr", "page-margins-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMergedCellNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells");
+            mergeCells.Should().NotBeNull();
+            mergeCells!.SetAttributeValue("nativeMergeContainerAttr", "kept");
+            var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+                .Single(element => element.Attribute("ref")?.Value == "A1:B2");
+            mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
