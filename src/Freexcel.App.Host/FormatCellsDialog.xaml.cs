@@ -12,6 +12,7 @@ public partial class FormatCellsDialog : Window
     public StyleDiff? ResultDiff { get; private set; }
 
     private readonly CellStyle _current;
+    private bool _syncingNumberControls;
 
     private sealed record NumberFormatOption(string Category, string Label, string Code, string Preview);
 
@@ -85,6 +86,16 @@ public partial class FormatCellsDialog : Window
         "Custom"
     ];
 
+    private static readonly string[] NumberSymbols = ["$", "€", "£", "¥", "None"];
+
+    private static readonly string[] NegativeNumberOptions =
+    [
+        "-1234.10",
+        "[Red] -1234.10",
+        "(1234.10)",
+        "[Red] (1234.10)"
+    ];
+
     public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         _current = current.Clone();
@@ -99,16 +110,11 @@ public partial class FormatCellsDialog : Window
     private void Populate(CellStyle s)
     {
         NumberCategoryList.ItemsSource = NumberCategories;
-        NumberSymbolCombo.ItemsSource = new[] { "$", "EUR", "GBP", "JPY", "None" };
+        NumberSymbolCombo.ItemsSource = NumberSymbols;
         NumberSymbolCombo.SelectedIndex = 0;
-        NumberNegativeNumbersList.ItemsSource = new[]
-        {
-            "-1234.10",
-            "1234.10",
-            "(1234.10)",
-            "-1234.10"
-        };
+        NumberNegativeNumbersList.ItemsSource = NegativeNumberOptions;
         NumberNegativeNumbersList.SelectedIndex = 0;
+        NumberDecimalPlacesBox.Text = DecimalPlacesForFormat(s.NumberFormat).ToString();
         var option = FindNumberFormatOption(s.NumberFormat);
         if (option is not null)
         {
@@ -120,6 +126,8 @@ public partial class FormatCellsDialog : Window
             NumberCategoryList.SelectedItem = "Custom";
             NumberFormatCombo.Text = s.NumberFormat;
         }
+        UpdateNumberControlAvailability();
+        UpdateNumberPreview();
 
         DlgFontNameBox.ItemsSource  = FontNamesWithFallback(s.FontName);
         DlgFontNameBox.SelectedItem = s.FontName;
@@ -169,8 +177,8 @@ public partial class FormatCellsDialog : Window
 
     private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (NumberPreview is not null)
-            NumberPreview.Text = PreviewForFormat(NumberFormatCombo.SelectedItem as string ?? NumberFormatCombo.Text);
+        SyncDecimalPlacesFromSelectedNumberFormat();
+        UpdateNumberPreview();
     }
 
     private void NumberCategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -186,6 +194,17 @@ public partial class FormatCellsDialog : Window
 
         NumberFormatCombo.ItemsSource = labels;
         NumberFormatCombo.SelectedIndex = labels.Length > 0 ? 0 : -1;
+        SyncDecimalPlacesFromSelectedNumberFormat();
+        UpdateNumberControlAvailability();
+        UpdateNumberPreview();
+    }
+
+    private void NumberFormatControl_Changed(object sender, RoutedEventArgs e)
+    {
+        if (NumberPreview is null)
+            return;
+
+        UpdateNumberPreview();
     }
 
     private void FontStyleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -247,7 +266,7 @@ public partial class FormatCellsDialog : Window
         CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
         bool clearFill = DlgClearFillCheck.IsChecked == true;
 
-        string? numFmt = ResolveNumberFormat(NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex);
+        string? numFmt = ResolveSelectedNumberFormat();
 
         double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);
 
@@ -528,6 +547,129 @@ public partial class FormatCellsDialog : Window
         NumberFormatCombo.SelectedItem = option.Label;
         if (!string.Equals(NumberFormatCombo.SelectedItem as string, option.Label, StringComparison.Ordinal))
             NumberFormatCombo.Text = option.Label;
+    }
+
+    private string? ResolveSelectedNumberFormat()
+    {
+        var category = NumberCategoryList.SelectedItem as string;
+        var decimals = SelectedDecimalPlaces();
+
+        return category switch
+        {
+            "Number" => BuildSignedNumberFormat(NumberPattern(decimals)),
+            "Currency" => BuildSignedNumberFormat(CurrencyPattern(decimals)),
+            "Accounting" => AccountingPattern(decimals),
+            "Percentage" => $"0{DecimalPattern(decimals)}%",
+            "Scientific" => $"0{DecimalPattern(decimals)}E+00",
+            _ => ResolveNumberFormat(NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex)
+        };
+    }
+
+    private void UpdateNumberControlAvailability()
+    {
+        if (NumberCategoryList?.SelectedItem is not string category)
+            return;
+
+        var usesDecimals = category is "Number" or "Currency" or "Accounting" or "Percentage" or "Scientific";
+        var usesSymbol = category is "Currency" or "Accounting";
+        var usesNegativeOptions = category is "Number" or "Currency";
+
+        NumberDecimalPlacesBox.IsEnabled = usesDecimals;
+        NumberSymbolCombo.IsEnabled = usesSymbol;
+        NumberNegativeNumbersList.IsEnabled = usesNegativeOptions;
+    }
+
+    private void UpdateNumberPreview()
+    {
+        if (NumberPreview is null)
+            return;
+
+        NumberPreview.Text = ResolveSelectedNumberFormat() is { } generatedFormat
+            ? PreviewForFormat(generatedFormat)
+            : PreviewForFormat(NumberFormatCombo.SelectedItem as string ?? NumberFormatCombo.Text);
+    }
+
+    private void SyncDecimalPlacesFromSelectedNumberFormat()
+    {
+        if (_syncingNumberControls || NumberDecimalPlacesBox is null)
+            return;
+
+        var selectedFormat = ResolveNumberFormat(NumberFormatCombo.SelectedItem as string ?? NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex);
+        if (selectedFormat is null)
+            return;
+
+        _syncingNumberControls = true;
+        NumberDecimalPlacesBox.Text = DecimalPlacesForFormat(selectedFormat).ToString();
+        _syncingNumberControls = false;
+    }
+
+    private string BuildSignedNumberFormat(string positivePattern)
+    {
+        var negativePattern = NumberNegativeNumbersList.SelectedIndex switch
+        {
+            1 => $"[Red]-{positivePattern}",
+            2 => $"({positivePattern})",
+            3 => $"[Red]({positivePattern})",
+            _ => ""
+        };
+
+        return string.IsNullOrEmpty(negativePattern)
+            ? positivePattern
+            : $"{positivePattern};{negativePattern}";
+    }
+
+    private string NumberPattern(int decimals) => $"#,##0{DecimalPattern(decimals)}";
+
+    private string CurrencyPattern(int decimals)
+    {
+        var symbol = SelectedCurrencySymbol();
+        return string.IsNullOrEmpty(symbol)
+            ? NumberPattern(decimals)
+            : $"{symbol}{NumberPattern(decimals)}";
+    }
+
+    private string AccountingPattern(int decimals)
+    {
+        var symbol = SelectedCurrencySymbol();
+        var symbolToken = string.IsNullOrEmpty(symbol) ? "" : symbol;
+        var decimalPattern = DecimalPattern(decimals);
+        var zeroPadding = decimals > 0 ? "??" : "";
+
+        return $"_({symbolToken}* #,##0{decimalPattern}_);_({symbolToken}* (#,##0{decimalPattern});_({symbolToken}* \"-\"{zeroPadding}_);_(@_)";
+    }
+
+    private int SelectedDecimalPlaces()
+    {
+        if (!int.TryParse(NumberDecimalPlacesBox.Text.Trim(), out var decimals))
+            decimals = 2;
+
+        return Math.Clamp(decimals, 0, 30);
+    }
+
+    private string SelectedCurrencySymbol()
+    {
+        var value = NumberSymbolCombo.SelectedItem as string ?? NumberSymbolCombo.Text;
+        return string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) ? "" : value;
+    }
+
+    private static string DecimalPattern(int decimals)
+        => decimals <= 0 ? "" : "." + new string('0', decimals);
+
+    private static int DecimalPlacesForFormat(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            return 2;
+
+        var firstSection = format.Split(';')[0];
+        var dotIndex = firstSection.IndexOf('.');
+        if (dotIndex < 0)
+            return 0;
+
+        var count = 0;
+        for (var i = dotIndex + 1; i < firstSection.Length && firstSection[i] is '0' or '#'; i++)
+            count++;
+
+        return Math.Clamp(count, 0, 30);
     }
 
     private static string PreviewForFormat(string? text)
