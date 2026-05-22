@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Documents;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -19,11 +20,22 @@ public partial class MainWindow
             doc,
             settings,
             showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
-            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()))
+            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
+            refreshPreview: BuildActiveSheetPrintPreview)
         {
             Owner = this
         };
         dialog.ShowDialog();
+    }
+
+    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview()
+    {
+        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var settings = sheet is null
+            ? new PrintSettingsPlan(["Print active sheet"])
+            : PrintSettingsPlanner.Build(sheet);
+        return (document, settings);
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
