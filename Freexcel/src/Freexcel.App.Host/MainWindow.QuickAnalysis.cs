@@ -160,6 +160,9 @@ public partial class MainWindow
             case QuickAnalysisCommand.StockChart:
                 ChartStockMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.MoreCharts:
+                InsertChartPickerBtn_Click(sender, e);
+                break;
             case QuickAnalysisCommand.Sum:
                 AutoSumSumMenuItem_Click(sender, e);
                 break;

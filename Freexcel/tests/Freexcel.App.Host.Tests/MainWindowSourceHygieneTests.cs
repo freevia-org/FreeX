@@ -1262,6 +1262,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_MoreChartsReusesInsertChartDialogPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("case QuickAnalysisCommand.MoreCharts:");
+        source.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
+    }
+
+    [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
