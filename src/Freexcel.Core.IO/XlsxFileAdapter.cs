@@ -119,6 +119,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
+            foreach (var xlCell in xlSheet.CellsUsed(XLCellsUsedOptions.AllFormats))
+            {
+                var row = (uint)xlCell.Address.RowNumber;
+                var col = (uint)xlCell.Address.ColumnNumber;
+                if (sheet.GetCell(row, col) is not null)
+                    continue;
+
+                var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
+                if (!style.Equals(CellStyle.Default))
+                    sheet.SetStyleOnly(row, col, workbook.RegisterStyle(style));
+            }
+
             foreach (var xlCell in xlSheet.CellsUsed(XLCellsUsedOptions.All))
             {
                 try
@@ -411,6 +423,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 }
 
                 var style = workbook.GetStyle(cell.StyleId);
+                XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+            }
+
+            foreach (var ((row, col), styleId) in sheet.GetStyleOnlyEntries())
+            {
+                if (!IsValidWorksheetRow(row) || !IsValidWorksheetColumn(col))
+                    continue;
+
+                if (sheet.GetCell(row, col) is not null)
+                    continue;
+
+                var style = workbook.GetStyle(styleId);
+                if (style.Equals(CellStyle.Default))
+                    continue;
+
+                var xlCell = xlSheet.Cell((int)row, (int)col);
                 XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
             }
 
