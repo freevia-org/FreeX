@@ -22,6 +22,44 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
     }
 
+    [Theory]
+    [InlineData(FreexcelEnterDirection.Right, ModifierKeys.None, 10, 6)]
+    [InlineData(FreexcelEnterDirection.Right, ModifierKeys.Shift, 10, 4)]
+    [InlineData(FreexcelEnterDirection.Up, ModifierKeys.None, 9, 5)]
+    [InlineData(FreexcelEnterDirection.Left, ModifierKeys.None, 10, 4)]
+    public void GetIntent_UsesConfiguredEnterDirection(
+        FreexcelEnterDirection direction,
+        ModifierKeys modifiers,
+        uint expectedRow,
+        uint expectedCol)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.Enter,
+            modifiers,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            enterDirection: direction);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitAndMove);
+        intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
+    }
+
+    [Fact]
+    public void GetIntent_CanCommitEnterWithoutMovingSelection()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.Enter,
+            ModifierKeys.None,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            moveSelectionAfterEnter: false);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitAndMove);
+        intent.Target.Should().Be(Current);
+    }
+
     [Fact]
     public void GetIntent_DoesNotCommitInlineEditorOnPlainArrowKeys()
     {
