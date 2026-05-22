@@ -138,6 +138,8 @@ public static class PrintRenderer
                 sheet.PrintHeadings,
                 pageHeader,
                 pageFooter,
+                workbook.Name,
+                sheet.Name,
                 sheet.HeaderFooterAlignWithMargins,
                 sheet.CenterHorizontallyOnPage,
                     sheet.CenterVerticallyOnPage,
@@ -326,6 +328,8 @@ public static class PrintRenderer
         bool printHeadings,
         WorksheetHeaderFooter pageHeader,
         WorksheetHeaderFooter pageFooter,
+        string workbookName,
+        string sheetName,
         bool alignHeaderFooterWithMargins,
         bool centerHorizontally,
         bool centerVertically,
@@ -351,6 +355,8 @@ public static class PrintRenderer
             footerMargin,
             pageHeader,
             pageFooter,
+            workbookName,
+            sheetName,
             alignHeaderFooterWithMargins,
             pageNumber,
             totalPages);
@@ -646,6 +652,8 @@ public static class PrintRenderer
         double footerMargin,
         WorksheetHeaderFooter header,
         WorksheetHeaderFooter footer,
+        string workbookName,
+        string sheetName,
         bool alignWithMargins,
         int pageNumber,
         int totalPages)
@@ -655,8 +663,8 @@ public static class PrintRenderer
         var footerY = Math.Max(4, pageH - footerMargin - PrintFontSize);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, header, pageW, leftInset, rightInset, headerY, typeface, pageNumber, totalPages);
-        DrawHeaderFooterLine(dc, footer, pageW, leftInset, rightInset, footerY, typeface, pageNumber, totalPages);
+        DrawHeaderFooterLine(dc, header, pageW, leftInset, rightInset, headerY, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, footer, pageW, leftInset, rightInset, footerY, typeface, pageNumber, totalPages, workbookName, sheetName);
     }
 
     private static void DrawHeaderFooterLine(
@@ -668,11 +676,13 @@ public static class PrintRenderer
         double y,
         Typeface typeface,
         int pageNumber,
-        int totalPages)
+        int totalPages,
+        string workbookName,
+        string sheetName)
     {
-        var left = ExpandHeaderFooterText(value.Left, pageNumber, totalPages);
-        var center = ExpandHeaderFooterText(value.Center, pageNumber, totalPages);
-        var right = ExpandHeaderFooterText(value.Right, pageNumber, totalPages);
+        var left = ExpandHeaderFooterText(value.Left, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
+        var center = ExpandHeaderFooterText(value.Center, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
+        var right = ExpandHeaderFooterText(value.Right, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
         var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
         var sectionWidth = Math.Max(1, availableWidth / 3);
 
@@ -709,10 +719,22 @@ public static class PrintRenderer
         dc.DrawText(ft, new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2));
     }
 
-    private static string ExpandHeaderFooterText(string text, int pageNumber, int totalPages) =>
+    internal static string ExpandHeaderFooterText(
+        string text,
+        int pageNumber,
+        int totalPages,
+        string workbookName,
+        string sheetName,
+        DateTime now) =>
         text
             .Replace("&[Page]", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
             .Replace("&[Pages]", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Date]", now.ToString("d", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Time]", now.ToString("t", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&[File]", workbookName, StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Path]", workbookName, StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Tab]", sheetName, StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Picture]", "[Picture]", StringComparison.OrdinalIgnoreCase)
             .Replace("&P", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("&N", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 

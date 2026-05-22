@@ -7,6 +7,22 @@ namespace Freexcel.App.Host.Tests;
 public sealed class PrintRendererPageSetupTests
 {
     [Fact]
+    public void ExpandHeaderFooterText_ExpandsExcelHeaderFooterTokens()
+    {
+        var now = new DateTime(2026, 5, 22, 13, 45, 0);
+
+        PrintRenderer.ExpandHeaderFooterText(
+                "&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &P/&N &[Picture]",
+                pageNumber: 2,
+                totalPages: 5,
+                workbookName: "Budget.xlsx",
+                sheetName: "Summary",
+                now)
+            .Should()
+            .Be($"{now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 2/5 [Picture]");
+    }
+
+    [Fact]
     public void RenderWorksheet_UsesLandscapeLetterPageSetupForExport()
     {
         StaTestRunner.Run(() =>
