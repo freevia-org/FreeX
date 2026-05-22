@@ -9447,6 +9447,11 @@ public partial class FileAdapterSmokeTests
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreexcelNativeTableStyle")
             .Should().BeTrue();
+        tableStyles.Element(XName.Get("tableStylesNativeChild", "urn:freexcel:test"))!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
         loaded.PivotTableStyles.Should().ContainSingle(style =>
             style.Name == "FreexcelNativePivotStyle" &&
             style.AppliesToPivotTables &&
@@ -14005,6 +14010,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -14422,6 +14428,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
             stylesXml.Root!.Elements(workbookNs + "colors").Remove();
@@ -14439,6 +14446,7 @@ public partial class FileAdapterSmokeTests
             }
 
             tableStyles.SetAttributeValue("defaultPivotStyle", "PivotStyleMedium9");
+            tableStyles.Add(new XElement(freexcelNs + "tableStylesNativeChild", new XAttribute("value", "kept")));
             tableStyles.Add(new XElement(
                 workbookNs + "tableStyle",
                 new XAttribute("name", "FreexcelNativeTableStyle"),
