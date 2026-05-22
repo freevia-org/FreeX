@@ -173,20 +173,35 @@ public sealed class SortDialogTests
 
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)");
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false)");
+        source.Should().Contain("SortDialog.BuildRowChoices(range)");
         source.Should().Contain("SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders)");
+        source.Should().Contain("new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight)");
     }
 
     [Fact]
-    public void SortOptionsDialog_HidesUnsupportedExcelChoices()
+    public void SortOptionsDialog_ExposesExcelOptionsAsRealChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
         var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
 
         optionsSource.Should().Contain("Title = \"Sort Options\"");
+        optionsSource.Should().Contain("_Case sensitive");
         optionsSource.Should().Contain("Sort top to _bottom");
-        optionsSource.Should().NotContain("Case _sensitive");
-        optionsSource.Should().NotContain("Sort left to _right");
+        optionsSource.Should().Contain("Sort left to _right");
+        optionsSource.Should().Contain("Result = new SortDialogOptions");
         optionsSource.Should().NotContain("IsEnabled = false");
         optionsSource.Should().NotContain("Unsupported Excel options");
+    }
+
+    [Fact]
+    public void BuildRowChoices_LabelsRowsForLeftToRightSorting()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var range = new GridRange(new CellAddress(sheetId, 3, 2), new CellAddress(sheetId, 5, 4));
+
+        SortDialog.BuildRowChoices(range).Should().Equal(
+            new SortColumnChoice("Row 3", 0),
+            new SortColumnChoice("Row 4", 1),
+            new SortColumnChoice("Row 5", 2));
     }
 }
