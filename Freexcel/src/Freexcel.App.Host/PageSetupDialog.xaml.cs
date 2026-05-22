@@ -207,6 +207,9 @@ public partial class PageSetupDialog : Window
     private void PrintPreviewButton_Click(object sender, RoutedEventArgs e) =>
         Accept(PageSetupDialogAction.PrintPreview);
 
+    private void OptionsButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.Options);
+
     private void Accept(PageSetupDialogAction requestedAction)
     {
         var marginsText = string.Join(",",
@@ -440,5 +443,6 @@ public enum PageSetupDialogAction
 {
     Ok,
     Print,
-    PrintPreview
+    PrintPreview,
+    Options
 }

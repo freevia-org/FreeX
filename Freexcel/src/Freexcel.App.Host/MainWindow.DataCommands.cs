@@ -157,7 +157,7 @@ public partial class MainWindow
         var defaultList = SheetGrid.SelectedRange is { } selected
             ? FormatWorkbookRange(selected)
             : "A1:C10";
-        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList) { Owner = this };
+        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList, ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var outcome = _commandBus.Execute(
@@ -179,9 +179,12 @@ public partial class MainWindow
         => AdvancedFilterInputParser.TryParseRange(
             _currentSheetId,
             input,
-            sheetName => _workbook.Sheets.FirstOrDefault(item =>
-                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id,
+            ResolveSheetIdByName,
             out range);
+
+    private SheetId? ResolveSheetIdByName(string sheetName) =>
+        _workbook.Sheets.FirstOrDefault(item =>
+            string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id;
 
     private void ConsolidateBtn_Click(object sender, RoutedEventArgs e)
     {
