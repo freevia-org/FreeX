@@ -15,6 +15,11 @@ internal static class XlsxWorksheetMetadataPreserver
         "verticalCentered"
     };
 
+    private static readonly HashSet<string> ModeledDimensionAttributes = new(StringComparer.Ordinal)
+    {
+        "ref"
+    };
+
     private static readonly HashSet<string> ModeledPageMarginsAttributes = new(StringComparer.Ordinal)
     {
         "left",
@@ -47,6 +52,16 @@ internal static class XlsxWorksheetMetadataPreserver
         "differentFirst",
         "scaleWithDoc",
         "alignWithMargins"
+    };
+
+    private static readonly HashSet<string> ModeledMergeCellsAttributes = new(StringComparer.Ordinal)
+    {
+        "count"
+    };
+
+    private static readonly HashSet<string> ModeledMergeCellAttributes = new(StringComparer.Ordinal)
+    {
+        "ref"
     };
 
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
@@ -126,10 +141,12 @@ internal static class XlsxWorksheetMetadataPreserver
                 .ToList();
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
+            var sourceDimension = sourceWorksheetXml.Root?.Element(workbookNs + "dimension");
             var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
             var sourcePageMargins = sourceWorksheetXml.Root?.Element(workbookNs + "pageMargins");
             var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
             var sourceHeaderFooter = sourceWorksheetXml.Root?.Element(workbookNs + "headerFooter");
+            var sourceMergeCells = sourceWorksheetXml.Root?.Element(workbookNs + "mergeCells");
             var sourceColumns = sourceWorksheetXml.Root?.Element(workbookNs + "cols");
             var sourceSheetData = sourceWorksheetXml.Root?.Element(workbookNs + "sheetData");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
@@ -139,10 +156,12 @@ internal static class XlsxWorksheetMetadataPreserver
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
+                sourceDimension is null &&
                 sourcePrintOptions is null &&
                 sourcePageMargins is null &&
                 sourcePageSetup is null &&
                 sourceHeaderFooter is null &&
+                sourceMergeCells is null &&
                 sourceColumns is null &&
                 sourceSheetData is null &&
                 sourceSheetProtection is null &&
@@ -162,6 +181,12 @@ internal static class XlsxWorksheetMetadataPreserver
             if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetFormatProperties(sourceSheetFormatProperties, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetNativeOnlyElementAttributes(
+                    sourceDimension,
+                    targetRoot,
+                    workbookNs + "dimension",
+                    ModeledDimensionAttributes))
                 changed = true;
             if (MergeWorksheetNativeOnlyElementAttributes(
                     sourcePrintOptions,
@@ -196,6 +221,8 @@ internal static class XlsxWorksheetMetadataPreserver
             if (MergeWorksheetInlineStringMetadata(sourceSheetData, targetRoot, targetArchive, workbookNs))
                 changed = true;
             if (MergeWorksheetFormulaMetadata(sourceSheetData, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
@@ -638,6 +665,59 @@ internal static class XlsxWorksheetMetadataPreserver
     private static string NormalizeFormulaXmlText(string? formula)
     {
         return (formula ?? string.Empty).Trim().TrimStart('=');
+    }
+
+    private static bool MergeWorksheetMergedCellMetadata(
+        XElement? sourceMergeCells,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        if (sourceMergeCells is null)
+            return false;
+
+        var targetMergeCells = targetRoot.Element(workbookNs + "mergeCells");
+        if (targetMergeCells is null)
+            return false;
+
+        var changed = false;
+        foreach (var attribute in sourceMergeCells.Attributes().Where(attribute =>
+                     IsNativeOnlyWorksheetAttribute(attribute, ModeledMergeCellsAttributes)))
+        {
+            if (string.Equals(targetMergeCells.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+                continue;
+
+            targetMergeCells.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var targetMergeCellsByRef = targetMergeCells
+            .Elements(workbookNs + "mergeCell")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ref")?.Value))
+            .ToDictionary(
+                element => element.Attribute("ref")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceMergeCell in sourceMergeCells.Elements(workbookNs + "mergeCell"))
+        {
+            var reference = sourceMergeCell.Attribute("ref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference) ||
+                !targetMergeCellsByRef.TryGetValue(reference, out var targetMergeCell))
+            {
+                continue;
+            }
+
+            foreach (var attribute in sourceMergeCell.Attributes().Where(attribute =>
+                         IsNativeOnlyWorksheetAttribute(attribute, ModeledMergeCellAttributes)))
+            {
+                if (string.Equals(targetMergeCell.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+                    continue;
+
+                targetMergeCell.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     private static IReadOnlyList<string> LoadSharedStringPlainText(ZipArchive archive, XNamespace workbookNs)
