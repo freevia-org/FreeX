@@ -186,6 +186,14 @@ public sealed class ExcelCachedFormulaFixtureTests
                       <c r="A16"><v>6</v></c>
                       <c r="D14" t="e"><f>XMATCH(5,A14:A16,-1)</f><v>#DIV/0!</v></c>
                     </row>
+                    <row r="17">
+                      <c r="A17"><v>1</v></c>
+                      <c r="D17" t="e"><f>TAKE(A17:A17,0)</f><v>#CALC!</v></c>
+                    </row>
+                    <row r="18">
+                      <c r="A18"><v>1</v></c>
+                      <c r="D18" t="e"><f>DROP(A18:A18,1)</f><v>#CALC!</v></c>
+                    </row>
                   </sheetData>
                 </worksheet>
                 """);
