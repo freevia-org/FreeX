@@ -373,7 +373,7 @@ public static class RibbonIconFactory
 
     private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
     {
-        if (size <= 22 && UseBaseHomeIconArtwork(slug))
+        if (UseBaseHomeIconArtwork(slug))
         {
             yield return slug;
             yield break;
@@ -404,7 +404,17 @@ public static class RibbonIconFactory
         "font-color" or
         "fill-color" or
         "theme-colors" or
+        "top-align" or
+        "middle-align" or
+        "bottom-align" or
+        "align-left" or
+        "center" or
+        "align-right" or
         "orientation" or
+        "decrease-indent" or
+        "increase-indent" or
+        "wrap-text" or
+        "merge-center" or
         "accounting-currency" or
         "percent-style" or
         "comma-style" or
@@ -413,9 +423,12 @@ public static class RibbonIconFactory
         "conditional-formatting" or
         "format-as-table" or
         "cell-styles" or
+        "styles" or
+        "cells" or
         "insert" or
         "delete" or
         "format" or
+        "editing" or
         "sort" or
         "find" or
         "clear" or
