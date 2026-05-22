@@ -320,9 +320,29 @@ public partial class MainWindow
         {
             _options = dlg.Result;
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
+            ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
             UpdateViewport();
         }
+    }
+
+    private void ApplyOptionsWorksheetViewSettings()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        if (sheet.ShowGridlines == _options.ShowGridlines &&
+            sheet.ShowHeadings == _options.ShowHeadings)
+            return;
+
+        TryExecuteGroupedSheetCommand(
+            "Worksheet View Options",
+            sheetId => new SetWorksheetViewOptionsCommand(
+                sheetId,
+                _options.ShowGridlines,
+                _options.ShowHeadings,
+                _workbook.GetSheet(sheetId)?.ShowRulers ?? true));
     }
 
     private void ApplyFormulaErrorCheckingOptions(IReadOnlySet<string> disabledErrorCodes)
