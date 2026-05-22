@@ -232,6 +232,15 @@ public sealed class AutoFilterDialogTests
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
     }
 
+    [Fact]
+    public void DialogLayout_UsesSeparatorsBetweenExcelFilterMenuSections()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("AddFilterMenuSeparator(stack)");
+        source.Should().Contain("new Separator");
+    }
+
     [Theory]
     [InlineData("And", ">10", "<20", "and:>10|<20")]
     [InlineData("Or", "begins:Red", "ends:Apple", "or:begins:Red|ends:Apple")]
