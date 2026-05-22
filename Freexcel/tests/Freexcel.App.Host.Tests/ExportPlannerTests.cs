@@ -125,6 +125,19 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyBookmarks()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.EntireWorkbook,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: false,
+            CreateBookmarks: true);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Entire workbook; standard quality; document properties are included; bookmarks are PDF-only.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeEntireWorkbook()
     {
         var options = new ExportOptions(
@@ -171,7 +184,7 @@ public class ExportPlannerTests
             "Content = \"_Include document properties\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Ignore print areas\"",
-            "Content = \"Create _bookmarks using sheet names\"",
+            "Content = \"Create _PDF bookmarks using sheet names\"",
             "Content = \"_Standard\"",
             "Content = \"_Minimum size\"",
             "Content = \"_All\"",

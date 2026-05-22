@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -87,6 +88,7 @@ public partial class MainWindow
             _inlineEditor.TextChanged += (_, _) =>
             {
                 FormulaBar.Text = _inlineEditor.Text;
+                RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
             };
             _inlineFormulaReferenceOverlay = new System.Windows.Controls.TextBlock
@@ -127,6 +129,7 @@ public partial class MainWindow
         System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
         _inlineEditor.Width  = layout.TextOverlayRect.Width + 8;
         _inlineEditor.Height = layout.EditorRect.Height;
+        RefreshInlineEditorChromeBorder();
         if (_inlineFormulaReferenceOverlay is not null)
         {
             System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
@@ -144,6 +147,35 @@ public partial class MainWindow
         _inlineEditor.Focus();
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
+    }
+
+    private void RefreshInlineEditorChromeBorder()
+    {
+        if (_inlineEditorChrome is null || _inlineEditor is null)
+            return;
+
+        var textSpillsRight = DoesInlineEditorTextSpillRight(_inlineEditor, _inlineEditorChrome.Width);
+        _inlineEditorChrome.BorderThickness = FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(textSpillsRight);
+    }
+
+    private static bool DoesInlineEditorTextSpillRight(System.Windows.Controls.TextBox editor, double chromeWidth)
+    {
+        if (chromeWidth <= 0 || string.IsNullOrEmpty(editor.Text))
+            return false;
+
+        var typeface = new Typeface(editor.FontFamily, editor.FontStyle, editor.FontWeight, editor.FontStretch);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(editor).PixelsPerDip;
+        var formattedText = new FormattedText(
+            editor.Text,
+            CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            editor.FontSize,
+            Brushes.Black,
+            pixelsPerDip);
+
+        var innerWidth = Math.Max(0, chromeWidth - editor.Padding.Left - editor.Padding.Right);
+        return formattedText.WidthIncludingTrailingWhitespace > innerWidth;
     }
 
     private void HideInlineEditor(bool commit)
