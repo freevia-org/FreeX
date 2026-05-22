@@ -90,6 +90,11 @@ public sealed class GoToDialogsTests
             GoToSpecialKind.Constants,
             GoToSpecialKind.Formulas,
             GoToSpecialKind.Comments,
+            GoToSpecialKind.CurrentRegion,
+            GoToSpecialKind.RowDifferences,
+            GoToSpecialKind.ColumnDifferences,
+            GoToSpecialKind.LastCell,
+            GoToSpecialKind.ConditionalFormats,
             GoToSpecialKind.DataValidation,
             GoToSpecialKind.VisibleCellsOnly]);
     }
@@ -105,6 +110,11 @@ public sealed class GoToDialogsTests
             "new(GoToSpecialKind.Constants, \"_Constants\")",
             "new(GoToSpecialKind.Formulas, \"_Formulas\")",
             "new(GoToSpecialKind.Comments, \"Co_mments\")",
+            "new(GoToSpecialKind.CurrentRegion, \"Current _region\")",
+            "new(GoToSpecialKind.RowDifferences, \"Row _differences\")",
+            "new(GoToSpecialKind.ColumnDifferences, \"Column dif_ferences\")",
+            "new(GoToSpecialKind.LastCell, \"_Last cell\")",
+            "new(GoToSpecialKind.ConditionalFormats, \"Conditional _formats\")",
             "new(GoToSpecialKind.DataValidation, \"_Data validation\")",
             "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
         })
@@ -124,5 +134,9 @@ public sealed class GoToDialogsTests
         GoToSpecialDialog.TryParseChoice("Data validation", out var kind).Should().BeTrue();
 
         kind.Should().Be(GoToSpecialKind.DataValidation);
+
+        GoToSpecialDialog.TryParseChoice("conditional formats", out kind).Should().BeTrue();
+
+        kind.Should().Be(GoToSpecialKind.ConditionalFormats);
     }
 }

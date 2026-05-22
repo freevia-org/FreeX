@@ -16,7 +16,7 @@ public sealed class GoToSpecialDialog : Window
     {
         Title = "Go To Special";
         Width = 430;
-        Height = 300;
+        Height = 390;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -67,6 +67,11 @@ public sealed class GoToSpecialDialog : Window
             new(GoToSpecialKind.Constants, "_Constants"),
             new(GoToSpecialKind.Formulas, "_Formulas"),
             new(GoToSpecialKind.Comments, "Co_mments"),
+            new(GoToSpecialKind.CurrentRegion, "Current _region"),
+            new(GoToSpecialKind.RowDifferences, "Row _differences"),
+            new(GoToSpecialKind.ColumnDifferences, "Column dif_ferences"),
+            new(GoToSpecialKind.LastCell, "_Last cell"),
+            new(GoToSpecialKind.ConditionalFormats, "Conditional _formats"),
             new(GoToSpecialKind.DataValidation, "_Data validation"),
             new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
         ];
