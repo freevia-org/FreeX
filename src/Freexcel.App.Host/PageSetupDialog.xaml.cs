@@ -37,6 +37,12 @@ public partial class PageSetupDialog : Window
     public WorksheetHeaderFooter FirstPageFooter { get; private set; }
     public WorksheetHeaderFooter EvenPageHeader { get; private set; }
     public WorksheetHeaderFooter EvenPageFooter { get; private set; }
+    public WorksheetHeaderFooterPictureSet HeaderPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet FooterPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; private set; }
     public bool DifferentFirstPage { get; private set; }
     public bool DifferentOddEvenPages { get; private set; }
     public bool ScaleHeaderFooterWithDocument { get; private set; }
@@ -78,6 +84,12 @@ public partial class PageSetupDialog : Window
         FirstPageFooter = sheet.FirstPageFooter;
         EvenPageHeader = sheet.EvenPageHeader;
         EvenPageFooter = sheet.EvenPageFooter;
+        HeaderPictures = sheet.PageHeaderPictures.DeepClone();
+        FooterPictures = sheet.PageFooterPictures.DeepClone();
+        FirstPageHeaderPictures = sheet.FirstPageHeaderPictures.DeepClone();
+        FirstPageFooterPictures = sheet.FirstPageFooterPictures.DeepClone();
+        EvenPageHeaderPictures = sheet.EvenPageHeaderPictures.DeepClone();
+        EvenPageFooterPictures = sheet.EvenPageFooterPictures.DeepClone();
         DifferentFirstPage = sheet.DifferentFirstPageHeaderFooter;
         DifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter;
         ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument;
@@ -332,6 +344,12 @@ public partial class PageSetupDialog : Window
             FirstPageFooter = FirstPageFooter,
             EvenPageHeader = EvenPageHeader,
             EvenPageFooter = EvenPageFooter,
+            PageHeaderPictures = HeaderPictures.DeepClone(),
+            PageFooterPictures = FooterPictures.DeepClone(),
+            FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
+            FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
+            EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
+            EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
             DifferentFirstPageHeaderFooter = DifferentFirstPageBox.IsChecked == true,
             DifferentOddEvenHeaderFooter = DifferentOddEvenBox.IsChecked == true,
             HeaderFooterScaleWithDocument = ScaleWithDocumentBox.IsChecked == true,
@@ -348,6 +366,12 @@ public partial class PageSetupDialog : Window
         FirstPageFooter = dialog.FirstPageFooter;
         EvenPageHeader = dialog.EvenPageHeader;
         EvenPageFooter = dialog.EvenPageFooter;
+        HeaderPictures = dialog.HeaderPictures.DeepClone();
+        FooterPictures = dialog.FooterPictures.DeepClone();
+        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures.DeepClone();
+        FirstPageFooterPictures = dialog.FirstPageFooterPictures.DeepClone();
+        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures.DeepClone();
+        EvenPageFooterPictures = dialog.EvenPageFooterPictures.DeepClone();
         DifferentFirstPage = dialog.DifferentFirstPage;
         DifferentOddEvenPages = dialog.DifferentOddEvenPages;
         ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument;

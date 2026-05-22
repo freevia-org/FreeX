@@ -58,6 +58,31 @@ public partial class FileAdapterSmokeTests
     // ── XLSX ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
+    {
+        var workbook = new Workbook("HeaderPicture");
+        var sheet = workbook.AddSheet("Sheet1");
+        var picture = new WorksheetHeaderFooterPicture([1, 2, 3, 4], "image/png", "logo.png", 120, 48);
+        sheet.PageHeader = new WorksheetHeaderFooter("&[Picture]", "", "");
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(picture, null, null);
+
+        var adapter = new NativeJsonAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.PageHeader.Left.Should().Be("&[Picture]");
+        loaded.PageHeaderPictures.Left.Should().NotBeNull();
+        loaded.PageHeaderPictures.Left!.ImageBytes.Should().Equal([1, 2, 3, 4]);
+        loaded.PageHeaderPictures.Left.ContentType.Should().Be("image/png");
+        loaded.PageHeaderPictures.Left.FileName.Should().Be("logo.png");
+        loaded.PageHeaderPictures.Left.Width.Should().Be(120);
+        loaded.PageHeaderPictures.Left.Height.Should().Be(48);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_IgnoredFormulaErrors()
     {
         var workbook = new Workbook("IgnoredErrors");
