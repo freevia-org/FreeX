@@ -241,7 +241,9 @@ public sealed class PivotWorkflowDialogTests
             showRowStripes: true,
             showColumnStripes: false,
             reportLayout: PivotReportLayout.Outline,
-            emptyValueText: "  N/A  ");
+            emptyValueText: "  N/A  ",
+            refreshOnOpen: true,
+            saveSourceData: false);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
             true,
@@ -256,7 +258,32 @@ public sealed class PivotWorkflowDialogTests
             true,
             false,
             PivotReportLayout.Outline,
-            "N/A"));
+            "N/A",
+            true,
+            false));
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesConnectedCacheDataOptions()
+    {
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 7,
+            StyleName = "PivotStyleMedium4"
+        };
+        var cache = new PivotCacheModel
+        {
+            CacheId = 7,
+            RefreshOnLoad = true,
+            SaveData = false
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
+            .Should()
+            .Match<PivotTableOptionsDialogResult>(result =>
+                result.RefreshOnOpen &&
+                !result.SaveSourceData);
     }
 
     [Fact]
