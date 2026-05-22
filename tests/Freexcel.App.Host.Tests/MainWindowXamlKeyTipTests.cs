@@ -939,6 +939,40 @@ public sealed class MainWindowXamlKeyTipTests
         tooltip!.Value.Should().Be("Zoom");
     }
 
+    [Fact]
+    public void StatusBarAggregates_AreConstrainedAwayFromZoomControls()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var statusBarGrid = document
+            .Descendants(presentation + "Grid")
+            .Single(grid => grid.Attribute(x + "Name")?.Value == "StatusBarGrid");
+
+        statusBarGrid
+            .Element(presentation + "Grid.ColumnDefinitions")!
+            .Elements(presentation + "ColumnDefinition")
+            .Select(column => column.Attribute("Width")?.Value)
+            .Should()
+            .Equal("Auto", "*", "Auto");
+
+        var statsPanel = statusBarGrid
+            .Descendants(presentation + "StackPanel")
+            .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusStatsPanel");
+
+        statsPanel.Attribute("Grid.Column")?.Value.Should().Be("1");
+        statsPanel.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsPanel.Attribute("Margin")?.Value.Should().NotContain("180");
+
+        var zoomControls = statusBarGrid
+            .Descendants(presentation + "StackPanel")
+            .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusZoomControls");
+
+        zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
+        zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
+    }
+
     [Theory]
     [InlineData("CellAddressBox", "Name Box", "Go to a cell or named range")]
     [InlineData("FormulaBar", "Formula Bar", "Edit the active cell value or formula")]
