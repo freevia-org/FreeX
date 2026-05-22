@@ -1,6 +1,9 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -147,6 +150,25 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Fact]
+    public void PivotValueFieldSettingsDialog_PresetSelectionClearsStaleCustomFormatCode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var field = new PivotDataFieldModel(
+                SourceFieldIndex: 0,
+                Name: "Sum of Sales",
+                SummaryFunction: "sum",
+                NumberFormatId: 164,
+                NumberFormatCode: "#,##0.0 \"kg\"");
+            var dialog = new PivotValueFieldSettingsDialog(field);
+
+            GetControl<ComboBox>(dialog, "NumberFormatPresetBox").SelectedItem = "Currency";
+            GetControl<TextBox>(dialog, "NumberFormatBox").Text.Should().Be("7");
+            GetControl<TextBox>(dialog, "NumberFormatCodeBox").Text.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void PivotFieldFilterDialog_ExposesItemLabelAndValueFilterTabsWithActions()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
@@ -218,4 +240,14 @@ public sealed class PivotFilterDialogXamlTests
 
         label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
     }
+
+    private static T GetControl<T>(PivotValueFieldSettingsDialog dialog, string name)
+    {
+        var field = typeof(PivotValueFieldSettingsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull($"control {name} should exist");
+        var value = field!.GetValue(dialog);
+        value.Should().BeOfType<T>();
+        return (T)value!;
+    }
+
 }
