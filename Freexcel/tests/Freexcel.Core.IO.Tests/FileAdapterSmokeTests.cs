@@ -1856,6 +1856,9 @@ public partial class FileAdapterSmokeTests
             Anchor = new CellAddress(sheet.Id, 3, 4),
             SourceRowCount = 2,
             SourceColumnCount = 2,
+            IsLinkedToSourceRange = true,
+            LinkedSourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            LinkedSourceSheetName = "Sheet1",
             Width = 160,
             Height = 40,
             AltText = "Copied range snapshot",
@@ -1877,6 +1880,9 @@ public partial class FileAdapterSmokeTests
         picture.Anchor.Row.Should().Be(3);
         picture.Anchor.Col.Should().Be(4);
         picture.SourceRowCount.Should().Be(2);
+        picture.IsLinkedToSourceRange.Should().BeTrue();
+        picture.LinkedSourceRange.Should().Be(new GridRange(new CellAddress(loaded.GetSheetAt(0).Id, 1, 1), new CellAddress(loaded.GetSheetAt(0).Id, 2, 2)));
+        picture.LinkedSourceSheetName.Should().Be("Sheet1");
         picture.AltText.Should().Be("Copied range snapshot");
         picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 1 && cell.Text == "D");
     }
