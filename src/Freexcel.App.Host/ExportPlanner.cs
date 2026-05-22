@@ -151,8 +151,10 @@ internal static class ExportPlanner
             (true, ExportFormat.Xps) => "document properties are included",
             _ => "document properties are not included"
         };
-        var bookmarks = options.CreateBookmarks && format == ExportFormat.Pdf
-            ? "bookmarks use sheet names"
+        var bookmarks = options.CreateBookmarks
+            ? format == ExportFormat.Pdf
+                ? "bookmarks use sheet names"
+                : "bookmarks are PDF-only"
             : null;
         var open = options.OpenAfterPublish
             ? "open after publishing"
