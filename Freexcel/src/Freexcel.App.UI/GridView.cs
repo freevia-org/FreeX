@@ -73,6 +73,8 @@ public class GridView : FrameworkElement
     private static readonly Pen      GridPen               = new(GridLineBrush, 1);
     private static readonly Brush    SelectionBrush        = MakeBrushAlpha(32, 33, 115, 70);
     private static readonly Pen      SelectionPen          = new(MakeBrush(33, 115, 70), 2);
+    private static readonly Brush    QuickAnalysisPreviewBrush = MakeBrushAlpha(38, 91, 155, 213);
+    private static readonly Pen      QuickAnalysisPreviewPen = new(MakeBrush(47, 117, 181), 2);
     private static readonly Pen      ResizeLinePen         = MakeResizeLinePen();
     private static readonly Pen      FreezePen             = MakeFreezePen();
     private static readonly Brush    PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
@@ -215,6 +217,15 @@ public class GridView : FrameworkElement
     {
         get => (GridRange?)GetValue(SelectedRangeProperty);
         set => SetValue(SelectedRangeProperty, value);
+    }
+
+    public static readonly DependencyProperty QuickAnalysisPreviewRangeProperty =
+        DependencyProperty.Register(nameof(QuickAnalysisPreviewRange), typeof(GridRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridRange? QuickAnalysisPreviewRange
+    {
+        get => (GridRange?)GetValue(QuickAnalysisPreviewRangeProperty);
+        set => SetValue(QuickAnalysisPreviewRangeProperty, value);
     }
 
     public static readonly DependencyProperty EditingCellProperty =
@@ -607,6 +618,7 @@ public class GridView : FrameworkElement
         RenderSplitPaneCells(dc);
         RenderWorksheetViewOverlay(dc);
         RenderSparklines(dc);
+        RenderQuickAnalysisPreview(dc);
         RenderSelection(dc);
         RenderFormulaTraceArrows(dc);
         RenderAutofillPreview(dc);
@@ -2173,6 +2185,25 @@ public class GridView : FrameworkElement
         double rowHeaderWidth,
         double columnHeaderHeight) =>
         SelectionMarqueeLayoutPlanner.CalculateClipboardMarquee(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
+    public static Rect? CalculateQuickAnalysisPreviewRect(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight) =>
+        SelectionMarqueeLayoutPlanner.CalculateVisibleSelectionRect(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
+    private void RenderQuickAnalysisPreview(DrawingContext dc)
+    {
+        if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
+            return;
+
+        var rect = CalculateQuickAnalysisPreviewRect(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+        if (rect is null)
+            return;
+
+        dc.DrawRectangle(QuickAnalysisPreviewBrush, QuickAnalysisPreviewPen, rect.Value);
+    }
 
     private void RenderSelection(DrawingContext dc)
     {
