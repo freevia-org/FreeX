@@ -1,3 +1,4 @@
+using System.Windows;
 using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
@@ -34,6 +35,35 @@ public sealed class PrintRendererPageSetupTests
                 new DateTime(2026, 5, 22))
             .Should()
             .Be("Logo  ");
+    }
+
+    [Fact]
+    public void HeaderFooterPictureLayout_ReservesPictureHeightAndSideTextSpace()
+    {
+        var picture = new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 96, 42);
+        var header = new WorksheetHeaderFooter("Logo &[Picture]", "", "");
+        var pictures = new WorksheetHeaderFooterPictureSet(picture, null, null);
+        var section = new Rect(24, 10, 200, PrintRenderer.CalculateHeaderFooterLineHeight(header, pictures));
+
+        PrintRenderer.CalculateHeaderFooterLineHeight(header, pictures).Should().Be(42);
+        PrintRenderer.CalculateHeaderFooterPictureRect(picture, section, TextAlignment.Left)
+            .Should()
+            .Be(new Rect(26, 10, 96, 42));
+        PrintRenderer.CalculateHeaderFooterTextRect(section, picture, TextAlignment.Left)
+            .Should()
+            .Be(new Rect(124, 10, 100, 42));
+    }
+
+    [Fact]
+    public void HeaderFooterPictureLayout_IgnoresPicturesWithoutPictureTokens()
+    {
+        var picture = new WorksheetHeaderFooterPicture([1], "image/png", "logo.png", 96, 42);
+
+        PrintRenderer.CalculateHeaderFooterLineHeight(
+                new WorksheetHeaderFooter("Logo", "", ""),
+                new WorksheetHeaderFooterPictureSet(picture, null, null))
+            .Should()
+            .Be(18);
     }
 
     [Fact]
