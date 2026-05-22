@@ -139,6 +139,7 @@ public sealed class AutoFilterDialog : Window
         stack.Children.Add(_sortNone);
         stack.Children.Add(_sortAscending);
         stack.Children.Add(_sortDescending);
+        AddFilterMenuSeparator(stack);
         _clearFilterButton.Click += (_, _) =>
         {
             _selectedColorFilter = null;
@@ -163,6 +164,7 @@ public sealed class AutoFilterDialog : Window
             stack.Children.Add(filterButton);
         }
 
+        AddFilterMenuSeparator(stack);
         stack.Children.Add(new Label { Content = "_Search", Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
         _searchBox.Margin = new Thickness(0, 0, 0, 8);
         _searchBox.ToolTip = "Search";
@@ -190,6 +192,7 @@ public sealed class AutoFilterDialog : Window
         selectionRow.Children.Add(selectAll);
         selectionRow.Children.Add(clearAll);
         stack.Children.Add(selectionRow);
+        AddFilterMenuSeparator(stack);
 
         var customFilterPanel = new StackPanel();
         _customFilterGroup.Content = customFilterPanel;
@@ -406,6 +409,11 @@ public sealed class AutoFilterDialog : Window
 
     public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
+
+    private static void AddFilterMenuSeparator(Panel stack)
+    {
+        stack.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+    }
 
     private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
     {
