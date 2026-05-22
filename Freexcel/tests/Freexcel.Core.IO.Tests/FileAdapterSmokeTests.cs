@@ -10574,6 +10574,11 @@ public partial class FileAdapterSmokeTests
         row.Attribute("thickTop")!.Value.Should().Be("1");
         row.Attribute("ph")!.Value.Should().Be("1");
         row.Attribute("customAttr")!.Value.Should().Be("row-native");
+        row.Element(XName.Get("rowNativeChild", "urn:freexcel:test"))!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -10608,6 +10613,11 @@ public partial class FileAdapterSmokeTests
         cell.Attribute("vm")!.Value.Should().Be("1");
         cell.Attribute("ph")!.Value.Should().Be("1");
         cell.Attribute("customAttr")!.Value.Should().Be("cell-native");
+        cell.Element(XName.Get("cellNativeChild", "urn:freexcel:test"))!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -15222,6 +15232,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!
@@ -15234,6 +15245,7 @@ public partial class FileAdapterSmokeTests
             row.SetAttributeValue("thickTop", "1");
             row.SetAttributeValue("ph", "1");
             row.SetAttributeValue("customAttr", "row-native");
+            row.Add(new XElement(freexcelNs + "rowNativeChild", new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15245,6 +15257,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var cell = worksheetXml.Root!
@@ -15255,6 +15268,7 @@ public partial class FileAdapterSmokeTests
             cell.SetAttributeValue("vm", "1");
             cell.SetAttributeValue("ph", "1");
             cell.SetAttributeValue("customAttr", "cell-native");
+            cell.Add(new XElement(freexcelNs + "cellNativeChild", new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

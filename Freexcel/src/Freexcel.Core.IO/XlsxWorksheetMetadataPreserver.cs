@@ -495,6 +495,14 @@ internal static class XlsxWorksheetMetadataPreserver
 
             if (XlsxNativeXmlMerger.MergeExtensionList(sourceRow.Element(workbookNs + "extLst"), targetRow, workbookNs))
                 changed = true;
+
+            if (MergeMissingNativeChildren(
+                    sourceRow,
+                    targetRow,
+                    child => child.Name != workbookNs + "c" && child.Name != workbookNs + "extLst"))
+            {
+                changed = true;
+            }
         }
 
         return changed;
@@ -537,6 +545,18 @@ internal static class XlsxWorksheetMetadataPreserver
 
             if (XlsxNativeXmlMerger.MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
                 changed = true;
+
+            if (MergeMissingNativeChildren(
+                    sourceCell,
+                    targetCell,
+                    child =>
+                        child.Name != workbookNs + "f" &&
+                        child.Name != workbookNs + "v" &&
+                        child.Name != workbookNs + "is" &&
+                        child.Name != workbookNs + "extLst"))
+            {
+                changed = true;
+            }
         }
 
         return changed;
@@ -1944,6 +1964,35 @@ internal static class XlsxWorksheetMetadataPreserver
 
             targetSheetProtection.Add(new XElement(sourceChild));
             existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeMissingNativeChildren(
+        XElement sourceElement,
+        XElement targetElement,
+        Func<XElement, bool> shouldRetain)
+    {
+        var existingChildrenByKey = targetElement
+            .Elements()
+            .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        var changed = false;
+        foreach (var sourceChild in sourceElement.Elements().Where(shouldRetain))
+        {
+            var key = ElementIdentityKey(sourceChild);
+            if (existingChildrenByKey.TryGetValue(key, out var targetChild))
+            {
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    changed = true;
+                continue;
+            }
+
+            targetElement.Add(new XElement(sourceChild));
+            existingChildrenByKey[key] = targetElement.Elements().Last();
             changed = true;
         }
 
