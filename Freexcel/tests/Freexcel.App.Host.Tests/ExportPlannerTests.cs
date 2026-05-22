@@ -609,10 +609,12 @@ public class ExportPlannerTests
         source.Should().Contain("PrintSettingsPlan settings");
         source.Should().Contain("Action? showMargins = null");
         source.Should().Contain("Action? showPageSetup = null");
+        source.Should().Contain("Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null");
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
         printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
+        printExport.Should().Contain("refreshPreview: BuildActiveSheetPrintPreview");
     }
 
     [Fact]
@@ -620,8 +622,11 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
 
-        source.Should().Contain("marginsButton.Click += (_, _) => showMargins?.Invoke()");
-        source.Should().Contain("pageSetupButton.Click += (_, _) => showPageSetup?.Invoke()");
+        source.Should().Contain("showMargins?.Invoke()");
+        source.Should().Contain("showPageSetup?.Invoke()");
+        source.Should().Contain("RefreshPreviewDocument()");
+        source.Should().Contain("viewer.Document = previewDocument");
+        source.Should().Contain("settingsSummaryText.Text = refreshed.Settings.Summary");
     }
 
     [Fact]
