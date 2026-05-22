@@ -93,6 +93,12 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BITOR(1,NA())")]
     [InlineData("=BITLSHIFT(NA(),1)")]
     [InlineData("=BITRSHIFT(1,NA())")]
+    [InlineData("=DEC2BIN(10,NA())")]
+    [InlineData("=DEC2HEX(255,NA())")]
+    [InlineData("=DEC2OCT(15,NA())")]
+    [InlineData("=BIN2HEX(\"1010\",NA())")]
+    [InlineData("=HEX2BIN(\"F\",NA())")]
+    [InlineData("=OCT2HEX(\"17\",NA())")]
     public void EngineeringFunctions_PropagateExcelErrors(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
