@@ -1687,6 +1687,9 @@ internal static class XlsxWorksheetMetadataPreserver
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var changed = false;
+        if (MergeMissingAttributes(sourceSheetViews, targetSheetViews, []))
+            changed = true;
+
         foreach (var sourceView in sourceViews)
         {
             var viewId = sourceView.Attribute("workbookViewId")?.Value;
