@@ -15,6 +15,11 @@ internal static class XlsxWorksheetMetadataPreserver
         "verticalCentered"
     };
 
+    private static readonly HashSet<string> ModeledDimensionAttributes = new(StringComparer.Ordinal)
+    {
+        "ref"
+    };
+
     private static readonly HashSet<string> ModeledPageMarginsAttributes = new(StringComparer.Ordinal)
     {
         "left",
@@ -136,6 +141,7 @@ internal static class XlsxWorksheetMetadataPreserver
                 .ToList();
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
+            var sourceDimension = sourceWorksheetXml.Root?.Element(workbookNs + "dimension");
             var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
             var sourcePageMargins = sourceWorksheetXml.Root?.Element(workbookNs + "pageMargins");
             var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
@@ -150,6 +156,7 @@ internal static class XlsxWorksheetMetadataPreserver
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
+                sourceDimension is null &&
                 sourcePrintOptions is null &&
                 sourcePageMargins is null &&
                 sourcePageSetup is null &&
@@ -174,6 +181,12 @@ internal static class XlsxWorksheetMetadataPreserver
             if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetFormatProperties(sourceSheetFormatProperties, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetNativeOnlyElementAttributes(
+                    sourceDimension,
+                    targetRoot,
+                    workbookNs + "dimension",
+                    ModeledDimensionAttributes))
                 changed = true;
             if (MergeWorksheetNativeOnlyElementAttributes(
                     sourcePrintOptions,
