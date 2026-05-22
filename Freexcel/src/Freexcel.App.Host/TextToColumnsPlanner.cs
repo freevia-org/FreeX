@@ -132,6 +132,34 @@ public static class TextToColumnsPlanner
             ? columnFormats[index]
             : TextToColumnsColumnFormat.General;
 
+    public static IReadOnlyList<CellAddress> FindOverwriteTargets(
+        Sheet sheet,
+        IEnumerable<(CellAddress Address, Cell NewCell)> edits,
+        GridRange sourceRange)
+    {
+        var conflicts = new List<CellAddress>();
+        var seen = new HashSet<CellAddress>();
+        foreach (var (address, _) in edits)
+        {
+            if (!seen.Add(address) ||
+                IsOriginalSourceCell(address, sourceRange) ||
+                sheet.GetValue(address) is BlankValue)
+            {
+                continue;
+            }
+
+            conflicts.Add(address);
+        }
+
+        return conflicts;
+    }
+
+    private static bool IsOriginalSourceCell(CellAddress address, GridRange sourceRange) =>
+        address.Sheet == sourceRange.Start.Sheet &&
+        address.Col == sourceRange.Start.Col &&
+        address.Row >= sourceRange.Start.Row &&
+        address.Row <= sourceRange.End.Row;
+
     public static string[] SplitText(string text, string delimiters)
     {
         return SplitText(text, delimiters, '"', false);
