@@ -482,6 +482,36 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteRangeAsPictureCommand_LinkedPictureRecordsSourceRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), "Q1"),
+            (new CellAddress(sheet.Id, 2, 2), "20")
+        };
+
+        var command = new PasteRangeAsPictureCommand(
+            sheet.Id,
+            sourceRange,
+            source,
+            new CellAddress(sheet.Id, 5, 5),
+            isLinkedToSourceRange: true,
+            sourceSheetName: "Sheet1");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var picture = sheet.Pictures.Should().ContainSingle().Subject;
+        picture.IsLinkedToSourceRange.Should().BeTrue();
+        picture.LinkedSourceRange.Should().Be(sourceRange);
+        picture.LinkedSourceSheetName.Should().Be("Sheet1");
+        picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 1 && cell.Text == "20");
+    }
+
+    [Fact]
     public void InsertPictureCommand_AddsBinaryImagePictureAndUndoRemoves()
     {
         var wb = new Workbook("test");

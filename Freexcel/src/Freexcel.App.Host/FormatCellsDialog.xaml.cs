@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
 using CellVAlign = Freexcel.Core.Model.VerticalAlignment;
@@ -748,7 +749,42 @@ public partial class FormatCellsDialog : Window
     }
 
     private static string PreviewForFormat(string? text)
-        => FindNumberFormatOption(text)?.Preview ?? "1234.56";
+    {
+        var format = FindNumberFormatOption(text)?.Code ?? text;
+        if (string.IsNullOrWhiteSpace(format))
+            return "1234.56";
+
+        try
+        {
+            if (LooksLikeDateTimeFormat(format))
+            {
+                var sampleDate = new DateTime(2026, 5, 21, 13, 30, 0).ToOADate();
+                return NumberFormatter.Format(new DateTimeValue(sampleDate), format);
+            }
+
+            if (format.Contains('@', StringComparison.Ordinal))
+                return NumberFormatter.Format(new TextValue("Sample"), format);
+
+            return NumberFormatter.Format(new NumberValue(1234.56), format);
+        }
+        catch
+        {
+            return FindNumberFormatOption(text)?.Preview ?? "1234.56";
+        }
+    }
+
+    private static bool LooksLikeDateTimeFormat(string format)
+    {
+        var lower = format.ToLowerInvariant();
+        return lower.Contains('y')
+            || lower.Contains("am/pm", StringComparison.Ordinal)
+            || lower.Contains("[h]", StringComparison.Ordinal)
+            || lower.Contains("h:", StringComparison.Ordinal)
+            || lower.Contains(":mm", StringComparison.Ordinal)
+            || lower.Contains("m/d", StringComparison.Ordinal)
+            || lower.Contains("d-m", StringComparison.Ordinal)
+            || lower.Contains("mmmm", StringComparison.Ordinal);
+    }
 
     private static string[] FontNamesWithFallback(string fontName)
     {

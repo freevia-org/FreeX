@@ -15,6 +15,7 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbAllMergingConditionalFormats", PasteSpecialDialogMode.AllMergingConditionalFormats)]
     [InlineData("_rbFormulasAndNumberFormats", PasteSpecialDialogMode.FormulasAndNumberFormats)]
     [InlineData("_rbValuesAndNumberFormats", PasteSpecialDialogMode.ValuesAndNumberFormats)]
+    [InlineData("_rbValuesAndSourceFormatting", PasteSpecialDialogMode.ValuesAndSourceFormatting)]
     [InlineData("_rbLinkedPicture", PasteSpecialDialogMode.LinkedPicture)]
     public void Mode_ExposesExcelPasteSpecialChoices(string fieldName, PasteSpecialDialogMode expectedMode)
     {
@@ -47,6 +48,7 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbColumnWidths", "Column _widths")]
     [InlineData("_rbFormulasAndNumberFormats", "Formulas and number fo_rmats")]
     [InlineData("_rbValuesAndNumberFormats", "Values and number for_mats")]
+    [InlineData("_rbValuesAndSourceFormatting", "Values and source f_ormatting")]
     [InlineData("_rbPicture", "_Picture")]
     [InlineData("_rbLinkedPicture", "_Linked picture")]
     public void Choices_ExposeKeyboardAccessKeys(string fieldName, string expectedContent)
