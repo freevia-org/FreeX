@@ -49,6 +49,25 @@ public sealed class TextToColumnsPlannerTests
     }
 
     [Fact]
+    public void BuildEdits_CanWriteSplitOutputToExplicitDestination()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 3, 1));
+        var destination = new CellAddress(sheet.Id, 2, 6);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East,42"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("West,7"));
+
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, destination, ',');
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 2, 6),
+            new CellAddress(sheet.Id, 2, 7),
+            new CellAddress(sheet.Id, 3, 6),
+            new CellAddress(sheet.Id, 3, 7));
+        edits.Select(edit => edit.Address.Col).Should().NotContain(1u);
+    }
+
+    [Fact]
     public void BuildEdits_SplitsOnAnySelectedDelimiter()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

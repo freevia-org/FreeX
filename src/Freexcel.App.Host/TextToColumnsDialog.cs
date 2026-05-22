@@ -33,7 +33,8 @@ public sealed record TextToColumnsDialogResult(
     TextToColumnsSplitMode SplitMode = TextToColumnsSplitMode.Delimited,
     IReadOnlyList<int>? FixedWidthBreakPositions = null,
     TextToColumnsTextQualifier TextQualifier = TextToColumnsTextQualifier.DoubleQuote,
-    bool TreatConsecutiveDelimitersAsOne = false)
+    bool TreatConsecutiveDelimitersAsOne = false,
+    CellAddress? Destination = null)
 {
     public string Delimiters => Delimiter;
     public char? TextQualifierChar => TextQualifier switch
@@ -57,18 +58,22 @@ public sealed class TextToColumnsDialog : Window
     private readonly ComboBox _textQualifierBox = new() { Width = 130, Margin = new Thickness(8, 0, 0, 0) };
     private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = "_Treat consecutive delimiters as one", Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
+    private readonly TextBox _destinationBox = new() { Width = 120 };
     private readonly ListView _previewGrid = new() { Height = 88 };
     private readonly IReadOnlyList<string> _previewRows;
+    private readonly CellAddress _defaultDestination;
 
     public TextToColumnsDialogResult? Result { get; private set; }
 
-    public TextToColumnsDialog(IEnumerable<string>? previewRows = null)
+    public TextToColumnsDialog(IEnumerable<string>? previewRows = null, CellAddress? defaultDestination = null)
     {
         _previewRows = NormalizePreviewRows(previewRows);
+        _defaultDestination = defaultDestination ?? new CellAddress(SheetId.New(), 1, 1);
+        _destinationBox.Text = _defaultDestination.ToA1();
 
         Title = "Text to Columns";
         Width = 500;
-        Height = 390;
+        Height = 430;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -112,13 +117,17 @@ public sealed class TextToColumnsDialog : Window
         body.Children.Add(CreateFixedWidthPanel());
         body.Children.Add(new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) });
         body.Children.Add(_previewGrid);
+        body.Children.Add(CreateDestinationPanel());
 
         Content = root;
         RefreshMode();
         RefreshPreview();
     }
 
-    public static TextToColumnsDialogResult CreateResult(TextToColumnsDelimiterKind delimiterKind, string? customDelimiter = null)
+    public static TextToColumnsDialogResult CreateResult(
+        TextToColumnsDelimiterKind delimiterKind,
+        string? customDelimiter = null,
+        CellAddress? destination = null)
     {
         var delimiter = delimiterKind switch
         {
@@ -132,14 +141,15 @@ public sealed class TextToColumnsDialog : Window
             _ => throw new ArgumentOutOfRangeException(nameof(delimiterKind), delimiterKind, "Unsupported delimiter.")
         };
 
-        return new TextToColumnsDialogResult(delimiterKind, delimiter);
+        return new TextToColumnsDialogResult(delimiterKind, delimiter, Destination: destination);
     }
 
     public static TextToColumnsDialogResult CreateResult(
         IEnumerable<TextToColumnsDelimiterKind> delimiterKinds,
         string? customDelimiter = null,
         TextToColumnsTextQualifier textQualifier = TextToColumnsTextQualifier.DoubleQuote,
-        bool treatConsecutiveDelimitersAsOne = false)
+        bool treatConsecutiveDelimitersAsOne = false,
+        CellAddress? destination = null)
     {
         var kinds = delimiterKinds.Distinct().ToList();
         if (kinds.Count == 0)
@@ -153,10 +163,13 @@ public sealed class TextToColumnsDialog : Window
             primaryKind,
             delimiters,
             TextQualifier: textQualifier,
-            TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne);
+            TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne,
+            Destination: destination);
     }
 
-    public static TextToColumnsDialogResult CreateFixedWidthResult(string? breakPositionsText)
+    public static TextToColumnsDialogResult CreateFixedWidthResult(
+        string? breakPositionsText,
+        CellAddress? destination = null)
     {
         var positions = ParseFixedWidthBreakPositions(breakPositionsText);
         if (positions.Count == 0)
@@ -166,7 +179,8 @@ public sealed class TextToColumnsDialog : Window
             TextToColumnsDelimiterKind.Comma,
             string.Empty,
             TextToColumnsSplitMode.FixedWidth,
-            positions);
+            positions,
+            Destination: destination);
     }
 
     public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
@@ -267,6 +281,20 @@ public sealed class TextToColumnsDialog : Window
         };
     }
 
+    private DockPanel CreateDestinationPanel()
+    {
+        var panel = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
+        panel.Children.Add(new Label
+        {
+            Content = "_Destination:",
+            Target = _destinationBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 4, 8, 0)
+        });
+        panel.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
+        return panel;
+    }
+
     private IReadOnlyList<TextToColumnsDelimiterKind> SelectedDelimiterKinds()
     {
         var kinds = new List<TextToColumnsDelimiterKind>();
@@ -288,19 +316,60 @@ public sealed class TextToColumnsDialog : Window
     {
         try
         {
+            if (!TryParseDestination(_destinationBox.Text, _defaultDestination, out var destination))
+                throw new ArgumentException("Enter a single destination cell, such as F2.");
+
             Result = _fixedWidthButton.IsChecked == true
-                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text)
+                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination)
                 : CreateResult(
                     SelectedDelimiterKinds(),
                     _customBox.Text,
                     SelectedTextQualifier(),
-                    _treatConsecutiveDelimitersBox.IsChecked == true);
+                    _treatConsecutiveDelimitersBox.IsChecked == true,
+                    destination);
             DialogResult = true;
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    public static bool TryParseDestination(string? input, CellAddress defaultDestination, out CellAddress destination)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            destination = defaultDestination;
+            return true;
+        }
+
+        return CellAddress.TryParse(input.Trim(), defaultDestination.Sheet, out destination);
+    }
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel();
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        System.Windows.Automation.AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
     }
 
     internal static StackPanel CreateButtonRow(Action accept) =>
@@ -389,7 +458,8 @@ public sealed class TextToColumnsDialog : Window
                     SelectedDelimiterKinds(),
                     _customBox.Text,
                     SelectedTextQualifier(),
-                    _treatConsecutiveDelimitersBox.IsChecked == true);
+                    _treatConsecutiveDelimitersBox.IsChecked == true,
+                    _defaultDestination);
                 rows = _previewRows
                     .Select(row => TextToColumnsPlanner.SplitText(
                         row,
