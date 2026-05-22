@@ -123,9 +123,9 @@ public partial class MainWindow
             _inlineEditorChrome.Height = layout.EditorRect.Height;
         }
 
-        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.EditorRect.Left);
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
         System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
-        _inlineEditor.Width  = layout.EditorRect.Width;
+        _inlineEditor.Width  = layout.TextOverlayRect.Width + 8;
         _inlineEditor.Height = layout.EditorRect.Height;
         if (_inlineFormulaReferenceOverlay is not null)
         {
@@ -352,6 +352,7 @@ public partial class MainWindow
         if (selectedRange is null)
             return;
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
+        var inlineEditorCommitsOnArrow = !formulaRangeEntryActive;
         var current = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
@@ -363,7 +364,7 @@ public partial class MainWindow
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
-            emptyInlineEditorActive: !formulaRangeEntryActive && string.IsNullOrEmpty(_inlineEditor?.Text));
+            inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -475,7 +476,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return _formulaRangeEntryMode && editor.Text.StartsWith("=", StringComparison.Ordinal);
+        return editor.Text.StartsWith("=", StringComparison.Ordinal);
     }
 
     private bool IsFormulaReferenceHighlightActive(System.Windows.Controls.TextBox? editor)
@@ -586,7 +587,7 @@ public partial class MainWindow
         }
         else
         {
-            _inlineEditor!.Foreground = highlights.Count > 0
+            _inlineEditor!.Foreground = editor.Text.StartsWith("=", StringComparison.Ordinal)
                 ? System.Windows.Media.Brushes.Transparent
                 : normalBrush;
             FormulaReferenceTextOverlay.Apply(
@@ -594,7 +595,8 @@ public partial class MainWindow
                 editor.Text,
                 highlights,
                 _formulaReferenceBrushes,
-                normalBrush);
+                normalBrush,
+                keepFormulaVisibleWithoutHighlights: true);
             FormulaBar.Foreground = highlights.Count > 0
                 ? System.Windows.Media.Brushes.Transparent
                 : normalBrush;
