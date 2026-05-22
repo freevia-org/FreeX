@@ -72,6 +72,11 @@ public partial class HeaderFooterDialog : Window
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleWithDocument;
         AlignWithMarginsBox.IsChecked = AlignWithMargins;
+        DifferentFirstPageBox.Checked += (_, _) => RefreshOptionalSectionState();
+        DifferentFirstPageBox.Unchecked += (_, _) => RefreshOptionalSectionState();
+        DifferentOddEvenBox.Checked += (_, _) => RefreshOptionalSectionState();
+        DifferentOddEvenBox.Unchecked += (_, _) => RefreshOptionalSectionState();
+        RefreshOptionalSectionState();
         _activeTextBox = HeaderCenterBox;
     }
 
@@ -163,6 +168,35 @@ public partial class HeaderFooterDialog : Window
         target.Text = InsertToken(target.Text, caretIndex, token);
         target.CaretIndex = caretIndex + token.Length;
         target.Focus();
+    }
+
+    private void RefreshOptionalSectionState()
+    {
+        var firstEnabled = DifferentFirstPageBox.IsChecked == true;
+        var evenEnabled = DifferentOddEvenBox.IsChecked == true;
+        SetControlsEnabled(firstEnabled,
+            FirstHeaderLeftBox,
+            FirstHeaderCenterBox,
+            FirstHeaderRightBox,
+            FirstFooterLeftBox,
+            FirstFooterCenterBox,
+            FirstFooterRightBox);
+        SetControlsEnabled(evenEnabled,
+            EvenHeaderLeftBox,
+            EvenHeaderCenterBox,
+            EvenHeaderRightBox,
+            EvenFooterLeftBox,
+            EvenFooterCenterBox,
+            EvenFooterRightBox);
+
+        if (_activeTextBox is not null && !_activeTextBox.IsEnabled)
+            _activeTextBox = HeaderCenterBox;
+    }
+
+    private static void SetControlsEnabled(bool isEnabled, params Control[] controls)
+    {
+        foreach (var control in controls)
+            control.IsEnabled = isEnabled;
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
