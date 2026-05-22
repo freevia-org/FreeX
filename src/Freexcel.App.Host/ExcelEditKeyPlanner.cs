@@ -12,7 +12,7 @@ public static class ExcelEditKeyPlanner
         int pageSize,
         bool allowFormulaBarNavigationKeys,
         bool formulaRangeEntryActive = false,
-        bool emptyInlineEditorActive = false)
+        bool inlineEditorCommitsOnArrow = false)
     {
         if (key == Key.Enter && modifiers == ModifierKeys.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
@@ -43,7 +43,7 @@ public static class ExcelEditKeyPlanner
                 : ExcelEditKeyIntent.None;
         }
 
-        if (emptyInlineEditorActive && modifiers == ModifierKeys.None && key is Key.Up or Key.Down or Key.Left or Key.Right)
+        if (inlineEditorCommitsOnArrow && modifiers == ModifierKeys.None && key is Key.Up or Key.Down or Key.Left or Key.Right)
         {
             var emptyEditorTarget = key switch
             {
