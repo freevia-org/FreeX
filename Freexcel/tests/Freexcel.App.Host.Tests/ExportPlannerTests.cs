@@ -82,6 +82,27 @@ public class ExportPlannerTests
         request.ActualPath.Should().Be(@"C:\temp\report.xps");
     }
 
+    [Theory]
+    [InlineData(@"C:\temp\report.pdf", "xps", @"C:\temp\report.xps")]
+    [InlineData(@"C:\temp\report.xps", "pdf", @"C:\temp\report.pdf")]
+    [InlineData(@"C:\temp\report.export", "pdf", @"C:\temp\report.pdf")]
+    [InlineData(@"C:\temp\report.export", "xps", @"C:\temp\report.xps")]
+    public void PlanExport_NormalizesMismatchedExtensionForExplicitFormatRequests(
+        string path,
+        string explicitFormat,
+        string expectedPath)
+    {
+        var format = explicitFormat == "xps"
+            ? ExportFormat.Xps
+            : ExportFormat.Pdf;
+
+        var request = ExportPlanner.PlanExport(path, format, ExportOptions.ExcelLikeDefault);
+
+        request.Path.Should().Be(expectedPath);
+        request.Format.Should().Be(format);
+        request.ActualPath.Should().Be(expectedPath);
+    }
+
     [Fact]
     public void ExportOptions_DefaultsToActiveSheetWithoutDocumentProperties()
     {
