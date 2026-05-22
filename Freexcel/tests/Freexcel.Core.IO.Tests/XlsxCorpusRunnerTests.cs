@@ -283,6 +283,7 @@ public class XlsxCorpusRunnerTests
             using var source = File.OpenRead(path);
             var workbook = adapter.Load(source);
             workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+            var before = CapturePublicComparableSummary(workbook);
 
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
@@ -292,6 +293,10 @@ public class XlsxCorpusRunnerTests
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
+            CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
+                before,
+                options => options.WithStrictOrdering(),
+                row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
     }
@@ -582,6 +587,17 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
+
+    private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
+    {
+        var summary = CaptureSummary(workbook);
+        return summary with
+        {
+            Sheets = summary.Sheets
+                .Select(sheet => sheet with { StyleOnlyCellCount = 0 })
+                .ToArray()
+        };
+    }
 
     private static PackagePartSummary CapturePackageSummary(Stream stream)
     {

@@ -48,6 +48,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
+        IReadOnlyList<(uint Row, uint Col)> ExplicitStyleOnlyCells,
         string? CodeName);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
@@ -233,6 +234,7 @@ public sealed partial class XlsxFileAdapter
         var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
         var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
+        var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -277,7 +279,32 @@ public sealed partial class XlsxFileAdapter
             customViews,
             customProperties,
             cachedFormulaErrors,
+            explicitStyleOnlyCells,
             codeName);
+    }
+
+    private static IReadOnlyList<(uint Row, uint Col)> ReadExplicitStyleOnlyCells(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var result = new List<(uint Row, uint Col)>();
+
+        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
+        {
+            if (string.IsNullOrWhiteSpace(cell.Attribute("s")?.Value) ||
+                cell.Element(worksheetNs + "f") is not null ||
+                cell.Element(worksheetNs + "v") is not null ||
+                cell.Element(worksheetNs + "is") is not null)
+            {
+                continue;
+            }
+
+            var reference = cell.Attribute("r")?.Value;
+            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
+                continue;
+
+            result.Add((address.Row, address.Col));
+        }
+
+        return result;
     }
 
     private static Dictionary<(uint Row, uint Col), ErrorValue> ReadCachedFormulaErrors(XDocument worksheetXml, XNamespace worksheetNs)
