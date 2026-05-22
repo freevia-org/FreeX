@@ -81,4 +81,18 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("Add/Edit Scenario");
         source.Should().Contain("_newNameBox.Text = selected.Name");
     }
+
+    [Fact]
+    public void DialogSource_ReturnsChangingCellsAndCommentFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("public string? ChangingCellsText");
+        source.Should().Contain("public string? CommentText");
+        source.Should().Contain("ChangingCellsText = _changingCellsBox.Text");
+        source.Should().Contain("CommentText = _commentBox.Text");
+        handlerSource.Should().Contain("SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText)");
+        handlerSource.Should().Contain("TryParseScenarioChangingCells");
+    }
 }
