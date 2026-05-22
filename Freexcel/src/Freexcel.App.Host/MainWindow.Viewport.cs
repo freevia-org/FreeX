@@ -280,12 +280,18 @@ public partial class MainWindow
         SheetGrid.Viewport = viewport;
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
-        var showObjects = _options.ObjectsDisplay != FreexcelObjectDisplay.Nothing;
-        SheetGrid.Charts = showObjects ? sheet?.Charts : null;
-        SheetGrid.TextBoxes = showObjects ? sheet?.TextBoxes : null;
-        SheetGrid.DrawingShapes = showObjects ? sheet?.DrawingShapes : null;
+        SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
+        {
+            FreexcelObjectDisplay.Placeholders => Freexcel.App.UI.GridObjectDisplayMode.Placeholders,
+            FreexcelObjectDisplay.Nothing => Freexcel.App.UI.GridObjectDisplayMode.Nothing,
+            _ => Freexcel.App.UI.GridObjectDisplayMode.All
+        };
+        var keepObjectData = _options.ObjectsDisplay != FreexcelObjectDisplay.Nothing;
+        SheetGrid.Charts = keepObjectData ? sheet?.Charts : null;
+        SheetGrid.TextBoxes = keepObjectData ? sheet?.TextBoxes : null;
+        SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
         SheetGrid.WorkbookTheme = _workbook.Theme;
-        SheetGrid.Pictures = showObjects ? sheet?.Pictures : null;
+        SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null ? null : SparklineValuePlanner.BuildValues(sheet);
