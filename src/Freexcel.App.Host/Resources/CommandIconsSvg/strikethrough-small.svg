@@ -1,8 +1,20 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
   <defs>
     <style>
-      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:600;text-anchor:middle;dominant-baseline:central}
-    </style>
+      .s{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .r{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .g{fill:#107c41}
+      .g2{fill:#dff6dd}
+      .b{fill:#0078d4}
+      .o{fill:#f7630c}
+      .y{fill:#ffb900}
+      .rd{fill:#d32f2f}
+      .p{fill:#8b5cf6}
+      .w{fill:#ffffff}
+      .k{fill:#242424}
+      .f{fill:#f3f2f1}
+      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
+</style>
   </defs>
   <text class="t" x="10" y="10" font-size="9" >S</text>
   <path class="s" d="M5 10 L15 10" stroke-width="1"/>
