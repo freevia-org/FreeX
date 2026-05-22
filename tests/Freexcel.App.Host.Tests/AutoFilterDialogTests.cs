@@ -164,6 +164,30 @@ public sealed class AutoFilterDialogTests
         AutoFilterDialog.BuildCriteriaText(option, value).Should().Be(expected);
     }
 
+    [Fact]
+    public void BuildBetweenCriteriaText_UsesSeparateMinimumAndMaximumValues()
+    {
+        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+            .Single(item => item.Label == "Between");
+
+        AutoFilterDialog.BuildBetweenCriteriaText(option, " 10 ", "20")
+            .Should()
+            .Be("between:10:20");
+    }
+
+    [Theory]
+    [InlineData("Top 10", "top:5")]
+    [InlineData("Bottom 10 Percent", "bottompercent:25")]
+    public void BuildTopBottomCriteriaText_UsesExcelCountControl(string optionLabel, string expected)
+    {
+        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+            .Single(item => item.Label == optionLabel);
+
+        AutoFilterDialog.BuildTopBottomCriteriaText(option, expected.Split(':')[1])
+            .Should()
+            .Be(expected);
+    }
+
     [Theory]
     [InlineData(AutoFilterMenuFilterKind.Text, "Blanks", "blank")]
     [InlineData(AutoFilterMenuFilterKind.Number, "Above Average", "above average")]
@@ -249,6 +273,11 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("_criteriaOperatorBox");
         source.Should().Contain("_criteriaValueBox");
+        source.Should().Contain("_betweenCriteriaPanel");
+        source.Should().Contain("_betweenMinBox");
+        source.Should().Contain("_betweenMaxBox");
+        source.Should().Contain("_topBottomCriteriaPanel");
+        source.Should().Contain("_topBottomCountBox");
         source.Should().Contain("_criteriaConnectorBox");
         source.Should().Contain("_criteriaOperatorBox2");
         source.Should().Contain("_criteriaValueBox2");
@@ -258,7 +287,10 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("_customFilterGroup.Visibility = Visibility.Visible");
         source.Should().Contain("_criteriaSuggestionLabel.Visibility = Visibility.Visible");
         source.Should().Contain("BuildCriteriaText");
+        source.Should().Contain("BuildBetweenCriteriaText");
+        source.Should().Contain("BuildTopBottomCriteriaText");
         source.Should().Contain("BuildCompositeCriteriaText");
+        source.Should().Contain("RefreshSpecialCriteriaPanels");
         source.Should().Contain("!string.IsNullOrWhiteSpace(_criteriaValueBox2.Text)");
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
     }
