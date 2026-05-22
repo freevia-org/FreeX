@@ -2653,6 +2653,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesFormulaNativeMetadata()
+    {
+        var workbook = new Workbook("FormulaNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3.14));
+        var formulaCell = Cell.FromFormula("A1*2");
+        formulaCell.Value = new NumberValue(6.28);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), formulaCell);
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetFormulaNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var formula = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2")
+            .Element(worksheetNs + "f");
+        formula.Should().NotBeNull();
+        formula!.Attribute("t").Should().NotBeNull();
+        formula.Attribute("t")!.Value.Should().Be("array");
+        formula.Attribute("ref").Should().NotBeNull();
+        formula.Attribute("ref")!.Value.Should().Be("A2:A2");
+        formula.Attribute("ca").Should().NotBeNull();
+        formula.Attribute("ca")!.Value.Should().Be("1");
+        formula.Attribute("customAttr").Should().NotBeNull();
+        formula.Attribute("customAttr")!.Value.Should().Be("formula-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_NamedRange_OnSheetWithApostrophe()
     {
         var workbook = new Workbook("NamedRangeTest");
@@ -14753,6 +14796,29 @@ public partial class FileAdapterSmokeTests
                     worksheetNs + "phoneticPr",
                     new XAttribute("fontId", "1"),
                     new XAttribute("type", "noConversion"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetFormulaNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var formula = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Descendants(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A2")
+                .Element(worksheetNs + "f");
+            formula.Should().NotBeNull();
+            formula!.SetAttributeValue("t", "array");
+            formula.SetAttributeValue("ref", "A2:A2");
+            formula.SetAttributeValue("ca", "1");
+            formula.SetAttributeValue("customAttr", "formula-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
