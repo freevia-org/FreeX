@@ -139,6 +139,20 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void OptionalFirstAndEvenSections_AreEnabledOnlyWhenTheirOptionsAreChecked()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+
+        source.Should().Contain("DifferentFirstPageBox.Checked += (_, _) => RefreshOptionalSectionState()");
+        source.Should().Contain("DifferentOddEvenBox.Checked += (_, _) => RefreshOptionalSectionState()");
+        source.Should().Contain("SetControlsEnabled(firstEnabled");
+        source.Should().Contain("FirstHeaderLeftBox");
+        source.Should().Contain("SetControlsEnabled(evenEnabled");
+        source.Should().Contain("EvenFooterRightBox");
+        source.Should().Contain("_activeTextBox = HeaderCenterBox");
+    }
+
+    [Fact]
     public void FirstAndEvenHeadersAndFooters_UseSectionBoxesWithoutPipeParsing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
