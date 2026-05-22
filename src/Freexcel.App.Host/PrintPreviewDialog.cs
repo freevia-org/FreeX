@@ -20,7 +20,8 @@ public sealed class PrintPreviewDialog : Window
         FixedDocument document,
         PrintSettingsPlan settings,
         Action? showMargins = null,
-        Action? showPageSetup = null)
+        Action? showPageSetup = null,
+        Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null)
     {
         Title = CreateTitle(workbookName);
         Width = 900;
@@ -33,8 +34,9 @@ public sealed class PrintPreviewDialog : Window
             Padding = new Thickness(4),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        var viewer = new DocumentViewer { Document = document };
-        var totalPages = Math.Max(1, document.Pages.Count);
+        var previewDocument = document;
+        var viewer = new DocumentViewer { Document = previewDocument };
+        var totalPages = Math.Max(1, previewDocument.Pages.Count);
         var printerBox = new ComboBox
         {
             Width = 190,
@@ -110,7 +112,7 @@ public sealed class PrintPreviewDialog : Window
         {
             var copies = NormalizeCopyCount(copiesBox.Text);
             copiesBox.Text = copies.ToString(CultureInfo.InvariantCulture);
-            ShowNativePrintDialog(document, printerBox.SelectedItem as PrintQueue, copies);
+            ShowNativePrintDialog(previewDocument, printerBox.SelectedItem as PrintQueue, copies);
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
         };
         closeButton.Click += (_, _) => Close();
@@ -201,13 +203,34 @@ public sealed class PrintPreviewDialog : Window
         };
         toolbar.Items.Add(zoomBox);
         toolbar.Items.Add(new Separator());
+        TextBlock? settingsSummaryText = null;
+        void RefreshPreviewDocument()
+        {
+            if (refreshPreview is null)
+                return;
+
+            var refreshed = refreshPreview();
+            previewDocument = refreshed.Document;
+            viewer.Document = previewDocument;
+            totalPages = Math.Max(1, previewDocument.Pages.Count);
+            pageNumberBox.Text = "1";
+            pageStatusText.Text = $"Page 1 of {totalPages}";
+            RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
+            if (settingsSummaryText is not null)
+                settingsSummaryText.Text = refreshed.Settings.Summary;
+        }
+
         var marginsButton = new Button
         {
             Content = "_Margins",
             Padding = new Thickness(10, 4, 10, 4),
             ToolTip = "Review worksheet margin settings before printing."
         };
-        marginsButton.Click += (_, _) => showMargins?.Invoke();
+        marginsButton.Click += (_, _) =>
+        {
+            showMargins?.Invoke();
+            RefreshPreviewDocument();
+        };
         toolbar.Items.Add(marginsButton);
         var pageSetupButton = new Button
         {
@@ -215,19 +238,24 @@ public sealed class PrintPreviewDialog : Window
             Padding = new Thickness(10, 4, 10, 4),
             ToolTip = "Use Page Layout settings to change paper, orientation, margins, and scaling."
         };
-        pageSetupButton.Click += (_, _) => showPageSetup?.Invoke();
+        pageSetupButton.Click += (_, _) =>
+        {
+            showPageSetup?.Invoke();
+            RefreshPreviewDocument();
+        };
         toolbar.Items.Add(pageSetupButton);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(closeButton);
         toolbar.Items.Add(new Separator());
-        toolbar.Items.Add(new TextBlock
+        settingsSummaryText = new TextBlock
         {
             Text = settings.Summary,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 620
-        });
+        };
+        toolbar.Items.Add(settingsSummaryText);
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
         root.Children.Add(viewer);
