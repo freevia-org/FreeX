@@ -16,11 +16,13 @@ public sealed class ScenarioManagerCommandTests
 
         var command = new SaveScenarioCommand(
             "Best Case",
-            [new ScenarioCellValue(address, new NumberValue(42))]);
+            [new ScenarioCellValue(address, new NumberValue(42))],
+            "Optimistic assumptions");
 
         command.Apply(ctx).Success.Should().BeTrue();
         workbook.Scenarios.Should().ContainSingle();
         workbook.Scenarios[0].Name.Should().Be("Best Case");
+        workbook.Scenarios[0].Comment.Should().Be("Optimistic assumptions");
         workbook.Scenarios[0].ChangingCells.Should().ContainSingle()
             .Which.Should().Be(new ScenarioCellValue(address, new NumberValue(42)));
 
