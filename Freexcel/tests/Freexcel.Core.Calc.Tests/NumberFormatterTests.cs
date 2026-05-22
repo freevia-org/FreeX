@@ -223,6 +223,11 @@ public class NumberFormatterTests
     [InlineData("[$\u20B9-44E]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
     [InlineData("[$$-C0C]#,##0.00", 1234.5, "$1\u00A0234,50")]
     [InlineData("[$R-1C09]#,##0.00", 1234.5, "R1\u00A0234,50")]
+    [InlineData("[$\u20AB-42A]#,##0.00", 1234.5, "\u20AB1.234,50")]
+    [InlineData("[$Rp-421]#,##0.00", 1234.5, "Rp1.234,50")]
+    [InlineData("[$RM-43E]#,##0.00", 1234.5, "RM1,234.50")]
+    [InlineData("[$\u20AA-40D]#,##0.00", 1234.5, "\u20AA1,234.50")]
+    [InlineData("[$\u0E3F-41E]#,##0.00", 1234.5, "\u0E3F1,234.50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
     [InlineData("[$XYZ-999]#,##0.00", 1234.5, "XYZ1,234.50")]
     public void CustomNumberSubset_UsesKnownLcidDecimalAndGroupSeparators(
@@ -253,6 +258,11 @@ public class NumberFormatterTests
     [InlineData("[$-439]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-445]dd/mm/yyyy", "01-01-2024")]
     [InlineData("[$-44A]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-42A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-421]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-43E]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-40D]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-41E]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-409]m/d/yyyy", "1/1/2024")]
     [InlineData("[$-999]dd/mm/yyyy", "01/01/2024")]
     public void CustomNumberSubset_UsesKnownLcidDateSeparatorsForDateValues(
