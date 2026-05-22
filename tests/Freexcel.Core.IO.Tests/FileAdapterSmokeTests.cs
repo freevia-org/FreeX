@@ -3729,6 +3729,10 @@ public partial class FileAdapterSmokeTests
         protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
         protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
         protectedRange.Element(worksheetNs + "extLst").Should().NotBeNull();
+        protectedRange.Elements(XName.Get("protectedRangeNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -15666,6 +15670,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Add(new XElement(
@@ -15680,7 +15685,9 @@ public partial class FileAdapterSmokeTests
                         worksheetNs + "extLst",
                         new XElement(
                             worksheetNs + "ext",
-                            new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))))));
+                            new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))),
+                    new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "first")),
+                    new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "second")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
