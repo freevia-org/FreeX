@@ -91,9 +91,52 @@ internal static class XlsxStylesheetMetadataPreserver
                 changed = true;
         }
 
+        if (MergeTableStylesNativeChildren(sourceTableStyles, targetTableStyles, workbookNs))
+            changed = true;
+
         targetTableStyles.SetAttributeValue(
             "count",
             targetTableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
         return changed;
+    }
+
+    private static bool MergeTableStylesNativeChildren(
+        XElement sourceTableStyles,
+        XElement targetTableStyles,
+        XNamespace workbookNs)
+    {
+        var targetChildrenByKey = targetTableStyles
+            .Elements()
+            .Where(child => child.Name != workbookNs + "tableStyle")
+            .GroupBy(NativeChildKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        var changed = false;
+        foreach (var sourceChild in sourceTableStyles.Elements().Where(child => child.Name != workbookNs + "tableStyle"))
+        {
+            var key = NativeChildKey(sourceChild);
+            if (targetChildrenByKey.TryGetValue(key, out var targetChild))
+            {
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    changed = true;
+                continue;
+            }
+
+            targetTableStyles.Add(new XElement(sourceChild));
+            targetChildrenByKey[key] = targetTableStyles.Elements().Last();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static string NativeChildKey(XElement element)
+    {
+        var identity = element.Attribute("name")?.Value
+            ?? element.Attribute("id")?.Value
+            ?? element.Attribute("uid")?.Value
+            ?? element.Attribute("uri")?.Value
+            ?? string.Empty;
+        return $"{element.Name}\u001f{identity}";
     }
 }
