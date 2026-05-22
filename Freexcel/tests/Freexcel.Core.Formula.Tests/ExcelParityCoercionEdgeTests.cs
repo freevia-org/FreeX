@@ -91,6 +91,36 @@ public sealed class ExcelParityCoercionEdgeTests
         result.At(2, 2).Should().Be(new NumberValue(14));
     }
 
+    [Theory]
+    [InlineData("=XLOOKUP(\"B\",A1:A2,B1:B2)")]
+    [InlineData("=XMATCH(\"B\",A1:A2)")]
+    public void ModernLookupFunctions_PropagateLookupArrayErrorsBeforeLaterMatches(string formula)
+    {
+        var sheet = Sheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(10)),
+            (2, 2, new NumberValue(20)));
+
+        _eval.Evaluate(formula, sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Theory]
+    [InlineData("=XLOOKUP(5,A1:A3,B1:B3,\"\",-1)")]
+    [InlineData("=XMATCH(5,A1:A3,-1)")]
+    public void ModernApproximateLookupFunctions_PropagateLookupArrayErrorsBeforeFallbackMatches(string formula)
+    {
+        var sheet = Sheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, new NumberValue(4)),
+            (3, 1, new NumberValue(6)),
+            (1, 2, new TextValue("error row")),
+            (2, 2, new TextValue("smaller")),
+            (3, 2, new TextValue("larger")));
+
+        _eval.Evaluate(formula, sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
     [Fact]
     public void VolatileDynamicArrays_ReturnBoundedValuesOnEachEvaluation()
     {
