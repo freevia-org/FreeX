@@ -49,6 +49,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.PasteSpecial:
                 PasteSpecialBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.InsertCopiedCells:
+                ExecuteInsertCopiedCells();
+                break;
             case WorksheetContextMenuAction.InsertCells:
                 InsertCellsMenuItem_Click(this, new RoutedEventArgs());
                 break;
