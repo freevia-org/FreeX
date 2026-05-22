@@ -3537,6 +3537,10 @@ public partial class FileAdapterSmokeTests
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("Example"));
         sheet.Hyperlinks[addr] = "https://example.com/docs";
+        sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open documentation",
+            "");
 
         var ms = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -3548,7 +3552,39 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         var loadedAddr = new CellAddress(loadedSheet.Id, 1, 1);
         loadedSheet.Hyperlinks[loadedAddr].Should().Be("https://example.com/docs");
+        loadedSheet.HyperlinkMetadata[loadedAddr].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open documentation",
+            ""));
         loadedSheet.GetValue(loadedAddr).Should().Be(new TextValue("Example"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_InternalHyperlinkMetadata()
+    {
+        var workbook = new Workbook("HyperlinkInternalTest");
+        var sheet = workbook.AddSheet("S1");
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("Jump"));
+        sheet.Hyperlinks[addr] = "S1!B2";
+        sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to details",
+            "S1!B2");
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+        var loadedAddr = new CellAddress(loadedSheet.Id, 1, 1);
+
+        loadedSheet.Hyperlinks[loadedAddr].Should().Be("S1!B2");
+        loadedSheet.HyperlinkMetadata[loadedAddr].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to details",
+            "S1!B2"));
     }
 
     [Fact]

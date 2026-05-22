@@ -140,12 +140,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     if (cell is null) continue;
 
                     var target = hyperlink.ExternalAddress?.ToString() ??
-                                 hyperlink.InternalAddress ??
+                                 NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress) ??
                                  string.Empty;
                     if (string.IsNullOrEmpty(target)) continue;
 
                     var addr = new CellAddress(sheet.Id, (uint)cell.Address.RowNumber, (uint)cell.Address.ColumnNumber);
                     sheet.Hyperlinks[addr] = target;
+                    sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+                        GetHyperlinkTargetKind(hyperlink, target),
+                        hyperlink.Tooltip ?? "",
+                        NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress) ?? "");
                 }
                 catch
                 {
@@ -1399,8 +1403,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             {
                 try
                 {
+                    sheet.HyperlinkMetadata.TryGetValue(address, out var metadata);
                     xlSheet.Cell((int)address.Row, (int)address.Col)
-                        .SetHyperlink(new XLHyperlink(target));
+                        .SetHyperlink(CreateXlsxHyperlink(target, metadata));
                 }
                 catch
                 {
@@ -1746,6 +1751,55 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 (uint)xlMerge.RangeAddress.LastAddress.ColumnNumber);
             sheet.AddMergedRegion(new GridRange(start, end));
         }
+    }
+
+    private static HyperlinkTargetKind GetHyperlinkTargetKind(XLHyperlink hyperlink, string target)
+    {
+        if (!string.IsNullOrWhiteSpace(hyperlink.InternalAddress))
+            return HyperlinkTargetKind.PlaceInThisDocument;
+
+        return target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+            ? HyperlinkTargetKind.EmailAddress
+            : HyperlinkTargetKind.ExistingFileOrWebPage;
+    }
+
+    private static string? NormalizeInternalHyperlinkAddress(string? address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+            return address;
+
+        var bangIndex = address.IndexOf('!');
+        if (bangIndex > 2 && address[0] == '\'' && address[bangIndex - 1] == '\'')
+            return address[1..(bangIndex - 1)] + address[bangIndex..];
+
+        return address;
+    }
+
+    private static XLHyperlink CreateXlsxHyperlink(string target, HyperlinkMetadata? metadata)
+    {
+        metadata ??= new HyperlinkMetadata();
+        var linkTarget = metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument &&
+                         !string.IsNullOrWhiteSpace(metadata.Bookmark)
+            ? metadata.Bookmark
+            : target;
+        var hyperlink = new XLHyperlink(linkTarget);
+
+        if (metadata.LinkType == HyperlinkTargetKind.PlaceInThisDocument)
+        {
+            hyperlink.IsExternal = false;
+            hyperlink.InternalAddress = linkTarget;
+        }
+        else
+        {
+            hyperlink.IsExternal = true;
+            if (Uri.TryCreate(linkTarget, UriKind.Absolute, out var uri))
+                hyperlink.ExternalAddress = uri;
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata.ScreenTip))
+            hyperlink.Tooltip = metadata.ScreenTip;
+
+        return hyperlink;
     }
 
     private sealed record XlsxSourcePackage(byte[] Bytes);
