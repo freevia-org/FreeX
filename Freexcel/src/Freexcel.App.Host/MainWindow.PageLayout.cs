@@ -333,7 +333,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var dialog = new PageSetupDialog(sheet) { Owner = this };
+        var dialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 

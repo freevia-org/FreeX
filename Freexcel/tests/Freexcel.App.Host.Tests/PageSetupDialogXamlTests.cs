@@ -122,7 +122,7 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
-    public void SheetTab_ExposesHonestRangePickerButtonsForPrintRanges()
+    public void SheetTab_ExposesCurrentSelectionRangePickerButtonsForPrintRanges()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
@@ -131,9 +131,9 @@ public sealed class PageSetupDialogXamlTests
 
         foreach (var (buttonName, targetName, automationName) in new[]
         {
-            ("PrintAreaPickerButton", "PrintAreaBox", "Focus print area range"),
-            ("RowsRepeatPickerButton", "RowsRepeatBox", "Focus rows to repeat range"),
-            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Focus columns to repeat range")
+            ("PrintAreaPickerButton", "PrintAreaBox", "Insert current selection as print area"),
+            ("RowsRepeatPickerButton", "RowsRepeatBox", "Insert current selection rows"),
+            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Insert current selection columns")
         })
         {
             var button = document.Descendants(presentation + "Button")
@@ -142,13 +142,17 @@ public sealed class PageSetupDialogXamlTests
             button.Should().NotBeNull($"{buttonName} should expose Excel-like picker affordance");
             button!.Attribute("Content")?.Value.Should().Be("...");
             button.Attribute("Click")?.Value.Should().Be("RangePickerButton_Click");
-            button.Attribute("ToolTip")?.Value.Should().Contain("Focuses and selects");
+            button.Attribute("ToolTip")?.Value.Should().Contain("selection");
             button.Attribute("Tag")?.Value.Should().Be(targetName);
             button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
             button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
         }
 
         source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("private readonly GridRange? _currentSelection");
+        source.Should().Contain("target.Text = targetName switch");
+        source.Should().Contain("selection.ToString()");
+        source.Should().Contain("CellAddress.NumberToColumnName(selection.Start.Col)");
         source.Should().Contain("target.Focus()");
         source.Should().Contain("target.SelectAll()");
     }
@@ -176,6 +180,7 @@ public sealed class PageSetupDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
 
         source.Should().Contain("new CompositeWorkbookCommand(");
+        source.Should().Contain("new PageSetupDialog(sheet, SheetGrid.SelectedRange)");
         source.Should().Contain("new SetHeaderFooterCommand(");
         source.Should().Contain("dialog.FirstPageHeader");
         source.Should().Contain("dialog.EvenPageFooter");
