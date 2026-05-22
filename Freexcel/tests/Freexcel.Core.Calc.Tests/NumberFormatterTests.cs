@@ -549,6 +549,20 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("@ \"units\"", "A1", "A1 units")]
+    [InlineData("\"SKU \"@", "A1", "SKU A1")]
+    [InlineData("\\@@", "A1", "@A1")]
+    public void CustomNumberSubset_AppliesSingleTextSectionWhenItContainsPlaceholder(
+        string format,
+        string value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new TextValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void Format_BlankValue_ReturnsEmpty()
     {
