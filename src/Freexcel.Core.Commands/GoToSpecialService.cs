@@ -14,12 +14,23 @@ public enum GoToSpecialKind
     ColumnDifferences,
     CurrentRegion,
     LastCell,
-    ConditionalFormats
+    ConditionalFormats,
+    Objects,
+    Precedents,
+    Dependents
 }
 
 public static class GoToSpecialService
 {
     public static IReadOnlyList<CellAddress> Find(
+        Sheet sheet,
+        GridRange range,
+        GoToSpecialKind kind,
+        CellAddress? activeCell = null)
+        => Find(null, sheet, range, kind, activeCell);
+
+    public static IReadOnlyList<CellAddress> Find(
+        Workbook? workbook,
         Sheet sheet,
         GridRange range,
         GoToSpecialKind kind,
@@ -30,6 +41,15 @@ public static class GoToSpecialService
 
         if (kind == GoToSpecialKind.LastCell)
             return sheet.GetUsedRange() is { } usedRange ? [usedRange.End] : [];
+
+        if (kind == GoToSpecialKind.Objects)
+            return FindObjects(sheet, range);
+
+        if (kind == GoToSpecialKind.Precedents)
+            return workbook is null ? [] : FindPrecedents(workbook, sheet, range);
+
+        if (kind == GoToSpecialKind.Dependents)
+            return workbook is null ? [] : FindDependents(workbook, sheet, range);
 
         var result = new List<CellAddress>();
         if (kind == GoToSpecialKind.RowDifferences)
@@ -74,6 +94,53 @@ public static class GoToSpecialService
         }
 
         return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindObjects(Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        foreach (var chart in sheet.Charts)
+            AddIfInRange(result, range, chart.DataRange.Start);
+        foreach (var shape in sheet.DrawingShapes)
+            AddIfInRange(result, range, shape.Anchor);
+        foreach (var picture in sheet.Pictures)
+            AddIfInRange(result, range, picture.Anchor);
+        foreach (var textBox in sheet.TextBoxes)
+            AddIfInRange(result, range, textBox.Anchor);
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindPrecedents(Workbook workbook, Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            foreach (var precedent in FormulaAuditingService.GetDirectPrecedents(workbook, address))
+                if (precedent.Sheet == sheet.Id && !result.Contains(precedent))
+                    result.Add(precedent);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindDependents(Workbook workbook, Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, address))
+                if (dependent.Sheet == sheet.Id && !result.Contains(dependent))
+                    result.Add(dependent);
+        }
+
+        return result;
+    }
+
+    private static void AddIfInRange(List<CellAddress> result, GridRange range, CellAddress address)
+    {
+        if (range.Contains(address) && !result.Contains(address))
+            result.Add(address);
     }
 
     private static IReadOnlyList<CellAddress> FindRowDifferences(Sheet sheet, GridRange range)

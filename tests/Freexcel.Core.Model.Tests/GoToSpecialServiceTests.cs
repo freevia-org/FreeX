@@ -130,6 +130,52 @@ public sealed class GoToSpecialServiceTests
             .Equal(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 4));
     }
 
+    [Fact]
+    public void FindObjects_ReturnsCellsAnchoringObjectsInRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
+        var chartAnchor = new CellAddress(sheet.Id, 2, 2);
+        var shapeAnchor = new CellAddress(sheet.Id, 3, 3);
+        var pictureAnchor = new CellAddress(sheet.Id, 4, 4);
+        var outsideAnchor = new CellAddress(sheet.Id, 5, 5);
+        sheet.Charts.Add(new ChartModel { DataRange = new GridRange(chartAnchor, chartAnchor) });
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = shapeAnchor });
+        sheet.Pictures.Add(new PictureModel { Anchor = pictureAnchor });
+        sheet.TextBoxes.Add(new TextBoxModel { Anchor = outsideAnchor });
+
+        GoToSpecialService.Find(wb, sheet, range, GoToSpecialKind.Objects)
+            .Should()
+            .Equal(chartAnchor, shapeAnchor, pictureAnchor);
+    }
+
+    [Fact]
+    public void FindPrecedentsAndDependents_ReturnsDirectSameSheetFormulaReferences()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var selectedFormula = new CellAddress(sheet.Id, 3, 3);
+        var selectedInput = new CellAddress(sheet.Id, 2, 2);
+        var selectedRange = new GridRange(selectedFormula, selectedFormula);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(selectedInput, new NumberValue(20));
+        sheet.SetCell(selectedFormula, Cell.FromFormula("A1+B2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), Cell.FromFormula("B2*2"));
+
+        GoToSpecialService.Find(wb, sheet, selectedRange, GoToSpecialKind.Precedents)
+            .Should()
+            .Equal(new CellAddress(sheet.Id, 1, 1), selectedInput);
+
+        GoToSpecialService.Find(
+                wb,
+                sheet,
+                new GridRange(selectedInput, selectedInput),
+                GoToSpecialKind.Dependents)
+            .Should()
+            .Equal(selectedFormula, new CellAddress(sheet.Id, 4, 4));
+    }
+
     private static void Set(Sheet sheet, uint row, uint col, string value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
 

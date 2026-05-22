@@ -72,6 +72,9 @@ public sealed class GoToSpecialDialog : Window
             new(GoToSpecialKind.ColumnDifferences, "Column dif_ferences"),
             new(GoToSpecialKind.LastCell, "_Last cell"),
             new(GoToSpecialKind.ConditionalFormats, "Conditional _formats"),
+            new(GoToSpecialKind.Objects, "_Objects"),
+            new(GoToSpecialKind.Precedents, "_Precedents"),
+            new(GoToSpecialKind.Dependents, "_Dependents"),
             new(GoToSpecialKind.DataValidation, "_Data validation"),
             new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
         ];
