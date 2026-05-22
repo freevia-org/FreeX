@@ -88,6 +88,7 @@ public partial class MainWindow
             _inlineEditor.TextChanged += (_, _) =>
             {
                 FormulaBar.Text = _inlineEditor.Text;
+                RefreshInlineEditorTextSurface();
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
             };
@@ -124,7 +125,6 @@ public partial class MainWindow
         System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
         _inlineEditor.Width  = layout.TextOverlayRect.Width + 8;
         _inlineEditor.Height = layout.EditorRect.Height;
-        RefreshInlineEditorChromeBorder();
         if (_inlineFormulaReferenceOverlay is not null)
         {
             System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
@@ -132,6 +132,8 @@ public partial class MainWindow
             _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
             _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
         }
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
 
         if (_inlineEditorChrome is not null)
             _inlineEditorChrome.Visibility = Visibility.Visible;
@@ -142,6 +144,30 @@ public partial class MainWindow
         _inlineEditor.Focus();
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
+    }
+
+    private void RefreshInlineEditorTextSurface()
+    {
+        if (_inlineEditor is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var desiredTextWidth = MeasureEditorTextWidth(_inlineEditor);
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            chromeBaseRect.Left,
+            chromeBaseRect.Top,
+            chromeBaseRect.Width,
+            chromeBaseRect.Height,
+            desiredTextWidth,
+            EditOverlay.ActualWidth);
+
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
+        _inlineEditor.Width = layout.TextOverlayRect.Width + 8;
+
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+        }
     }
 
     private void RefreshInlineEditorChromeBorder()
@@ -171,9 +197,25 @@ public partial class MainWindow
         if (chromeWidth <= 0 || string.IsNullOrEmpty(editor.Text))
             return FormulaInlineEditorOverflow.None;
 
+        var formattedText = CreateEditorFormattedText(editor);
+
+        var innerWidth = Math.Max(0, chromeWidth - editor.Padding.Left - editor.Padding.Right);
+        var scrollOffset = Math.Max(0, editor.HorizontalOffset);
+        var spillsLeft = scrollOffset > 0;
+        var spillsRight = formattedText.WidthIncludingTrailingWhitespace - scrollOffset > innerWidth;
+        return new FormulaInlineEditorOverflow(spillsLeft, spillsRight);
+    }
+
+    private static double MeasureEditorTextWidth(System.Windows.Controls.TextBox editor) =>
+        string.IsNullOrEmpty(editor.Text)
+            ? 0
+            : CreateEditorFormattedText(editor).WidthIncludingTrailingWhitespace;
+
+    private static FormattedText CreateEditorFormattedText(System.Windows.Controls.TextBox editor)
+    {
         var typeface = new Typeface(editor.FontFamily, editor.FontStyle, editor.FontWeight, editor.FontStretch);
         var pixelsPerDip = VisualTreeHelper.GetDpi(editor).PixelsPerDip;
-        var formattedText = new FormattedText(
+        return new FormattedText(
             editor.Text,
             CultureInfo.CurrentUICulture,
             FlowDirection.LeftToRight,
@@ -181,12 +223,6 @@ public partial class MainWindow
             editor.FontSize,
             Brushes.Black,
             pixelsPerDip);
-
-        var innerWidth = Math.Max(0, chromeWidth - editor.Padding.Left - editor.Padding.Right);
-        var scrollOffset = Math.Max(0, editor.HorizontalOffset);
-        var spillsLeft = scrollOffset > 0;
-        var spillsRight = formattedText.WidthIncludingTrailingWhitespace - scrollOffset > innerWidth;
-        return new FormulaInlineEditorOverflow(spillsLeft, spillsRight);
     }
 
     private void HideInlineEditor(bool commit)
