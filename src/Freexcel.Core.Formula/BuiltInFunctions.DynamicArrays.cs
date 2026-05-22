@@ -291,15 +291,15 @@ public static partial class BuiltInFunctions
         int rowStart = 0;
         int rowCount = arr.RowCount;
         if (args[1] is not BlankValue &&
-            !TryGetArraySliceCount(args[1], arr.RowCount, isTake: true, out rowStart, out rowCount))
-            return ErrorValue.Value;
+            !TryGetArraySliceCount(args[1], arr.RowCount, isTake: true, out rowStart, out rowCount, out var rowSliceError))
+            return rowSliceError;
 
         int colStart = 0;
         int colCount = arr.ColCount;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
-            if (!TryGetArraySliceCount(args[2], arr.ColCount, isTake: true, out colStart, out colCount))
-                return ErrorValue.Value;
+            if (!TryGetArraySliceCount(args[2], arr.ColCount, isTake: true, out colStart, out colCount, out var colSliceError))
+                return colSliceError;
         }
 
         return SliceRange(arr, rowStart, colStart, rowCount, colCount);
@@ -317,15 +317,15 @@ public static partial class BuiltInFunctions
         int rowStart = 0;
         int rowCount = arr.RowCount;
         if (args[1] is not BlankValue &&
-            !TryGetArraySliceCount(args[1], arr.RowCount, isTake: false, out rowStart, out rowCount))
-            return ErrorValue.Value;
+            !TryGetArraySliceCount(args[1], arr.RowCount, isTake: false, out rowStart, out rowCount, out var rowSliceError))
+            return rowSliceError;
 
         int colStart = 0;
         int colCount = arr.ColCount;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
-            if (!TryGetArraySliceCount(args[2], arr.ColCount, isTake: false, out colStart, out colCount))
-                return ErrorValue.Value;
+            if (!TryGetArraySliceCount(args[2], arr.ColCount, isTake: false, out colStart, out colCount, out var colSliceError))
+                return colSliceError;
         }
 
         return SliceRange(arr, rowStart, colStart, rowCount, colCount);
@@ -336,8 +336,10 @@ public static partial class BuiltInFunctions
         int dimensionLength,
         bool isTake,
         out int start,
-        out int count)
+        out int count,
+        out ScalarValue error)
     {
+        error = ErrorValue.Value;
         double raw = ToNumber(countValue);
         if (!double.IsFinite(raw))
         {
@@ -359,6 +361,7 @@ public static partial class BuiltInFunctions
             // TAKE 0 → empty result
             start = 0;
             count = 0;
+            error = ErrorValue.Calc;
             return false;
         }
 
@@ -373,6 +376,7 @@ public static partial class BuiltInFunctions
         {
             start = 0;
             count = 0;
+            error = ErrorValue.Calc;
             return false;
         }
 
