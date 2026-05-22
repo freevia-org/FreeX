@@ -429,35 +429,23 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        switch (dialog.Result.Action)
-        {
-            case SelectionPaneDialogAction.MoveUp when dialog.Result.Target is { } target:
-                ApplySelectionPaneChanges(dialog.Result, new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward: true));
-                break;
-            case SelectionPaneDialogAction.MoveDown when dialog.Result.Target is { } target:
-                ApplySelectionPaneChanges(dialog.Result, new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward: false));
-                break;
-            default:
-                ApplySelectionPaneChanges(dialog.Result);
-                break;
-        }
+        ApplySelectionPaneChanges(dialog.Result);
     }
 
-    private void ApplySelectionPaneChanges(SelectionPaneDialogResult result, IWorkbookCommand? moveCommand = null)
+    private void ApplySelectionPaneChanges(SelectionPaneDialogResult result)
     {
         var commands = new List<IWorkbookCommand>();
         commands.AddRange(result.RenameChanges.Select(change =>
             new RenameSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Name)));
         commands.AddRange(result.VisibilityChanges.Select(change =>
             new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible)));
-        if (moveCommand is not null)
-            commands.Add(moveCommand);
+        commands.AddRange(result.MoveChanges.Select(change =>
+            new MoveSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Forward)));
 
         if (commands.Count == 0)
             return;
 
-        var label = moveCommand?.Label ?? "Selection Pane";
-        if (TryExecuteCommand(new CompositeWorkbookCommand(label, commands), label))
+        if (TryExecuteCommand(new CompositeWorkbookCommand("Selection Pane", commands), "Selection Pane"))
             UpdateViewport();
     }
 
