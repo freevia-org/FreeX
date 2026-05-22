@@ -79,6 +79,32 @@ public sealed class StructuredReferenceFormulaTests
         result.Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=[@Amount]", 10)]
+    [InlineData("=Sales[@Amount]", 10)]
+    [InlineData("=SUM(Sales[[#This Row],[Amount]:[Tax]])", 11)]
+    public void CurrentRowStructuredReferences_ResolveRelativeToFormulaCell(string formula, double expected)
+    {
+        var (workbook, sheet) = CreateSalesWorkbookWithTax();
+        var evaluator = new FormulaEvaluator();
+        var formulaCell = new CellAddress(sheet.Id, 2, 3);
+
+        var result = evaluator.Evaluate(formula, sheet, workbook, formulaCell);
+
+        result.Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void StructuredReferenceColumnNames_AreMatchedCaseInsensitivelyAndMayContainSpaces()
+    {
+        var (workbook, sheet) = CreateSalesWorkbookWithSpacedColumn();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate("=SUM(Sales[net amount])", sheet, workbook);
+
+        result.Should().Be(new NumberValue(27));
+    }
+
     private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbook()
     {
         var workbook = new Workbook("StructuredReferenceTest");
@@ -167,6 +193,41 @@ public sealed class StructuredReferenceFormulaTests
         table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
         table.Columns.Add(new StructuredTableColumnModel(3, "Tax"));
+        sheet.StructuredTables.Add(table);
+
+        return (workbook, sheet);
+    }
+
+    private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbookWithSpacedColumn()
+    {
+        var workbook = new Workbook("StructuredReferenceTest");
+        var sheet = workbook.AddSheet("Data");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Net Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(9));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(18));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 3)),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Net Amount"));
         sheet.StructuredTables.Add(table);
 
         return (workbook, sheet);
