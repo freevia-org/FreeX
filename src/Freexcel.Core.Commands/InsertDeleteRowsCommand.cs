@@ -15,6 +15,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _commentSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
@@ -75,6 +76,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         ShiftCommentRowsUp(sheet.ThreadedComments, _beforeRow, _count);
         _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
         ShiftCommentRowsUp(sheet.Hyperlinks, _beforeRow, _count);
+        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        ShiftCommentRowsUp(sheet.HyperlinkMetadata, _beforeRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = CaptureRuleRanges(sheet);
         ShiftRuleRowsUp(sheet, _beforeRow, _count);
@@ -136,6 +139,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RestoreDictionary(sheet.Comments, _commentSnapshot);
         RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
+        RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
         RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
@@ -627,6 +631,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _commentSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
@@ -690,6 +695,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftCommentRowsDown(sheet.ThreadedComments, _startRow, _count);
         _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
         InsertRowsCommand.ShiftCommentRowsDown(sheet.Hyperlinks, _startRow, _count);
+        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        InsertRowsCommand.ShiftCommentRowsDown(sheet.HyperlinkMetadata, _startRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = InsertRowsCommand.CaptureRuleRanges(sheet);
         InsertRowsCommand.ShiftRuleRowsDown(sheet, _startRow, _count);
@@ -766,6 +773,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
+        InsertRowsCommand.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         InsertRowsCommand.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);

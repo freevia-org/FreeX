@@ -16,17 +16,23 @@ public sealed class HyperlinkCommandTests
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("old"));
 
-        var command = new SetHyperlinkCommand(sheet.Id, addr, "https://example.com", "Example");
+        var metadata = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open the budget tab",
+            "Budget!A1");
+        var command = new SetHyperlinkCommand(sheet.Id, addr, "https://example.com", "Example", metadata);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         sheet.GetValue(addr).Should().Be(new TextValue("Example"));
         sheet.Hyperlinks[addr].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[addr].Should().Be(metadata);
 
         command.Revert(ctx);
 
         sheet.GetValue(addr).Should().Be(new TextValue("old"));
         sheet.Hyperlinks.Should().NotContainKey(addr);
+        sheet.HyperlinkMetadata.Should().NotContainKey(addr);
     }
 
     [Fact]
@@ -38,6 +44,10 @@ public sealed class HyperlinkCommandTests
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("Example"));
         sheet.Hyperlinks[addr] = "https://example.com";
+        sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email support",
+            "support@example.com");
 
         var command = new ClearHyperlinksCommand(
             sheet.Id,
@@ -47,10 +57,15 @@ public sealed class HyperlinkCommandTests
 
         sheet.GetValue(addr).Should().Be(new TextValue("Example"));
         sheet.Hyperlinks.Should().NotContainKey(addr);
+        sheet.HyperlinkMetadata.Should().NotContainKey(addr);
 
         command.Revert(ctx);
 
         sheet.Hyperlinks[addr].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[addr].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Email support",
+            "support@example.com"));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
