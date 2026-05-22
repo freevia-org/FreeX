@@ -65,8 +65,13 @@ internal static class FormulaEditingUiE2eHarness
         run.Press(VirtualKey.F2);
         run.Capture("07-reference-highlighting-existing-formula");
 
+        run.Press(VirtualKey.Escape);
+        run.ClickCell(col: 6, row: 5);
+        run.TypeText("=SUM(F6:F8,H6:H7,F10:H12,");
+        run.Capture("08-long-formula-inline-overflow");
+
         var screenshots = run.Artifacts.GetFiles("*.png").OrderBy(file => file.Name).ToList();
-        screenshots.Should().HaveCountGreaterThanOrEqualTo(8);
+        screenshots.Should().HaveCountGreaterThanOrEqualTo(9);
         foreach (var screenshot in screenshots)
             screenshot.Length.Should().BeGreaterThan(10_000, screenshot.Name);
 
@@ -108,6 +113,7 @@ internal static class FormulaEditingUiE2eHarness
         - Pressed `F2` in an existing formula and verified the visual state is captured for Edit mode arrow/caret movement.
         - Pressed `F2` again and captured Point mode arrow/reference behavior.
         - Re-opened an existing formula to capture reference highlighting.
+        - Typed a long formula with multiple colored references to capture inline overflow behavior.
 
         ## Captured Screenshots
 
