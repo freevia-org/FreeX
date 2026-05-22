@@ -82,7 +82,8 @@ public static class WorksheetContextMenuPlanner
         new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
         WorksheetContextMenuCommand.Separator,
-        new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text...")
+        new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text..."),
+        new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
     ];
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSelectionCommands() =>
@@ -129,7 +130,8 @@ public static class WorksheetContextMenuPlanner
             new("Shape Fill...", WorksheetContextMenuAction.ShapeFill, AccessHeader: "Shape _Fill..."),
             new("Shape Outline...", WorksheetContextMenuAction.ShapeOutline, AccessHeader: "Shape _Outline..."),
             WorksheetContextMenuCommand.Separator,
-            new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text...")
+            new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text..."),
+            new("Selection Pane...", WorksheetContextMenuAction.SelectionPane, AccessHeader: "_Selection Pane...")
         };
 
         if (includeReorder)
@@ -217,7 +219,8 @@ public enum WorksheetContextMenuAction
     ShapeOutline,
     BringForward,
     SendBackward,
-    EditAltText
+    EditAltText,
+    SelectionPane
 }
 
 public enum WorksheetContextMenuTargetKind

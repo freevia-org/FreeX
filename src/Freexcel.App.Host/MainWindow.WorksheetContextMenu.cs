@@ -218,6 +218,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.EditAltText:
                 SetAltTextBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.SelectionPane:
+                SelectionPaneBtn_Click(this, new RoutedEventArgs());
+                break;
         }
     }
 
