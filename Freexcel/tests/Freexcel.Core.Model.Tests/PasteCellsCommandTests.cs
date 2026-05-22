@@ -312,6 +312,55 @@ public sealed class PasteCellsCommandTests
     }
 
     [Fact]
+    public void PasteCommandFactory_TransposedFormatsModeAppliesStylesWithoutChangingContent()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceEnd = new CellAddress(sheet.Id, 1, 2);
+        var destinationStart = new CellAddress(sheet.Id, 3, 3);
+        var secondDestination = new CellAddress(sheet.Id, 4, 3);
+        var firstSourceStyle = wb.RegisterStyle(new CellStyle { Bold = true });
+        var secondSourceStyle = wb.RegisterStyle(new CellStyle { Italic = true });
+        var firstDestinationStyle = wb.RegisterStyle(new CellStyle { Underline = true });
+        var secondDestinationStyle = wb.RegisterStyle(new CellStyle { Strikethrough = true });
+        var firstSourceCell = Cell.FromValue(new TextValue("source 1"));
+        firstSourceCell.StyleId = firstSourceStyle;
+        var secondSourceCell = Cell.FromValue(new TextValue("source 2"));
+        secondSourceCell.StyleId = secondSourceStyle;
+        sheet.SetCell(sourceStart, firstSourceCell);
+        sheet.SetCell(sourceEnd, secondSourceCell);
+        var firstDestinationCell = Cell.FromValue(new TextValue("keep 1"));
+        firstDestinationCell.StyleId = firstDestinationStyle;
+        sheet.SetCell(destinationStart, firstDestinationCell);
+        var secondDestinationCell = Cell.FromFormula("A1+1");
+        secondDestinationCell.Value = new NumberValue(7);
+        secondDestinationCell.StyleId = secondDestinationStyle;
+        sheet.SetCell(secondDestination, secondDestinationCell);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(sourceStart, sourceEnd),
+            [(sourceStart, firstSourceCell.Clone()), (sourceEnd, secondSourceCell.Clone())],
+            destinationStart,
+            PasteCellsMode.Formats,
+            new PasteSpecialOptions(Transpose: true));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var firstPasted = sheet.GetCell(destinationStart)!;
+        firstPasted.Value.Should().Be(new TextValue("keep 1"));
+        firstPasted.FormulaText.Should().BeNull();
+        firstPasted.StyleId.Should().Be(firstSourceStyle);
+        var secondPasted = sheet.GetCell(secondDestination)!;
+        secondPasted.FormulaText.Should().Be("A1+1");
+        secondPasted.Value.Should().Be(new NumberValue(7));
+        secondPasted.StyleId.Should().Be(secondSourceStyle);
+    }
+
+    [Fact]
     public void PasteCommandFactory_FormulasModePreservesDestinationStyleOnlyAndRebasesFormula()
     {
         var wb = new Workbook("test");
