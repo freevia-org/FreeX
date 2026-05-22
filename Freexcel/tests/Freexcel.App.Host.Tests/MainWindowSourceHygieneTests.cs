@@ -461,7 +461,7 @@ public sealed class MainWindowSourceHygieneTests
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
-        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands()");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
 
@@ -1167,6 +1167,21 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("menu.HorizontalOffset = screenPoint.X");
         source.Should().Contain("menu.VerticalOffset = screenPoint.Y");
         source.Should().NotContain("OnGridContextMenuRequested(address, default);");
+    }
+
+    [Fact]
+    public void WorksheetContextMenu_UsesObjectAwareTargetKind()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
+        source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
+        source.Should().Contain("PictureSizeBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.FormatDrawingObject:");
+        source.Should().Contain("ObjectSizeBtn_Click(this, new RoutedEventArgs());");
     }
 
     [Fact]

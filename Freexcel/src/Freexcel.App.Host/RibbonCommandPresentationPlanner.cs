@@ -305,8 +305,8 @@ public static class RibbonCommandPresentationPlanner
         name == "pivottable" ||
         name is "table" ||
         name.Contains("recommended chart") ||
-        name.Contains("picture") ||
-        name.Contains("link") ||
+        name == "insert picture" ||
+        name == "insert link" ||
         name.Contains("insert symbol") ||
         name.Contains("text box") ||
         name.Contains("rectangle") ||
@@ -381,14 +381,7 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("theme effects") ||
         name.Contains("line sparkline") ||
         name.Contains("column sparkline") ||
-        name.Contains("win/loss") ||
-        name.Contains("column chart") ||
-        name.Contains("line chart") ||
-        name.Contains("pie chart") ||
-        name.Contains("bar chart") ||
-        name.Contains("scatter chart") ||
-        name.Contains("area chart") ||
-        name.Contains("doughnut chart");
+        name.Contains("win/loss");
 }
 
 public enum RibbonCommandLayoutKind
