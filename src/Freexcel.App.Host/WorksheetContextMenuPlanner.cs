@@ -80,7 +80,9 @@ public static class WorksheetContextMenuPlanner
     [
         new("Format Picture...", WorksheetContextMenuAction.FormatPicture, AccessHeader: "_Format Picture..."),
         new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
-        new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop")
+        new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
+        WorksheetContextMenuCommand.Separator,
+        new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text...")
     ];
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildRowSelectionCommands() =>
@@ -125,7 +127,9 @@ public static class WorksheetContextMenuPlanner
             new("Size and Properties...", WorksheetContextMenuAction.ResizeDrawingObject, AccessHeader: "_Size and Properties..."),
             new("Rotate...", WorksheetContextMenuAction.RotateDrawingObject, AccessHeader: "_Rotate..."),
             new("Shape Fill...", WorksheetContextMenuAction.ShapeFill, AccessHeader: "Shape _Fill..."),
-            new("Shape Outline...", WorksheetContextMenuAction.ShapeOutline, AccessHeader: "Shape _Outline...")
+            new("Shape Outline...", WorksheetContextMenuAction.ShapeOutline, AccessHeader: "Shape _Outline..."),
+            WorksheetContextMenuCommand.Separator,
+            new("Edit Alt Text...", WorksheetContextMenuAction.EditAltText, AccessHeader: "Edit _Alt Text...")
         };
 
         if (includeReorder)
@@ -212,7 +216,8 @@ public enum WorksheetContextMenuAction
     ShapeFill,
     ShapeOutline,
     BringForward,
-    SendBackward
+    SendBackward,
+    EditAltText
 }
 
 public enum WorksheetContextMenuTargetKind

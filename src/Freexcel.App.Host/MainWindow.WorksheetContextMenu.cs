@@ -215,6 +215,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.SendBackward:
                 SendBackwardBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.EditAltText:
+                SetAltTextBtn_Click(this, new RoutedEventArgs());
+                break;
         }
     }
 
