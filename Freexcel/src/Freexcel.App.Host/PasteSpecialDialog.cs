@@ -17,6 +17,7 @@ public enum PasteSpecialDialogMode
     ColumnWidths,
     FormulasAndNumberFormats,
     ValuesAndNumberFormats,
+    ValuesAndSourceFormatting,
     Picture,
     LinkedPicture
 }
@@ -35,6 +36,7 @@ public sealed class PasteSpecialDialog : Window
     private readonly RadioButton _rbColumnWidths;
     private readonly RadioButton _rbFormulasAndNumberFormats;
     private readonly RadioButton _rbValuesAndNumberFormats;
+    private readonly RadioButton _rbValuesAndSourceFormatting;
     private readonly RadioButton _rbPicture;
     private readonly RadioButton _rbLinkedPicture;
     private readonly Button _pasteLinkButton;
@@ -61,6 +63,7 @@ public sealed class PasteSpecialDialog : Window
         _ when _rbColumnWidths.IsChecked == true => PasteSpecialDialogMode.ColumnWidths,
         _ when _rbFormulasAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.FormulasAndNumberFormats,
         _ when _rbValuesAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.ValuesAndNumberFormats,
+        _ when _rbValuesAndSourceFormatting.IsChecked == true => PasteSpecialDialogMode.ValuesAndSourceFormatting,
         _ when _rbPicture.IsChecked == true => PasteSpecialDialogMode.Picture,
         _ when _rbLinkedPicture.IsChecked == true => PasteSpecialDialogMode.LinkedPicture,
         _ => PasteSpecialDialogMode.All
@@ -104,6 +107,7 @@ public sealed class PasteSpecialDialog : Window
         _rbColumnWidths = new RadioButton { Content = "Column _widths", Margin = new Thickness(0, 0, 0, 6) };
         _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number fo_rmats", Margin = new Thickness(0, 0, 0, 6) };
         _rbValuesAndNumberFormats = new RadioButton { Content = "Values and number for_mats", Margin = new Thickness(0, 0, 0, 6) };
+        _rbValuesAndSourceFormatting = new RadioButton { Content = "Values and source f_ormatting", Margin = new Thickness(0, 0, 0, 6) };
         _rbPicture  = new RadioButton { Content = "_Picture",        Margin = new Thickness(0, 0, 0, 6) };
         _rbLinkedPicture = new RadioButton { Content = "_Linked picture", Margin = new Thickness(0, 0, 0, 6) };
         _pasteLinkButton = new Button { Content = "Paste _Link", Width = 96, Margin = new Thickness(0, 0, 8, 0) };
@@ -129,7 +133,7 @@ public sealed class PasteSpecialDialog : Window
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition());
-        for (var i = 0; i < 7; i++)
+        for (var i = 0; i < 8; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddPasteChoice(grid, _rbAll, 0, 0);
@@ -144,8 +148,9 @@ public sealed class PasteSpecialDialog : Window
         AddPasteChoice(grid, _rbAllMergingConditionalFormats, 2, 1);
         AddPasteChoice(grid, _rbFormulasAndNumberFormats, 3, 1);
         AddPasteChoice(grid, _rbValuesAndNumberFormats, 4, 1);
-        AddPasteChoice(grid, _rbPicture, 5, 1);
-        AddPasteChoice(grid, _rbLinkedPicture, 6, 1);
+        AddPasteChoice(grid, _rbValuesAndSourceFormatting, 5, 1);
+        AddPasteChoice(grid, _rbPicture, 6, 1);
+        AddPasteChoice(grid, _rbLinkedPicture, 7, 1);
 
         return new GroupBox
         {
