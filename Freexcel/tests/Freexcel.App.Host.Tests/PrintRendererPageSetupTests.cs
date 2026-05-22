@@ -12,14 +12,14 @@ public sealed class PrintRendererPageSetupTests
         var now = new DateTime(2026, 5, 22, 13, 45, 0);
 
         PrintRenderer.ExpandHeaderFooterText(
-                "&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &P/&N &[Picture]",
+                "&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &D &T &F &Z &A &P/&N &[Picture]",
                 pageNumber: 2,
                 totalPages: 5,
                 workbookName: "Budget.xlsx",
                 sheetName: "Summary",
                 now)
             .Should()
-            .Be($"{now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 2/5 ");
+            .Be($"{now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 {now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 ");
     }
 
     [Fact]
