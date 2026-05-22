@@ -187,6 +187,40 @@ public partial class MainWindow
         RefreshToolbar();
     }
 
+    private void ExecuteInsertCopiedCells()
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
+            return;
+
+        IWorkbookCommand CreateCommand()
+        {
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            return InsertCopiedCellsPlanner.CreateCommand(
+                _workbook,
+                _currentSheetId,
+                clip.SourceRange,
+                clip.Cells,
+                currentRange,
+                choice);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Copied Cells");
+            return;
+        }
+
+        _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, default);
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        CompletePasteSelection(clip.SourceRange, default);
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
     private void CompletePasteSelection(GridRange sourceRange, PasteSpecialOptions options)
     {
         if (SheetGrid.SelectedRange is not { } range)
