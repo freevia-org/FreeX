@@ -418,13 +418,14 @@ internal static class XlsxWorksheetMetadataPreserver
         if (targetColumns is null)
             return false;
 
+        var changed = MergeMissingAttributes(sourceColumns, targetColumns);
+
         var targetColumnsByRange = targetColumns
             .Elements(workbookNs + "col")
             .Where(column => !string.IsNullOrWhiteSpace(column.Attribute("min")?.Value) &&
                              !string.IsNullOrWhiteSpace(column.Attribute("max")?.Value))
             .ToDictionary(ColumnRangeKey, StringComparer.OrdinalIgnoreCase);
 
-        var changed = false;
         foreach (var sourceColumn in sourceColumns.Elements(workbookNs + "col"))
         {
             var key = ColumnRangeKey(sourceColumn);
@@ -465,6 +466,8 @@ internal static class XlsxWorksheetMetadataPreserver
         if (targetSheetData is null)
             return false;
 
+        var changed = MergeMissingAttributes(sourceSheetData, targetSheetData);
+
         var targetRowsByNumber = targetSheetData
             .Elements(workbookNs + "row")
             .Where(row => !string.IsNullOrWhiteSpace(row.Attribute("r")?.Value))
@@ -472,7 +475,6 @@ internal static class XlsxWorksheetMetadataPreserver
                 row => row.Attribute("r")!.Value,
                 StringComparer.OrdinalIgnoreCase);
 
-        var changed = false;
         foreach (var sourceRow in sourceSheetData.Elements(workbookNs + "row"))
         {
             var rowNumber = sourceRow.Attribute("r")?.Value;
