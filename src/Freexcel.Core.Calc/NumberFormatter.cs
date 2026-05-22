@@ -1323,7 +1323,12 @@ public static class NumberFormatter
     private static FormatResult FormatTextWithColor(string text, string[] sections)
     {
         if (sections.Length <= 3 || string.IsNullOrEmpty(sections[3]))
-            return new FormatResult(text);
+        {
+            var firstSection = ParseSection(sections[0]);
+            return firstSection.Format.Contains('@', StringComparison.Ordinal)
+                ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
+                : new FormatResult(text);
+        }
 
         var parsed = ParseSection(sections[3]);
         return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);

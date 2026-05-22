@@ -117,13 +117,8 @@ public partial class MainWindow
         var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
-        if (_inlineEditorChrome is not null)
-        {
-            System.Windows.Controls.Canvas.SetLeft(_inlineEditorChrome, layout.EditorRect.Left);
-            System.Windows.Controls.Canvas.SetTop(_inlineEditorChrome, layout.EditorRect.Top);
-            _inlineEditorChrome.Width = layout.EditorRect.Width;
-            _inlineEditorChrome.Height = layout.EditorRect.Height;
-        }
+        _inlineEditorChromeBaseRect = layout.EditorRect;
+        ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow.None);
 
         System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
         System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
@@ -151,17 +146,30 @@ public partial class MainWindow
 
     private void RefreshInlineEditorChromeBorder()
     {
-        if (_inlineEditorChrome is null || _inlineEditor is null)
+        if (_inlineEditorChrome is null || _inlineEditor is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
             return;
 
-        var textSpillsRight = DoesInlineEditorTextSpillRight(_inlineEditor, _inlineEditorChrome.Width);
-        _inlineEditorChrome.BorderThickness = FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(textSpillsRight);
+        var overflow = GetInlineEditorTextOverflow(_inlineEditor, chromeBaseRect.Width);
+        ApplyInlineEditorChromeFrame(overflow);
     }
 
-    private static bool DoesInlineEditorTextSpillRight(System.Windows.Controls.TextBox editor, double chromeWidth)
+    private void ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow overflow)
+    {
+        if (_inlineEditorChrome is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var chromeRect = FormulaInlineEditorLayoutPlanner.GetChromeRect(chromeBaseRect, overflow);
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditorChrome, chromeRect.Left);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditorChrome, chromeRect.Top);
+        _inlineEditorChrome.Width = chromeRect.Width;
+        _inlineEditorChrome.Height = chromeRect.Height;
+        _inlineEditorChrome.BorderThickness = FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(overflow);
+    }
+
+    private static FormulaInlineEditorOverflow GetInlineEditorTextOverflow(System.Windows.Controls.TextBox editor, double chromeWidth)
     {
         if (chromeWidth <= 0 || string.IsNullOrEmpty(editor.Text))
-            return false;
+            return FormulaInlineEditorOverflow.None;
 
         var typeface = new Typeface(editor.FontFamily, editor.FontStyle, editor.FontWeight, editor.FontStretch);
         var pixelsPerDip = VisualTreeHelper.GetDpi(editor).PixelsPerDip;
@@ -175,7 +183,10 @@ public partial class MainWindow
             pixelsPerDip);
 
         var innerWidth = Math.Max(0, chromeWidth - editor.Padding.Left - editor.Padding.Right);
-        return formattedText.WidthIncludingTrailingWhitespace > innerWidth;
+        var scrollOffset = Math.Max(0, editor.HorizontalOffset);
+        var spillsLeft = scrollOffset > 0;
+        var spillsRight = formattedText.WidthIncludingTrailingWhitespace - scrollOffset > innerWidth;
+        return new FormulaInlineEditorOverflow(spillsLeft, spillsRight);
     }
 
     private void HideInlineEditor(bool commit)
@@ -184,6 +195,7 @@ public partial class MainWindow
         _inlineEditor.Visibility = Visibility.Collapsed;
         if (_inlineEditorChrome is not null)
             _inlineEditorChrome.Visibility = Visibility.Collapsed;
+        _inlineEditorChromeBaseRect = null;
         SheetGrid.EditingCell = null;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();

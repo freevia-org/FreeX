@@ -82,6 +82,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
+            sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
             sheet.IsVeryHidden = xlSheet.Visibility == XLWorksheetVisibility.VeryHidden;
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)
@@ -103,6 +104,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     var cached = XlsxClosedXmlCellMapper.MapValue(xlCell);
                     if (cached is not BlankValue)
                         cell.Value = cached;
+                    else if (xmlLayout?.CachedFormulaErrors.TryGetValue(((uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber), out var cachedFormulaError) == true)
+                        cell.Value = cachedFormulaError;
                 }
                 else
                 {
@@ -175,187 +178,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     sheet.HiddenCols.Add(colNumber);
             }
 
-            if (sheetXmlLayout.TryGetValue(xlSheet.Name, out var layout))
-            {
-                sheet.HiddenRows.UnionWith(layout.HiddenRows);
-                sheet.HiddenCols.UnionWith(layout.HiddenCols);
-                sheet.IsProtected = layout.IsProtected;
-                sheet.ProtectionPassword = layout.ProtectionPasswordHash;
-                foreach (var range in layout.AllowEditRanges)
-                    sheet.AllowEditRanges.Add(new GridRange(
-                        new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
-                        new CellAddress(sheet.Id, range.End.Row, range.End.Col)));
-                sheet.ViewMode = layout.ViewMode;
-                sheet.ShowGridlines = layout.ShowGridlines;
-                sheet.ShowHeadings = layout.ShowHeadings;
-                sheet.ShowRulers = layout.ShowRulers;
-                sheet.ZoomPercent = layout.ZoomPercent;
-                sheet.ShowFormulas = layout.ShowFormulas;
-                sheet.BackgroundImage = layout.BackgroundImage;
-                sheet.CodeName = layout.CodeName;
-
-                foreach (var (rowNum, level) in layout.RowOutlineLevels)
-                    sheet.RowOutlineLevels[rowNum] = level;
-                foreach (var (colNum, level) in layout.ColOutlineLevels)
-                    sheet.ColOutlineLevels[colNum] = level;
-                sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
-                sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
-                foreach (var chartPart in layout.ChartParts)
-                {
-                    if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
-                    {
-                        chart.Name = chartPart.Name;
-                    XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
-                        ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
-                        sheet.Charts.Add(chart);
-                    }
-                }
-                foreach (var picturePart in layout.PictureParts)
-                {
-                    var picture = new PictureModel
-                    {
-                        Anchor = new CellAddress(
-                            sheet.Id,
-                            picturePart.Anchor?.FromRowZeroBased + 1 ?? 1,
-                            picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
-                        Kind = PictureKind.Image,
-                        Name = picturePart.Name,
-                        ImageBytes = picturePart.ImageBytes.ToArray(),
-                        ContentType = picturePart.ContentType,
-                        AltText = picturePart.AltText,
-                        CropLeft = picturePart.CropLeft,
-                        CropTop = picturePart.CropTop,
-                        CropRight = picturePart.CropRight,
-                        CropBottom = picturePart.CropBottom
-                    };
-                    XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
-                    sheet.Pictures.Add(picture);
-                }
-                foreach (var textBoxPart in layout.TextBoxParts)
-                {
-                    var textBox = new TextBoxModel
-                    {
-                        Anchor = new CellAddress(
-                            sheet.Id,
-                            textBoxPart.Anchor?.FromRowZeroBased + 1 ?? 1,
-                            textBoxPart.Anchor?.FromColumnZeroBased + 1 ?? 1),
-                        Text = textBoxPart.Text,
-                        Name = textBoxPart.Name,
-                        AltText = textBoxPart.AltText,
-                        RotationDegrees = textBoxPart.RotationDegrees,
-                        FillColor = textBoxPart.FillColor,
-                        OutlineColor = textBoxPart.OutlineColor
-                    };
-                XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
-                    sheet.TextBoxes.Add(textBox);
-                }
-                foreach (var shapePart in layout.ShapeParts)
-                {
-                    var shape = new DrawingShapeModel
-                    {
-                        Anchor = new CellAddress(
-                            sheet.Id,
-                            shapePart.Anchor?.FromRowZeroBased + 1 ?? 1,
-                            shapePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
-                        Kind = shapePart.Kind,
-                        Name = shapePart.Name,
-                        AltText = shapePart.AltText,
-                        RotationDegrees = shapePart.RotationDegrees,
-                        FillColor = shapePart.FillColor,
-                        OutlineColor = shapePart.OutlineColor,
-                        GradientFillEndColor = shapePart.GradientFillEndColor,
-                        HasShadowEffect = shapePart.HasShadowEffect
-                    };
-                XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
-                    sheet.DrawingShapes.Add(shape);
-                }
-                foreach (var sparkline in layout.Sparklines)
-                {
-                    sheet.Sparklines.Add(new SparklineModel
-                    {
-                        DataRange = new GridRange(
-                            new CellAddress(sheet.Id, sparkline.DataRange.Start.Row, sparkline.DataRange.Start.Col),
-                            new CellAddress(sheet.Id, sparkline.DataRange.End.Row, sparkline.DataRange.End.Col)),
-                        Location = new CellAddress(sheet.Id, sparkline.Location.Row, sparkline.Location.Col),
-                        Kind = sparkline.Kind
-                    });
-                }
-                foreach (var conditionalFormat in layout.AdvancedConditionalFormats)
-                    sheet.ConditionalFormats.Add(RemapConditionalFormat(conditionalFormat, sheet.Id));
-                foreach (var ignoredErrorAddress in layout.IgnoredErrors.ExpandedCells)
-                {
-                    var address = new CellAddress(sheet.Id, ignoredErrorAddress.Row, ignoredErrorAddress.Col);
-                    var cell = sheet.GetCell(address);
-                    if (cell is null)
-                    {
-                        cell = Cell.FromValue(BlankValue.Instance);
-                        sheet.SetCell(address, cell);
-                    }
-
-                    cell.IgnoreFormulaError = true;
-                }
-                if (layout.IgnoredErrors.ExistingCellOnlyRanges.Count > 0)
-                {
-                    foreach (var (address, cell) in sheet.GetUsedCells())
-                    {
-                        var comparableAddress = new CellAddress(
-                            layout.IgnoredErrors.ExistingCellOnlyRanges[0].Start.Sheet,
-                            address.Row,
-                            address.Col);
-                        if (layout.IgnoredErrors.ExistingCellOnlyRanges.Any(range => range.Contains(comparableAddress)))
-                            cell.IgnoreFormulaError = true;
-                    }
-                }
-                foreach (var watchedCell in layout.CellWatches)
-                {
-                    var address = new CellAddress(sheet.Id, watchedCell.Row, watchedCell.Col);
-                    if (!workbook.WatchedCells.Contains(address))
-                        workbook.WatchedCells.Add(address);
-                }
-                foreach (var scenario in layout.Scenarios)
-                {
-                    var remappedScenario = new WorkbookScenario(
-                        scenario.Name,
-                        scenario.ChangingCells
-                            .Select(change => new ScenarioCellValue(
-                                new CellAddress(sheet.Id, change.Address.Row, change.Address.Col),
-                                change.Value))
-                            .ToList());
-
-                    if (loadedScenarioNames.Add(remappedScenario.Name))
-                    {
-                        workbook.Scenarios.Add(remappedScenario);
-                        continue;
-                    }
-
-                    var existingIndex = workbook.Scenarios.FindIndex(existing =>
-                        string.Equals(existing.Name, remappedScenario.Name, StringComparison.OrdinalIgnoreCase));
-                    if (existingIndex >= 0)
-                    {
-                        workbook.Scenarios[existingIndex] = workbook.Scenarios[existingIndex] with
-                        {
-                            ChangingCells = workbook.Scenarios[existingIndex].ChangingCells
-                                .Concat(remappedScenario.ChangingCells)
-                                .Distinct()
-                                .ToList()
-                        };
-                    }
-                }
-                foreach (var customView in layout.CustomViews)
-                {
-                    if (!customViewStatesById.TryGetValue(customView.Id, out var states))
-                    {
-                        states = [];
-                        customViewStatesById[customView.Id] = states;
-                    }
-
-                    states.Add(customView.State with { SheetName = sheet.Name });
-                }
-                foreach (var property in layout.CustomProperties)
-                    sheet.CustomProperties.Add(property);
-                sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
-                sheet.PhoneticProperties = layout.PhoneticProperties;
-            }
+            if (xmlLayout is { } layout)
+                ApplySheetXmlLayout(workbook, sheet, layout, loadedScenarioNames, customViewStatesById);
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
                 foreach (var pivotTable in pivotTables)
@@ -371,28 +195,28 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 }
             }
 
-            if (layout?.PaneState is "frozen" or "frozenSplit")
+            if (xmlLayout?.PaneState is "frozen" or "frozenSplit")
             {
-                sheet.FrozenRows = layout.PaneRowSplit ?? 0;
-                sheet.FrozenCols = layout.PaneColumnSplit ?? 0;
+                sheet.FrozenRows = xmlLayout.PaneRowSplit ?? 0;
+                sheet.FrozenCols = xmlLayout.PaneColumnSplit ?? 0;
             }
             else
             {
                 var splitRow = xlSheet.SheetView.SplitRow > 0
                     ? (uint)xlSheet.SheetView.SplitRow
-                    : layout?.PaneRowSplit;
+                    : xmlLayout?.PaneRowSplit;
                 var splitColumn = xlSheet.SheetView.SplitColumn > 0
                     ? (uint)xlSheet.SheetView.SplitColumn
-                    : layout?.PaneColumnSplit;
+                    : xmlLayout?.PaneColumnSplit;
                 if (splitRow > 0)
                     sheet.SplitRow = splitRow;
                 if (splitColumn > 0)
                     sheet.SplitColumn = splitColumn;
             }
-            sheet.ViewTopRow = layout?.ViewTopRow;
-            sheet.ViewLeftCol = layout?.ViewLeftCol;
-            sheet.ActiveRow = layout?.ActiveRow;
-            sheet.ActiveCol = layout?.ActiveCol;
+            sheet.ViewTopRow = xmlLayout?.ViewTopRow;
+            sheet.ViewLeftCol = xmlLayout?.ViewLeftCol;
+            sheet.ActiveRow = xmlLayout?.ActiveRow;
+            sheet.ActiveCol = xmlLayout?.ActiveCol;
 
             try { XlsxWorksheetPageSetupMapper.LoadPrintArea(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
@@ -487,8 +311,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             // Load data validation rules (best-effort)
             try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] DV load failed: {ex.Message}"); }
-            if (layout is not null)
-                XlsxDataValidationNativeMetadataMapper.Apply(sheet, layout.DataValidationNativeMetadata);
+            if (xmlLayout is not null)
+                XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
 
             // Load merged regions (best-effort)
             try { LoadMergedRegions(xlSheet, sheet); }
@@ -791,160 +615,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         using var packageStream = new MemoryStream();
         xlWorkbook.SaveAs(packageStream);
-
-        if (workbook.IsStructureProtected)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveProtection(packageStream, workbook);
-        }
-
-        packageStream.Position = 0;
-        XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);
-
-        if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetCalculationPropertyMapper.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetPhoneticPropertyMapper.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
-        {
-            packageStream.Position = 0;
-            XlsxAllowEditRangeMapper.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.DataValidations.Any(XlsxDataValidationNativeMetadataMapper.HasNativeMetadata)))
-        {
-            packageStream.Position = 0;
-            XlsxDataValidationNativeMetadataMapper.Save(packageStream, workbook);
-        }
-
-        if (XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(workbook))
-        {
-            packageStream.Position = 0;
-            XlsxAdvancedConditionalFormatWriter.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.Sparklines.Count > 0))
-        {
-            packageStream.Position = 0;
-            XlsxSparklineMapper.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.BackgroundImage is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetViewWriter.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => !string.IsNullOrWhiteSpace(sheet.CodeName)))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetCodeNameWriter.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.GetUsedCells().Any(pair => pair.Value.IgnoreFormulaError)))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook);
-        }
-
-        if (workbook.WatchedCells.Count > 0)
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetDiagnosticsMapper.SaveCellWatches(packageStream, workbook);
-        }
-
-        if (workbook.Scenarios.Count > 0)
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetScenarioMapper.Save(packageStream, workbook);
-        }
-
-        if (workbook.CustomViews.Count > 0)
-        {
-            packageStream.Position = 0;
-            XlsxCustomViewMapper.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.CustomProperties.Count > 0))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetCustomPropertyMapper.Save(packageStream, workbook);
-        }
-
-        packageStream.Position = 0;
-        XlsxWorkbookThemeWriter.Save(packageStream, workbook.Theme);
-
-        if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetChartWriter.Save(packageStream, workbook, XlsxChartXmlWriter.IsSupportedXlsxChart, XlsxChartXmlWriter.ToChartXml);
-        }
-
-        if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetDrawingObjectWriter.Save(packageStream, workbook);
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.StructuredTables.Count > 0))
-        {
-            packageStream.Position = 0;
-            XlsxStructuredTableWriter.Save(packageStream, workbook);
-        }
-
-        if (workbook.PivotTableStyles.Count > 0)
-        {
-            packageStream.Position = 0;
-            XlsxSlicerTimelineWriter.SavePivotTableStyles(packageStream, workbook);
-        }
-
-        IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
-        if (workbook.NumberFormatCatalog.Count > 0 ||
-            workbook.Sheets.SelectMany(sheet => sheet.PivotTables)
-                .SelectMany(pivot => pivot.DataFields)
-                .Any(field => field.NumberFormatId is >= 164 && !string.IsNullOrWhiteSpace(field.NumberFormatCode)))
-        {
-            packageStream.Position = 0;
-            numberFormatIdMap = XlsxNumberFormatCatalogWriter.Save(packageStream, workbook);
-        }
-
-        if (!SourcePackages.TryGetValue(workbook, out _) &&
-            workbook.PivotCaches.Count > 0 &&
-            workbook.Sheets.Any(sheet => sheet.PivotTables.Count > 0))
-        {
-            packageStream.Position = 0;
-            XlsxPivotTableWriter.Save(packageStream, workbook, numberFormatIdMap);
-        }
-
-        if (!SourcePackages.TryGetValue(workbook, out _) &&
-            (workbook.Slicers.Count > 0 || workbook.Timelines.Count > 0))
-        {
-            packageStream.Position = 0;
-            XlsxSlicerTimelineWriter.SaveSlicerTimelines(packageStream, workbook);
-        }
-
-        packageStream.Position = 0;
-        PreserveSourcePackageParts(workbook, packageStream);
-
-        if (numberFormatIdMap.Any(pair => pair.Key != pair.Value))
-        {
-            packageStream.Position = 0;
-            XlsxNumberFormatCatalogWriter.RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
-        }
+        ApplyPackagePostProcessing(workbook, packageStream);
 
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
