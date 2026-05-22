@@ -3372,7 +3372,8 @@ public partial class FileAdapterSmokeTests
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.HeaderMargin = 0.35;
         sheet.FooterMargin = 0.45;
-        sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
+        const string friendlyTokens = "&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &[Picture]";
+        sheet.PageHeader = new WorksheetHeaderFooter("Left header", friendlyTokens, "Right header");
         sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Page &[Page] of &[Pages]", "Right footer");
         sheet.FirstPageHeader = new WorksheetHeaderFooter("First header left", "First header center", "First header right");
         sheet.FirstPageFooter = new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right");
@@ -3400,6 +3401,22 @@ public partial class FileAdapterSmokeTests
         adapter.Save(workbook, ms);
         ms.Position = 0;
 
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var sheetXml = zip.GetEntry("xl/worksheets/sheet1.xml");
+            sheetXml.Should().NotBeNull();
+            using var reader = new StreamReader(sheetXml.Open());
+            var xml = XDocument.Parse(reader.ReadToEnd());
+            XNamespace main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            xml.Descendants(main + "oddHeader")
+                .Single()
+                .Value
+                .Should()
+                .Contain("&C&D &T &F &Z &A &P/&N &G");
+        }
+
+        ms.Position = 0;
+
         var loaded = adapter.Load(ms);
 
         var loadedSheet = loaded.GetSheetAt(0);
@@ -3407,7 +3424,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
         loadedSheet.HeaderMargin.Should().Be(0.35);
         loadedSheet.FooterMargin.Should().Be(0.45);
-        loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
+        loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", friendlyTokens, "Right header"));
         loadedSheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Page &[Page] of &[Pages]", "Right footer"));
         loadedSheet.FirstPageHeader.Should().Be(new WorksheetHeaderFooter("First header left", "First header center", "First header right"));
         loadedSheet.FirstPageFooter.Should().Be(new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right"));
@@ -3429,6 +3446,25 @@ public partial class FileAdapterSmokeTests
         loadedSheet.RowPageBreaks.Should().Contain(20u);
         loadedSheet.ColumnPageBreaks.Should().Contain(4u);
         loadedSheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 1));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ConvertsExcelHeaderFooterShortTokens()
+    {
+        using var xl = new XLWorkbook();
+        var xlSheet = xl.AddWorksheet("Summary");
+        xlSheet.Cell(1, 1).Value = "x";
+        xlSheet.PageSetup.Header.Center.AddText("&D &T &F &Z &A &P/&N &G", XLHFOccurrence.AllPages);
+
+        var ms = new MemoryStream();
+        xl.SaveAs(ms);
+        ms.Position = 0;
+
+        var loaded = new XlsxFileAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).PageHeader.Center
+            .Should()
+            .Be("&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &[Picture]");
     }
 
     [Fact]
