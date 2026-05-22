@@ -47,6 +47,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<WorkbookScenario> Scenarios,
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
+        Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         string? CodeName);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
@@ -231,6 +232,7 @@ public sealed partial class XlsxFileAdapter
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
         var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
+        var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -274,8 +276,47 @@ public sealed partial class XlsxFileAdapter
             scenarios,
             customViews,
             customProperties,
+            cachedFormulaErrors,
             codeName);
     }
+
+    private static Dictionary<(uint Row, uint Col), ErrorValue> ReadCachedFormulaErrors(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var result = new Dictionary<(uint Row, uint Col), ErrorValue>();
+
+        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
+        {
+            if (!string.Equals(cell.Attribute("t")?.Value, "e", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (cell.Element(worksheetNs + "f") is null)
+                continue;
+            var rawValue = cell.Element(worksheetNs + "v")?.Value;
+            if (string.IsNullOrWhiteSpace(rawValue))
+                continue;
+            var reference = cell.Attribute("r")?.Value;
+            if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
+                continue;
+
+            result[(address.Row, address.Col)] = MapCachedFormulaError(rawValue);
+        }
+
+        return result;
+    }
+
+    private static ErrorValue MapCachedFormulaError(string rawValue) =>
+        rawValue.ToUpperInvariant() switch
+        {
+            "#NULL!" => ErrorValue.Null,
+            "#DIV/0!" => ErrorValue.DivByZero,
+            "#VALUE!" => ErrorValue.Value,
+            "#REF!" => ErrorValue.Ref,
+            "#NAME?" => ErrorValue.Name,
+            "#NUM!" => ErrorValue.Num,
+            "#N/A" => ErrorValue.NA,
+            "#SPILL!" => ErrorValue.Spill,
+            "#CALC!" => ErrorValue.Calc,
+            _ => new ErrorValue(rawValue)
+        };
 
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
     {

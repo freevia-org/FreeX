@@ -4987,19 +4987,19 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Take_ZeroRows_ReturnsValueError()
+    public void Take_ZeroRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]
-    public void Drop_AllRows_ReturnsValueError()
+    public void Drop_AllRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=DROP(A1:A1,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A1,1)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]
