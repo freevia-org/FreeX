@@ -1185,6 +1185,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenu_UsesRowAndColumnSelectionTargetKinds()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
+        source.Should().Contain("SelectionRangeService.IsWholeRowSelection(selectedRange)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.RowSelection");
+        source.Should().Contain("SelectionRangeService.IsWholeColumnSelection(selectedRange)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.ColumnSelection");
+    }
+
+    [Fact]
     public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
     {
         var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
