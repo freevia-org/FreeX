@@ -77,7 +77,12 @@ public partial class MainWindow
 
         var edits = result.SplitMode == TextToColumnsSplitMode.FixedWidth
             ? TextToColumnsPlanner.BuildFixedWidthEdits(sheet, range, result.FixedWidthBreakPositions ?? [])
-            : TextToColumnsPlanner.BuildEdits(sheet, range, result.Delimiters);
+            : TextToColumnsPlanner.BuildEdits(
+                sheet,
+                range,
+                result.Delimiters,
+                result.TextQualifierChar,
+                result.TreatConsecutiveDelimitersAsOne);
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1

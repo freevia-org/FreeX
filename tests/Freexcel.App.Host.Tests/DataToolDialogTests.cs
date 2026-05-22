@@ -59,6 +59,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Choose the delimiters that separate your selected text.");
         source.Should().Contain("Header = \"Delimiters\"");
         source.Should().Contain("Header = \"Fixed width\"");
+        source.Should().Contain("Text _qualifier:");
+        source.Should().Contain("_Treat consecutive delimiters as one");
         source.Should().NotContain("_Destination:");
     }
 
@@ -81,7 +83,9 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_previewGrid");
         source.Should().Contain("RefreshPreview");
         source.Should().Contain("TextToColumnsPlanner.SplitText");
-        source.Should().NotContain("_textQualifierBox");
+        source.Should().Contain("_textQualifierBox");
+        source.Should().Contain("SelectedTextQualifier");
+        source.Should().Contain("TreatConsecutiveDelimitersAsOne");
         source.Should().NotContain("_destinationBox");
     }
 
@@ -110,6 +114,20 @@ public sealed class DataToolDialogTests
         var result = TextToColumnsDialog.CreateFixedWidthResult("4,8");
         result.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
         result.FixedWidthBreakPositions.Should().Equal(4, 8);
+    }
+
+    [Fact]
+    public void TextToColumnsResult_CapturesTextQualifierAndConsecutiveDelimiterChoice()
+    {
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Comma],
+            textQualifier: TextToColumnsTextQualifier.SingleQuote,
+            treatConsecutiveDelimitersAsOne: true);
+
+        result.Delimiters.Should().Be(",");
+        result.TextQualifier.Should().Be(TextToColumnsTextQualifier.SingleQuote);
+        result.TextQualifierChar.Should().Be('\'');
+        result.TreatConsecutiveDelimitersAsOne.Should().BeTrue();
     }
 
     [Fact]
