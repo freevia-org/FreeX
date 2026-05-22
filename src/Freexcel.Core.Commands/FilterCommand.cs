@@ -149,6 +149,129 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
     }
 }
 
+public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly GridRange _range;
+    private readonly uint _filterColOffset;
+    private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousFilterHiddenRows;
+
+    public string Label => "Filter by No Fill";
+
+    public CellNoFillColorFilterCommand(
+        SheetId sheetId,
+        GridRange range,
+        uint filterColOffset)
+    {
+        _sheetId = sheetId;
+        _range = range;
+        _filterColOffset = filterColOffset;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _previousHiddenRows = [.. sheet.HiddenRows];
+        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+
+        var filterCol = _range.Start.Col + _filterColOffset;
+        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+            sheet.FilterHiddenRows.Remove(row);
+
+        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        {
+            var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
+                sheet.GetStyleOnly(row, filterCol) ??
+                StyleId.Default;
+            var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
+            if (fillColor is not null)
+                sheet.FilterHiddenRows.Add(row);
+        }
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousHiddenRows is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.HiddenRows.Clear();
+        sheet.HiddenRows.UnionWith(_previousHiddenRows);
+        sheet.FilterHiddenRows.Clear();
+        if (_previousFilterHiddenRows is not null)
+            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+    }
+}
+
+public sealed class CellFontColorFilterCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly GridRange _range;
+    private readonly uint _filterColOffset;
+    private readonly CellColor _fontColor;
+    private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousFilterHiddenRows;
+
+    public string Label => "Filter by Font Color";
+
+    public CellFontColorFilterCommand(
+        SheetId sheetId,
+        GridRange range,
+        uint filterColOffset,
+        CellColor fontColor)
+    {
+        _sheetId = sheetId;
+        _range = range;
+        _filterColOffset = filterColOffset;
+        _fontColor = fontColor;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _previousHiddenRows = [.. sheet.HiddenRows];
+        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+
+        var filterCol = _range.Start.Col + _filterColOffset;
+        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+            sheet.FilterHiddenRows.Remove(row);
+
+        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        {
+            var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
+                sheet.GetStyleOnly(row, filterCol) ??
+                StyleId.Default;
+            var fontColor = ctx.Workbook.GetStyle(styleId).FontColor;
+            if (fontColor != _fontColor)
+                sheet.FilterHiddenRows.Add(row);
+        }
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousHiddenRows is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.HiddenRows.Clear();
+        sheet.HiddenRows.UnionWith(_previousHiddenRows);
+        sheet.FilterHiddenRows.Clear();
+        if (_previousFilterHiddenRows is not null)
+            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+    }
+}
+
 internal static class FilterValueFormatter
 {
     public static string ToText(ScalarValue value) => value switch

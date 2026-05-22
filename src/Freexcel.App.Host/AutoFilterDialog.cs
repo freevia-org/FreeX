@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -22,7 +24,9 @@ public sealed record AutoFilterDialogResult(
     IReadOnlyList<string> SelectedValues,
     string SearchText,
     string CriteriaText,
-    CellColor? ColorFilter = null);
+    AutoFilterColorFilter? ColorFilter = null);
+
+public sealed record AutoFilterColorFilter(AutoFilterColorFilterKind Kind, CellColor? Color);
 
 public sealed record AutoFilterCriteriaOption(string Label, string CriteriaPrefix, bool RequiresValue = true);
 
@@ -61,7 +65,8 @@ public sealed class AutoFilterDialog : Window
     private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
     private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
     private readonly Button _clearFilterButton = new() { Content = "_Clear Filter From", Margin = new Thickness(0, 8, 0, 0) };
-    private readonly Button _filterByColorButton = new() { Content = "Filter by _Color", Visibility = Visibility.Collapsed };
+    private readonly GroupBox _filterByColorGroup = new() { Header = "Filter by Color", Visibility = Visibility.Collapsed };
+    private readonly StackPanel _filterByColorPanel = new();
     private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
     private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
     private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };
@@ -72,7 +77,7 @@ public sealed class AutoFilterDialog : Window
         Padding = new Thickness(0),
         Visibility = Visibility.Collapsed
     };
-    private CellColor? _selectedColorFilter;
+    private AutoFilterColorFilter? _selectedColorFilter;
 
     public AutoFilterDialogResult Result { get; private set; }
 
@@ -116,8 +121,9 @@ public sealed class AutoFilterDialog : Window
             _customFilterGroup.Visibility = Visibility.Visible;
         }
 
-        if (HasFilterByColorEntry(menuPlan))
-            _filterByColorButton.Visibility = Visibility.Visible;
+        var colorOptions = menuPlan.ColorOptions ?? [];
+        if (colorOptions.Count > 0)
+            PopulateColorChoices(colorOptions);
     }
 
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)
@@ -150,9 +156,9 @@ public sealed class AutoFilterDialog : Window
             ReplaceAllItems(SelectAll(_allItems));
         };
         stack.Children.Add(_clearFilterButton);
-        _filterByColorButton.Margin = new Thickness(0, 8, 0, 0);
-        _filterByColorButton.Click += FilterByColorButton_Click;
-        stack.Children.Add(_filterByColorButton);
+        _filterByColorGroup.Content = _filterByColorPanel;
+        _filterByColorGroup.Margin = new Thickness(0, 8, 0, 0);
+        stack.Children.Add(_filterByColorGroup);
         foreach (var filterButton in new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton })
         {
             filterButton.Margin = new Thickness(0, 8, 0, 0);
@@ -312,7 +318,7 @@ public sealed class AutoFilterDialog : Window
         IEnumerable<AutoFilterDialogItem> items,
         string? searchText,
         string? criteriaText,
-        CellColor? colorFilter = null)
+        AutoFilterColorFilter? colorFilter = null)
     {
         var selectedValues = items
             .Where(item => item.IsSelected)
@@ -476,19 +482,64 @@ public sealed class AutoFilterDialog : Window
             _criteriaValueBox2.IsEnabled = secondOption.RequiresValue;
     }
 
-    private void FilterByColorButton_Click(object sender, RoutedEventArgs e)
+    private void PopulateColorChoices(IReadOnlyList<AutoFilterColorOption> colorOptions)
     {
-        var dialog = new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)
+        _filterByColorPanel.Children.Clear();
+        foreach (var section in colorOptions.GroupBy(option => option.Kind == AutoFilterColorFilterKind.FontColor ? "Font Color" : "Cell Color"))
         {
-            Owner = this
-        };
-        if (dialog.ShowDialog() != true)
-            return;
+            _filterByColorPanel.Children.Add(new TextBlock
+            {
+                Text = section.Key,
+                Margin = new Thickness(0, _filterByColorPanel.Children.Count == 0 ? 0 : 8, 0, 4)
+            });
 
-        _selectedColorFilter = dialog.SelectedColor;
-        _filterByColorButton.ToolTip = _selectedColorFilter is { } color
-            ? $"Filter color {ColorInputParser.FormatHexColor(color)}"
-            : "No color filter";
+            var swatches = new WrapPanel();
+            foreach (var option in section)
+                swatches.Children.Add(CreateColorChoiceButton(option));
+            _filterByColorPanel.Children.Add(swatches);
+        }
+
+        _filterByColorGroup.Visibility = Visibility.Visible;
+    }
+
+    private Button CreateColorChoiceButton(AutoFilterColorOption option)
+    {
+        var colorFilter = new AutoFilterColorFilter(option.Kind, option.Color);
+        var button = new Button
+        {
+            Width = 92,
+            Height = 24,
+            Margin = new Thickness(0, 0, 6, 6),
+            ToolTip = option.Label
+        };
+
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(CreateColorSwatch(option));
+        content.Children.Add(new TextBlock
+        {
+            Text = option.Kind == AutoFilterColorFilterKind.NoFill ? "No Fill" : ColorInputParser.FormatHexColor(option.Color!.Value),
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        button.Content = content;
+        button.Click += (_, _) => _selectedColorFilter = colorFilter;
+        return button;
+    }
+
+    private static Rectangle CreateColorSwatch(AutoFilterColorOption option)
+    {
+        var fill = option.Color is { } color
+            ? new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))
+            : Brushes.White;
+        return new Rectangle
+        {
+            Width = 14,
+            Height = 14,
+            Fill = fill,
+            Stroke = Brushes.Gray,
+            StrokeThickness = 1,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        };
     }
 
     private static DataTemplate CreateItemTemplate()

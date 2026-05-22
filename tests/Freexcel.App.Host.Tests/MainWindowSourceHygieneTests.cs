@@ -1357,7 +1357,7 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
         var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
-        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)");
+        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
         dialog.Should().Contain("AutoFilterMenuPlan menuPlan");
         dialog.Should().Contain("CriteriaSuggestions");
