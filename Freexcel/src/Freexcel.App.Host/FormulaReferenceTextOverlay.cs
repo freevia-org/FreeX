@@ -12,12 +12,20 @@ public static class FormulaReferenceTextOverlay
         string text,
         IReadOnlyList<FormulaReferenceHighlight> highlights,
         IReadOnlyList<Brush> brushes,
-        Brush normalBrush)
+        Brush normalBrush,
+        bool keepFormulaVisibleWithoutHighlights = false)
     {
         overlay.Inlines.Clear();
 
         if (!text.StartsWith("=", StringComparison.Ordinal) || highlights.Count == 0)
         {
+            if (keepFormulaVisibleWithoutHighlights && text.StartsWith("=", StringComparison.Ordinal))
+            {
+                overlay.Inlines.Add(CreateRun(text, normalBrush));
+                overlay.Visibility = Visibility.Visible;
+                return;
+            }
+
             overlay.Visibility = Visibility.Collapsed;
             return;
         }
