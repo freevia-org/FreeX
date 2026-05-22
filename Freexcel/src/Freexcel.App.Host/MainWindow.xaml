@@ -1629,7 +1629,7 @@
                                         </Button.ContextMenu>
                                     </Button>
                                 </StackPanel>
-                                <StackPanel Margin="1,0">
+                                <StackPanel Margin="1,0" VerticalAlignment="Center">
                                     <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
                                             local:RibbonTooltip.Title="Shape Gradient"
                                             local:RibbonTooltip.KeyTip="G"
@@ -2369,19 +2369,19 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
-                                <CheckBox x:Name="ViewGridlinesChk" Content="Gridlines"              Margin="4,3" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
+                                <CheckBox x:Name="ViewGridlinesChk" Content="Gridlines"              Margin="4,1" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
                                           local:RibbonTooltip.Title="Gridlines"
                                           local:RibbonTooltip.KeyTip="G"
                                           local:RibbonTooltip.Description="Show or hide worksheet gridlines."/>
-                                <CheckBox x:Name="ViewHeadersChk"   Content="Row and Column Headers" Margin="4,3" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"
+                                <CheckBox x:Name="ViewHeadersChk"   Content="Row and Column Headers" Margin="4,1" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"
                                           local:RibbonTooltip.Title="Headings"
                                           local:RibbonTooltip.KeyTip="H"
                                           local:RibbonTooltip.Description="Show or hide row numbers and column letters."/>
-                                <CheckBox x:Name="ViewRulerChk"     Content="Ruler"                  Margin="4,3" IsChecked="True" Checked="ViewRulerChk_Changed"     Unchecked="ViewRulerChk_Changed"
+                                <CheckBox x:Name="ViewRulerChk"     Content="Ruler"                  Margin="4,1" IsChecked="True" Checked="ViewRulerChk_Changed"     Unchecked="ViewRulerChk_Changed"
                                           local:RibbonTooltip.Title="Ruler"
                                           local:RibbonTooltip.KeyTip="R"
                                           local:RibbonTooltip.Description="Show or hide rulers in Page Layout view."/>
-                                <CheckBox x:Name="ViewFormulaBarChk" Content="Formula Bar" Margin="4,3" IsChecked="True" Checked="ViewFormulaBarChk_Changed" Unchecked="ViewFormulaBarChk_Changed"
+                                <CheckBox x:Name="ViewFormulaBarChk" Content="Formula Bar" Margin="4,1" IsChecked="True" Checked="ViewFormulaBarChk_Changed" Unchecked="ViewFormulaBarChk_Changed"
                                           local:RibbonTooltip.Title="Formula Bar"
                                           local:RibbonTooltip.KeyTip="FB"
                                           local:RibbonTooltip.Description="Show or hide the formula bar."/>
