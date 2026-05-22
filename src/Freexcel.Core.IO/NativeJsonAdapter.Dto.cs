@@ -48,6 +48,8 @@ public sealed partial class NativeJsonAdapter
         public string? Name { get; set; }
         public string? SheetName { get; set; }
         public string? Range { get; set; }
+        public string? Scope { get; set; }
+        public string? Comment { get; set; }
     }
 
     private class WatchedCellDto
