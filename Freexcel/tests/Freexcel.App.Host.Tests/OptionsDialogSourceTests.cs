@@ -106,6 +106,17 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void Viewport_MapsObjectPlaceholderOptionToGridDisplayMode()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+
+        source.Should().Contain("SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch");
+        source.Should().Contain("FreexcelObjectDisplay.Placeholders => Freexcel.App.UI.GridObjectDisplayMode.Placeholders");
+        source.Should().Contain("FreexcelObjectDisplay.Nothing => Freexcel.App.UI.GridObjectDisplayMode.Nothing");
+        source.Should().Contain("var keepObjectData = _options.ObjectsDisplay != FreexcelObjectDisplay.Nothing");
+    }
+
+    [Fact]
     public void OptionsDialog_AppliesWorksheetViewOptionsThroughUndoableCommand()
     {
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));

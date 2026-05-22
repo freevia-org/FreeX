@@ -9,6 +9,13 @@ using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
 
 namespace Freexcel.App.UI;
 
+public enum GridObjectDisplayMode
+{
+    All,
+    Placeholders,
+    Nothing
+}
+
 /// <summary>
 /// A high-performance, virtualized spreadsheet grid control.
 /// Renders only the visible portion of the workbook using low-level DrawingContext.
@@ -292,6 +299,15 @@ public partial class GridView : FrameworkElement
     {
         get => (IReadOnlyList<PictureModel>?)GetValue(PicturesProperty);
         set => SetValue(PicturesProperty, value);
+    }
+
+    public static readonly DependencyProperty ObjectDisplayModeProperty =
+        DependencyProperty.Register(nameof(ObjectDisplayMode), typeof(GridObjectDisplayMode), typeof(GridView),
+            new FrameworkPropertyMetadata(GridObjectDisplayMode.All, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridObjectDisplayMode ObjectDisplayMode
+    {
+        get => (GridObjectDisplayMode)GetValue(ObjectDisplayModeProperty);
+        set => SetValue(ObjectDisplayModeProperty, value);
     }
 
     public static readonly DependencyProperty WorksheetBackgroundProperty =
@@ -612,10 +628,17 @@ public partial class GridView : FrameworkElement
         RenderSplitDivider(dc);
         RenderSplitPaneScrollbarChrome(dc);
         RenderResizeLine(dc);
-        RenderCharts(dc);
-        RenderDrawingShapes(dc);
-        RenderPictures(dc);
-        RenderTextBoxes(dc);
+        if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)
+        {
+            RenderObjectPlaceholders(dc);
+        }
+        else if (ObjectDisplayMode == GridObjectDisplayMode.All)
+        {
+            RenderCharts(dc);
+            RenderDrawingShapes(dc);
+            RenderPictures(dc);
+            RenderTextBoxes(dc);
+        }
 
         dc.Pop();
     }
