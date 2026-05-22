@@ -226,7 +226,7 @@ public partial class MainWindow
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage, Sheet sheet, GridRange range)
     {
-        var matches = GoToSpecialService.Find(sheet, range, kind);
+        var matches = GoToSpecialService.Find(sheet, range, kind, range.Start);
         if (matches.Count == 0)
         {
             if (showEmptyMessage)
