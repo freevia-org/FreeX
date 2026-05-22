@@ -194,6 +194,33 @@ public sealed class ExcelCachedFormulaFixtureTests
                       <c r="A18"><v>1</v></c>
                       <c r="D18" t="e"><f>DROP(A18:A18,1)</f><v>#CALC!</v></c>
                     </row>
+                    <row r="19">
+                      <c r="A19"><v>1</v></c>
+                      <c r="B19"><v>2</v></c>
+                      <c r="C19"><v>3</v></c>
+                      <c r="D19"><f>SUM(CHOOSECOLS(A19:C20,HSTACK(1,3)))</f><v>14</v></c>
+                    </row>
+                    <row r="20">
+                      <c r="A20"><v>4</v></c>
+                      <c r="B20"><v>5</v></c>
+                      <c r="C20"><v>6</v></c>
+                    </row>
+                    <row r="21">
+                      <c r="A21"><v>10</v></c>
+                      <c r="B21"><v>20</v></c>
+                      <c r="D21"><f>SUM(CHOOSEROWS(A21:B23,VSTACK(3,1)))</f><v>140</v></c>
+                    </row>
+                    <row r="22">
+                      <c r="A22"><v>30</v></c>
+                      <c r="B22"><v>40</v></c>
+                    </row>
+                    <row r="23">
+                      <c r="A23"><v>50</v></c>
+                      <c r="B23"><v>60</v></c>
+                    </row>
+                    <row r="24">
+                      <c r="D24" t="e"><f>DEC2BIN(10,NA())</f><v>#N/A</v></c>
+                    </row>
                   </sheetData>
                 </worksheet>
                 """);
