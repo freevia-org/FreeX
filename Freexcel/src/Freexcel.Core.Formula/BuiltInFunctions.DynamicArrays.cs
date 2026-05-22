@@ -450,21 +450,49 @@ public static partial class BuiltInFunctions
                 return false;
             }
 
-            double raw = ToNumber(args[i]);
-            if (!double.IsFinite(raw)) return false;
+            if (args[i] is RangeValue range)
+            {
+                for (int r = 0; r < range.RowCount; r++)
+                    for (int c = 0; c < range.ColCount; c++)
+                        if (!TryAddChoiceIndex(range.Cells[r, c], dimensionLength, indexes, out error))
+                            return false;
 
-            int requested = (int)raw;
-            if (requested == 0) return false;
+                continue;
+            }
 
-            int zeroBased = requested > 0
-                ? requested - 1
-                : dimensionLength + requested;
-            if (zeroBased < 0 || zeroBased >= dimensionLength) return false;
-
-            indexes.Add(zeroBased);
+            if (!TryAddChoiceIndex(args[i], dimensionLength, indexes, out error))
+                return false;
         }
 
         return indexes.Count > 0;
+    }
+
+    private static bool TryAddChoiceIndex(
+        ScalarValue value,
+        int dimensionLength,
+        List<int> indexes,
+        out ScalarValue error)
+    {
+        error = ErrorValue.Value;
+        if (value is ErrorValue e)
+        {
+            error = e;
+            return false;
+        }
+
+        double raw = ToNumber(value);
+        if (!double.IsFinite(raw)) return false;
+
+        int requested = (int)raw;
+        if (requested == 0) return false;
+
+        int zeroBased = requested > 0
+            ? requested - 1
+            : dimensionLength + requested;
+        if (zeroBased < 0 || zeroBased >= dimensionLength) return false;
+
+        indexes.Add(zeroBased);
+        return true;
     }
 
     private static ScalarValue VStack(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
