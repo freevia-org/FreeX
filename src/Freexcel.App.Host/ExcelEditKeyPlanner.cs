@@ -12,7 +12,9 @@ public static class ExcelEditKeyPlanner
         int pageSize,
         bool allowFormulaBarNavigationKeys,
         bool formulaRangeEntryActive = false,
-        bool inlineEditorCommitsOnArrow = false)
+        bool inlineEditorCommitsOnArrow = false,
+        bool moveSelectionAfterEnter = true,
+        FreexcelEnterDirection enterDirection = FreexcelEnterDirection.Down)
     {
         if (key == Key.Enter && modifiers == ModifierKeys.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
@@ -61,9 +63,9 @@ public static class ExcelEditKeyPlanner
 
         var target = key switch
         {
-            Key.Enter => shiftHeld
-                ? new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col)
-                : new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
+            Key.Enter => moveSelectionAfterEnter
+                ? GetEnterTarget(current, shiftHeld, enterDirection)
+                : current,
             Key.Tab => shiftHeld
                 ? new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
                 : new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
@@ -81,6 +83,28 @@ public static class ExcelEditKeyPlanner
         return target is { } moveTarget
             ? new ExcelEditKeyIntent(ExcelEditKeyAction.CommitAndMove, moveTarget)
             : ExcelEditKeyIntent.None;
+    }
+
+    private static CellAddress GetEnterTarget(CellAddress current, bool reverse, FreexcelEnterDirection direction)
+    {
+        var effectiveDirection = reverse
+            ? direction switch
+            {
+                FreexcelEnterDirection.Down => FreexcelEnterDirection.Up,
+                FreexcelEnterDirection.Up => FreexcelEnterDirection.Down,
+                FreexcelEnterDirection.Right => FreexcelEnterDirection.Left,
+                FreexcelEnterDirection.Left => FreexcelEnterDirection.Right,
+                _ => direction
+            }
+            : direction;
+
+        return effectiveDirection switch
+        {
+            FreexcelEnterDirection.Right => new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
+            FreexcelEnterDirection.Up => new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+            FreexcelEnterDirection.Left => new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+            _ => new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col)
+        };
     }
 }
 
