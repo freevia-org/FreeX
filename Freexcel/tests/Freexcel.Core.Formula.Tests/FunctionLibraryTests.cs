@@ -5037,6 +5037,25 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Chooserows_AcceptsDynamicArrayRowIndexes()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(1)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(2)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(3)));
+
+        var result = _eval.Evaluate("=CHOOSEROWS(A1:B3,VSTACK(3,1))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new TextValue("C"));
+        rv.Cells[0, 1].Should().Be(new NumberValue(3));
+        rv.Cells[1, 0].Should().Be(new TextValue("A"));
+        rv.Cells[1, 1].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Choosecols_ReordersColumnsAndAllowsRepeats()
     {
         var sheet = MakeSheet(
@@ -5065,6 +5084,24 @@ public class FunctionLibraryTests
         rv.ColCount.Should().Be(2);
         rv.Cells[0, 0].Should().Be(new TextValue("C"));
         rv.Cells[0, 1].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
+    public void Choosecols_AcceptsDynamicArrayColumnIndexes()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new TextValue("B")), (1,3,new TextValue("C")),
+            (2,1,new NumberValue(1)), (2,2,new NumberValue(2)), (2,3,new NumberValue(3)));
+
+        var result = _eval.Evaluate("=CHOOSECOLS(A1:C2,HSTACK(1,3))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new TextValue("A"));
+        rv.Cells[0, 1].Should().Be(new TextValue("C"));
+        rv.Cells[1, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 1].Should().Be(new NumberValue(3));
     }
 
     [Fact]
