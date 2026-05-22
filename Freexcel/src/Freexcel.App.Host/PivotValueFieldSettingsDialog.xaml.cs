@@ -140,6 +140,16 @@ public partial class PivotValueFieldSettingsDialog : Window
         if (dialog.ShowDialog() != true || dialog.ResultDiff?.NumberFormat is not { } numberFormat)
             return;
 
+        if (PivotValueFieldSettingsInputParser.TryResolveBuiltInNumberFormatIdForCode(numberFormat, out var builtInId))
+        {
+            NumberFormatCodeBox.Text = "";
+            NumberFormatBox.Text = builtInId?.ToString(CultureInfo.InvariantCulture) ?? "";
+            NumberFormatPresetBox.Text = PivotValueFieldSettingsInputParser.NumberFormatPresets
+                .First(preset => preset.NumberFormatId == builtInId && string.Equals(preset.FormatCode, numberFormat, StringComparison.OrdinalIgnoreCase))
+                .Label;
+            return;
+        }
+
         NumberFormatCodeBox.Text = numberFormat;
         NumberFormatBox.Text = PivotValueFieldSettingsInputParser.DefaultCustomNumberFormatId.ToString(CultureInfo.InvariantCulture);
         NumberFormatPresetBox.Text = numberFormat;
