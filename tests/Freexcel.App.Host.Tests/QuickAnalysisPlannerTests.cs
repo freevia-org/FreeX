@@ -102,7 +102,11 @@ public sealed class QuickAnalysisPlannerTests
                 "Scatter",
                 "Bubble",
                 "Radar",
-                "Stock");
+                "Stock",
+                "More Charts...");
+
+        options.Single(option => option.Label == "More Charts...")
+            .Command.Should().Be(QuickAnalysisCommand.MoreCharts);
     }
 
     [Fact]
