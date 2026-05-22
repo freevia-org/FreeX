@@ -56,7 +56,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range)) { Owner = this };
+        var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Text to Columns",
@@ -76,10 +76,11 @@ public partial class MainWindow
             return new EditCellsCommand(_currentSheetId, []);
 
         var edits = result.SplitMode == TextToColumnsSplitMode.FixedWidth
-            ? TextToColumnsPlanner.BuildFixedWidthEdits(sheet, range, result.FixedWidthBreakPositions ?? [])
+            ? TextToColumnsPlanner.BuildFixedWidthEdits(sheet, range, result.Destination ?? range.Start, result.FixedWidthBreakPositions ?? [])
             : TextToColumnsPlanner.BuildEdits(
                 sheet,
                 range,
+                result.Destination ?? range.Start,
                 result.Delimiters,
                 result.TextQualifierChar,
                 result.TreatConsecutiveDelimitersAsOne);

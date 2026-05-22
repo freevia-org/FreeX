@@ -61,7 +61,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Header = \"Fixed width\"");
         source.Should().Contain("Text _qualifier:");
         source.Should().Contain("_Treat consecutive delimiters as one");
-        source.Should().NotContain("_Destination:");
+        source.Should().Contain("_Destination:");
     }
 
     [Fact]
@@ -86,7 +86,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_textQualifierBox");
         source.Should().Contain("SelectedTextQualifier");
         source.Should().Contain("TreatConsecutiveDelimitersAsOne");
-        source.Should().NotContain("_destinationBox");
+        source.Should().Contain("_destinationBox");
+        source.Should().Contain("ReferencePickerButton_Click");
     }
 
     [Fact]
@@ -128,6 +129,21 @@ public sealed class DataToolDialogTests
         result.TextQualifier.Should().Be(TextToColumnsTextQualifier.SingleQuote);
         result.TextQualifierChar.Should().Be('\'');
         result.TreatConsecutiveDelimitersAsOne.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TextToColumnsResult_ParsesDestinationCellOrDefaultsToSelectionStart()
+    {
+        var sheetId = SheetId.New();
+        var defaultDestination = new CellAddress(sheetId, 2, 1);
+
+        TextToColumnsDialog.TryParseDestination("", defaultDestination, out var blankDestination).Should().BeTrue();
+        blankDestination.Should().Be(defaultDestination);
+
+        TextToColumnsDialog.TryParseDestination(" F2 ", defaultDestination, out var parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("F2:G3", defaultDestination, out _).Should().BeFalse();
     }
 
     [Fact]
