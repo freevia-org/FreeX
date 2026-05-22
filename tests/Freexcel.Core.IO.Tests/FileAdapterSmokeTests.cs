@@ -2653,6 +2653,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesFormulaNativeMetadata()
+    {
+        var workbook = new Workbook("FormulaNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3.14));
+        var formulaCell = Cell.FromFormula("A1*2");
+        formulaCell.Value = new NumberValue(6.28);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), formulaCell);
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetFormulaNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var formula = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2")
+            .Element(worksheetNs + "f");
+        formula.Should().NotBeNull();
+        formula!.Attribute("t").Should().NotBeNull();
+        formula.Attribute("t")!.Value.Should().Be("array");
+        formula.Attribute("ref").Should().NotBeNull();
+        formula.Attribute("ref")!.Value.Should().Be("A2:A2");
+        formula.Attribute("ca").Should().NotBeNull();
+        formula.Attribute("ca")!.Value.Should().Be("1");
+        formula.Attribute("customAttr").Should().NotBeNull();
+        formula.Attribute("customAttr")!.Value.Should().Be("formula-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_NamedRange_OnSheetWithApostrophe()
     {
         var workbook = new Workbook("NamedRangeTest");
@@ -3815,6 +3858,45 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "t")!
             .Value.Should().Be("ri-chi");
         richString.Element(worksheetNs + "phoneticPr").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesInlineStringRichTextAndPhonetics()
+    {
+        var workbook = new Workbook("InlineStringNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Inline phonetic"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddInlineStringRichTextAndPhonetics(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cell = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1");
+        cell.Attribute("t")!.Value.Should().Be("inlineStr");
+        var inlineString = cell.Element(worksheetNs + "is");
+        inlineString.Should().NotBeNull();
+        inlineString!.Elements(worksheetNs + "r").Should().HaveCount(2);
+        inlineString.Element(worksheetNs + "rPh").Should().NotBeNull();
+        inlineString.Element(worksheetNs + "rPh")!
+            .Element(worksheetNs + "t")!
+            .Value.Should().Be("in-line");
+        inlineString.Element(worksheetNs + "phoneticPr").Should().NotBeNull();
     }
 
     [Fact]
@@ -14675,6 +14757,69 @@ public partial class FileAdapterSmokeTests
                     new XAttribute("fontId", "1"),
                     new XAttribute("type", "noConversion")));
             ReplacePackageXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddInlineStringRichTextAndPhonetics(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var cell = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Descendants(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A1");
+            cell.SetAttributeValue("t", "inlineStr");
+            cell.Elements(worksheetNs + "v").Remove();
+            cell.Add(new XElement(
+                worksheetNs + "is",
+                new XElement(
+                    worksheetNs + "r",
+                    new XElement(
+                        worksheetNs + "rPr",
+                        new XElement(worksheetNs + "i"),
+                        new XElement(worksheetNs + "rFont", new XAttribute("val", "FreexcelInline"))),
+                    new XElement(worksheetNs + "t", "Inline ")),
+                new XElement(
+                    worksheetNs + "r",
+                    new XElement(worksheetNs + "t", "phonetic")),
+                new XElement(
+                    worksheetNs + "rPh",
+                    new XAttribute("sb", "0"),
+                    new XAttribute("eb", "6"),
+                    new XElement(worksheetNs + "t", "in-line")),
+                new XElement(
+                    worksheetNs + "phoneticPr",
+                    new XAttribute("fontId", "1"),
+                    new XAttribute("type", "noConversion"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetFormulaNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var formula = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Descendants(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A2")
+                .Element(worksheetNs + "f");
+            formula.Should().NotBeNull();
+            formula!.SetAttributeValue("t", "array");
+            formula.SetAttributeValue("ref", "A2:A2");
+            formula.SetAttributeValue("ca", "1");
+            formula.SetAttributeValue("customAttr", "formula-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         packageStream.Position = 0;

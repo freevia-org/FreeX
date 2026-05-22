@@ -177,6 +177,10 @@ internal static class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetCellAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
+            if (MergeWorksheetInlineStringMetadata(sourceSheetData, targetRoot, targetArchive, workbookNs))
+                changed = true;
+            if (MergeWorksheetFormulaMetadata(sourceSheetData, targetRoot, workbookNs))
+                changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
@@ -490,6 +494,184 @@ internal static class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static bool MergeWorksheetInlineStringMetadata(
+        XElement? sourceSheetData,
+        XElement targetRoot,
+        ZipArchive targetArchive,
+        XNamespace workbookNs)
+    {
+        if (sourceSheetData is null)
+            return false;
+
+        var sourceInlineStrings = sourceSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell =>
+                string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.OrdinalIgnoreCase) &&
+                cell.Element(workbookNs + "is") is { } inlineString &&
+                HasRichInlineStringMetadata(inlineString, workbookNs) &&
+                !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToList();
+        if (sourceInlineStrings.Count == 0)
+            return false;
+
+        var targetSheetData = targetRoot.Element(workbookNs + "sheetData");
+        if (targetSheetData is null)
+            return false;
+
+        var targetSharedStrings = LoadSharedStringPlainText(targetArchive, workbookNs);
+        var targetCellsByAddress = targetSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToDictionary(
+                cell => cell.Attribute("r")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceCell in sourceInlineStrings)
+        {
+            var address = sourceCell.Attribute("r")!.Value;
+            if (!targetCellsByAddress.TryGetValue(address, out var targetCell) ||
+                targetCell.Element(workbookNs + "f") is not null)
+            {
+                continue;
+            }
+
+            var sourceInlineString = sourceCell.Element(workbookNs + "is")!;
+            var sourcePlainText = ReadInlineStringPlainText(sourceInlineString, workbookNs);
+            if (string.IsNullOrEmpty(sourcePlainText) ||
+                !string.Equals(sourcePlainText, ReadCellPlainText(targetCell, targetSharedStrings, workbookNs), StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            targetCell.SetAttributeValue("t", "inlineStr");
+            targetCell.Elements(workbookNs + "v").Remove();
+            targetCell.Elements(workbookNs + "is").Remove();
+            targetCell.Add(new XElement(sourceInlineString));
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorksheetFormulaMetadata(
+        XElement? sourceSheetData,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        if (sourceSheetData is null)
+            return false;
+
+        var sourceFormulaCells = sourceSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell =>
+                cell.Element(workbookNs + "f")?.HasAttributes == true &&
+                !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToList();
+        if (sourceFormulaCells.Count == 0)
+            return false;
+
+        var targetSheetData = targetRoot.Element(workbookNs + "sheetData");
+        if (targetSheetData is null)
+            return false;
+
+        var targetCellsByAddress = targetSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToDictionary(
+                cell => cell.Attribute("r")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceCell in sourceFormulaCells)
+        {
+            var address = sourceCell.Attribute("r")!.Value;
+            if (!targetCellsByAddress.TryGetValue(address, out var targetCell))
+                continue;
+
+            var sourceFormula = sourceCell.Element(workbookNs + "f");
+            var targetFormula = targetCell.Element(workbookNs + "f");
+            if (sourceFormula is null ||
+                targetFormula is null ||
+                !string.Equals(
+                    NormalizeFormulaXmlText(sourceFormula.Value),
+                    NormalizeFormulaXmlText(targetFormula.Value),
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var attribute in sourceFormula.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration)
+                    continue;
+
+                if (string.Equals(targetFormula.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+                    continue;
+
+                targetFormula.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static string NormalizeFormulaXmlText(string? formula)
+    {
+        return (formula ?? string.Empty).Trim().TrimStart('=');
+    }
+
+    private static IReadOnlyList<string> LoadSharedStringPlainText(ZipArchive archive, XNamespace workbookNs)
+    {
+        var sharedStringsEntry = archive.GetEntry("xl/sharedStrings.xml");
+        if (sharedStringsEntry is null)
+            return [];
+
+        var sharedStringsXml = XlsxPackageXmlEditor.LoadXml(sharedStringsEntry);
+        return sharedStringsXml.Root?
+            .Elements(workbookNs + "si")
+            .Select(sharedString => ReadInlineStringPlainText(sharedString, workbookNs))
+            .ToList() ?? [];
+    }
+
+    private static string ReadCellPlainText(
+        XElement cell,
+        IReadOnlyList<string> sharedStrings,
+        XNamespace workbookNs)
+    {
+        var type = cell.Attribute("t")?.Value;
+        if (string.Equals(type, "inlineStr", StringComparison.OrdinalIgnoreCase) &&
+            cell.Element(workbookNs + "is") is { } inlineString)
+        {
+            return ReadInlineStringPlainText(inlineString, workbookNs);
+        }
+
+        if (string.Equals(type, "s", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(cell.Element(workbookNs + "v")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) &&
+            index >= 0 &&
+            index < sharedStrings.Count)
+        {
+            return sharedStrings[index];
+        }
+
+        return cell.Element(workbookNs + "v")?.Value ?? string.Empty;
+    }
+
+    private static bool HasRichInlineStringMetadata(XElement inlineString, XNamespace workbookNs) =>
+        inlineString.Elements(workbookNs + "r").Any() ||
+        inlineString.Element(workbookNs + "rPh") is not null ||
+        inlineString.Element(workbookNs + "phoneticPr") is not null;
+
+    private static string ReadInlineStringPlainText(XElement inlineString, XNamespace workbookNs)
+    {
+        var runs = inlineString.Elements(workbookNs + "r").ToList();
+        if (runs.Count > 0)
+            return string.Concat(runs.Select(run => run.Element(workbookNs + "t")?.Value ?? string.Empty));
+
+        return inlineString.Element(workbookNs + "t")?.Value ?? string.Empty;
     }
 
     private static void InsertWorksheetMetadataElementInOrder(
