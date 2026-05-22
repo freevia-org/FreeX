@@ -69,9 +69,21 @@ public sealed class ObjectDialogTests
         objectSizeSource.Should().Contain("_heightBox");
         objectSizeSource.Should().Contain("Height:");
         objectSizeSource.Should().Contain("Width:");
-        objectSizeSource.Should().Contain("Lock aspect ratio is hidden until proportional resizing is wired");
-        objectSizeSource.Should().NotContain("_lockAspectRatioBox");
-        objectSizeSource.Should().NotContain("Content = \"_Lock aspect ratio\"");
+        objectSizeSource.Should().Contain("_lockAspectRatioBox");
+        objectSizeSource.Should().Contain("Content = \"_Lock aspect ratio\"");
+        objectSizeSource.Should().Contain("CalculateLockedAspectHeight");
+        objectSizeSource.Should().Contain("CalculateLockedAspectWidth");
+    }
+
+    [Fact]
+    public void ObjectSizeDialog_CalculatesLockedAspectSize()
+    {
+        ObjectSizeDialog.CalculateLockedAspectHeight(240, originalWidth: 120, originalHeight: 60)
+            .Should()
+            .Be(120);
+        ObjectSizeDialog.CalculateLockedAspectWidth(90, originalWidth: 120, originalHeight: 60)
+            .Should()
+            .Be(180);
     }
 
     [Fact]

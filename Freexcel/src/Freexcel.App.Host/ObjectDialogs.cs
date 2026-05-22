@@ -183,20 +183,28 @@ public sealed class ObjectSizeDialog : Window
 {
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true };
+    private readonly double _originalWidth;
+    private readonly double _originalHeight;
+    private bool _updatingSize;
 
     public ObjectSizeDialogResult Result { get; private set; }
 
     public ObjectSizeDialog(double width, double height, string title = "Object Size")
     {
         Result = new ObjectSizeDialogResult(width, height);
+        _originalWidth = Math.Max(1, width);
+        _originalHeight = Math.Max(1, height);
         Title = title;
         Width = 360;
-        Height = 220;
+        Height = 250;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
+        _widthBox.TextChanged += WidthBox_TextChanged;
+        _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateSizeContent(Accept);
     }
 
@@ -222,12 +230,69 @@ public sealed class ObjectSizeDialog : Window
         DialogResult = true;
     }
 
+    private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
+            return;
+
+        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) || width <= 0)
+            return;
+
+        SetHeight(CalculateLockedAspectHeight(width, _originalWidth, _originalHeight));
+    }
+
+    private void HeightBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
+            return;
+
+        if (!double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var height) || height <= 0)
+            return;
+
+        SetWidth(CalculateLockedAspectWidth(height, _originalWidth, _originalHeight));
+    }
+
+    internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
+        originalWidth <= 0 || originalHeight <= 0 ? width : width * originalHeight / originalWidth;
+
+    internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
+        originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
+
+    private void SetWidth(double width)
+    {
+        _updatingSize = true;
+        try
+        {
+            _widthBox.Text = FormatSize(width);
+        }
+        finally
+        {
+            _updatingSize = false;
+        }
+    }
+
+    private void SetHeight(double height)
+    {
+        _updatingSize = true;
+        try
+        {
+            _heightBox.Text = FormatSize(height);
+        }
+        finally
+        {
+            _updatingSize = false;
+        }
+    }
+
+    private static string FormatSize(double value) =>
+        Math.Round(value, 2).ToString("0.##", CultureInfo.InvariantCulture);
+
     private StackPanel CreateSizeContent(Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         AddLabeledTextBox(stack, "Height:", _heightBox);
         AddLabeledTextBox(stack, "Width:", _widthBox);
-        // Lock aspect ratio is hidden until proportional resizing is wired.
+        stack.Children.Add(_lockAspectRatioBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
         return stack;
     }
