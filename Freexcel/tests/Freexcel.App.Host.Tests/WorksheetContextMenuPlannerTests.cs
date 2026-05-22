@@ -121,4 +121,44 @@ public sealed class WorksheetContextMenuPlannerTests
 
         command.AccessHeader.Should().Be(expectedAccessHeader);
     }
+
+    [Fact]
+    public void BuildCommands_ForPictureTargetIncludesExcelObjectCommands()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Picture);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Format Picture...",
+            "Crop...",
+            "Reset Crop");
+        commands.Single(command => command.Header == "Format Picture...")
+            .Action.Should().Be(WorksheetContextMenuAction.FormatPicture);
+    }
+
+    [Theory]
+    [InlineData(WorksheetContextMenuTargetKind.Shape, "Format Shape...", true)]
+    [InlineData(WorksheetContextMenuTargetKind.TextBox, "Format Text Box...", false)]
+    public void BuildCommands_ForDrawingObjectTargetsIncludesExcelObjectCommands(
+        WorksheetContextMenuTargetKind targetKind,
+        string formatHeader,
+        bool includesReorder)
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            formatHeader,
+            "Size and Properties...",
+            "Rotate...",
+            "Shape Fill...",
+            "Shape Outline...");
+        if (includesReorder)
+        {
+            commands.Select(command => command.Header).Should().ContainInOrder(
+                "Bring Forward",
+                "Send Backward");
+        }
+
+        commands.Single(command => command.Header == formatHeader)
+            .Action.Should().Be(WorksheetContextMenuAction.FormatDrawingObject);
+    }
 }
