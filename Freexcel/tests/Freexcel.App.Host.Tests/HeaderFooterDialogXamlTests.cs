@@ -115,6 +115,28 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("SetPictureForActiveBox");
     }
 
+    [Fact]
+    public void PictureFormatDialog_ExposesExcelLikeSizeControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+
+        source.Should().Contain("private readonly CheckBox _lockAspectRatioBox");
+        source.Should().Contain("Content = \"_Lock aspect ratio\"");
+        source.Should().Contain("Content = \"_Reset\"");
+        source.Should().Contain("CalculateLockedAspectHeight");
+        source.Should().Contain("CalculateLockedAspectWidth");
+    }
+
+    [Fact]
+    public void PictureFormatDialog_CalculatesLockedAspectSize()
+    {
+        HeaderFooterPictureFormatDialog.CalculateLockedAspectHeight(200, originalWidth: 100, originalHeight: 50)
+            .Should()
+            .Be(100);
+        HeaderFooterPictureFormatDialog.CalculateLockedAspectWidth(75, originalWidth: 100, originalHeight: 50)
+            .Should()
+            .Be(150);
+    }
 
     [Fact]
     public void FirstAndEvenHeadersAndFooters_UseSectionBoxesWithoutPipeParsing()
