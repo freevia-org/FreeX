@@ -635,6 +635,111 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_NumberTab_AppliesDecimalSymbolAndNegativeControlsToNumberFormats()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var negatives = GetControl<ListBox>(dialog, "NumberNegativeNumbersList");
+
+                categories.SelectedItem = "Number";
+                decimals.Text = "3";
+                negatives.SelectedIndex = 2;
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("#,##0.000;(#,##0.000)");
+
+                categories.SelectedItem = "Currency";
+                decimals.Text = "1";
+                symbols.SelectedItem = "€";
+                negatives.SelectedIndex = 3;
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("€#,##0.0;[Red](€#,##0.0)");
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "0";
+                symbols.SelectedItem = "£";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("_(£* #,##0_);_(£* (#,##0);_(£* \"-\"_);_(@_)");
+
+                categories.SelectedItem = "Percentage";
+                decimals.Text = "4";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("0.0000%");
+
+                categories.SelectedItem = "Scientific";
+                decimals.Text = "1";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("0.0E+00");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_EnablesOnlyControlsThatAffectSelectedCategory()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var negatives = GetControl<ListBox>(dialog, "NumberNegativeNumbersList");
+
+                categories.SelectedItem = "General";
+                decimals.IsEnabled.Should().BeFalse();
+                symbols.IsEnabled.Should().BeFalse();
+                negatives.IsEnabled.Should().BeFalse();
+
+                categories.SelectedItem = "Number";
+                decimals.IsEnabled.Should().BeTrue();
+                symbols.IsEnabled.Should().BeFalse();
+                negatives.IsEnabled.Should().BeTrue();
+
+                categories.SelectedItem = "Currency";
+                decimals.IsEnabled.Should().BeTrue();
+                symbols.IsEnabled.Should().BeTrue();
+                negatives.IsEnabled.Should().BeTrue();
+
+                categories.SelectedItem = "Accounting";
+                decimals.IsEnabled.Should().BeTrue();
+                symbols.IsEnabled.Should().BeTrue();
+                negatives.IsEnabled.Should().BeFalse();
+
+                foreach (var category in new[] { "Date", "Time", "Fraction", "Text", "Special", "Custom" })
+                {
+                    categories.SelectedItem = category;
+                    decimals.IsEnabled.Should().BeFalse();
+                    symbols.IsEnabled.Should().BeFalse();
+                    negatives.IsEnabled.Should().BeFalse();
+                }
+
+                foreach (var category in new[] { "Percentage", "Scientific" })
+                {
+                    categories.SelectedItem = category;
+                    decimals.IsEnabled.Should().BeTrue();
+                    symbols.IsEnabled.Should().BeFalse();
+                    negatives.IsEnabled.Should().BeFalse();
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFillBorderAndProtectionFields()
     {
         StaTestRunner.Run(() =>

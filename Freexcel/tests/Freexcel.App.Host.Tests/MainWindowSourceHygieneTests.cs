@@ -1271,6 +1271,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_RoutesExpandedTotalsGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("case QuickAnalysisCommand.PercentTotal:");
+        source.Should().Contain("case QuickAnalysisCommand.RunningTotal:");
+        source.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
+        source.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
+    }
+
+    [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
