@@ -375,7 +375,9 @@ public partial class MainWindow
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
-            inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow);
+            inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
+            moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
+            enterDirection: _options.AfterEnterDirection);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -759,7 +761,9 @@ public partial class MainWindow
                 current,
                 pageSize,
                 allowFormulaBarNavigationKeys: !formulaTextActive,
-                formulaRangeEntryActive: formulaRangeEntryActive);
+                formulaRangeEntryActive: formulaRangeEntryActive,
+                moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
+                enterDirection: _options.AfterEnterDirection);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {

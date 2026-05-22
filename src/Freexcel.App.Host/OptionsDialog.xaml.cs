@@ -52,10 +52,24 @@ public partial class OptionsDialog : Window
         PopulateErrorCheckingRules();
 
         // Advanced
+        OptMoveAfterEnter.IsChecked = _opts.MoveSelectionAfterEnter;
         OptAfterEnterDirection.ItemsSource = new[] { "Down", "Right", "Up", "Left" };
-        OptAfterEnterDirection.SelectedIndex = 0;
+        OptAfterEnterDirection.SelectedIndex = _opts.AfterEnterDirection switch
+        {
+            FreexcelEnterDirection.Right => 1,
+            FreexcelEnterDirection.Up => 2,
+            FreexcelEnterDirection.Left => 3,
+            _ => 0
+        };
+        OptShowGridlines.IsChecked = _opts.ShowGridlines;
+        OptShowHeadings.IsChecked = _opts.ShowHeadings;
         OptObjectsDisplay.ItemsSource = new[] { "All", "Placeholders", "Nothing (hide objects)" };
-        OptObjectsDisplay.SelectedIndex = 0;
+        OptObjectsDisplay.SelectedIndex = _opts.ObjectsDisplay switch
+        {
+            FreexcelObjectDisplay.Placeholders => 1,
+            FreexcelObjectDisplay.Nothing => 2,
+            _ => 0
+        };
 
         // View
         OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
@@ -100,6 +114,22 @@ public partial class OptionsDialog : Window
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
             ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
             FormulaBarExpanded = OptFormulaBarExpanded.IsChecked == true,
+            MoveSelectionAfterEnter = OptMoveAfterEnter.IsChecked == true,
+            AfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
+            {
+                1 => FreexcelEnterDirection.Right,
+                2 => FreexcelEnterDirection.Up,
+                3 => FreexcelEnterDirection.Left,
+                _ => FreexcelEnterDirection.Down
+            },
+            ShowGridlines = OptShowGridlines.IsChecked == true,
+            ShowHeadings = OptShowHeadings.IsChecked == true,
+            ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
+            {
+                1 => FreexcelObjectDisplay.Placeholders,
+                2 => FreexcelObjectDisplay.Nothing,
+                _ => FreexcelObjectDisplay.All
+            },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
         };
         opts.Save();
