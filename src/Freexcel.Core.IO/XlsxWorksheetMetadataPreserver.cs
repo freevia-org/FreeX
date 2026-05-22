@@ -1001,13 +1001,17 @@ internal static class XlsxWorksheetMetadataPreserver
             .Where(attribute => IsNativeOnlyWorksheetAttribute(attribute, modeledAttributeNames))
             .Select(attribute => new XAttribute(attribute))
             .ToList();
-        if (retainedAttributes.Count == 0)
+        var retainedChildren = sourceElement
+            .Elements()
+            .Select(element => new XElement(element))
+            .ToList();
+        if (retainedAttributes.Count == 0 && retainedChildren.Count == 0)
             return false;
 
         var targetElement = targetRoot.Element(elementName);
         if (targetElement is null)
         {
-            targetRoot.Add(new XElement(elementName, retainedAttributes));
+            targetRoot.Add(new XElement(elementName, retainedAttributes, retainedChildren));
             return true;
         }
 
@@ -1018,6 +1022,21 @@ internal static class XlsxWorksheetMetadataPreserver
                 continue;
 
             targetElement.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildrenByKey = targetElement
+            .Elements()
+            .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        foreach (var child in retainedChildren)
+        {
+            var key = ElementIdentityKey(child);
+            if (existingChildrenByKey.ContainsKey(key))
+                continue;
+
+            targetElement.Add(child);
+            existingChildrenByKey[key] = child;
             changed = true;
         }
 
