@@ -19,7 +19,21 @@ public sealed class PrintRendererPageSetupTests
                 sheetName: "Summary",
                 now)
             .Should()
-            .Be($"{now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 2/5 [Picture]");
+            .Be($"{now:d} {now:t} Budget.xlsx Budget.xlsx Summary 2/5 2/5 ");
+    }
+
+    [Fact]
+    public void ExpandHeaderFooterText_RemovesPictureTokensSoRendererCanDrawImages()
+    {
+        PrintRenderer.ExpandHeaderFooterText(
+                "Logo &[Picture] &G",
+                pageNumber: 1,
+                totalPages: 1,
+                workbookName: "Book.xlsx",
+                sheetName: "Sheet1",
+                new DateTime(2026, 5, 22))
+            .Should()
+            .Be("Logo  ");
     }
 
     [Fact]
