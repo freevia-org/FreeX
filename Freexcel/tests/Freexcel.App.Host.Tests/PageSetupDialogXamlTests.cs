@@ -158,7 +158,7 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
-    public void Footer_ExposesExcelPrintActionsAndHonestOptionsState()
+    public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
@@ -167,10 +167,14 @@ public sealed class PageSetupDialogXamlTests
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
             xaml.Should().Contain($"Content=\"{content}\"");
 
-        xaml.Should().Contain("ToolTip=\"Printer driver options are not available yet.\"");
+        xaml.Should().Contain("Click=\"OptionsButton_Click\"");
+        xaml.Should().NotContain("IsEnabled=\"False\"");
+        xaml.Should().NotContain("not available yet");
+        source.Should().Contain("PageSetupDialogAction.Options");
         source.Should().Contain("PageSetupDialogAction.PrintPreview");
         source.Should().Contain("PageSetupDialogAction.Print");
-        handlerSource.Should().Contain("dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview");
+        handlerSource.Should().Contain("PageSetupDialogAction.Options");
+        handlerSource.Should().Contain("ShowPageSetupPrinterOptions()");
         handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
     }
 
