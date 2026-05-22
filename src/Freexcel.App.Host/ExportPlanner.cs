@@ -69,21 +69,22 @@ internal static class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var format = InferExportFormat(path);
-        return PlanExport(path, format, options);
+        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: false);
+        return new ExportRequest(normalizedPath, format, options, null);
     }
 
     public static ExportRequest PlanExport(string path, ExportFormat format, ExportOptions options)
     {
-        var normalizedPath = NormalizeExportPath(path, format);
+        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: true);
         return new ExportRequest(normalizedPath, format, options, null);
     }
 
     public static string GetFallbackXpsPath(string requestedPath) =>
         Path.ChangeExtension(requestedPath, ".xps");
 
-    private static string NormalizeExportPath(string path, ExportFormat format)
+    private static string NormalizeExportPath(string path, ExportFormat format, bool forceMatchingExtension)
     {
-        if (!string.IsNullOrEmpty(Path.GetExtension(path)))
+        if (!forceMatchingExtension && !string.IsNullOrEmpty(Path.GetExtension(path)))
             return path;
 
         return Path.ChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf");
