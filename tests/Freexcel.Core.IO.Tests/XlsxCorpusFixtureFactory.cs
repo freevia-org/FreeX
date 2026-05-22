@@ -20,6 +20,16 @@ internal static class XlsxCorpusFixtureFactory
         "generated-data-bars-001",
         "generated-text-boxes-shapes-001",
         "generated-images-sparklines-001",
+        "generated-comments-hyperlinks-002",
+        "generated-merged-freeze-002",
+        "generated-print-titles-breaks-001",
+        "generated-named-ranges-formulas-002",
+        "generated-validation-custom-002",
+        "generated-style-only-cells-002",
+        "generated-charts-combo-002",
+        "generated-pivots-filters-002",
+        "generated-structured-table-totals-002",
+        "generated-images-sparklines-002",
         "generated-objects-001",
         "generated-charts-001",
         "generated-pivots-001",
@@ -70,6 +80,16 @@ internal static class XlsxCorpusFixtureFactory
         "generated-data-bars-001" => CreateDataBars(),
         "generated-text-boxes-shapes-001" => CreateTextBoxesAndShapes(),
         "generated-images-sparklines-001" => CreateImagesAndSparklines(),
+        "generated-comments-hyperlinks-002" => CreateCommentsAndHyperlinks(),
+        "generated-merged-freeze-002" => CreateMergedFreeze(),
+        "generated-print-titles-breaks-001" => CreatePrintTitlesAndBreaks(),
+        "generated-named-ranges-formulas-002" => CreateNamedRangesAndFormulas(),
+        "generated-validation-custom-002" => CreateValidationCustom(),
+        "generated-style-only-cells-002" => CreateStyleOnlyCells(),
+        "generated-charts-combo-002" => CreateChartsCombo(),
+        "generated-pivots-filters-002" => CreatePivotsWithFilters(),
+        "generated-structured-table-totals-002" => CreateStructuredTableTotals(),
+        "generated-images-sparklines-002" => CreateImagesAndSparklinesVariant(),
         "generated-objects-001" => CreateObjects(),
         "generated-charts-001" => CreateCharts(),
         "generated-pivots-001" => CreatePivots(),
@@ -563,6 +583,281 @@ internal static class XlsxCorpusFixtureFactory
             OutlineColor = new CellColor(31, 78, 121),
             AltText = "Corpus ellipse"
         });
+        return workbook;
+    }
+
+    private static Workbook CreateCommentsAndHyperlinks()
+    {
+        var workbook = NewWorkbook("generated-comments-hyperlinks-002");
+        var sheet = workbook.AddSheet("Links Notes");
+        Set(sheet, "A1", new TextValue("Documentation"));
+        Set(sheet, "A2", new TextValue("Release notes"));
+        Set(sheet, "B1", new TextValue("Review"));
+        Set(sheet, "B2", new TextValue("Follow-up"));
+        sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel/docs";
+        sheet.Hyperlinks[Addr(sheet, "A2")] = "mailto:review@example.com";
+        sheet.Comments[Addr(sheet, "B1")] = "Check workbook fidelity notes.";
+        sheet.Comments[Addr(sheet, "B2")] = "Confirm links survived round-trip.";
+        return workbook;
+    }
+
+    private static Workbook CreateMergedFreeze()
+    {
+        var workbook = NewWorkbook("generated-merged-freeze-002");
+        var sheet = workbook.AddSheet("Merged Freeze");
+        Set(sheet, "A1", new TextValue("Regional summary"));
+        Set(sheet, "A3", new TextValue("North"));
+        Set(sheet, "B3", new NumberValue(120));
+        Set(sheet, "A4", new TextValue("South"));
+        Set(sheet, "B4", new NumberValue(145));
+        sheet.AddMergedRegion(Range(sheet, "A1", "D1"));
+        sheet.AddMergedRegion(Range(sheet, "C3", "D4"));
+        sheet.FrozenRows = 2;
+        sheet.FrozenCols = 1;
+        sheet.HiddenRows.Add(8);
+        sheet.HiddenCols.Add(6);
+        sheet.ColumnWidths[1] = 20;
+        sheet.RowHeights[1] = 30;
+        return workbook;
+    }
+
+    private static Workbook CreatePrintTitlesAndBreaks()
+    {
+        var workbook = NewWorkbook("generated-print-titles-breaks-001");
+        var sheet = workbook.AddSheet("Print Setup");
+        Set(sheet, "A1", new TextValue("Region"));
+        Set(sheet, "B1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("North"));
+        Set(sheet, "B2", new NumberValue(100));
+        Set(sheet, "A25", new TextValue("South"));
+        Set(sheet, "B25", new NumberValue(125));
+        sheet.PrintArea = Range(sheet, "A1", "D40");
+        sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageMargins = WorksheetPageMargins.Narrow;
+        sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 1);
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel", "Print setup", "Corpus");
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(4);
+        return workbook;
+    }
+
+    private static Workbook CreateNamedRangesAndFormulas()
+    {
+        var workbook = NewWorkbook("generated-named-ranges-formulas-002");
+        var inputs = workbook.AddSheet("Inputs");
+        var summary = workbook.AddSheet("Summary");
+        Set(inputs, "A1", new TextValue("North"));
+        Set(inputs, "B1", new NumberValue(100));
+        Set(inputs, "A2", new TextValue("South"));
+        Set(inputs, "B2", new NumberValue(125));
+        Set(inputs, "A3", new TextValue("West"));
+        Set(inputs, "B3", new NumberValue(90));
+        workbook.DefineNamedRange("RevenueValues", Range(inputs, "B1", "B3"));
+        workbook.DefineNamedRange("RegionLabels", Range(inputs, "A1", "A3"));
+        Formula(summary, "A1", "SUM(RevenueValues)");
+        Formula(summary, "A2", "AVERAGE(Inputs!B1:B3)");
+        Formula(summary, "A3", "INDEX(RegionLabels,2)");
+        return workbook;
+    }
+
+    private static Workbook CreateValidationCustom()
+    {
+        var workbook = NewWorkbook("generated-validation-custom-002");
+        var sheet = workbook.AddSheet("Validation Custom");
+        Set(sheet, "A1", new TextValue("Allowed"));
+        Set(sheet, "A2", new TextValue("Open"));
+        Set(sheet, "A3", new TextValue("Closed"));
+        Set(sheet, "B1", new TextValue("Status"));
+        Set(sheet, "C1", new TextValue("Ratio"));
+        workbook.DefineNamedRange("StatusChoices", Range(sheet, "A2", "A3"));
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, "B2", "B20"),
+            Type = DvType.List,
+            Formula1 = "StatusChoices"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, "C2", "C20"),
+            Type = DvType.Decimal,
+            Operator = DvOperator.Between,
+            Formula1 = "0",
+            Formula2 = "1"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, "D2", "D20"),
+            Type = DvType.Custom,
+            Formula1 = "LEN(D2)<=12"
+        });
+        return workbook;
+    }
+
+    private static Workbook CreateStyleOnlyCells()
+    {
+        var workbook = NewWorkbook("generated-style-only-cells-002");
+        var sheet = workbook.AddSheet("Style Only");
+        var warningStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FillColor = new CellColor(255, 242, 204),
+            FontColor = new CellColor(156, 87, 0),
+            BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(191, 143, 0))
+        });
+        var percentStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00%" });
+        sheet.SetStyleOnly(4, 4, warningStyle);
+        sheet.SetStyleOnly(5, 4, warningStyle);
+        Set(sheet, "A1", new TextValue("Completion"));
+        Set(sheet, "B1", new NumberValue(0.875), percentStyle);
+        Set(sheet, "A2", new TextValue("Empty styled cells at D4:D5"));
+        return workbook;
+    }
+
+    private static Workbook CreateChartsCombo()
+    {
+        var workbook = NewWorkbook("generated-charts-combo-002");
+        var sheet = workbook.AddSheet("Chart Mix");
+        Set(sheet, "A1", new TextValue("Quarter"));
+        Set(sheet, "B1", new TextValue("Revenue"));
+        Set(sheet, "C1", new TextValue("Cost"));
+        Set(sheet, "A2", new TextValue("Q1"));
+        Set(sheet, "A3", new TextValue("Q2"));
+        Set(sheet, "A4", new TextValue("Q3"));
+        Set(sheet, "A5", new TextValue("Q4"));
+        Set(sheet, "B2", new NumberValue(120));
+        Set(sheet, "B3", new NumberValue(135));
+        Set(sheet, "B4", new NumberValue(150));
+        Set(sheet, "B5", new NumberValue(170));
+        Set(sheet, "C2", new NumberValue(80));
+        Set(sheet, "C3", new NumberValue(92));
+        Set(sheet, "C4", new NumberValue(98));
+        Set(sheet, "C5", new NumberValue(110));
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Line, DataRange = Range(sheet, "A1", "C5"), Title = "Trend", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Bar, DataRange = Range(sheet, "A1", "C5"), Title = "Bar View", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel { Type = ChartType.Area, DataRange = Range(sheet, "A1", "C5"), Title = "Area View", ShowLegend = true });
+        return workbook;
+    }
+
+    private static Workbook CreatePivotsWithFilters()
+    {
+        var workbook = NewWorkbook("generated-pivots-filters-002");
+        var sheet = workbook.AddSheet("Pivot Filters");
+        Set(sheet, "A1", new TextValue("Region"));
+        Set(sheet, "B1", new TextValue("Category"));
+        Set(sheet, "C1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("North"));
+        Set(sheet, "B2", new TextValue("Hardware"));
+        Set(sheet, "C2", new NumberValue(100));
+        Set(sheet, "A3", new TextValue("South"));
+        Set(sheet, "B3", new TextValue("Software"));
+        Set(sheet, "C3", new NumberValue(125));
+        Set(sheet, "A4", new TextValue("North"));
+        Set(sheet, "B4", new TextValue("Services"));
+        Set(sheet, "C4", new NumberValue(80));
+        Set(sheet, "A7", new TextValue("Region"));
+        Set(sheet, "B7", new TextValue("Sum of Amount"));
+        Set(sheet, "A8", new TextValue("North"));
+        Set(sheet, "B8", new NumberValue(180));
+        Set(sheet, "A9", new TextValue("Grand Total"));
+        Set(sheet, "B9", new NumberValue(180));
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 2,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = "A1:C4",
+            PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
+            RefreshOnLoad = true
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region", SharedItems: ["North", "South"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Category", SharedItems: ["Hardware", "Software", "Services"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4, ContainsNumber: true, MinValue: 80, MaxValue: 125));
+        workbook.PivotCaches.Add(cache);
+
+        var style = new PivotTableStyleModel { Name = "FreexcelCorpusFilteredPivotStyle", AppliesToPivotTables = true };
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
+        style.Elements.Add(new PivotTableStyleElementModel("headerRow", 1));
+        workbook.PivotTableStyles.Add(style);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTableFiltered",
+            CacheId = 2,
+            SourceRange = Range(sheet, "A1", "C4"),
+            TargetRange = Range(sheet, "A7", "B9"),
+            PackagePart = "xl/pivotTables/pivotTable2.xml",
+            StyleName = style.Name,
+            ShowRowStripes = true,
+            RepeatItemLabels = false
+        };
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 4));
+        sheet.PivotTables.Add(pivot);
+        return workbook;
+    }
+
+    private static Workbook CreateStructuredTableTotals()
+    {
+        var workbook = NewWorkbook("generated-structured-table-totals-002");
+        var sheet = workbook.AddSheet("Table Totals");
+        Set(sheet, "A1", new TextValue("Item"));
+        Set(sheet, "B1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("A"));
+        Set(sheet, "B2", new NumberValue(10));
+        Set(sheet, "A3", new TextValue("B"));
+        Set(sheet, "B3", new NumberValue(20));
+        Set(sheet, "A4", new TextValue("Total"));
+        Set(sheet, "B4", new NumberValue(30));
+
+        var table = new StructuredTableModel
+        {
+            Id = 2,
+            Name = "SalesTotals",
+            DisplayName = "SalesTotals",
+            Range = Range(sheet, "A1", "B4"),
+            HasAutoFilter = true,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium9",
+            ShowRowStripes = true,
+            ShowFirstColumn = true,
+            PackagePart = "xl/tables/table2.xml"
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Item", TotalsRowLabel: "Total"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount", TotalsRowFunction: "sum"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["A", "B"]));
+        sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
+    private static Workbook CreateImagesAndSparklinesVariant()
+    {
+        var workbook = NewWorkbook("generated-images-sparklines-002");
+        var sheet = workbook.AddSheet("Visual Data");
+        Set(sheet, "A1", new NumberValue(5));
+        Set(sheet, "B1", new NumberValue(7));
+        Set(sheet, "C1", new NumberValue(9));
+        Set(sheet, "A2", new NumberValue(3));
+        Set(sheet, "B2", new NumberValue(4));
+        Set(sheet, "C2", new NumberValue(8));
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = Addr(sheet, "F2"),
+            Kind = PictureKind.Image,
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png",
+            Width = 80,
+            Height = 80,
+            AltText = "Additional corpus image"
+        });
+        sheet.Sparklines.Add(new SparklineModel { DataRange = Range(sheet, "A1", "C1"), Location = Addr(sheet, "D1"), Kind = SparklineKind.Line });
+        sheet.Sparklines.Add(new SparklineModel { DataRange = Range(sheet, "A2", "C2"), Location = Addr(sheet, "D2"), Kind = SparklineKind.Column });
         return workbook;
     }
 
