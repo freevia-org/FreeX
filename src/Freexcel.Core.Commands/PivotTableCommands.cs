@@ -484,6 +484,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _showColumnStripes;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
+    private readonly bool? _refreshOnOpen;
+    private readonly bool? _saveSourceData;
     private PivotOptionsSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
@@ -503,7 +505,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool showColumnStripes = false,
         PivotReportLayout reportLayout = PivotReportLayout.Tabular,
         string? emptyValueText = null,
-        bool updateEmptyValueText = false)
+        bool updateEmptyValueText = false,
+        bool? refreshOnOpen = null,
+        bool? saveSourceData = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -521,6 +525,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showColumnStripes = showColumnStripes;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
+        _refreshOnOpen = refreshOnOpen;
+        _saveSourceData = saveSourceData;
     }
 
     public string Label => "Configure PivotTable Options";
@@ -533,7 +539,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         if (pivotTable is null)
             return new CommandOutcome(false, "PivotTable was not found.");
 
-        _snapshot = PivotOptionsSnapshot.Capture(pivotTable);
+        var cache = ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        _snapshot = PivotOptionsSnapshot.Capture(pivotTable, cache);
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
 
         pivotTable.ShowRowGrandTotals = _showRowGrandTotals;
@@ -550,6 +557,13 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         pivotTable.ShowColumnStripes = _showColumnStripes;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
+        if (cache is not null)
+        {
+            if (_refreshOnOpen is { } refreshOnOpen)
+                cache.RefreshOnLoad = refreshOnOpen;
+            if (_saveSourceData is { } saveSourceData)
+                cache.SaveData = saveSourceData;
+        }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
@@ -560,8 +574,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        var cache = pivotTable is null
+            ? null
+            : ctx.Workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
         if (pivotTable is not null && _snapshot is not null)
-            _snapshot.Restore(pivotTable);
+            _snapshot.Restore(pivotTable, cache);
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
         _targetSnapshot = null;
@@ -580,9 +597,12 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowColumnHeaders,
         bool ShowRowStripes,
         bool ShowColumnStripes,
-        string? EmptyValueText)
+        string? EmptyValueText,
+        bool? RefreshOnLoad,
+        bool? SaveData,
+        bool? EnableRefresh)
     {
-        public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable) =>
+        public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
                 pivotTable.ShowRowGrandTotals,
                 pivotTable.ShowColumnGrandTotals,
@@ -596,9 +616,12 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowColumnHeaders,
                 pivotTable.ShowRowStripes,
                 pivotTable.ShowColumnStripes,
-                pivotTable.EmptyValueText);
+                pivotTable.EmptyValueText,
+                cache?.RefreshOnLoad,
+                cache?.SaveData,
+                cache?.EnableRefresh);
 
-        public void Restore(PivotTableModel pivotTable)
+        public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
         {
             pivotTable.ShowRowGrandTotals = ShowRowGrandTotals;
             pivotTable.ShowColumnGrandTotals = ShowColumnGrandTotals;
@@ -613,6 +636,15 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowRowStripes = ShowRowStripes;
             pivotTable.ShowColumnStripes = ShowColumnStripes;
             pivotTable.EmptyValueText = EmptyValueText;
+            if (cache is not null)
+            {
+                if (RefreshOnLoad is { } refreshOnLoad)
+                    cache.RefreshOnLoad = refreshOnLoad;
+                if (SaveData is { } saveData)
+                    cache.SaveData = saveData;
+                if (EnableRefresh is { } enableRefresh)
+                    cache.EnableRefresh = enableRefresh;
+            }
         }
     }
 
