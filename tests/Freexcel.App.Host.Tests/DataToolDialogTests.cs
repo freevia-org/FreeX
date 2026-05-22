@@ -439,6 +439,33 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_ParsesSheetQualifiedListAndCriteriaRanges()
+    {
+        var currentSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+        var criteriaSheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            currentSheetId,
+            listRangeText: "Data!A1:D20",
+            criteriaRangeText: "Criteria!F1:G2",
+            copyToCellText: "",
+            uniqueRecordsOnly: false,
+            resolveSheetId: sheetName => sheetName switch
+            {
+                "Data" => dataSheetId,
+                "Criteria" => criteriaSheetId,
+                _ => null
+            },
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.ListRange.Should().Be(new GridRange(new CellAddress(dataSheetId, 1, 1), new CellAddress(dataSheetId, 20, 4)));
+        result.CriteriaRange.Should().Be(new GridRange(new CellAddress(criteriaSheetId, 1, 6), new CellAddress(criteriaSheetId, 2, 7)));
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_RejectsInvalidCopyToCell()
     {
         var sheetId = SheetId.New();

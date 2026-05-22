@@ -386,8 +386,20 @@ public partial class MainWindow
 
         UpdateViewport();
         RefreshStatusBar();
+        if (dialog.RequestedAction == PageSetupDialogAction.Options)
+        {
+            ShowPageSetupPrinterOptions();
+            return;
+        }
+
         if (dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
             PrintButton_Click(this, new RoutedEventArgs());
+    }
+
+    private void ShowPageSetupPrinterOptions()
+    {
+        var dialog = new System.Windows.Controls.PrintDialog();
+        dialog.ShowDialog();
     }
 
     private void PrintGridlinesChk_Click(object sender, RoutedEventArgs e)
