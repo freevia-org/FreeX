@@ -5850,6 +5850,12 @@ public class FunctionLibraryTests
     public void Unicode_BasicAscii_ReturnsCodePoint() =>
         _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
 
+    [Theory]
+    [InlineData("=UNICODE(65)", 54)]
+    [InlineData("=UNICODE(TRUE)", 84)]
+    public void Unicode_CoercesScalarArgumentsToText(string formula, double expected) =>
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+
     [Fact]
     public void Unicode_EmptyText_ReturnsValueError() =>
         _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
