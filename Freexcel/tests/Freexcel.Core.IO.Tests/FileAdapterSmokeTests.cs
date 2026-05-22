@@ -9986,6 +9986,12 @@ public partial class FileAdapterSmokeTests
         sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1");
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1");
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3");
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild").Should().NotBeNull();
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -14702,6 +14708,9 @@ public partial class FileAdapterSmokeTests
             sheetFormat.SetAttributeValue("zeroHeight", "1");
             sheetFormat.SetAttributeValue("thickTop", "1");
             sheetFormat.SetAttributeValue("outlineLevelRow", "3");
+            sheetFormat.Add(new XElement(
+                worksheetNs + "nativeSheetFormatChild",
+                new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
