@@ -167,7 +167,7 @@ public sealed class InsertChartDialog : Window
         subtypeGallery.SelectedItem as ChartTypeGalleryChoice
         ?? recommendedGallery.SelectedItem as ChartTypeGalleryChoice;
 
-    private static Grid CreateRecommendedChartsPanel(ListBox gallery)
+    internal static Grid CreateRecommendedChartsPanel(ListBox gallery)
     {
         var grid = CreatePickerGrid();
         var heading = new StackPanel();

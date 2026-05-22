@@ -169,10 +169,10 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Choose fields");
-        source.Should().Contain("Slicers make it faster to filter a PivotTable");
         source.Should().Contain("_Field to connect");
         source.Should().Contain("Slicer _caption");
         source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().NotContain("Slicers make it faster to filter a PivotTable");
     }
 
     [Fact]
@@ -189,9 +189,9 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Choose date fields");
-        source.Should().Contain("Timelines filter PivotTables by date");
         source.Should().Contain("_Date field to connect");
         source.Should().Contain("Timeline _caption");
+        source.Should().NotContain("Timelines filter PivotTables by date");
     }
 
     [Fact]
@@ -209,14 +209,16 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotChartTypeDialog_ExposesPreviewAndRecommendedChartTypeCopy()
+    public void PivotChartTypeDialog_ExposesSelectableRecommendedPivotCharts()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Recommended PivotCharts");
         source.Should().Contain("All Charts");
-        source.Should().Contain("Chart preview");
-        source.Should().Contain("Pick a chart type for the selected PivotTable data");
+        source.Should().Contain("private readonly ListBox _recommendedGallery");
+        source.Should().Contain("CreateRecommendedChartsPanel(_recommendedGallery)");
+        source.Should().Contain("SelectedGalleryChoice()");
+        source.Should().NotContain("Pick a chart type for the selected PivotTable data");
         source.Should().Contain("InsertChartDialog.CreateAllChartsPanel");
         source.Should().Contain("Chart categories");
         source.Should().Contain("Chart subtype gallery");
@@ -340,13 +342,15 @@ public sealed class PivotWorkflowDialogTests
             "Totals & Filters",
             "Display",
             "Data",
-            "Alt Text",
             "_emptyCellsBox",
             "_autofitColumnsBox",
             "_preserveFormattingBox",
             "_refreshOnOpenBox"
         })
             source.Should().Contain(content);
+
+        source.Should().NotContain("Alt Text");
+        source.Should().NotContain("Title and description metadata can be added in a future pass.");
     }
 
     [Fact]
@@ -368,12 +372,13 @@ public sealed class PivotWorkflowDialogTests
             "Layout section",
             "Format section",
             "Grand totals",
-            "Field list and buttons",
             "PivotTable Style Options",
             "Data options",
             "Preserve source sort and _filter settings"
         })
             source.Should().Contain(content);
+
+        source.Should().NotContain("Field list and buttons remain available");
     }
 
     [Fact]
@@ -506,7 +511,7 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Selection");
         source.Should().Contain("Group by");
         source.Should().Contain("Range");
-        source.Should().Contain("Select the PivotTable field and grouping interval");
+        source.Should().NotContain("Select the PivotTable field and grouping interval");
     }
 
     [Fact]
@@ -525,8 +530,8 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Name and formula");
         source.Should().Contain("Formula:");
-        source.Should().Contain("Use field names in formulas");
-        source.Should().Contain("Calculated fields are added to the Values area");
+        source.Should().NotContain("Use field names in formulas");
+        source.Should().NotContain("Calculated fields are added to the Values area");
     }
 
     [Fact]
@@ -568,7 +573,7 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Field and item");
-        source.Should().Contain("Calculated items are evaluated within the selected field");
+        source.Should().NotContain("Calculated items are evaluated within the selected field");
         source.Should().Contain("Source _field");
         source.Should().Contain("Item _formula");
     }
@@ -640,12 +645,13 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Chart style");
-        source.Should().Contain("Style IDs match the built-in Excel chart style gallery");
         source.Should().Contain("Field buttons");
         source.Should().Contain("_Show field buttons on chart");
         source.Should().Contain("Report _filter buttons");
         source.Should().Contain("_Axis field buttons");
         source.Should().Contain("_Value field buttons");
+        source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
+        source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
     }
 
     [Fact]
