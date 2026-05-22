@@ -951,6 +951,10 @@ public sealed class ViewportService : IViewportService
 
         if (cfStyle.FillColor.HasValue)
             result.FillColor = cfStyle.FillColor;
+        if (cfStyle.FillPatternStyle != CellFillPatternStyle.None)
+            result.FillPatternStyle = cfStyle.FillPatternStyle;
+        if (cfStyle.FillPatternColor.HasValue)
+            result.FillPatternColor = cfStyle.FillPatternColor;
 
         // For font properties we treat any non-default CF value as an explicit override
         if (cfStyle.Bold)
