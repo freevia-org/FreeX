@@ -140,14 +140,24 @@ internal static class XlsxAdvancedConditionalFormatWriter
                         : null,
                     style.FontName != def.FontName ? new XElement(workbookNs + "name", new XAttribute("val", style.FontName)) : null)
                 : null,
-            style.FillColor is { } fill
+            HasDifferentialFill(style)
                 ? new XElement(
                     workbookNs + "fill",
                     new XElement(
                         workbookNs + "patternFill",
-                        new XAttribute("patternType", "solid"),
-                        new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(fill))),
-                        new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))
+                        new XAttribute("patternType", ToPatternType(style.FillPatternStyle)),
+                        style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid
+                            ? style.FillColor is { } fill
+                                ? new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(fill)))
+                                : null
+                            : style.FillPatternColor is { } pattern
+                                ? new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(pattern)))
+                                : null,
+                        style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid
+                            ? new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))
+                            : style.FillColor is { } background
+                                ? new XElement(workbookNs + "bgColor", new XAttribute("rgb", ToArgb(background)))
+                                : new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))
                 : null,
             HasDifferentialBorder(style)
                 ? new XElement(
@@ -237,6 +247,11 @@ internal static class XlsxAdvancedConditionalFormatWriter
         style.BorderRight.Style != BorderStyle.None ||
         style.BorderTop.Style != BorderStyle.None ||
         style.BorderBottom.Style != BorderStyle.None;
+
+    private static bool HasDifferentialFill(CellStyle style) =>
+        style.FillColor is not null ||
+        style.FillPatternStyle != CellFillPatternStyle.None ||
+        style.FillPatternColor is not null;
 
     private static XElement ToDifferentialBorderXml(string edgeName, CellBorder border, XNamespace workbookNs)
     {
@@ -456,6 +471,30 @@ internal static class XlsxAdvancedConditionalFormatWriter
 
     private static string ToArgb(CellColor color) =>
         $"FF{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static string ToPatternType(CellFillPatternStyle style) =>
+        style switch
+        {
+            CellFillPatternStyle.Solid => "solid",
+            CellFillPatternStyle.Gray0625 => "gray0625",
+            CellFillPatternStyle.Gray125 => "gray125",
+            CellFillPatternStyle.LightGray => "lightGray",
+            CellFillPatternStyle.MediumGray => "mediumGray",
+            CellFillPatternStyle.DarkGray => "darkGray",
+            CellFillPatternStyle.LightHorizontal => "lightHorizontal",
+            CellFillPatternStyle.LightVertical => "lightVertical",
+            CellFillPatternStyle.LightDown => "lightDown",
+            CellFillPatternStyle.LightUp => "lightUp",
+            CellFillPatternStyle.LightGrid => "lightGrid",
+            CellFillPatternStyle.LightTrellis => "lightTrellis",
+            CellFillPatternStyle.DarkHorizontal => "darkHorizontal",
+            CellFillPatternStyle.DarkVertical => "darkVertical",
+            CellFillPatternStyle.DarkDown => "darkDown",
+            CellFillPatternStyle.DarkUp => "darkUp",
+            CellFillPatternStyle.DarkGrid => "darkGrid",
+            CellFillPatternStyle.DarkTrellis => "darkTrellis",
+            _ => "solid"
+        };
 
     private static bool IsAdvancedConditionalFormat(ConditionalFormat cf) =>
         cf.RuleType is CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet or

@@ -2763,6 +2763,9 @@ public partial class FileAdapterSmokeTests
         {
             Bold = true,
             FontColor = new CellColor(200, 0, 0),
+            FillColor = new CellColor(255, 242, 204),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(112, 48, 160)
         };
         var styleId = workbook.RegisterStyle(style);
 
@@ -2782,6 +2785,9 @@ public partial class FileAdapterSmokeTests
         var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
         loadedStyle.Bold.Should().BeTrue();
         loadedStyle.FontColor.R.Should().Be(200);
+        loadedStyle.FillColor.Should().Be(new CellColor(255, 242, 204));
+        loadedStyle.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+        loadedStyle.FillPatternColor.Should().Be(new CellColor(112, 48, 160));
     }
 
     [Fact]
@@ -5296,6 +5302,8 @@ public partial class FileAdapterSmokeTests
             Bold = true,
             FontColor = new CellColor(12, 34, 56),
             FillColor = new CellColor(200, 210, 220),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(90, 80, 70),
             Locked = false
         });
         sheet.SetCell(address, cell);
@@ -5313,6 +5321,8 @@ public partial class FileAdapterSmokeTests
         loadedStyle.Bold.Should().BeTrue();
         loadedStyle.FontColor.Should().Be(new CellColor(12, 34, 56));
         loadedStyle.FillColor.Should().Be(new CellColor(200, 210, 220));
+        loadedStyle.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+        loadedStyle.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
         loadedStyle.Locked.Should().BeFalse();
     }
 

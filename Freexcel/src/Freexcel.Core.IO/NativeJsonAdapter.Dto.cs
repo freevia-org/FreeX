@@ -255,6 +255,8 @@ public sealed partial class NativeJsonAdapter
         public bool Subscript { get; set; }
         public CellColor FontColor { get; set; } = CellColor.Black;
         public CellColor? FillColor { get; set; }
+        public CellFillPatternStyle FillPatternStyle { get; set; }
+        public CellColor? FillPatternColor { get; set; }
         public CellBorderDto? BorderTop { get; set; }
         public CellBorderDto? BorderRight { get; set; }
         public CellBorderDto? BorderBottom { get; set; }

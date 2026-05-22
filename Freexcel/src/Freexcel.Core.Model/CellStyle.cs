@@ -38,6 +38,32 @@ public enum BorderStyle
 public readonly record struct CellBorder(BorderStyle Style = BorderStyle.None, CellColor Color = default);
 
 /// <summary>
+/// Pattern styles available for a cell fill.
+/// </summary>
+public enum CellFillPatternStyle
+{
+    None,
+    Solid,
+    Gray0625,
+    Gray125,
+    LightGray,
+    MediumGray,
+    DarkGray,
+    LightHorizontal,
+    LightVertical,
+    LightDown,
+    LightUp,
+    LightGrid,
+    LightTrellis,
+    DarkHorizontal,
+    DarkVertical,
+    DarkDown,
+    DarkUp,
+    DarkGrid,
+    DarkTrellis
+}
+
+/// <summary>
 /// Horizontal alignment within a cell.
 /// </summary>
 public enum HorizontalAlignment
@@ -96,6 +122,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
 
     /// <summary>Background fill color. Null means transparent / no fill.</summary>
     public CellColor? FillColor { get; set; }
+
+    /// <summary>Pattern rendered over the background fill.</summary>
+    public CellFillPatternStyle FillPatternStyle { get; set; }
+
+    /// <summary>Pattern foreground color. Null means the app default foreground.</summary>
+    public CellColor? FillPatternColor { get; set; }
 
     /// <summary>Top border.</summary>
     public CellBorder BorderTop { get; set; }
@@ -161,6 +193,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         Subscript = Subscript,
         FontColor = FontColor,
         FillColor = FillColor,
+        FillPatternStyle = FillPatternStyle,
+        FillPatternColor = FillPatternColor,
         BorderTop = BorderTop,
         BorderRight = BorderRight,
         BorderBottom = BorderBottom,
@@ -197,6 +231,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && Subscript == other.Subscript
             && FontColor == other.FontColor
             && FillColor == other.FillColor
+            && FillPatternStyle == other.FillPatternStyle
+            && FillPatternColor == other.FillPatternColor
             && BorderTop == other.BorderTop
             && BorderRight == other.BorderRight
             && BorderBottom == other.BorderBottom
@@ -226,6 +262,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(Subscript);
         h.Add(FontColor);
         h.Add(FillColor);
+        h.Add(FillPatternStyle);
+        h.Add(FillPatternColor);
         h.Add(BorderTop);
         h.Add(BorderRight);
         h.Add(BorderBottom);
@@ -271,7 +309,9 @@ public record StyleDiff(
     CellBorder? BorderBottom    = null,
     CellBorder? BorderLeft      = null,
     bool? Locked                = null,
-    bool? ClearFill             = null   // true → set FillColor to null
+    bool? ClearFill             = null,
+    CellFillPatternStyle? FillPatternStyle = null,
+    CellColor? FillPatternColor = null
 )
 {
     /// <summary>Create a StyleDiff that captures all properties of <paramref name="style"/> as explicit overrides.</summary>
@@ -286,6 +326,8 @@ public record StyleDiff(
         FontSize:        style.FontSize,
         FontColor:       style.FontColor,
         FillColor:       style.FillColor,
+        FillPatternStyle: style.FillPatternStyle,
+        FillPatternColor: style.FillPatternColor,
         HAlign:          style.HorizontalAlignment,
         VAlign:          style.VerticalAlignment,
         WrapText:        style.WrapText,
@@ -325,7 +367,14 @@ public record StyleDiff(
         if (FontSize       is not null) s.FontSize      = FontSize.Value;
         if (FontColor      is not null) s.FontColor     = FontColor.Value;
         if (FillColor      is not null) s.FillColor     = FillColor.Value;
-        if (ClearFill      == true)     s.FillColor     = null;
+        if (ClearFill      == true)
+        {
+            s.FillColor = null;
+            s.FillPatternStyle = CellFillPatternStyle.None;
+            s.FillPatternColor = null;
+        }
+        if (FillPatternStyle is not null) s.FillPatternStyle = FillPatternStyle.Value;
+        if (FillPatternColor is not null) s.FillPatternColor = FillPatternColor.Value;
         if (HAlign         is not null) s.HorizontalAlignment = HAlign.Value;
         if (VAlign         is not null) s.VerticalAlignment   = VAlign.Value;
         if (WrapText       is not null) s.WrapText      = WrapText.Value;

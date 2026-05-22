@@ -49,6 +49,52 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void ApplyFillPattern_SetsPatternStyleAndColor()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new NumberValue(1));
+
+        var cmd = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(
+                FillColor: new CellColor(255, 255, 0),
+                FillPatternStyle: CellFillPatternStyle.DarkGrid,
+                FillPatternColor: new CellColor(0, 112, 192)));
+
+        cmd.Apply(ctx);
+
+        var style = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        style.FillColor.Should().Be(new CellColor(255, 255, 0));
+        style.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+        style.FillPatternColor.Should().Be(new CellColor(0, 112, 192));
+    }
+
+    [Fact]
+    public void ClearFill_RemovesPatternState()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromValue(new NumberValue(1));
+        cell.StyleId = wb.RegisterStyle(new CellStyle
+        {
+            FillColor = new CellColor(255, 255, 0),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(0, 112, 192)
+        });
+        sheet.SetCell(addr, cell);
+
+        var cmd = new ApplyStyleCommand(sheet.Id, new GridRange(addr, addr), new StyleDiff(ClearFill: true));
+        cmd.Apply(ctx);
+
+        var style = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        style.FillColor.Should().BeNull();
+        style.FillPatternStyle.Should().Be(CellFillPatternStyle.None);
+        style.FillPatternColor.Should().BeNull();
+    }
+
+    [Fact]
     public void ApplyToRange_AllCellsUpdated()
     {
         var (wb, sheet, ctx) = Setup();

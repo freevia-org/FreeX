@@ -17,6 +17,8 @@ public partial class FormatCellsDialog : Window
 
     private sealed record NumberFormatOption(string Category, string Label, string Code, string Preview);
 
+    private sealed record FillPatternOption(CellFillPatternStyle Style, string Label);
+
     private static readonly NumberFormatOption[] NumberFormatOptions =
     [
         new("General", "General", "General", "1234.56"),
@@ -97,6 +99,29 @@ public partial class FormatCellsDialog : Window
         "[Red] (1234.10)"
     ];
 
+    private static readonly FillPatternOption[] FillPatternOptions =
+    [
+        new(CellFillPatternStyle.None, "None"),
+        new(CellFillPatternStyle.Solid, "Solid"),
+        new(CellFillPatternStyle.Gray0625, "6.25% Gray"),
+        new(CellFillPatternStyle.Gray125, "12.5% Gray"),
+        new(CellFillPatternStyle.LightGray, "25% Gray"),
+        new(CellFillPatternStyle.MediumGray, "50% Gray"),
+        new(CellFillPatternStyle.DarkGray, "75% Gray"),
+        new(CellFillPatternStyle.LightHorizontal, "Thin Horizontal Stripe"),
+        new(CellFillPatternStyle.LightVertical, "Thin Vertical Stripe"),
+        new(CellFillPatternStyle.LightDown, "Thin Reverse Diagonal Stripe"),
+        new(CellFillPatternStyle.LightUp, "Thin Diagonal Stripe"),
+        new(CellFillPatternStyle.LightGrid, "Thin Horizontal Crosshatch"),
+        new(CellFillPatternStyle.LightTrellis, "Thin Diagonal Crosshatch"),
+        new(CellFillPatternStyle.DarkHorizontal, "Horizontal Stripe"),
+        new(CellFillPatternStyle.DarkVertical, "Vertical Stripe"),
+        new(CellFillPatternStyle.DarkDown, "Reverse Diagonal Stripe"),
+        new(CellFillPatternStyle.DarkUp, "Diagonal Stripe"),
+        new(CellFillPatternStyle.DarkGrid, "Diagonal Crosshatch"),
+        new(CellFillPatternStyle.DarkTrellis, "Thick Diagonal Crosshatch")
+    ];
+
     public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         _current = current.Clone();
@@ -147,6 +172,11 @@ public partial class FormatCellsDialog : Window
         DlgFillColorBox.Text = s.FillColor.HasValue
             ? ColorInputParser.FormatRgbColor(s.FillColor.Value)
             : "";
+        DlgFillPatternColorBox.Text = s.FillPatternColor.HasValue
+            ? ColorInputParser.FormatRgbColor(s.FillPatternColor.Value)
+            : "";
+        DlgFillPatternStyleBox.ItemsSource = FillPatternOptions.Select(option => option.Label).ToArray();
+        DlgFillPatternStyleBox.SelectedItem = FillPatternLabel(s.FillPatternStyle);
         DlgClearFillCheck.IsChecked = false;
 
         DlgHAlignBox.ItemsSource  = Enum.GetNames(typeof(CellHAlign));
@@ -340,6 +370,8 @@ public partial class FormatCellsDialog : Window
     {
         CellColor? fontColor = TryParseColor(DlgFontColorBox.Text);
         CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
+        CellColor? fillPatternColor = TryParseColor(DlgFillPatternColorBox.Text);
+        var fillPatternStyle = SelectedFillPatternStyle();
         bool clearFill = DlgClearFillCheck.IsChecked == true;
 
         string? numFmt = ResolveSelectedNumberFormat();
@@ -371,6 +403,8 @@ public partial class FormatCellsDialog : Window
             FontSize:        fontSize,
             FontColor:       fontColor,
             FillColor:       clearFill ? null : fillColor,
+            FillPatternStyle: clearFill ? CellFillPatternStyle.None : fillPatternStyle,
+            FillPatternColor: clearFill ? null : fillPatternColor,
             HAlign:          hAlign,
             VAlign:          vAlign,
             WrapText:        DlgWrapTextCheck.IsChecked,
@@ -416,6 +450,9 @@ public partial class FormatCellsDialog : Window
 
     private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFillColorBox, allowNoColor: true);
+
+    private void DlgFillPatternColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgFillPatternColorBox, allowNoColor: true);
 
     private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgBorderLineColorBox, allowNoColor: false);
@@ -542,9 +579,17 @@ public partial class FormatCellsDialog : Window
         var fillBrush = DlgClearFillCheck.IsChecked == true
             ? Brushes.White
             : BrushForColor(TryParseColor(DlgFillColorBox.Text), Brushes.White);
+        var patternStyle = SelectedFillPatternStyle();
+        var patternColor = TryParseColor(DlgFillPatternColorBox.Text);
 
         DlgFillBackgroundPreview.Background = fillBrush;
         DlgFillSamplePreview.Background = fillBrush;
+        DlgFillSamplePreview.BorderBrush = patternStyle == CellFillPatternStyle.None
+            ? SystemColors.ControlDarkBrush
+            : BrushForColor(patternColor, Brushes.Black);
+        DlgFillSamplePreview.ToolTip = patternStyle == CellFillPatternStyle.None
+            ? "No fill pattern"
+            : $"{FillPatternLabel(patternStyle)} pattern";
     }
 
     private void UpdateBorderPreview()
@@ -576,6 +621,20 @@ public partial class FormatCellsDialog : Window
         => color is { } rgb
             ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))
             : fallback;
+
+    private CellFillPatternStyle SelectedFillPatternStyle()
+    {
+        if (DlgFillPatternStyleBox?.SelectedItem is string label
+            && FillPatternOptions.FirstOrDefault(option => option.Label == label) is { } option)
+        {
+            return option.Style;
+        }
+
+        return CellFillPatternStyle.None;
+    }
+
+    private static string FillPatternLabel(CellFillPatternStyle style) =>
+        FillPatternOptions.FirstOrDefault(option => option.Style == style)?.Label ?? "None";
 
     private static double PreviewThickness(string? selectedStyle)
         => selectedStyle switch
