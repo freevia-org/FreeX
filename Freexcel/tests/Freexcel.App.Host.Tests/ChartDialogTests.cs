@@ -87,7 +87,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartTypeDialogs_ExposeExcelInsertAndChangeSurfaces()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
 
         source.Should().Contain("Recommended Charts");
         source.Should().Contain("All Charts");
@@ -305,7 +305,9 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartFormatDialogs_ExposeKeyboardAccessKeysForOptionControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = string.Concat(
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs")));
 
         foreach (var content in new[]
         {
