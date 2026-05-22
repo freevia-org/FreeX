@@ -44,6 +44,19 @@ public sealed class AutoFilterDialog : Window
         DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
     };
     private readonly TextBox _criteriaValueBox = new() { Visibility = Visibility.Collapsed };
+    private readonly ComboBox _criteriaConnectorBox = new()
+    {
+        Visibility = Visibility.Collapsed,
+        ItemsSource = new[] { "And", "Or" },
+        SelectedIndex = 0
+    };
+    private readonly ComboBox _criteriaOperatorBox2 = new()
+    {
+        Visibility = Visibility.Collapsed,
+        IsTextSearchEnabled = true,
+        DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
+    };
+    private readonly TextBox _criteriaValueBox2 = new() { Visibility = Visibility.Collapsed };
     private readonly RadioButton _sortNone = new() { Content = "_No sort", IsChecked = true };
     private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
     private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
@@ -92,6 +105,13 @@ public sealed class AutoFilterDialog : Window
             _criteriaOperatorBox.ToolTip = $"{GetFilterFamilyHeader(menuPlan.FilterKind)} operator";
             _criteriaValueBox.Visibility = Visibility.Visible;
             _criteriaValueBox.ToolTip = "Value for the selected typed filter";
+            _criteriaConnectorBox.Visibility = Visibility.Visible;
+            _criteriaOperatorBox2.ItemsSource = criteriaOptions;
+            _criteriaOperatorBox2.Visibility = Visibility.Visible;
+            _criteriaOperatorBox2.SelectedIndex = 0;
+            _criteriaOperatorBox2.ToolTip = $"Second {GetFilterFamilyHeader(menuPlan.FilterKind)} operator";
+            _criteriaValueBox2.Visibility = Visibility.Visible;
+            _criteriaValueBox2.ToolTip = "Value for the second typed filter";
             _criteriaBox.ToolTip = "Generated criterion that will be applied.";
             _customFilterGroup.Visibility = Visibility.Visible;
         }
@@ -185,6 +205,21 @@ public sealed class AutoFilterDialog : Window
         _criteriaValueBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaValueBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaValueBox);
+
+        customFilterPanel.Children.Add(new Label { Content = "_And / Or", Target = _criteriaConnectorBox, Padding = new Thickness(0) });
+        _criteriaConnectorBox.Margin = new Thickness(0, 4, 0, 4);
+        _criteriaConnectorBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        customFilterPanel.Children.Add(_criteriaConnectorBox);
+
+        customFilterPanel.Children.Add(new Label { Content = "Second o_perator", Target = _criteriaOperatorBox2, Padding = new Thickness(0) });
+        _criteriaOperatorBox2.Margin = new Thickness(0, 4, 0, 4);
+        _criteriaOperatorBox2.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        customFilterPanel.Children.Add(_criteriaOperatorBox2);
+
+        customFilterPanel.Children.Add(new Label { Content = "Second va_lue", Target = _criteriaValueBox2, Padding = new Thickness(0) });
+        _criteriaValueBox2.Margin = new Thickness(0, 4, 0, 4);
+        _criteriaValueBox2.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        customFilterPanel.Children.Add(_criteriaValueBox2);
 
         customFilterPanel.Children.Add(new Label { Content = "_Criteria text", Target = _criteriaBox, Padding = new Thickness(0) });
 
@@ -353,6 +388,22 @@ public sealed class AutoFilterDialog : Window
         return $"{option.CriteriaPrefix}{value?.Trim() ?? string.Empty}";
     }
 
+    public static string BuildCompositeCriteriaText(string? firstCriteria, string? connector, string? secondCriteria)
+    {
+        var first = firstCriteria?.Trim() ?? string.Empty;
+        var second = secondCriteria?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(first))
+            return second;
+
+        if (string.IsNullOrWhiteSpace(second))
+            return first;
+
+        var prefix = string.Equals(connector, "Or", StringComparison.OrdinalIgnoreCase)
+            ? "or"
+            : "and";
+        return $"{prefix}:{first}|{second}";
+    }
+
     public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
 
@@ -403,8 +454,17 @@ public sealed class AutoFilterDialog : Window
         if (_criteriaOperatorBox.SelectedItem is not AutoFilterCriteriaOption option)
             return;
 
-        _criteriaBox.Text = BuildCriteriaText(option, _criteriaValueBox.Text);
+        var firstCriteria = BuildCriteriaText(option, _criteriaValueBox.Text);
+        var secondCriteria = _criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption option2
+            ? BuildCriteriaText(option2, _criteriaValueBox2.Text)
+            : string.Empty;
+        _criteriaBox.Text = BuildCompositeCriteriaText(
+            firstCriteria,
+            _criteriaConnectorBox.SelectedItem as string,
+            secondCriteria);
         _criteriaValueBox.IsEnabled = option.RequiresValue;
+        if (_criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption secondOption)
+            _criteriaValueBox2.IsEnabled = secondOption.RequiresValue;
     }
 
     private void FilterByColorButton_Click(object sender, RoutedEventArgs e)
