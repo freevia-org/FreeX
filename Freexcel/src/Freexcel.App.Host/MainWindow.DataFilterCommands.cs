@@ -63,7 +63,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = sheet is null
             ? new AutoFilterDialog(Array.Empty<AutoFilterChecklistItem>())
-            : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
+            : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
         dialog.Owner = this;
         dialog.Title = "Filter";
         if (dialog.ShowDialog() != true) return;
@@ -87,12 +87,27 @@ public partial class MainWindow
 
         var value = result.CriteriaText;
         var filterText = value.TrimStart();
-        if (result.ColorFilter is { } fillColor)
+        if (result.ColorFilter is { } colorFilter)
         {
+            var label = colorFilter.Kind switch
+            {
+                AutoFilterColorFilterKind.FontColor => "Filter by Font Color",
+                AutoFilterColorFilterKind.NoFill => "Filter by No Fill",
+                _ => "Filter by Cell Color"
+            };
             if (!TryExecuteRepeatableCurrentRangeCommand(
-                    "Filter by Cell Color",
+                    label,
                     range,
-                    currentRange => new CellFillColorFilterCommand(_currentSheetId, currentRange, filterColOffset, fillColor)))
+                    currentRange => colorFilter.Kind switch
+                    {
+                        AutoFilterColorFilterKind.FontColor when colorFilter.Color is { } fontColor =>
+                            new CellFontColorFilterCommand(_currentSheetId, currentRange, filterColOffset, fontColor),
+                        AutoFilterColorFilterKind.NoFill =>
+                            new CellNoFillColorFilterCommand(_currentSheetId, currentRange, filterColOffset),
+                        AutoFilterColorFilterKind.CellFillColor when colorFilter.Color is { } fillColor =>
+                            new CellFillColorFilterCommand(_currentSheetId, currentRange, filterColOffset, fillColor),
+                        _ => new FilterCommand(_currentSheetId, currentRange, filterColOffset, [])
+                    }))
                 return false;
             return true;
         }
