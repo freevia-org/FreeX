@@ -244,6 +244,11 @@ internal static class XlsxPivotTableWriter
             new XAttribute("showColumnGrandTotals", pivot.ShowColumnGrandTotals ? "1" : "0"),
             new XAttribute("repeatItemLabels", pivot.RepeatItemLabels ? "1" : "0"),
             new XAttribute("blankLineAfterItems", pivot.BlankLineAfterItems ? "1" : "0"),
+            new XAttribute("itemPrintTitles", pivot.PrintTitles ? "1" : "0"),
+            new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),
+            new XAttribute("printDrill", pivot.PrintExpandCollapseButtons ? "1" : "0"),
+            OptionalAttribute("altText", pivot.AltTextTitle),
+            OptionalAttribute("altTextSummary", pivot.AltTextDescription),
             new XAttribute("reportLayout", ToPivotReportLayoutText(pivot.ReportLayout)),
             new XElement(
                 workbookNs + "location",
@@ -497,5 +502,8 @@ internal static class XlsxPivotTableWriter
 
     private static string FormatInvariant(double value) =>
         value.ToString("0.########", CultureInfo.InvariantCulture);
+
+    private static XAttribute? OptionalAttribute(string name, string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value.Trim());
 
 }

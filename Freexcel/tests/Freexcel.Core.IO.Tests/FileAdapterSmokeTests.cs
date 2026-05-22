@@ -12592,7 +12592,11 @@ public partial class FileAdapterSmokeTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
-            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
+            PrintTitles = true,
+            PrintExpandCollapseButtons = true,
+            AltTextTitle = "Sales pivot",
+            AltTextDescription = "Pivot summary for sales"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
@@ -12614,14 +12618,23 @@ public partial class FileAdapterSmokeTests
             var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
             pivotXml.ToString().Should().Contain("rowFields");
             pivotXml.ToString().Should().Contain("dataFields");
+            pivotXml.Root!.Attribute("itemPrintTitles")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
+            pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
         }
 
         saved.Position = 0;
         var loaded = adapter.Load(saved);
         loaded.PivotCaches.Should().ContainSingle().Which.Fields.Select(field => field.Name)
             .Should().Equal("Category", "Amount");
-        loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Which.DataFields
-            .Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
+        loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        loadedPivot.PrintTitles.Should().BeTrue();
+        loadedPivot.PrintExpandCollapseButtons.Should().BeTrue();
+        loadedPivot.AltTextTitle.Should().Be("Sales pivot");
+        loadedPivot.AltTextDescription.Should().Be("Pivot summary for sales");
     }
 
     [Fact]

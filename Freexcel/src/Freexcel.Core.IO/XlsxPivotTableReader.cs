@@ -112,7 +112,7 @@ internal static class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, "PivotStyleLight16", true, true, false, false, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, "PivotStyleLight16", true, true, false, false, false, false, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -160,6 +160,10 @@ internal static class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showColHeaders", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showRowStripes"),
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showColStripes"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "itemPrintTitles") || XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldPrintTitles"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "printDrill"),
+            root.Attribute("altText")?.Value,
+            root.Attribute("altTextSummary")?.Value,
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
@@ -652,7 +656,11 @@ internal static class XlsxPivotTableReader
             ShowRowHeaders = pending.ShowRowHeaders,
             ShowColumnHeaders = pending.ShowColumnHeaders,
             ShowRowStripes = pending.ShowRowStripes,
-            ShowColumnStripes = pending.ShowColumnStripes
+            ShowColumnStripes = pending.ShowColumnStripes,
+            PrintTitles = pending.PrintTitles,
+            PrintExpandCollapseButtons = pending.PrintExpandCollapseButtons,
+            AltTextTitle = string.IsNullOrWhiteSpace(pending.AltTextTitle) ? null : pending.AltTextTitle,
+            AltTextDescription = string.IsNullOrWhiteSpace(pending.AltTextDescription) ? null : pending.AltTextDescription
         };
 
         pivotTable.RowFields.AddRange(pending.RowFields);
@@ -695,6 +703,10 @@ internal static class XlsxPivotTableReader
         bool ShowColumnHeaders,
         bool ShowRowStripes,
         bool ShowColumnStripes,
+        bool PrintTitles,
+        bool PrintExpandCollapseButtons,
+        string? AltTextTitle,
+        string? AltTextDescription,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,
