@@ -239,9 +239,17 @@
             </TabItem>
         </TabControl>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="_Cancel" Width="72" IsCancel="True"/>
-        </StackPanel>
+        <DockPanel Grid.Row="1" Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="_Print..." Width="86" Margin="0,0,8,0" Click="PrintButton_Click"/>
+                <Button Content="Print Pre_view" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"/>
+                <Button Content="_Options..." Width="86" IsEnabled="False"
+                        ToolTip="Printer driver options are not available yet."/>
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
+                <Button Content="_Cancel" Width="72" IsCancel="True"/>
+            </StackPanel>
+        </DockPanel>
     </Grid>
 </Window>
