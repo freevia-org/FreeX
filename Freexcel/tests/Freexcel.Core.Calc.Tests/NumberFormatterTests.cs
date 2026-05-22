@@ -560,4 +560,20 @@ public class NumberFormatterTests
     {
         Assert.Equal("#DIV/0!", NumberFormatter.Format(new ErrorValue("#DIV/0!"), "General"));
     }
+
+    [Fact]
+    public void Format_LcidToken_FallsBackToDotNetCultureSeparatorsForUncatalogedLocale()
+    {
+        var result = NumberFormatter.Format(new NumberValue(1234.5), "[$-0C07]#,##0.00");
+
+        Assert.Equal("1\u00A0234,50", result);
+    }
+
+    [Fact]
+    public void Format_LcidCurrencyToken_PreservesSymbolWhenUsingCultureFallback()
+    {
+        var result = NumberFormatter.Format(new NumberValue(1234.5), "[$€-0C07]#,##0.00");
+
+        Assert.Equal("€1\u00A0234,50", result);
+    }
 }
