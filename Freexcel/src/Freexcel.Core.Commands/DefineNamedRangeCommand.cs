@@ -11,17 +11,20 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 {
     private readonly string _name;
     private readonly GridRange _range;
+    private readonly NamedRangeMetadata? _metadata;
 
     // Snapshot captured during Apply for undo
     private bool _existed;
     private GridRange _previousRange;
+    private NamedRangeMetadata? _previousMetadata;
 
     public string Label => $"Define Named Range '{_name}'";
 
-    public DefineNamedRangeCommand(string name, GridRange range)
+    public DefineNamedRangeCommand(string name, GridRange range, NamedRangeMetadata? metadata = null)
     {
         _name = name;
         _range = range;
+        _metadata = metadata;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -31,14 +34,16 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
             return new CommandOutcome(false, validationError);
 
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
-        ctx.Workbook.DefineNamedRange(_name, _range);
+        if (_existed && ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
+            _previousMetadata = metadata;
+        ctx.Workbook.DefineNamedRange(_name, _range, _metadata);
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
         if (_existed)
-            ctx.Workbook.DefineNamedRange(_name, _previousRange);
+            ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata);
         else
             ctx.Workbook.RemoveNamedRange(_name);
     }
@@ -52,6 +57,7 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
 {
     private readonly string _name;
     private GridRange _previousRange;
+    private NamedRangeMetadata? _previousMetadata;
     private bool _existed;
 
     public string Label => $"Remove Named Range '{_name}'";
@@ -67,6 +73,8 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
         if (!_existed)
             return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
 
+        if (ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
+            _previousMetadata = metadata;
         ctx.Workbook.RemoveNamedRange(_name);
         return new CommandOutcome(true);
     }
@@ -74,7 +82,7 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (_existed)
-            ctx.Workbook.DefineNamedRange(_name, _previousRange);
+            ctx.Workbook.DefineNamedRange(_name, _previousRange, _previousMetadata);
     }
 }
 
@@ -85,7 +93,7 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
     private readonly bool _useLeftColumn;
     private readonly bool _useBottomRow;
     private readonly bool _useRightColumn;
-    private Dictionary<string, GridRange>? _snapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _snapshot;
 
     public string Label => "Create Names from Selection";
 
@@ -115,7 +123,7 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
         if (definitions.Count == 0)
             return new CommandOutcome(false, "No valid labels were found in the selection.");
 
-        _snapshot = ctx.Workbook.NamedRanges.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        _snapshot = CaptureNamedRangeSnapshot(ctx.Workbook);
         foreach (var (name, range) in definitions)
             ctx.Workbook.DefineNamedRange(name, range);
         return new CommandOutcome(true, AffectedCells: definitions.Select(d => d.Range.Start).ToList());
@@ -127,9 +135,18 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
             return;
 
         ctx.Workbook.NamedRanges.Clear();
-        foreach (var (name, range) in _snapshot)
-            ctx.Workbook.NamedRanges[name] = range;
+        ctx.Workbook.NamedRangeMetadataByName.Clear();
+        foreach (var (name, snapshot) in _snapshot)
+            ctx.Workbook.DefineNamedRange(name, snapshot.Range, snapshot.Metadata);
     }
+
+    private static Dictionary<string, NamedRangeSnapshot> CaptureNamedRangeSnapshot(Workbook workbook) =>
+        workbook.NamedRanges.ToDictionary(
+            pair => pair.Key,
+            pair => new NamedRangeSnapshot(
+                pair.Value,
+                workbook.TryGetNamedRangeMetadata(pair.Key, out var metadata) ? metadata : NamedRangeMetadata.WorkbookScope),
+            StringComparer.OrdinalIgnoreCase);
 
     private IEnumerable<(string Name, GridRange Range)> BuildDefinitions(Workbook workbook, Sheet sheet)
     {
@@ -241,4 +258,6 @@ public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
         }
         return name;
     }
+
+    private sealed record NamedRangeSnapshot(GridRange Range, NamedRangeMetadata Metadata);
 }

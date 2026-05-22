@@ -5395,9 +5395,12 @@ public partial class FileAdapterSmokeTests
     {
         var workbook = new Workbook("NamedRangeNativeTest");
         var sheet = workbook.AddSheet("Data");
-        workbook.DefineNamedRange("SalesData", new GridRange(
-            new CellAddress(sheet.Id, 2, 2),
-            new CellAddress(sheet.Id, 5, 4)));
+        workbook.DefineNamedRange(
+            "SalesData",
+            new GridRange(
+                new CellAddress(sheet.Id, 2, 2),
+                new CellAddress(sheet.Id, 5, 4)),
+            new NamedRangeMetadata("Data", "Quarterly sales"));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -5411,6 +5414,7 @@ public partial class FileAdapterSmokeTests
         loaded.NamedRanges["SalesData"].Should().Be(new GridRange(
             new CellAddress(loadedSheet.Id, 2, 2),
             new CellAddress(loadedSheet.Id, 5, 4)));
+        loaded.NamedRangeMetadataByName["SalesData"].Should().Be(new NamedRangeMetadata("Data", "Quarterly sales"));
     }
 
     [Fact]

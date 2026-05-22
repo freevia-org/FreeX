@@ -40,12 +40,15 @@ public sealed partial class NamedRangeDialog : Window
         _items.Clear();
         foreach (var (name, range) in _workbook.NamedRanges)
         {
+            var metadata = _workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+                ? savedMetadata
+                : NamedRangeMetadata.WorkbookScope;
             _items.Add(new NamedRangeViewModel(
                 name,
                 FormatValue(range, _workbook),
                 FormatRange(range, _workbook),
-                "Workbook",
-                ""));
+                metadata.Scope,
+                metadata.Comment));
         }
 
         ApplyFilter();
@@ -91,7 +94,9 @@ public sealed partial class NamedRangeDialog : Window
 
     private void NewButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new NameDefinitionDialog(new NameDefinitionDialogResult("", _initialRefersTo)) { Owner = this };
+        var dialog = new NameDefinitionDialog(
+            new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
+            GetScopeOptions()) { Owner = this };
         if (dialog.ShowDialog() == true)
             DefineOrUpdateName(dialog.Result);
     }
@@ -105,7 +110,8 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         var dialog = new NameDefinitionDialog(
-            new NameDefinitionDialogResult(vm.Name, vm.RefersTo))
+            new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
+            GetScopeOptions())
         {
             Owner = this
         };
@@ -133,7 +139,10 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        var cmd = new DefineNamedRangeCommand(name, range);
+        var cmd = new DefineNamedRangeCommand(
+            name,
+            range,
+            new NamedRangeMetadata(definition.Scope.Trim(), definition.Comment.Trim()));
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
@@ -169,6 +178,11 @@ public sealed partial class NamedRangeDialog : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
+    private IReadOnlyList<string> GetScopeOptions() =>
+        new[] { "Workbook" }
+            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 }
 
 public enum NamedRangeFilterOption
@@ -195,27 +209,36 @@ public static class NamedRangeDialogPlanner
         };
 }
 
-public sealed record NameDefinitionDialogResult(string Name, string RefersTo);
+public sealed record NameDefinitionDialogResult(string Name, string Scope, string Comment, string RefersTo);
 
 internal sealed class NameDefinitionDialog : Window
 {
     private readonly TextBox _nameBox = new();
+    private readonly ComboBox _scopeBox = new();
+    private readonly TextBox _commentBox = new();
     private readonly TextBox _refersToBox = new();
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
+    private readonly IReadOnlyList<string> _scopeOptions;
 
     public NameDefinitionDialogResult Result { get; private set; }
 
-    public NameDefinitionDialog(NameDefinitionDialogResult initial)
+    public NameDefinitionDialog(NameDefinitionDialogResult initial, IReadOnlyList<string> scopeOptions)
     {
         Result = initial;
+        _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
         Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
         Width = 460;
-        Height = 220;
+        Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
         _nameBox.Text = initial.Name;
+        foreach (var scope in _scopeOptions)
+            _scopeBox.Items.Add(scope);
+        _scopeBox.SelectedItem = _scopeOptions.FirstOrDefault(scope =>
+            string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
+        _commentBox.Text = initial.Comment;
         _refersToBox.Text = initial.RefersTo;
         _rangePickerButton.ToolTip = "Select the referenced range from the worksheet";
         _rangePickerButton.Click += (_, _) =>
@@ -230,24 +253,38 @@ internal sealed class NameDefinitionDialog : Window
     private Grid CreateContent()
     {
         var grid = new Grid { Margin = new Thickness(16) };
-        for (var row = 0; row < 3; row++)
+        for (var row = 0; row < 5; row++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(82) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         AddTextRow(grid, 0, "_Name:", _nameBox);
-        AddRefersToRow(grid, 1);
+        AddComboRow(grid, 1, "_Scope:", _scopeBox);
+        AddTextRow(grid, 2, "_Comment:", _commentBox);
+        AddRefersToRow(grid, 3);
 
         var buttons = InsertChartDialog.CreateButtonRow(Accept);
         buttons.Margin = new Thickness(0, 8, 0, 0);
         grid.Children.Add(buttons);
-        Grid.SetRow(buttons, 2);
+        Grid.SetRow(buttons, 4);
         Grid.SetColumnSpan(buttons, 3);
         return grid;
     }
 
     private static void AddTextRow(Grid grid, int row, string label, TextBox box)
+    {
+        grid.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 8) });
+        Grid.SetRow(grid.Children[^1], row);
+        Grid.SetColumn(grid.Children[^1], 0);
+        box.Margin = new Thickness(0, 0, 0, 8);
+        grid.Children.Add(box);
+        Grid.SetRow(box, row);
+        Grid.SetColumn(box, 1);
+        Grid.SetColumnSpan(box, 2);
+    }
+
+    private static void AddComboRow(Grid grid, int row, string label, ComboBox box)
     {
         grid.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 8) });
         Grid.SetRow(grid.Children[^1], row);
@@ -278,6 +315,8 @@ internal sealed class NameDefinitionDialog : Window
     {
         Result = new NameDefinitionDialogResult(
             _nameBox.Text.Trim(),
+            (_scopeBox.SelectedItem as string)?.Trim() ?? "Workbook",
+            _commentBox.Text.Trim(),
             _refersToBox.Text.Trim());
         DialogResult = true;
     }
