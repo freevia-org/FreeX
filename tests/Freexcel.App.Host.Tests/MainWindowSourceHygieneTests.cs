@@ -1184,6 +1184,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ObjectSizeBtn_Click(this, new RoutedEventArgs());");
         source.Should().Contain("case WorksheetContextMenuAction.EditAltText:");
         source.Should().Contain("SetAltTextBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.SelectionPane:");
+        source.Should().Contain("SelectionPaneBtn_Click(this, new RoutedEventArgs());");
     }
 
     [Fact]
