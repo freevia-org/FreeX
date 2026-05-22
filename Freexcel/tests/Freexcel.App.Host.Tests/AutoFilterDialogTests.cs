@@ -213,6 +213,17 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DataFilterCommands_RouteColorFiltersAndCompositeCriteriaToRealCommands()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+
+        source.Should().Contain("result.ColorFilter is { } fillColor");
+        source.Should().Contain("new CellFillColorFilterCommand");
+        source.Should().Contain("filterText.StartsWith(\"and:\", StringComparison.OrdinalIgnoreCase)");
+        source.Should().Contain("filterText.StartsWith(\"or:\", StringComparison.OrdinalIgnoreCase)");
+    }
+
+    [Fact]
     public void DialogControls_UseTypedCriteriaControlsInsteadOfFocusOnlyFilterButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
@@ -229,6 +240,7 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("_criteriaSuggestionLabel.Visibility = Visibility.Visible");
         source.Should().Contain("BuildCriteriaText");
         source.Should().Contain("BuildCompositeCriteriaText");
+        source.Should().Contain("!string.IsNullOrWhiteSpace(_criteriaValueBox2.Text)");
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
     }
 

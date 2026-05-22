@@ -463,9 +463,10 @@ public sealed class AutoFilterDialog : Window
             return;
 
         var firstCriteria = BuildCriteriaText(option, _criteriaValueBox.Text);
-        var secondCriteria = _criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption option2
-            ? BuildCriteriaText(option2, _criteriaValueBox2.Text)
-            : string.Empty;
+        var secondCriteria = _criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption option2 &&
+            (!option2.RequiresValue || !string.IsNullOrWhiteSpace(_criteriaValueBox2.Text))
+                ? BuildCriteriaText(option2, _criteriaValueBox2.Text)
+                : string.Empty;
         _criteriaBox.Text = BuildCompositeCriteriaText(
             firstCriteria,
             _criteriaConnectorBox.SelectedItem as string,
