@@ -278,6 +278,24 @@ public sealed class FormatCellsDialogXamlTests
             xaml.Should().Contain(content);
     }
 
+    [Theory]
+    [InlineData("Number", "#,##0.00", "0", "None", 0, "#,##0")]
+    [InlineData("Currency", "$#,##0.00", "3", "EUR", 2, "EUR#,##0.000;(EUR#,##0.000)")]
+    [InlineData("Accounting", "$#,##0.00", "2", "GBP", 0, "_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)")]
+    [InlineData("Percentage", "0.00%", "1", "None", 0, "0.0%")]
+    public void FormatCellsDialog_NumberTab_ComposesFormatFromCategoryControls(
+        string category,
+        string selectedFormat,
+        string decimalPlaces,
+        string symbol,
+        int negativeIndex,
+        string expected)
+    {
+        FormatCellsDialog.ResolveNumberFormat(selectedFormat, 0, category, decimalPlaces, symbol, negativeIndex)
+            .Should()
+            .Be(expected);
+    }
+
     [Fact]
     public void FormatCellsDialog_BorderTab_UsesExcelLikePresetLineColorAndPreviewLayout()
     {
@@ -588,6 +606,9 @@ public sealed class FormatCellsDialogXamlTests
             {
                 GetControl<ListBox>(dialog, "NumberCategoryList").SelectedItem = "Currency";
                 GetControl<ComboBox>(dialog, "NumberFormatCombo").SelectedItem = "Currency ($#,##0.00)";
+                GetControl<TextBox>(dialog, "NumberDecimalPlacesBox").Text = "3";
+                GetControl<ComboBox>(dialog, "NumberSymbolCombo").SelectedItem = "EUR";
+                GetControl<ListBox>(dialog, "NumberNegativeNumbersList").SelectedIndex = 2;
                 GetControl<ComboBox>(dialog, "DlgHAlignBox").SelectedItem = nameof(CellHAlign.Right);
                 GetControl<ComboBox>(dialog, "DlgVAlignBox").SelectedItem = nameof(CellVAlign.Center);
                 GetControl<CheckBox>(dialog, "DlgWrapTextCheck").IsChecked = true;
@@ -598,7 +619,7 @@ public sealed class FormatCellsDialogXamlTests
                 ClickOkForTest(dialog);
 
                 dialog.ResultDiff.Should().NotBeNull();
-                dialog.ResultDiff!.NumberFormat.Should().Be("$#,##0.00");
+                dialog.ResultDiff!.NumberFormat.Should().Be("EUR#,##0.000;(EUR#,##0.000)");
                 dialog.ResultDiff.HAlign.Should().Be(CellHAlign.Right);
                 dialog.ResultDiff.VAlign.Should().Be(CellVAlign.Center);
                 dialog.ResultDiff.WrapText.Should().BeTrue();
