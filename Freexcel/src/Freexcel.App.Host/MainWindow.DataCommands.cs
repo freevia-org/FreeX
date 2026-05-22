@@ -76,14 +76,20 @@ public partial class MainWindow
             return new EditCellsCommand(_currentSheetId, []);
 
         var edits = result.SplitMode == TextToColumnsSplitMode.FixedWidth
-            ? TextToColumnsPlanner.BuildFixedWidthEdits(sheet, range, result.Destination ?? range.Start, result.FixedWidthBreakPositions ?? [])
+            ? TextToColumnsPlanner.BuildFixedWidthEdits(
+                sheet,
+                range,
+                result.Destination ?? range.Start,
+                result.FixedWidthBreakPositions ?? [],
+                result.ColumnFormats)
             : TextToColumnsPlanner.BuildEdits(
                 sheet,
                 range,
                 result.Destination ?? range.Start,
                 result.Delimiters,
                 result.TextQualifierChar,
-                result.TreatConsecutiveDelimitersAsOne);
+                result.TreatConsecutiveDelimitersAsOne,
+                result.ColumnFormats);
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1

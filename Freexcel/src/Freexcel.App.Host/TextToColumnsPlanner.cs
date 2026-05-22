@@ -13,23 +13,25 @@ public static class TextToColumnsPlanner
         Sheet sheet,
         GridRange range,
         CellAddress destination,
-        char delimiter)
+        char delimiter,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
-        return BuildEdits(sheet, range, destination, delimiter.ToString());
+        return BuildEdits(sheet, range, destination, delimiter.ToString(), columnFormats);
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildEdits(Sheet sheet, GridRange range, string delimiters)
     {
-        return BuildEdits(sheet, range, range.Start, text => SplitText(text, delimiters));
+        return BuildEdits(sheet, range, range.Start, null, text => SplitText(text, delimiters));
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildEdits(
         Sheet sheet,
         GridRange range,
         CellAddress destination,
-        string delimiters)
+        string delimiters,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
-        return BuildEdits(sheet, range, destination, text => SplitText(text, delimiters));
+        return BuildEdits(sheet, range, destination, columnFormats, text => SplitText(text, delimiters));
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildEdits(
@@ -43,6 +45,7 @@ public static class TextToColumnsPlanner
             sheet,
             range,
             range.Start,
+            null,
             text => SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne));
     }
 
@@ -52,12 +55,14 @@ public static class TextToColumnsPlanner
         CellAddress destination,
         string delimiters,
         char? textQualifier,
-        bool treatConsecutiveDelimitersAsOne)
+        bool treatConsecutiveDelimitersAsOne,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
         return BuildEdits(
             sheet,
             range,
             destination,
+            columnFormats,
             text => SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne));
     }
 
@@ -66,22 +71,24 @@ public static class TextToColumnsPlanner
         GridRange range,
         IReadOnlyList<int> breakPositions)
     {
-        return BuildEdits(sheet, range, range.Start, text => SplitFixedWidthText(text, breakPositions));
+        return BuildEdits(sheet, range, range.Start, null, text => SplitFixedWidthText(text, breakPositions));
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildFixedWidthEdits(
         Sheet sheet,
         GridRange range,
         CellAddress destination,
-        IReadOnlyList<int> breakPositions)
+        IReadOnlyList<int> breakPositions,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
     {
-        return BuildEdits(sheet, range, destination, text => SplitFixedWidthText(text, breakPositions));
+        return BuildEdits(sheet, range, destination, columnFormats, text => SplitFixedWidthText(text, breakPositions));
     }
 
     private static List<(CellAddress Address, Cell NewCell)> BuildEdits(
         Sheet sheet,
         GridRange range,
         CellAddress destination,
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats,
         Func<string, string[]> split)
     {
         var edits = new List<(CellAddress, Cell)>();
@@ -91,24 +98,39 @@ public static class TextToColumnsPlanner
                 continue;
 
             var parts = split(cellValue.Value);
+            var outputIndex = 0u;
             for (var index = 0; index < parts.Length; index++)
             {
+                var columnFormat = GetColumnFormat(columnFormats, index);
+                if (columnFormat == TextToColumnsColumnFormat.Skip)
+                    continue;
+
                 var targetRow = destination.Row + (row - range.Start.Row);
-                var targetCol = destination.Col + (uint)index;
+                var targetCol = destination.Col + outputIndex;
                 if (targetRow > CellAddress.MaxRow || targetCol > CellAddress.MaxCol)
                     continue;
 
                 var trimmed = parts[index].Trim();
                 var address = new CellAddress(sheet.Id, targetRow, targetCol);
-                ScalarValue value = double.TryParse(trimmed, out var number)
+                ScalarValue value = columnFormat == TextToColumnsColumnFormat.Text
+                    ? new TextValue(trimmed)
+                    : double.TryParse(trimmed, out var number)
                     ? new NumberValue(number)
                     : new TextValue(trimmed);
                 edits.Add((address, Cell.FromValue(value)));
+                outputIndex++;
             }
         }
 
         return edits;
     }
+
+    private static TextToColumnsColumnFormat GetColumnFormat(
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats,
+        int index) =>
+        columnFormats is not null && index >= 0 && index < columnFormats.Count
+            ? columnFormats[index]
+            : TextToColumnsColumnFormat.General;
 
     public static string[] SplitText(string text, string delimiters)
     {
