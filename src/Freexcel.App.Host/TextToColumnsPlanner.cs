@@ -14,6 +14,19 @@ public static class TextToColumnsPlanner
         return BuildEdits(sheet, range, text => SplitText(text, delimiters));
     }
 
+    public static List<(CellAddress Address, Cell NewCell)> BuildEdits(
+        Sheet sheet,
+        GridRange range,
+        string delimiters,
+        char? textQualifier,
+        bool treatConsecutiveDelimitersAsOne)
+    {
+        return BuildEdits(
+            sheet,
+            range,
+            text => SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne));
+    }
+
     public static List<(CellAddress Address, Cell NewCell)> BuildFixedWidthEdits(
         Sheet sheet,
         GridRange range,
@@ -50,10 +63,57 @@ public static class TextToColumnsPlanner
 
     public static string[] SplitText(string text, string delimiters)
     {
+        return SplitText(text, delimiters, '"', false);
+    }
+
+    public static string[] SplitText(
+        string text,
+        string delimiters,
+        char? textQualifier,
+        bool treatConsecutiveDelimitersAsOne)
+    {
         var delimiterChars = string.IsNullOrEmpty(delimiters)
             ? [',']
             : delimiters.Distinct().ToArray();
-        return text.Split(delimiterChars, StringSplitOptions.None);
+
+        var parts = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQualifiedText = false;
+        for (var index = 0; index < text.Length; index++)
+        {
+            var ch = text[index];
+            if (textQualifier is { } qualifier && ch == qualifier)
+            {
+                if (inQualifiedText && index + 1 < text.Length && text[index + 1] == qualifier)
+                {
+                    current.Append(qualifier);
+                    index++;
+                    continue;
+                }
+
+                inQualifiedText = !inQualifiedText;
+                continue;
+            }
+
+            if (!inQualifiedText && delimiterChars.Contains(ch))
+            {
+                parts.Add(current.ToString());
+                current.Clear();
+
+                if (treatConsecutiveDelimitersAsOne)
+                {
+                    while (index + 1 < text.Length && delimiterChars.Contains(text[index + 1]))
+                        index++;
+                }
+
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        parts.Add(current.ToString());
+        return parts.ToArray();
     }
 
     public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions)

@@ -20,13 +20,28 @@ public enum TextToColumnsSplitMode
     FixedWidth
 }
 
+public enum TextToColumnsTextQualifier
+{
+    DoubleQuote,
+    SingleQuote,
+    None
+}
+
 public sealed record TextToColumnsDialogResult(
     TextToColumnsDelimiterKind DelimiterKind,
     string Delimiter,
     TextToColumnsSplitMode SplitMode = TextToColumnsSplitMode.Delimited,
-    IReadOnlyList<int>? FixedWidthBreakPositions = null)
+    IReadOnlyList<int>? FixedWidthBreakPositions = null,
+    TextToColumnsTextQualifier TextQualifier = TextToColumnsTextQualifier.DoubleQuote,
+    bool TreatConsecutiveDelimitersAsOne = false)
 {
     public string Delimiters => Delimiter;
+    public char? TextQualifierChar => TextQualifier switch
+    {
+        TextToColumnsTextQualifier.DoubleQuote => '"',
+        TextToColumnsTextQualifier.SingleQuote => '\'',
+        _ => null
+    };
 }
 
 public sealed class TextToColumnsDialog : Window
@@ -39,6 +54,8 @@ public sealed class TextToColumnsDialog : Window
     private readonly CheckBox _spaceBox = new() { Content = "S_pace" };
     private readonly CheckBox _otherBox = new() { Content = "_Other:" };
     private readonly TextBox _customBox = new() { Width = 48, Margin = new Thickness(6, 0, 0, 0) };
+    private readonly ComboBox _textQualifierBox = new() { Width = 130, Margin = new Thickness(8, 0, 0, 0) };
+    private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = "_Treat consecutive delimiters as one", Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
     private readonly ListView _previewGrid = new() { Height = 88 };
     private readonly IReadOnlyList<string> _previewRows;
@@ -65,6 +82,9 @@ public sealed class TextToColumnsDialog : Window
         _delimitedButton.Checked += (_, _) => RefreshMode();
         _fixedWidthButton.Checked += (_, _) => RefreshMode();
         _customBox.TextChanged += (_, _) => RefreshPreview();
+        _textQualifierBox.SelectionChanged += (_, _) => RefreshPreview();
+        _treatConsecutiveDelimitersBox.Checked += (_, _) => RefreshPreview();
+        _treatConsecutiveDelimitersBox.Unchecked += (_, _) => RefreshPreview();
         _fixedWidthBreaksBox.TextChanged += (_, _) => RefreshPreview();
 
         var root = new DockPanel { Margin = new Thickness(12) };
@@ -117,7 +137,9 @@ public sealed class TextToColumnsDialog : Window
 
     public static TextToColumnsDialogResult CreateResult(
         IEnumerable<TextToColumnsDelimiterKind> delimiterKinds,
-        string? customDelimiter = null)
+        string? customDelimiter = null,
+        TextToColumnsTextQualifier textQualifier = TextToColumnsTextQualifier.DoubleQuote,
+        bool treatConsecutiveDelimitersAsOne = false)
     {
         var kinds = delimiterKinds.Distinct().ToList();
         if (kinds.Count == 0)
@@ -127,7 +149,11 @@ public sealed class TextToColumnsDialog : Window
         var primaryKind = kinds.Contains(TextToColumnsDelimiterKind.Custom)
             ? TextToColumnsDelimiterKind.Custom
             : kinds[0];
-        return new TextToColumnsDialogResult(primaryKind, delimiters);
+        return new TextToColumnsDialogResult(
+            primaryKind,
+            delimiters,
+            TextQualifier: textQualifier,
+            TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne);
     }
 
     public static TextToColumnsDialogResult CreateFixedWidthResult(string? breakPositionsText)
@@ -186,10 +212,29 @@ public sealed class TextToColumnsDialog : Window
         otherPanel.Children.Add(_customBox);
         panel.Children.Add(otherPanel);
 
+        var qualifierPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        qualifierPanel.Children.Add(new Label
+        {
+            Content = "Text _qualifier:",
+            Target = _textQualifierBox,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        _textQualifierBox.Items.Add("\"");
+        _textQualifierBox.Items.Add("'");
+        _textQualifierBox.Items.Add("{none}");
+        _textQualifierBox.SelectedIndex = 0;
+        qualifierPanel.Children.Add(_textQualifierBox);
+
+        var layout = new StackPanel();
+        layout.Children.Add(panel);
+        layout.Children.Add(qualifierPanel);
+        layout.Children.Add(_treatConsecutiveDelimitersBox);
+
         return new GroupBox
         {
             Header = "Delimiters",
-            Content = panel,
+            Content = layout,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -245,7 +290,11 @@ public sealed class TextToColumnsDialog : Window
         {
             Result = _fixedWidthButton.IsChecked == true
                 ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text)
-                : CreateResult(SelectedDelimiterKinds(), _customBox.Text);
+                : CreateResult(
+                    SelectedDelimiterKinds(),
+                    _customBox.Text,
+                    SelectedTextQualifier(),
+                    _treatConsecutiveDelimitersBox.IsChecked == true);
             DialogResult = true;
         }
         catch (Exception ex)
@@ -316,6 +365,8 @@ public sealed class TextToColumnsDialog : Window
         _spaceBox.IsEnabled = !fixedWidth;
         _otherBox.IsEnabled = !fixedWidth;
         _customBox.IsEnabled = !fixedWidth && _otherBox.IsChecked == true;
+        _textQualifierBox.IsEnabled = !fixedWidth;
+        _treatConsecutiveDelimitersBox.IsEnabled = !fixedWidth;
         _fixedWidthBreaksBox.IsEnabled = fixedWidth;
         RefreshPreview();
     }
@@ -334,9 +385,17 @@ public sealed class TextToColumnsDialog : Window
             }
             else
             {
-                var result = CreateResult(SelectedDelimiterKinds(), _customBox.Text);
+                var result = CreateResult(
+                    SelectedDelimiterKinds(),
+                    _customBox.Text,
+                    SelectedTextQualifier(),
+                    _treatConsecutiveDelimitersBox.IsChecked == true);
                 rows = _previewRows
-                    .Select(row => TextToColumnsPlanner.SplitText(row, result.Delimiters).ToArray())
+                    .Select(row => TextToColumnsPlanner.SplitText(
+                        row,
+                        result.Delimiters,
+                        result.TextQualifierChar,
+                        result.TreatConsecutiveDelimitersAsOne).ToArray())
                     .ToList();
             }
         }
@@ -370,6 +429,14 @@ public sealed class TextToColumnsDialog : Window
             padded[index] = index < row.Count ? row[index] : string.Empty;
         return padded;
     }
+
+    private TextToColumnsTextQualifier SelectedTextQualifier() =>
+        _textQualifierBox.SelectedIndex switch
+        {
+            1 => TextToColumnsTextQualifier.SingleQuote,
+            2 => TextToColumnsTextQualifier.None,
+            _ => TextToColumnsTextQualifier.DoubleQuote
+        };
 
     public static IReadOnlyList<int> ParseFixedWidthBreakPositions(string? text) =>
         (text ?? string.Empty)
