@@ -212,8 +212,7 @@ public partial class MainWindow
     {
         var groupName = GetRibbonGroupName(group);
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
-        var iconSize = 32;
-        var glyphBrush = (Brush)BrushFromRgb(31, 31, 31);
+        var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
         var button = new Button
         {
             Tag = "RibbonCollapsedGroupButton",
@@ -221,6 +220,7 @@ public partial class MainWindow
             Height = 76,
             Margin = new Thickness(1, 0, 3, 0),
             Padding = new Thickness(3, 2, 3, 2),
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
             Visibility = Visibility.Collapsed,
             ContextMenu = CreateCollapsedRibbonGroupMenu(group),
             Content = new StackPanel
@@ -229,18 +229,31 @@ public partial class MainWindow
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
                 {
-                    RibbonIconFactory.CreateCommandIcon(groupName, icon, iconSize, glyphBrush),
+                    new Border
+                    {
+                        Width = 34,
+                        Height = 34,
+                        CornerRadius = new CornerRadius(3),
+                        Background = slotBackground,
+                        BorderBrush = slotBorder,
+                        BorderThickness = slotBorder is null ? new Thickness(0) : new Thickness(1),
+                        Child = RibbonIconFactory.CreateCommandIcon(groupName, icon, 28, glyphBrush),
+                        SnapsToDevicePixels = true,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 0, 2)
+                    },
                     new TextBlock
                     {
                         Text = groupName,
                         Tag = "RibbonLabel",
-                        FontSize = 10,
+                        FontSize = 12,
                         TextWrapping = TextWrapping.Wrap,
                         TextAlignment = TextAlignment.Center,
                         MaxWidth = 60,
+                        LineHeight = 14,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-                    },
-                    RibbonIconFactory.CreateIcon(new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown), 8, BrushFromRgb(31, 31, 31))
+                    }
                 }
             }
         };
