@@ -11,7 +11,7 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _documentPropertiesBox = new() { Content = "_Include document properties" };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
-    private readonly CheckBox _bookmarksBox = new() { Content = "Create _bookmarks using sheet names" };
+    private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks using sheet names" };
     private readonly RadioButton _standardQualityButton = new() { Content = "_Standard", IsChecked = true };
     private readonly RadioButton _minimumSizeButton = new() { Content = "_Minimum size" };
     private readonly RadioButton _allPagesButton = new() { Content = "_All", GroupName = "PageRange", IsChecked = true };
