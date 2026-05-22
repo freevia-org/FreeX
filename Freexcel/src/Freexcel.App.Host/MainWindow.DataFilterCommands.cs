@@ -35,7 +35,8 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new SortDialog(
             columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true),
-            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false))
+            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false),
+            rowChoices: SortDialog.BuildRowChoices(range))
         {
             Owner = this
         };
@@ -43,11 +44,18 @@ public partial class MainWindow
             return;
 
         var keys = dialog.ResultSortKeys;
+        var options = new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders), keys)))
+                currentRange => new SortCommand(
+                    _currentSheetId,
+                    dialog.ResultOptions.LeftToRight
+                        ? currentRange
+                        : SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders),
+                    keys,
+                    options)))
             return;
         UpdateViewport();
     }
