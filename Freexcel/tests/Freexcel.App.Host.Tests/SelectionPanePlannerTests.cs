@@ -87,6 +87,7 @@ public sealed class SelectionPanePlannerTests
             item.Id,
             IsVisible: false));
         result.RenameChanges.Should().BeEmpty();
+        result.MoveChanges.Should().BeEmpty();
     }
 
     [Fact]
@@ -144,11 +145,32 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("_searchBox");
         source.Should().Contain("_filterBox");
         source.Should().Contain("_renameBox");
+        source.Should().Contain("Content = \"_Name:\"");
         source.Should().Contain("_renameButton");
         source.Should().Contain("_toggleVisibilityButton");
+        source.Should().Contain("CreateEyeIcon()");
+        source.Should().NotContain("Content = \"Eye\"");
         source.Should().Contain("ApplySearchAndFilter");
         source.Should().Contain("RenameSelectedItem");
         source.Should().Contain("ToggleSelectedVisibility");
         source.Should().Contain("ToolTip = \"Toggle visibility\"");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var hostSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
+        source.Should().Contain("_moveChanges.Add(new SelectionPaneMoveChange");
+        source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
+        var acceptMoveBody = source.Substring(
+            source.IndexOf("private void AcceptMove", StringComparison.Ordinal),
+            source.IndexOf("private IReadOnlyList<SelectionPaneVisibilityChange>", StringComparison.Ordinal) -
+            source.IndexOf("private void AcceptMove", StringComparison.Ordinal));
+        acceptMoveBody.Should().NotContain("DialogResult = true");
+        hostSource.Should().Contain("result.MoveChanges.Select");
+        hostSource.Should().NotContain("SelectionPaneDialogAction.MoveUp when dialog.Result.Target");
     }
 }
