@@ -8,7 +8,7 @@ public partial class MainWindow
 {
     // ── Context menu + Insert/Delete ─────────────────────────────────────────
 
-    private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point screenPos)
+    private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point gridPos)
     {
         var actualAddr = new CellAddress(_currentSheetId, clickedCell.Row, clickedCell.Col);
         if (SheetGrid.SelectedRange is null)
@@ -30,6 +30,7 @@ public partial class MainWindow
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
+        PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
     }
 
@@ -190,6 +191,24 @@ public partial class MainWindow
     private void OpenKeyboardContextMenu()
     {
         var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        OnGridContextMenuRequested(address, default);
+        OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
+    }
+
+    private System.Windows.Point GetKeyboardContextMenuGridPoint(CellAddress address)
+    {
+        return TryGetCellOverlayRect(address) is { } rect
+            ? new System.Windows.Point(rect.Left, rect.Bottom)
+            : new System.Windows.Point();
+    }
+
+    private void PositionWorksheetContextMenu(ContextMenu menu, System.Windows.Point gridPos)
+    {
+        var screenPoint = SheetGrid.PointToScreen(gridPos);
+        if (PresentationSource.FromVisual(this)?.CompositionTarget is { } target)
+            screenPoint = target.TransformFromDevice.Transform(screenPoint);
+
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint;
+        menu.HorizontalOffset = screenPoint.X;
+        menu.VerticalOffset = screenPoint.Y;
     }
 }
