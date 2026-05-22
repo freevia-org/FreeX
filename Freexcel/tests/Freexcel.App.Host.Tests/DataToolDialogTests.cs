@@ -59,6 +59,11 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Choose the delimiters that separate your selected text.");
         source.Should().Contain("Header = \"Delimiters\"");
         source.Should().Contain("Header = \"Fixed width\"");
+        source.Should().Contain("_fixedWidthRuler");
+        source.Should().Contain("MouseLeftButtonDown");
+        source.Should().Contain("MouseMove");
+        source.Should().Contain("MouseRightButtonDown");
+        source.Should().Contain("Click the ruler to create a break line");
         source.Should().Contain("Text _qualifier:");
         source.Should().Contain("_Treat consecutive delimiters as one");
         source.Should().Contain("_Destination:");
@@ -121,6 +126,25 @@ public sealed class DataToolDialogTests
         var result = TextToColumnsDialog.CreateFixedWidthResult("4,8");
         result.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
         result.FixedWidthBreakPositions.Should().Equal(4, 8);
+    }
+
+    [Fact]
+    public void TextToColumnsFixedWidthBreakHelpers_AddMoveAndRemoveBreaks()
+    {
+        TextToColumnsDialog.AddFixedWidthBreakPosition([8, 4], 12, maxLength: 20)
+            .Should()
+            .Equal(4, 8, 12);
+        TextToColumnsDialog.AddFixedWidthBreakPosition([4, 8], 99, maxLength: 20)
+            .Should()
+            .Equal(4, 8, 19);
+
+        TextToColumnsDialog.MoveFixedWidthBreakPosition([4, 8, 12], index: 1, position: 10, maxLength: 20)
+            .Should()
+            .Equal(4, 10, 12);
+
+        TextToColumnsDialog.RemoveFixedWidthBreakPosition([4, 8, 12], index: 1)
+            .Should()
+            .Equal(4, 12);
     }
 
     [Fact]
