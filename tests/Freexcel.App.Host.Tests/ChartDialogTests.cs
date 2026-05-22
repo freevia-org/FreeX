@@ -266,7 +266,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartFormatDialogs_RouteColorFieldsThroughColorPickerButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
         var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         source.Should().Contain("AddColorText");
@@ -289,7 +289,8 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartFormatDialogs_GroupLongStacksIntoExcelLikeSections()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         source.Should().Contain("CreateGroupBox(\"Fill & Line\"");
         source.Should().Contain("CreateGroupBox(\"Legend\"");
@@ -299,7 +300,7 @@ public sealed class ChartDialogTests
         source.Should().Contain("CreateGroupBox(\"Series Options\"");
         source.Should().Contain("CreateInlineHelp(");
         source.Should().Contain("AddNumericText");
-        source.Should().Contain("AutomationProperties.SetHelpText");
+        helperSource.Should().Contain("AutomationProperties.SetHelpText");
     }
 
     [Fact]
@@ -307,7 +308,7 @@ public sealed class ChartDialogTests
     {
         var source = string.Concat(
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs")));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs")));
 
         foreach (var content in new[]
         {
