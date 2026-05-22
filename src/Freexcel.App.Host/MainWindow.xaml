@@ -1441,7 +1441,7 @@
 
             <!-- ── INSERT ────────────────────────────────────────────── -->
             <TabItem Header="Insert" local:RibbonTooltip.KeyTip="N">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -1459,22 +1459,6 @@
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"
                                         local:RibbonTooltip.Description="Create a table to manage and analyze related data."/>
-                                <StackPanel VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button Content="Refresh Pivot" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
-                                                local:RibbonTooltip.Title="Refresh PivotTable"
-                                                local:RibbonTooltip.KeyTip="RP"
-                                                local:RibbonTooltip.Description="Refresh the selected PivotTable from its source data."/>
-                                        <Button Content="Show Details" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
-                                                local:RibbonTooltip.Title="Show Details"
-                                                local:RibbonTooltip.KeyTip="PD"
-                                                local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
-                                    </StackPanel>
-                                    <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
-                                            local:RibbonTooltip.Title="PivotChart"
-                                            local:RibbonTooltip.KeyTip="PV"
-                                            local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
-                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tables" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1483,399 +1467,374 @@
                         <!-- ▌Charts ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Column" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartColumnMenuItem_Click"
-                                        local:RibbonTooltip.Title="Column Chart"
-                                        local:RibbonTooltip.KeyTip="C"
-                                        local:RibbonTooltip.Description="Insert a column chart to compare values across categories."/>
-                                <Button Content="Stack Col" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStackedColumnMenuItem_Click"
-                                        local:RibbonTooltip.Title="Stacked Column Chart"
-                                        local:RibbonTooltip.KeyTip="SC"
-                                        local:RibbonTooltip.Description="Insert a stacked column chart to show parts of a whole by category."/>
-                                <Button Content="100% Col" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPercentStackedColumnMenuItem_Click"
-                                        local:RibbonTooltip.Title="100% Stacked Column Chart"
-                                        local:RibbonTooltip.KeyTip="PC"
-                                        local:RibbonTooltip.Description="Insert a 100% stacked column chart to compare percentage contributions by category."/>
-                                <Button Content="Change Chart" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChangeChartTypeBtn_Click"
-                                        local:RibbonTooltip.Title="Change Chart Type"
-                                        local:RibbonTooltip.KeyTip="CT"
-                                        local:RibbonTooltip.Description="Change the current chart to another supported chart type."/>
-                                <Button Content="Select Data" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SelectChartDataSourceBtn_Click"
-                                        local:RibbonTooltip.Title="Select Data Source"
-                                        local:RibbonTooltip.KeyTip="DS"
-                                        local:RibbonTooltip.Description="Change the current chart data range and category-label column."/>
-                                <Button Content="Move Chart" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="MoveChartBtn_Click"
-                                        local:RibbonTooltip.Title="Move Chart"
-                                        local:RibbonTooltip.KeyTip="MC"
-                                        local:RibbonTooltip.Description="Move the current chart to another sheet or a new chart sheet."/>
-                                <Button Content="Chart Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStylesBtn_Click"
-                                        local:RibbonTooltip.Title="Chart Styles"
-                                        local:RibbonTooltip.KeyTip="CY"
-                                        local:RibbonTooltip.Description="Choose a saved Excel chart style for the current chart."/>
-                                <Button Content="Format Chart" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormatChartAreaBtn_Click"
-                                        local:RibbonTooltip.Title="Format Chart Area"
-                                        local:RibbonTooltip.KeyTip="FZ"
-                                        local:RibbonTooltip.Description="Open chart area, plot area, and legend formatting options."/>
-                                <Button Content="Line"   Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
-                                        local:RibbonTooltip.Title="Line Chart"
-                                        local:RibbonTooltip.KeyTip="L"
-                                        local:RibbonTooltip.Description="Insert a line chart to show trends over time."/>
-                                <Button Content="Pie"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieMenuItem_Click"
-                                        local:RibbonTooltip.Title="Pie Chart"
-                                        local:RibbonTooltip.KeyTip="PI"
-                                        local:RibbonTooltip.Description="Insert a pie chart to show proportions of a whole."/>
-                                <Button Content="Slice Angle" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFirstSliceAngleBtn_Click"
-                                        local:RibbonTooltip.Title="First Slice Angle"
-                                        local:RibbonTooltip.KeyTip="FA"
-                                        local:RibbonTooltip.Description="Cycle the first-slice angle for pie and doughnut charts."/>
-                                <Button Content="Explode" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"
-                                        local:RibbonTooltip.Title="Explode Slice"
-                                        local:RibbonTooltip.KeyTip="ES"
-                                        local:RibbonTooltip.Description="Cycle the exploded slice for pie and doughnut charts."/>
-                                <Button Content="Doughnut" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutMenuItem_Click"
-                                        local:RibbonTooltip.Title="Doughnut Chart"
-                                        local:RibbonTooltip.KeyTip="D"
-                                        local:RibbonTooltip.Description="Insert a doughnut chart to show proportions with a center hole."/>
-                                <Button Content="Hole Size" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutHoleSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Doughnut Hole Size"
-                                        local:RibbonTooltip.KeyTip="DH"
-                                        local:RibbonTooltip.Description="Cycle the current doughnut chart hole size."/>
-                                <Button Content="Bar"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBarMenuItem_Click"
-                                        local:RibbonTooltip.Title="Bar Chart"
-                                        local:RibbonTooltip.KeyTip="B"
-                                        local:RibbonTooltip.Description="Insert a horizontal bar chart to compare values across categories."/>
-                                <Button Content="Stack Bar" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStackedBarMenuItem_Click"
-                                        local:RibbonTooltip.Title="Stacked Bar Chart"
-                                        local:RibbonTooltip.KeyTip="SB"
-                                        local:RibbonTooltip.Description="Insert a stacked bar chart to show parts of a whole by category."/>
-                                <Button Content="100% Bar" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPercentStackedBarMenuItem_Click"
-                                        local:RibbonTooltip.Title="100% Stacked Bar Chart"
-                                        local:RibbonTooltip.KeyTip="PB"
-                                        local:RibbonTooltip.Description="Insert a 100% stacked bar chart to compare percentage contributions by category."/>
-                                <Button Content="Scatter" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartScatterMenuItem_Click"
-                                        local:RibbonTooltip.Title="Scatter Chart"
-                                        local:RibbonTooltip.KeyTip="X"
-                                        local:RibbonTooltip.Description="Insert a scatter chart to compare numeric X and Y values."/>
-                                <Button Content="Bubble" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleMenuItem_Click"
-                                        local:RibbonTooltip.Title="Bubble Chart"
-                                        local:RibbonTooltip.KeyTip="BU"
-                                        local:RibbonTooltip.Description="Insert a bubble chart to compare X, Y, and size values."/>
-                                <Button Content="Area" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaMenuItem_Click"
-                                        local:RibbonTooltip.Title="Area Chart"
-                                        local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Insert an area chart to show trends with filled areas."/>
-                                <Button Content="Radar" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartRadarMenuItem_Click"
-                                        local:RibbonTooltip.Title="Radar Chart"
-                                        local:RibbonTooltip.KeyTip="RD"
-                                        local:RibbonTooltip.Description="Insert a radar chart to compare multiple values across categories."/>
-                                <Button Content="Stock" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockMenuItem_Click"
-                                        local:RibbonTooltip.Title="Stock Chart"
-                                        local:RibbonTooltip.KeyTip="ST"
-                                        local:RibbonTooltip.Description="Insert a stock chart from high-low-close or open-high-low-close data."/>
-                                <Button Content="Surface" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Surface Chart"
-                                        local:RibbonTooltip.KeyTip="SF"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Treemap" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Treemap Chart"
-                                        local:RibbonTooltip.KeyTip="T7"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Sunburst" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Sunburst Chart"
-                                        local:RibbonTooltip.KeyTip="SU"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Histogram" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Histogram Chart"
-                                        local:RibbonTooltip.KeyTip="HI"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Pareto" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Pareto Chart"
-                                        local:RibbonTooltip.KeyTip="PA"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Box Plot" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Box and Whisker Chart"
-                                        local:RibbonTooltip.KeyTip="BW"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Waterfall" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Waterfall Chart"
-                                        local:RibbonTooltip.KeyTip="WF"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Funnel" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Funnel Chart"
-                                        local:RibbonTooltip.KeyTip="FU"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Map" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="Map Chart"
-                                        local:RibbonTooltip.KeyTip="MP"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="3D Column" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                        local:RibbonTooltip.Title="3D Column Chart"
-                                        local:RibbonTooltip.KeyTip="3C"
-                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                <Button Content="Data Labels" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
-                                        local:RibbonTooltip.Title="Data Labels"
-                                        local:RibbonTooltip.KeyTip="DL"
-                                        local:RibbonTooltip.Description="Show or hide value labels on the current chart."/>
-                                <Button Content="Label Pos" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPositionBtn_Click"
-                                        local:RibbonTooltip.Title="Data Label Position"
-                                        local:RibbonTooltip.KeyTip="DP"
-                                        local:RibbonTooltip.Description="Cycle through common Excel data-label positions for the current chart."/>
-                                <Button Content="Cat Label" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelCategoryBtn_Click"
-                                        local:RibbonTooltip.Title="Category Name"
-                                        local:RibbonTooltip.KeyTip="CN"
-                                        local:RibbonTooltip.Description="Show or hide category names in chart data labels."/>
-                                <Button Content="Series Label" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSeriesBtn_Click"
-                                        local:RibbonTooltip.Title="Series Name"
-                                        local:RibbonTooltip.KeyTip="SN"
-                                        local:RibbonTooltip.Description="Show or hide series names in chart data labels."/>
-                                <Button Content="Percent" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPercentageBtn_Click"
-                                        local:RibbonTooltip.Title="Percentage"
-                                        local:RibbonTooltip.KeyTip="PE"
-                                        local:RibbonTooltip.Description="Show or hide percentage values in pie and doughnut chart data labels."/>
-                                <Button Content="Separator" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSeparatorBtn_Click"
-                                        local:RibbonTooltip.Title="Label Separator"
-                                        local:RibbonTooltip.KeyTip="LS"
-                                        local:RibbonTooltip.Description="Cycle the separator used between chart data-label fields."/>
-                                <Button Content="Label Num" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelNumberFormatBtn_Click"
-                                        local:RibbonTooltip.Title="Label Number Format"
-                                        local:RibbonTooltip.KeyTip="LN"
-                                        local:RibbonTooltip.Description="Cycle the number format used by chart data labels."/>
-                                <Button Content="Callout" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelCalloutBtn_Click"
-                                        local:RibbonTooltip.Title="Data Callout"
-                                        local:RibbonTooltip.KeyTip="CA"
-                                        local:RibbonTooltip.Description="Show or hide boxed callout-style data labels."/>
-                                <Button Content="Label Fill" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelFillBtn_Click"
-                                        local:RibbonTooltip.Title="Data Label Fill"
-                                        local:RibbonTooltip.KeyTip="LF"
-                                        local:RibbonTooltip.Description="Cycle the current chart data-label fill color."/>
-                                <Button Content="Label Text" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelTextBtn_Click"
-                                        local:RibbonTooltip.Title="Data Label Text"
-                                        local:RibbonTooltip.KeyTip="LT"
-                                        local:RibbonTooltip.Description="Cycle the current chart data-label text color."/>
-                                <Button Content="Label Border" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelBorderBtn_Click"
-                                        local:RibbonTooltip.Title="Data Label Border"
-                                        local:RibbonTooltip.KeyTip="LB"
-                                        local:RibbonTooltip.Description="Cycle the current chart data-label border color and weight."/>
-                                <Button Content="Label Size" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Data Label Size"
-                                        local:RibbonTooltip.KeyTip="LZ"
-                                        local:RibbonTooltip.Description="Cycle the current chart data-label font size."/>
-                                <Button Content="Label Angle" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelAngleBtn_Click"
-                                        local:RibbonTooltip.Title="Data Label Angle"
-                                        local:RibbonTooltip.KeyTip="LA"
-                                        local:RibbonTooltip.Description="Cycle the current chart data-label text rotation."/>
-                                <Button Content="Point Label" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPointDataLabelBtn_Click"
-                                        local:RibbonTooltip.Title="Format Data Point Label"
-                                        local:RibbonTooltip.KeyTip="PL"
-                                        local:RibbonTooltip.Description="Cycle fill, border, text color, and font size for the first data point label."/>
-                                <Button Content="Chart Fill" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaFillBtn_Click"
-                                        local:RibbonTooltip.Title="Chart Area Fill"
-                                        local:RibbonTooltip.KeyTip="CF"
-                                        local:RibbonTooltip.Description="Cycle the current chart area fill color."/>
-                                <Button Content="Titles..." Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitlesBtn_Click"
-                                        local:RibbonTooltip.Title="Chart Titles"
-                                        local:RibbonTooltip.KeyTip="TI"
-                                        local:RibbonTooltip.Description="Edit chart title and axis-title text."/>
-                                <Button Content="Title Color" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleColorBtn_Click"
-                                        local:RibbonTooltip.Title="Chart Title Color"
-                                        local:RibbonTooltip.KeyTip="TC"
-                                        local:RibbonTooltip.Description="Cycle the current chart title text color."/>
-                                <Button Content="Title Size" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Chart Title Size"
-                                        local:RibbonTooltip.KeyTip="TZ"
-                                        local:RibbonTooltip.Description="Cycle the current chart title font size."/>
-                                <Button Content="Axis Title" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleColorBtn_Click"
-                                        local:RibbonTooltip.Title="Axis Title Color"
-                                        local:RibbonTooltip.KeyTip="AT"
-                                        local:RibbonTooltip.Description="Cycle chart axis-title text color."/>
-                                <Button Content="Axis Title Size" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Axis Title Size"
-                                        local:RibbonTooltip.KeyTip="AZ"
-                                        local:RibbonTooltip.Description="Cycle chart axis-title font size."/>
-                                <Button Content="Plot Fill" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaFillBtn_Click"
-                                        local:RibbonTooltip.Title="Plot Area Fill"
-                                        local:RibbonTooltip.KeyTip="PF"
-                                        local:RibbonTooltip.Description="Cycle the current chart plot area fill color."/>
-                                <Button Content="Plot Border" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaBorderBtn_Click"
-                                        local:RibbonTooltip.Title="Plot Area Border"
-                                        local:RibbonTooltip.KeyTip="PO"
-                                        local:RibbonTooltip.Description="Cycle the current chart plot area border color and weight."/>
-                                <Button Content="Legend Text" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendTextBtn_Click"
-                                        local:RibbonTooltip.Title="Legend Text"
-                                        local:RibbonTooltip.KeyTip="GE"
-                                        local:RibbonTooltip.Description="Cycle the current chart legend text color."/>
-                                <Button Content="Legend Fill" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendFillBtn_Click"
-                                        local:RibbonTooltip.Title="Legend Fill"
-                                        local:RibbonTooltip.KeyTip="GF"
-                                        local:RibbonTooltip.Description="Cycle the current chart legend fill color."/>
-                                <Button Content="Legend Border" Width="98" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendBorderBtn_Click"
-                                        local:RibbonTooltip.Title="Legend Border"
-                                        local:RibbonTooltip.KeyTip="GB"
-                                        local:RibbonTooltip.Description="Cycle the current chart legend border color and weight."/>
-                                <Button Content="Legend Size" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Legend Font Size"
-                                        local:RibbonTooltip.KeyTip="GZ"
-                                        local:RibbonTooltip.Description="Cycle the current chart legend font size."/>
-                                <Button Content="Legend Overlay" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendOverlayBtn_Click"
-                                        local:RibbonTooltip.Title="Legend Overlay"
-                                        local:RibbonTooltip.KeyTip="GO"
-                                        local:RibbonTooltip.Description="Toggle whether the legend overlays the plot area."/>
-                                <Button Content="Trendline" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineBtn_Click"
-                                        local:RibbonTooltip.Title="Trendline"
-                                        local:RibbonTooltip.KeyTip="TR"
-                                        local:RibbonTooltip.Description="Show or hide a trendline on the current column or line chart."/>
-                                <Button Content="Trend Type" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineTypeBtn_Click"
-                                        local:RibbonTooltip.Title="Trendline Type"
-                                        local:RibbonTooltip.KeyTip="TT"
-                                        local:RibbonTooltip.Description="Switch the current chart trendline between supported Excel-like trendline types."/>
-                                <Button Content="Trend Period" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlinePeriodBtn_Click"
-                                        local:RibbonTooltip.Title="Moving Average Period"
-                                        local:RibbonTooltip.KeyTip="TM"
-                                        local:RibbonTooltip.Description="Cycle the moving-average trendline period for the current chart."/>
-                                <Button Content="Trend Order" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineOrderBtn_Click"
-                                        local:RibbonTooltip.Title="Polynomial Order"
-                                        local:RibbonTooltip.KeyTip="TO"
-                                        local:RibbonTooltip.Description="Cycle the polynomial trendline order for the current chart."/>
-                                <Button Content="Equation" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineEquationBtn_Click"
-                                        local:RibbonTooltip.Title="Trendline Equation"
-                                        local:RibbonTooltip.KeyTip="TQ"
-                                        local:RibbonTooltip.Description="Show or hide the trendline equation on the current chart."/>
-                                <Button Content="R²" Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
-                                        local:RibbonTooltip.Title="R-squared"
-                                        local:RibbonTooltip.KeyTip="RS"
-                                        local:RibbonTooltip.Description="Show or hide the trendline R-squared value on the current chart."/>
-                                <Button Content="Trend Color" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineColorBtn_Click"
-                                        local:RibbonTooltip.Title="Trendline Color"
-                                        local:RibbonTooltip.KeyTip="TL"
-                                        local:RibbonTooltip.Description="Cycle the current chart trendline color."/>
-                                <Button Content="Trend Dash" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineDashBtn_Click"
-                                        local:RibbonTooltip.Title="Trendline Dash"
-                                        local:RibbonTooltip.KeyTip="TS"
-                                        local:RibbonTooltip.Description="Cycle the current chart trendline dash style."/>
-                                <Button Content="Trend Width" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineWidthBtn_Click"
-                                        local:RibbonTooltip.Title="Trendline Width"
-                                        local:RibbonTooltip.KeyTip="TW"
-                                        local:RibbonTooltip.Description="Cycle the current chart trendline width."/>
-                                <Button Content="Error Bars" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartErrorBarsBtn_Click"
-                                        local:RibbonTooltip.Title="Error Bars"
-                                        local:RibbonTooltip.KeyTip="EB"
-                                        local:RibbonTooltip.Description="Open Excel-like error bar options for the current chart."/>
-                                <Button Content="2nd Axis" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisBtn_Click"
-                                        local:RibbonTooltip.Title="Secondary Axis"
-                                        local:RibbonTooltip.KeyTip="SA"
-                                        local:RibbonTooltip.Description="Plot additional series on a secondary value axis for the current column or line chart."/>
-                                <Button Content="X Bounds" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisBoundsBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Bounds"
-                                        local:RibbonTooltip.KeyTip="XB"
-                                        local:RibbonTooltip.Description="Toggle automatic or data-based X axis bounds for the current chart."/>
-                                <Button Content="Y Bounds" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisBoundsBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Bounds"
-                                        local:RibbonTooltip.KeyTip="YB"
-                                        local:RibbonTooltip.Description="Toggle automatic or data-based Y axis bounds for the current chart."/>
-                                <Button Content="X Log" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLogBtn_Click"
-                                        local:RibbonTooltip.Title="X Log Scale"
-                                        local:RibbonTooltip.KeyTip="XL"
-                                        local:RibbonTooltip.Description="Toggle logarithmic scale for the current chart X axis."/>
-                                <Button Content="Y Log" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLogBtn_Click"
-                                        local:RibbonTooltip.Title="Y Log Scale"
-                                        local:RibbonTooltip.KeyTip="YL"
-                                        local:RibbonTooltip.Description="Toggle logarithmic scale for the current chart Y axis."/>
-                                <Button Content="X Num" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisNumberFormatBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Number Format"
-                                        local:RibbonTooltip.KeyTip="XN"
-                                        local:RibbonTooltip.Description="Cycle the current chart X axis number format."/>
-                                <Button Content="Y Num" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisNumberFormatBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Number Format"
-                                        local:RibbonTooltip.KeyTip="YN"
-                                        local:RibbonTooltip.Description="Cycle the current chart Y axis number format."/>
-                                <Button Content="X Grid" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlinesBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Gridlines"
-                                        local:RibbonTooltip.KeyTip="XG"
-                                        local:RibbonTooltip.Description="Cycle X axis gridlines between off, major, and major plus minor."/>
-                                <Button Content="Y Grid" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlinesBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Gridlines"
-                                        local:RibbonTooltip.KeyTip="YG"
-                                        local:RibbonTooltip.Description="Cycle Y axis gridlines between off, major, and major plus minor."/>
-                                <Button Content="X Grid Style" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlineStyleBtn_Click"
-                                        local:RibbonTooltip.Title="X Gridline Style"
-                                        local:RibbonTooltip.KeyTip="XS"
-                                        local:RibbonTooltip.Description="Cycle X axis gridline color and weight."/>
-                                <Button Content="Y Grid Style" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlineStyleBtn_Click"
-                                        local:RibbonTooltip.Title="Y Gridline Style"
-                                        local:RibbonTooltip.KeyTip="YS"
-                                        local:RibbonTooltip.Description="Cycle Y axis gridline color and weight."/>
-                                <Button Content="X Tick" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisTickBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Ticks"
-                                        local:RibbonTooltip.KeyTip="XT"
-                                        local:RibbonTooltip.Description="Cycle X axis tick mark styles."/>
-                                <Button Content="Y Tick" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisTickBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Ticks"
-                                        local:RibbonTooltip.KeyTip="YT"
-                                        local:RibbonTooltip.Description="Cycle Y axis tick mark styles."/>
-                                <Button Content="X Labels" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelsBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Labels"
-                                        local:RibbonTooltip.KeyTip="XA"
-                                        local:RibbonTooltip.Description="Show or hide X axis labels on the current chart."/>
-                                <Button Content="Y Labels" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelsBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Labels"
-                                        local:RibbonTooltip.KeyTip="YA"
-                                        local:RibbonTooltip.Description="Show or hide Y axis labels on the current chart."/>
-                                <Button Content="X Label Font" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelFontBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Label Font"
-                                        local:RibbonTooltip.KeyTip="XF"
-                                        local:RibbonTooltip.Description="Cycle X axis label text color and font size."/>
-                                <Button Content="X Angle" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelAngleBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Label Angle"
-                                        local:RibbonTooltip.KeyTip="XX"
-                                        local:RibbonTooltip.Description="Cycle X axis label rotation."/>
-                                <Button Content="Y Label Font" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelFontBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Label Font"
-                                        local:RibbonTooltip.KeyTip="YF"
-                                        local:RibbonTooltip.Description="Cycle Y axis label text color and font size."/>
-                                <Button Content="Y Angle" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelAngleBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Label Angle"
-                                        local:RibbonTooltip.KeyTip="YX"
-                                        local:RibbonTooltip.Description="Cycle Y axis label rotation."/>
-                                <Button Content="X Line" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLineBtn_Click"
-                                        local:RibbonTooltip.Title="X Axis Line"
-                                        local:RibbonTooltip.KeyTip="XI"
-                                        local:RibbonTooltip.Description="Cycle X axis line color and weight on the current chart."/>
-                                <Button Content="Y Line" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLineBtn_Click"
-                                        local:RibbonTooltip.Title="Y Axis Line"
-                                        local:RibbonTooltip.KeyTip="YI"
-                                        local:RibbonTooltip.Description="Cycle Y axis line color and weight on the current chart."/>
-                                <Button Content="Axis Series" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisSeriesBtn_Click"
-                                        local:RibbonTooltip.Title="Secondary Axis Series"
-                                        local:RibbonTooltip.KeyTip="SS"
-                                        local:RibbonTooltip.Description="Cycle which chart series uses the secondary value axis."/>
-                                <Button Content="Combo" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboBtn_Click"
-                                        local:RibbonTooltip.Title="Combo Chart"
-                                        local:RibbonTooltip.KeyTip="CO"
-                                        local:RibbonTooltip.Description="Render additional column or area chart series as lines."/>
-                                <Button Content="Combo Series" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboSeriesBtn_Click"
-                                        local:RibbonTooltip.Title="Combo Chart Series"
-                                        local:RibbonTooltip.KeyTip="CS"
-                                        local:RibbonTooltip.Description="Cycle which data series renders as the combo chart line."/>
-                                <Button Content="Series Color" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesColorBtn_Click"
-                                        local:RibbonTooltip.Title="Series Color"
-                                        local:RibbonTooltip.KeyTip="SR"
-                                        local:RibbonTooltip.Description="Cycle the first chart series fill or line color."/>
-                                <Button Content="Series Width" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesWidthBtn_Click"
-                                        local:RibbonTooltip.Title="Series Width"
-                                        local:RibbonTooltip.KeyTip="WD"
-                                        local:RibbonTooltip.Description="Cycle the first chart series outline or line width."/>
-                                <Button Content="Series Dash" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesDashBtn_Click"
-                                        local:RibbonTooltip.Title="Series Dash"
-                                        local:RibbonTooltip.KeyTip="SD"
-                                        local:RibbonTooltip.Description="Cycle the first chart series line dash style."/>
-                                <Button Content="Marker" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerBtn_Click"
-                                        local:RibbonTooltip.Title="Series Marker"
-                                        local:RibbonTooltip.KeyTip="SM"
-                                        local:RibbonTooltip.Description="Cycle the first chart series marker style."/>
-                                <Button Content="Marker Size" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Marker Size"
-                                        local:RibbonTooltip.KeyTip="MS"
-                                        local:RibbonTooltip.Description="Cycle the first chart series marker size."/>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <!-- Column chart family -->
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Column"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartColumnMenuItem_Click"
+                                            local:RibbonTooltip.Title="Column Chart" local:RibbonTooltip.KeyTip="C"
+                                            local:RibbonTooltip.Description="Insert a column chart to compare values across categories."/>
+                                    <Button Content="Stack Col" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStackedColumnMenuItem_Click"
+                                            local:RibbonTooltip.Title="Stacked Column Chart" local:RibbonTooltip.KeyTip="SC"
+                                            local:RibbonTooltip.Description="Insert a stacked column chart to show parts of a whole by category."/>
+                                    <Button Content="100% Col"  Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPercentStackedColumnMenuItem_Click"
+                                            local:RibbonTooltip.Title="100% Stacked Column Chart" local:RibbonTooltip.KeyTip="PC"
+                                            local:RibbonTooltip.Description="Insert a 100% stacked column chart to compare percentage contributions by category."/>
+                                </StackPanel>
+                                <!-- Bar chart family -->
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Bar"       Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBarMenuItem_Click"
+                                            local:RibbonTooltip.Title="Bar Chart" local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Insert a horizontal bar chart to compare values across categories."/>
+                                    <Button Content="Stack Bar" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStackedBarMenuItem_Click"
+                                            local:RibbonTooltip.Title="Stacked Bar Chart" local:RibbonTooltip.KeyTip="SB"
+                                            local:RibbonTooltip.Description="Insert a stacked bar chart to show parts of a whole by category."/>
+                                    <Button Content="100% Bar"  Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPercentStackedBarMenuItem_Click"
+                                            local:RibbonTooltip.Title="100% Stacked Bar Chart" local:RibbonTooltip.KeyTip="PB"
+                                            local:RibbonTooltip.Description="Insert a 100% stacked bar chart to compare percentage contributions by category."/>
+                                </StackPanel>
+                                <!-- Line / Area / Stock -->
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Line"      Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
+                                            local:RibbonTooltip.Title="Line Chart" local:RibbonTooltip.KeyTip="L"
+                                            local:RibbonTooltip.Description="Insert a line chart to show trends over time."/>
+                                    <Button Content="Area"      Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaMenuItem_Click"
+                                            local:RibbonTooltip.Title="Area Chart" local:RibbonTooltip.KeyTip="A"
+                                            local:RibbonTooltip.Description="Insert an area chart to show trends with filled areas."/>
+                                    <Button Content="Stock"     Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockMenuItem_Click"
+                                            local:RibbonTooltip.Title="Stock Chart" local:RibbonTooltip.KeyTip="ST"
+                                            local:RibbonTooltip.Description="Insert a stock chart from high-low-close or open-high-low-close data."/>
+                                </StackPanel>
+                                <!-- Pie / Doughnut / Scatter -->
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Pie"       Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieMenuItem_Click"
+                                            local:RibbonTooltip.Title="Pie Chart" local:RibbonTooltip.KeyTip="PI"
+                                            local:RibbonTooltip.Description="Insert a pie chart to show proportions of a whole."/>
+                                    <Button Content="Doughnut"  Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutMenuItem_Click"
+                                            local:RibbonTooltip.Title="Doughnut Chart" local:RibbonTooltip.KeyTip="D"
+                                            local:RibbonTooltip.Description="Insert a doughnut chart to show proportions with a center hole."/>
+                                    <Button Content="Scatter"   Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartScatterMenuItem_Click"
+                                            local:RibbonTooltip.Title="Scatter Chart" local:RibbonTooltip.KeyTip="X"
+                                            local:RibbonTooltip.Description="Insert a scatter chart to compare numeric X and Y values."/>
+                                </StackPanel>
+                                <!-- Bubble / Radar -->
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Bubble"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleMenuItem_Click"
+                                            local:RibbonTooltip.Title="Bubble Chart" local:RibbonTooltip.KeyTip="BU"
+                                            local:RibbonTooltip.Description="Insert a bubble chart to compare X, Y, and size values."/>
+                                    <Button Content="Radar"     Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartRadarMenuItem_Click"
+                                            local:RibbonTooltip.Title="Radar Chart" local:RibbonTooltip.KeyTip="RD"
+                                            local:RibbonTooltip.Description="Insert a radar chart to compare multiple values across categories."/>
+                                </StackPanel>
+                                <!-- Hidden chart management, pie utilities, deferred types, and format buttons
+                                     (collapsed by ConfigureInsertRibbonSurface; shown in chart selection context) -->
+                                <StackPanel>
+                                    <Button Content="Change Chart" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChangeChartTypeBtn_Click"
+                                            local:RibbonTooltip.Title="Change Chart Type" local:RibbonTooltip.KeyTip="CT"
+                                            local:RibbonTooltip.Description="Change the current chart to another supported chart type."/>
+                                    <Button Content="Select Data"  Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SelectChartDataSourceBtn_Click"
+                                            local:RibbonTooltip.Title="Select Data Source" local:RibbonTooltip.KeyTip="DS"
+                                            local:RibbonTooltip.Description="Change the current chart data range and category-label column."/>
+                                    <Button Content="Move Chart"   Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="MoveChartBtn_Click"
+                                            local:RibbonTooltip.Title="Move Chart" local:RibbonTooltip.KeyTip="MC"
+                                            local:RibbonTooltip.Description="Move the current chart to another sheet or a new chart sheet."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Chart Styles" Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStylesBtn_Click"
+                                            local:RibbonTooltip.Title="Chart Styles" local:RibbonTooltip.KeyTip="CY"
+                                            local:RibbonTooltip.Description="Choose a saved Excel chart style for the current chart."/>
+                                    <Button Content="Format Chart" Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormatChartAreaBtn_Click"
+                                            local:RibbonTooltip.Title="Format Chart Area" local:RibbonTooltip.KeyTip="FZ"
+                                            local:RibbonTooltip.Description="Open chart area, plot area, and legend formatting options."/>
+                                    <Button Content="Slice Angle"  Width="84"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFirstSliceAngleBtn_Click"
+                                            local:RibbonTooltip.Title="First Slice Angle" local:RibbonTooltip.KeyTip="FA"
+                                            local:RibbonTooltip.Description="Cycle the first-slice angle for pie and doughnut charts."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Explode"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"
+                                            local:RibbonTooltip.Title="Explode Slice" local:RibbonTooltip.KeyTip="ES"
+                                            local:RibbonTooltip.Description="Cycle the exploded slice for pie and doughnut charts."/>
+                                    <Button Content="Hole Size"    Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutHoleSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Doughnut Hole Size" local:RibbonTooltip.KeyTip="DH"
+                                            local:RibbonTooltip.Description="Cycle the current doughnut chart hole size."/>
+                                    <Button Content="Surface"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Surface Chart" local:RibbonTooltip.KeyTip="SF"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Treemap"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Treemap Chart" local:RibbonTooltip.KeyTip="T7"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                    <Button Content="Sunburst"     Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Sunburst Chart" local:RibbonTooltip.KeyTip="SU"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                    <Button Content="Histogram"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Histogram Chart" local:RibbonTooltip.KeyTip="HI"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Pareto"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Pareto Chart" local:RibbonTooltip.KeyTip="PA"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                    <Button Content="Box Plot"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Box and Whisker Chart" local:RibbonTooltip.KeyTip="BW"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                    <Button Content="Waterfall"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Waterfall Chart" local:RibbonTooltip.KeyTip="WF"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Funnel"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Funnel Chart" local:RibbonTooltip.KeyTip="FU"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                    <Button Content="Map"          Width="58"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="Map Chart" local:RibbonTooltip.KeyTip="MP"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                    <Button Content="3D Column"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Title="3D Column Chart" local:RibbonTooltip.KeyTip="3C"
+                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Data Labels"  Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
+                                            local:RibbonTooltip.Title="Data Labels" local:RibbonTooltip.KeyTip="DL"
+                                            local:RibbonTooltip.Description="Show or hide value labels on the current chart."/>
+                                    <Button Content="Label Pos"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPositionBtn_Click"
+                                            local:RibbonTooltip.Title="Data Label Position" local:RibbonTooltip.KeyTip="DP"
+                                            local:RibbonTooltip.Description="Cycle through common Excel data-label positions for the current chart."/>
+                                    <Button Content="Cat Label"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelCategoryBtn_Click"
+                                            local:RibbonTooltip.Title="Category Name" local:RibbonTooltip.KeyTip="CN"
+                                            local:RibbonTooltip.Description="Show or hide category names in chart data labels."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Series Label" Width="88"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSeriesBtn_Click"
+                                            local:RibbonTooltip.Title="Series Name" local:RibbonTooltip.KeyTip="SN"
+                                            local:RibbonTooltip.Description="Show or hide series names in chart data labels."/>
+                                    <Button Content="Percent"      Width="70"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPercentageBtn_Click"
+                                            local:RibbonTooltip.Title="Percentage" local:RibbonTooltip.KeyTip="PE"
+                                            local:RibbonTooltip.Description="Show or hide percentage values in pie and doughnut chart data labels."/>
+                                    <Button Content="Separator"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSeparatorBtn_Click"
+                                            local:RibbonTooltip.Title="Label Separator" local:RibbonTooltip.KeyTip="LS"
+                                            local:RibbonTooltip.Description="Cycle the separator used between chart data-label fields."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Label Num"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelNumberFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Label Number Format" local:RibbonTooltip.KeyTip="LN"
+                                            local:RibbonTooltip.Description="Cycle the number format used by chart data labels."/>
+                                    <Button Content="Callout"      Width="70"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelCalloutBtn_Click"
+                                            local:RibbonTooltip.Title="Data Callout" local:RibbonTooltip.KeyTip="CA"
+                                            local:RibbonTooltip.Description="Show or hide boxed callout-style data labels."/>
+                                    <Button Content="Label Fill"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelFillBtn_Click"
+                                            local:RibbonTooltip.Title="Data Label Fill" local:RibbonTooltip.KeyTip="LF"
+                                            local:RibbonTooltip.Description="Cycle the current chart data-label fill color."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Label Text"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelTextBtn_Click"
+                                            local:RibbonTooltip.Title="Data Label Text" local:RibbonTooltip.KeyTip="LT"
+                                            local:RibbonTooltip.Description="Cycle the current chart data-label text color."/>
+                                    <Button Content="Label Border" Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelBorderBtn_Click"
+                                            local:RibbonTooltip.Title="Data Label Border" local:RibbonTooltip.KeyTip="LB"
+                                            local:RibbonTooltip.Description="Cycle the current chart data-label border color and weight."/>
+                                    <Button Content="Label Size"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Data Label Size" local:RibbonTooltip.KeyTip="LZ"
+                                            local:RibbonTooltip.Description="Cycle the current chart data-label font size."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Label Angle"  Width="88"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelAngleBtn_Click"
+                                            local:RibbonTooltip.Title="Data Label Angle" local:RibbonTooltip.KeyTip="LA"
+                                            local:RibbonTooltip.Description="Cycle the current chart data-label text rotation."/>
+                                    <Button Content="Point Label"  Width="86"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPointDataLabelBtn_Click"
+                                            local:RibbonTooltip.Title="Format Data Point Label" local:RibbonTooltip.KeyTip="PL"
+                                            local:RibbonTooltip.Description="Cycle fill, border, text color, and font size for the first data point label."/>
+                                    <Button Content="Chart Fill"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaFillBtn_Click"
+                                            local:RibbonTooltip.Title="Chart Area Fill" local:RibbonTooltip.KeyTip="CF"
+                                            local:RibbonTooltip.Description="Cycle the current chart area fill color."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Titles..."    Width="70"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitlesBtn_Click"
+                                            local:RibbonTooltip.Title="Chart Titles" local:RibbonTooltip.KeyTip="TI"
+                                            local:RibbonTooltip.Description="Edit chart title and axis-title text."/>
+                                    <Button Content="Title Color"  Width="84"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleColorBtn_Click"
+                                            local:RibbonTooltip.Title="Chart Title Color" local:RibbonTooltip.KeyTip="TC"
+                                            local:RibbonTooltip.Description="Cycle the current chart title text color."/>
+                                    <Button Content="Title Size"   Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Chart Title Size" local:RibbonTooltip.KeyTip="TZ"
+                                            local:RibbonTooltip.Description="Cycle the current chart title font size."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Axis Title"   Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleColorBtn_Click"
+                                            local:RibbonTooltip.Title="Axis Title Color" local:RibbonTooltip.KeyTip="AT"
+                                            local:RibbonTooltip.Description="Cycle chart axis-title text color."/>
+                                    <Button Content="Axis Ttl Sz"  Width="80"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Axis Title Size" local:RibbonTooltip.KeyTip="AZ"
+                                            local:RibbonTooltip.Description="Cycle chart axis-title font size."/>
+                                    <Button Content="Plot Fill"    Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaFillBtn_Click"
+                                            local:RibbonTooltip.Title="Plot Area Fill" local:RibbonTooltip.KeyTip="PF"
+                                            local:RibbonTooltip.Description="Cycle the current chart plot area fill color."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Plot Border"  Width="86"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaBorderBtn_Click"
+                                            local:RibbonTooltip.Title="Plot Area Border" local:RibbonTooltip.KeyTip="PO"
+                                            local:RibbonTooltip.Description="Cycle the current chart plot area border color and weight."/>
+                                    <Button Content="Legend Text"  Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendTextBtn_Click"
+                                            local:RibbonTooltip.Title="Legend Text" local:RibbonTooltip.KeyTip="GE"
+                                            local:RibbonTooltip.Description="Cycle the current chart legend text color."/>
+                                    <Button Content="Legend Fill"  Width="86"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendFillBtn_Click"
+                                            local:RibbonTooltip.Title="Legend Fill" local:RibbonTooltip.KeyTip="GF"
+                                            local:RibbonTooltip.Description="Cycle the current chart legend fill color."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Legend Bdr"   Width="84"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendBorderBtn_Click"
+                                            local:RibbonTooltip.Title="Legend Border" local:RibbonTooltip.KeyTip="GB"
+                                            local:RibbonTooltip.Description="Cycle the current chart legend border color and weight."/>
+                                    <Button Content="Legend Size"  Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Legend Font Size" local:RibbonTooltip.KeyTip="GZ"
+                                            local:RibbonTooltip.Description="Cycle the current chart legend font size."/>
+                                    <Button Content="Lgnd Overlay" Width="98"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendOverlayBtn_Click"
+                                            local:RibbonTooltip.Title="Legend Overlay" local:RibbonTooltip.KeyTip="GO"
+                                            local:RibbonTooltip.Description="Toggle whether the legend overlays the plot area."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Trendline"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineBtn_Click"
+                                            local:RibbonTooltip.Title="Trendline" local:RibbonTooltip.KeyTip="TR"
+                                            local:RibbonTooltip.Description="Show or hide a trendline on the current column or line chart."/>
+                                    <Button Content="Trend Type"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineTypeBtn_Click"
+                                            local:RibbonTooltip.Title="Trendline Type" local:RibbonTooltip.KeyTip="TT"
+                                            local:RibbonTooltip.Description="Switch the current chart trendline between supported Excel-like trendline types."/>
+                                    <Button Content="Trend Period"  Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlinePeriodBtn_Click"
+                                            local:RibbonTooltip.Title="Moving Average Period" local:RibbonTooltip.KeyTip="TM"
+                                            local:RibbonTooltip.Description="Cycle the moving-average trendline period for the current chart."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Trend Order"  Width="88"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineOrderBtn_Click"
+                                            local:RibbonTooltip.Title="Polynomial Order" local:RibbonTooltip.KeyTip="TO"
+                                            local:RibbonTooltip.Description="Cycle the polynomial trendline order for the current chart."/>
+                                    <Button Content="Equation"     Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineEquationBtn_Click"
+                                            local:RibbonTooltip.Title="Trendline Equation" local:RibbonTooltip.KeyTip="TQ"
+                                            local:RibbonTooltip.Description="Show or hide the trendline equation on the current chart."/>
+                                    <Button Content="R²"           Width="48"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
+                                            local:RibbonTooltip.Title="R-squared" local:RibbonTooltip.KeyTip="RS"
+                                            local:RibbonTooltip.Description="Show or hide the trendline R-squared value on the current chart."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Trend Color"  Width="88"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineColorBtn_Click"
+                                            local:RibbonTooltip.Title="Trendline Color" local:RibbonTooltip.KeyTip="TL"
+                                            local:RibbonTooltip.Description="Cycle the current chart trendline color."/>
+                                    <Button Content="Trend Dash"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineDashBtn_Click"
+                                            local:RibbonTooltip.Title="Trendline Dash" local:RibbonTooltip.KeyTip="TS"
+                                            local:RibbonTooltip.Description="Cycle the current chart trendline dash style."/>
+                                    <Button Content="Trend Width"  Width="88"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineWidthBtn_Click"
+                                            local:RibbonTooltip.Title="Trendline Width" local:RibbonTooltip.KeyTip="TW"
+                                            local:RibbonTooltip.Description="Cycle the current chart trendline width."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Error Bars"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartErrorBarsBtn_Click"
+                                            local:RibbonTooltip.Title="Error Bars" local:RibbonTooltip.KeyTip="EB"
+                                            local:RibbonTooltip.Description="Open Excel-like error bar options for the current chart."/>
+                                    <Button Content="2nd Axis"     Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisBtn_Click"
+                                            local:RibbonTooltip.Title="Secondary Axis" local:RibbonTooltip.KeyTip="SA"
+                                            local:RibbonTooltip.Description="Plot additional series on a secondary value axis for the current column or line chart."/>
+                                    <Button Content="X Bounds"     Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisBoundsBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Bounds" local:RibbonTooltip.KeyTip="XB"
+                                            local:RibbonTooltip.Description="Toggle automatic or data-based X axis bounds for the current chart."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Y Bounds"     Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisBoundsBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Bounds" local:RibbonTooltip.KeyTip="YB"
+                                            local:RibbonTooltip.Description="Toggle automatic or data-based Y axis bounds for the current chart."/>
+                                    <Button Content="X Log"        Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLogBtn_Click"
+                                            local:RibbonTooltip.Title="X Log Scale" local:RibbonTooltip.KeyTip="XL"
+                                            local:RibbonTooltip.Description="Toggle logarithmic scale for the current chart X axis."/>
+                                    <Button Content="Y Log"        Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLogBtn_Click"
+                                            local:RibbonTooltip.Title="Y Log Scale" local:RibbonTooltip.KeyTip="YL"
+                                            local:RibbonTooltip.Description="Toggle logarithmic scale for the current chart Y axis."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="X Num"        Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisNumberFormatBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Number Format" local:RibbonTooltip.KeyTip="XN"
+                                            local:RibbonTooltip.Description="Cycle the current chart X axis number format."/>
+                                    <Button Content="Y Num"        Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisNumberFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Number Format" local:RibbonTooltip.KeyTip="YN"
+                                            local:RibbonTooltip.Description="Cycle the current chart Y axis number format."/>
+                                    <Button Content="X Grid"       Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlinesBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Gridlines" local:RibbonTooltip.KeyTip="XG"
+                                            local:RibbonTooltip.Description="Cycle X axis gridlines between off, major, and major plus minor."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Y Grid"       Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlinesBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Gridlines" local:RibbonTooltip.KeyTip="YG"
+                                            local:RibbonTooltip.Description="Cycle Y axis gridlines between off, major, and major plus minor."/>
+                                    <Button Content="X Grid Style" Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlineStyleBtn_Click"
+                                            local:RibbonTooltip.Title="X Gridline Style" local:RibbonTooltip.KeyTip="XS"
+                                            local:RibbonTooltip.Description="Cycle X axis gridline color and weight."/>
+                                    <Button Content="Y Grid Style" Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlineStyleBtn_Click"
+                                            local:RibbonTooltip.Title="Y Gridline Style" local:RibbonTooltip.KeyTip="YS"
+                                            local:RibbonTooltip.Description="Cycle Y axis gridline color and weight."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="X Tick"       Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisTickBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Ticks" local:RibbonTooltip.KeyTip="XT"
+                                            local:RibbonTooltip.Description="Cycle X axis tick mark styles."/>
+                                    <Button Content="Y Tick"       Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisTickBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Ticks" local:RibbonTooltip.KeyTip="YT"
+                                            local:RibbonTooltip.Description="Cycle Y axis tick mark styles."/>
+                                    <Button Content="X Labels"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelsBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Labels" local:RibbonTooltip.KeyTip="XA"
+                                            local:RibbonTooltip.Description="Show or hide X axis labels on the current chart."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Y Labels"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelsBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Labels" local:RibbonTooltip.KeyTip="YA"
+                                            local:RibbonTooltip.Description="Show or hide Y axis labels on the current chart."/>
+                                    <Button Content="X Label Font" Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelFontBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Label Font" local:RibbonTooltip.KeyTip="XF"
+                                            local:RibbonTooltip.Description="Cycle X axis label text color and font size."/>
+                                    <Button Content="X Angle"      Width="70"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelAngleBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Label Angle" local:RibbonTooltip.KeyTip="XX"
+                                            local:RibbonTooltip.Description="Cycle X axis label rotation."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Y Label Font" Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelFontBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Label Font" local:RibbonTooltip.KeyTip="YF"
+                                            local:RibbonTooltip.Description="Cycle Y axis label text color and font size."/>
+                                    <Button Content="Y Angle"      Width="70"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelAngleBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Label Angle" local:RibbonTooltip.KeyTip="YX"
+                                            local:RibbonTooltip.Description="Cycle Y axis label rotation."/>
+                                    <Button Content="X Line"       Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLineBtn_Click"
+                                            local:RibbonTooltip.Title="X Axis Line" local:RibbonTooltip.KeyTip="XI"
+                                            local:RibbonTooltip.Description="Cycle X axis line color and weight on the current chart."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Y Line"       Width="64"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLineBtn_Click"
+                                            local:RibbonTooltip.Title="Y Axis Line" local:RibbonTooltip.KeyTip="YI"
+                                            local:RibbonTooltip.Description="Cycle Y axis line color and weight on the current chart."/>
+                                    <Button Content="Axis Series"  Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisSeriesBtn_Click"
+                                            local:RibbonTooltip.Title="Secondary Axis Series" local:RibbonTooltip.KeyTip="SS"
+                                            local:RibbonTooltip.Description="Cycle which chart series uses the secondary value axis."/>
+                                    <Button Content="Combo"        Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboBtn_Click"
+                                            local:RibbonTooltip.Title="Combo Chart" local:RibbonTooltip.KeyTip="CO"
+                                            local:RibbonTooltip.Description="Render additional column or area chart series as lines."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Combo Series" Width="92"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboSeriesBtn_Click"
+                                            local:RibbonTooltip.Title="Combo Chart Series" local:RibbonTooltip.KeyTip="CS"
+                                            local:RibbonTooltip.Description="Cycle which data series renders as the combo chart line."/>
+                                    <Button Content="Series Color" Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesColorBtn_Click"
+                                            local:RibbonTooltip.Title="Series Color" local:RibbonTooltip.KeyTip="SR"
+                                            local:RibbonTooltip.Description="Cycle the first chart series fill or line color."/>
+                                    <Button Content="Series Width" Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesWidthBtn_Click"
+                                            local:RibbonTooltip.Title="Series Width" local:RibbonTooltip.KeyTip="WD"
+                                            local:RibbonTooltip.Description="Cycle the first chart series outline or line width."/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Button Content="Series Dash"  Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesDashBtn_Click"
+                                            local:RibbonTooltip.Title="Series Dash" local:RibbonTooltip.KeyTip="SD"
+                                            local:RibbonTooltip.Description="Cycle the first chart series line dash style."/>
+                                    <Button Content="Marker"       Width="70"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerBtn_Click"
+                                            local:RibbonTooltip.Title="Series Marker" local:RibbonTooltip.KeyTip="SM"
+                                            local:RibbonTooltip.Description="Cycle the first chart series marker style."/>
+                                    <Button Content="Marker Size"  Width="90"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Marker Size" local:RibbonTooltip.KeyTip="MS"
+                                            local:RibbonTooltip.Description="Cycle the first chart series marker size."/>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Charts" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1922,25 +1881,6 @@
                                         local:RibbonTooltip.Title="Insert Picture"
                                         local:RibbonTooltip.KeyTip="IP"
                                         local:RibbonTooltip.Description="Insert a picture from a local image file."/>
-                                <Button Content="Pic Size"  Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Picture Size"
-                                        local:RibbonTooltip.KeyTip="PZ"
-                                        local:RibbonTooltip.Description="Resize the selected or most recent picture."/>
-                                <Button Content="Rotate"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureRotateBtn_Click"
-                                        local:RibbonTooltip.Title="Rotate Picture"
-                                        local:RibbonTooltip.KeyTip="PR"
-                                        local:RibbonTooltip.Description="Rotate the selected or most recent picture."/>
-                                <Button Content="Crop"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
-                                        local:RibbonTooltip.Title="Crop Picture"
-                                        local:RibbonTooltip.KeyTip="CR"
-                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
-                                            <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Objects" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1952,7 +1892,7 @@
 
             <!-- ── DRAW ──────────────────────────────────────────────── -->
             <TabItem Header="Draw" local:RibbonTooltip.KeyTip="J">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -1986,28 +1926,33 @@
                         <!-- ▌Arrange ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <UniformGrid Grid.Row="0" Rows="2" Columns="3" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Bring Forward" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                        Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
                                         local:RibbonTooltip.Title="Bring Forward"
                                         local:RibbonTooltip.KeyTip="BF"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the front."/>
-                                <Button Content="Send Backward" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
+                                <Button Content="Send Backward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                        Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
                                         local:RibbonTooltip.Title="Send Backward"
                                         local:RibbonTooltip.KeyTip="SB"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the back."/>
-                                <Button Content="Size" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Object Size"
-                                        local:RibbonTooltip.KeyTip="SZ"
-                                        local:RibbonTooltip.Description="Resize the selected or most recent drawing object."/>
-                                <Button Content="Rotate" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
-                                        local:RibbonTooltip.Title="Rotate Object"
-                                        local:RibbonTooltip.KeyTip="RO"
-                                        local:RibbonTooltip.Description="Rotate the selected or most recent drawing object."/>
-                                <Button Content="Selection Pane" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
+                                <Button Content="Selection Pane" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                        Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
                                         local:RibbonTooltip.Title="Selection Pane"
                                         local:RibbonTooltip.KeyTip="SP"
                                         local:RibbonTooltip.Description="List sheet objects and control visibility or stacking order."/>
-                            </UniformGrid>
+                                <StackPanel VerticalAlignment="Center" Margin="2,0">
+                                    <Button Content="Rotate" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                            local:RibbonTooltip.Title="Rotate Object"
+                                            local:RibbonTooltip.KeyTip="RO"
+                                            local:RibbonTooltip.Description="Rotate the selected or most recent drawing object."/>
+                                    <Button Content="Size"   Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Object Size"
+                                            local:RibbonTooltip.KeyTip="SZ"
+                                            local:RibbonTooltip.Description="Resize the selected or most recent drawing object."/>
+                                </StackPanel>
+                            </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Arrange" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
@@ -2015,34 +1960,38 @@
                         <!-- â–ŒFormat â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Fill" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
-                                        local:RibbonTooltip.Title="Object Fill"
-                                        local:RibbonTooltip.KeyTip="F"
-                                        local:RibbonTooltip.Description="Change the fill color of the selected drawing object."/>
-                                <Button Content="Outline" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
-                                        local:RibbonTooltip.Title="Object Outline"
-                                        local:RibbonTooltip.KeyTip="O"
-                                        local:RibbonTooltip.Description="Change the outline color of the selected drawing object."/>
-                                <Button Content="Crop" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
-                                        local:RibbonTooltip.Title="Crop Picture"
-                                        local:RibbonTooltip.KeyTip="C"
-                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
-                                            <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
-                                        local:RibbonTooltip.Title="Shape Gradient"
-                                        local:RibbonTooltip.KeyTip="G"
-                                        local:RibbonTooltip.Description="Apply a two-color gradient fill to the selected shape."/>
-                                <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectEffectsBtn_Click"
-                                        local:RibbonTooltip.Title="Shape Effects"
-                                        local:RibbonTooltip.KeyTip="FX"
-                                        local:RibbonTooltip.Description="Toggle a shadow effect on the selected shape."/>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Fill" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
+                                            local:RibbonTooltip.Title="Object Fill"
+                                            local:RibbonTooltip.KeyTip="F"
+                                            local:RibbonTooltip.Description="Change the fill color of the selected drawing object."/>
+                                    <Button Content="Outline" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
+                                            local:RibbonTooltip.Title="Object Outline"
+                                            local:RibbonTooltip.KeyTip="O"
+                                            local:RibbonTooltip.Description="Change the outline color of the selected drawing object."/>
+                                    <Button Content="Crop" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
+                                            local:RibbonTooltip.Title="Crop Picture"
+                                            local:RibbonTooltip.KeyTip="C"
+                                            local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
+                                                <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Margin="1,0">
+                                    <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
+                                            local:RibbonTooltip.Title="Shape Gradient"
+                                            local:RibbonTooltip.KeyTip="G"
+                                            local:RibbonTooltip.Description="Apply a two-color gradient fill to the selected shape."/>
+                                    <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectEffectsBtn_Click"
+                                            local:RibbonTooltip.Title="Shape Effects"
+                                            local:RibbonTooltip.KeyTip="FX"
+                                            local:RibbonTooltip.Description="Toggle a shadow effect on the selected shape."/>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Format" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2054,7 +2003,7 @@
 
             <!-- ── PAGE LAYOUT ───────────────────────────────────────── -->
             <TabItem Header="Page Layout" local:RibbonTooltip.KeyTip="P">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -2239,7 +2188,7 @@
 
             <!-- ── FORMULAS ──────────────────────────────────────────── -->
             <TabItem Header="Formulas" local:RibbonTooltip.KeyTip="M">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -2423,7 +2372,7 @@
 
             <!-- ── DATA ──────────────────────────────────────────────── -->
             <TabItem Header="Data" local:RibbonTooltip.KeyTip="A">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -2614,7 +2563,7 @@
 
             <!-- ── REVIEW ────────────────────────────────────────────── -->
             <TabItem Header="Review" local:RibbonTooltip.KeyTip="R">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -2739,7 +2688,7 @@
 
             <!-- ── VIEW ──────────────────────────────────────────────── -->
             <TabItem Header="View" local:RibbonTooltip.KeyTip="W">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -2914,7 +2863,7 @@
 
             <!-- ── HELP ──────────────────────────────────────────────── -->
             <TabItem x:Name="PivotTableAnalyzeTab" Header="PivotTable Analyze" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -2990,7 +2939,7 @@
             </TabItem>
 
             <TabItem x:Name="PivotTableDesignTab" Header="Design" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JD">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -3054,7 +3003,7 @@
             </TabItem>
 
             <TabItem Header="Help" local:RibbonTooltip.KeyTip="Y">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
