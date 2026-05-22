@@ -11,17 +11,22 @@ public static class FormulaInlineEditorLayoutPlanner
     public static FormulaInlineEditorLayout Create(double cellLeft, double cellTop, double cellWidth, double cellHeight)
     {
         var editorRect = new Rect(
-            cellLeft - 2,
-            cellTop - 2,
-            cellWidth + 4,
-            Math.Max(cellHeight + 6, 24));
+            cellLeft,
+            cellTop,
+            cellWidth,
+            cellHeight);
 
         var textOverlayRect = new Rect(
             editorRect.Left + 4,
-            editorRect.Top + 3,
+            editorRect.Top,
             Math.Max(editorRect.Width - 8, MinimumTextSurfaceWidth),
-            Math.Max(editorRect.Height - 6, 18));
+            editorRect.Height);
 
         return new FormulaInlineEditorLayout(editorRect, textOverlayRect);
     }
+
+    public static Thickness GetChromeBorderThickness(bool textSpillsRight) =>
+        textSpillsRight
+            ? new Thickness(2, 2, 0, 2)
+            : new Thickness(2);
 }
