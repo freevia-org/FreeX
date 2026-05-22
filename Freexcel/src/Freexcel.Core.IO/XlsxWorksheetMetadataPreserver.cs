@@ -374,6 +374,8 @@ internal static class XlsxWorksheetMetadataPreserver
         if (targetHyperlinks is null)
             return false;
 
+        var changed = MergeMissingAttributes(sourceHyperlinks, targetHyperlinks);
+
         var targetByReference = targetHyperlinks
             .Elements(workbookNs + "hyperlink")
             .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ref")?.Value))
@@ -381,7 +383,6 @@ internal static class XlsxWorksheetMetadataPreserver
                 element => element.Attribute("ref")!.Value,
                 StringComparer.OrdinalIgnoreCase);
 
-        var changed = false;
         foreach (var sourceHyperlink in sourceHyperlinks.Elements(workbookNs + "hyperlink"))
         {
             var reference = sourceHyperlink.Attribute("ref")?.Value;

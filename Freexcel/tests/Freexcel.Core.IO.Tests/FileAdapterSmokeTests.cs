@@ -3550,6 +3550,17 @@ public partial class FileAdapterSmokeTests
             .Element(worksheetNs + "hyperlinks")!
             .Elements(worksheetNs + "hyperlink")
             .Single(element => element.Attribute("ref")?.Value == "A1");
+        worksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")!
+            .Attribute("nativeHyperlinksAttr")
+            .Should()
+            .NotBeNull();
+        worksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")!
+            .Attribute("nativeHyperlinksAttr")!
+            .Value
+            .Should()
+            .Be("kept");
         hyperlink.Attribute("tooltip").Should().NotBeNull();
         hyperlink.Attribute("tooltip")!.Value.Should().Be("Open documentation");
         hyperlink.Attribute("display").Should().NotBeNull();
@@ -14873,6 +14884,9 @@ public partial class FileAdapterSmokeTests
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!
+                .Element(worksheetNs + "hyperlinks")!
+                .SetAttributeValue("nativeHyperlinksAttr", "kept");
             var hyperlink = worksheetXml.Root!
                 .Element(worksheetNs + "hyperlinks")!
                 .Elements(worksheetNs + "hyperlink")
