@@ -212,7 +212,10 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dlg = new DataValidationDialog
+        var existingRule = sheet is null
+            ? null
+            : DataValidationService.GetApplicable(sheet, range.Start).FirstOrDefault();
+        var dlg = new DataValidationDialog(existingRule)
         {
             Owner = this,
             SelectionSource = DataValidationService.FormatListSourceRange(range, sheet?.Name, sheet?.Name)
@@ -241,11 +244,77 @@ public partial class MainWindow
                 {
                     var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
                     rule.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
-                    return new SetDataValidationCommand(sheetId, rule);
+                    return CreateDataValidationCommand(
+                        sheetId,
+                        rule,
+                        existingRule,
+                        dlg.ApplyToSameSettings);
                 }))
             return;
         UpdateViewport();
     }
+
+    private IWorkbookCommand CreateDataValidationCommand(
+        SheetId sheetId,
+        DataValidation rule,
+        DataValidation? existingRule,
+        bool applyToSameSettings)
+    {
+        if (!applyToSameSettings || existingRule is null || _workbook.GetSheet(sheetId) is not { } sheet)
+            return new SetDataValidationCommand(sheetId, rule);
+
+        var commands = sheet.DataValidations
+            .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
+            .Select(candidate => new SetDataValidationCommand(
+                sheetId,
+                CloneDataValidationForRange(rule, candidate.AppliesTo, candidate.Id)))
+            .Cast<IWorkbookCommand>()
+            .ToList();
+
+        if (commands.Count == 0)
+            commands.Add(new SetDataValidationCommand(sheetId, rule));
+
+        return new CompositeWorkbookCommand("Data Validation", commands);
+    }
+
+    private static bool HasSameDataValidationSettings(DataValidation left, DataValidation right) =>
+        left.Type == right.Type &&
+        left.Operator == right.Operator &&
+        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
+        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
+        left.AllowBlank == right.AllowBlank &&
+        left.ShowDropdown == right.ShowDropdown &&
+        left.AlertStyle == right.AlertStyle &&
+        left.ShowInputMessage == right.ShowInputMessage &&
+        left.ShowErrorMessage == right.ShowErrorMessage &&
+        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
+        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
+        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
+        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal);
+
+    private static DataValidation CloneDataValidationForRange(DataValidation source, GridRange range, Guid id) =>
+        new()
+        {
+            Id = id,
+            AppliesTo = range,
+            Type = source.Type,
+            Operator = source.Operator,
+            Formula1 = source.Formula1,
+            Formula2 = source.Formula2,
+            AllowBlank = source.AllowBlank,
+            ShowDropdown = source.ShowDropdown,
+            AlertStyle = source.AlertStyle,
+            ShowInputMessage = source.ShowInputMessage,
+            ShowErrorMessage = source.ShowErrorMessage,
+            ErrorTitle = source.ErrorTitle,
+            ErrorMessage = source.ErrorMessage,
+            PromptTitle = source.PromptTitle,
+            PromptMessage = source.PromptMessage,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
+        };
 
     private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
     {

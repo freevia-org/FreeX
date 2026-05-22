@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using Freexcel.App.Host;
+using Freexcel.Core.Model;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -142,6 +143,99 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void MainWindow_AppliesDataValidationToMatchingSettingsWhenRequested()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
+
+        source.Should().Contain("new DataValidationDialog(existingRule)");
+        source.Should().Contain("dlg.ApplyToSameSettings");
+        source.Should().Contain("HasSameDataValidationSettings");
+        source.Should().Contain("CompositeWorkbookCommand(\"Data Validation\", commands)");
+    }
+
+    [Fact]
+    public void DataValidationDialog_PrePopulatesExistingRuleAndPreservesIdentity()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var id = Guid.NewGuid();
+            var sheetId = SheetId.New();
+            var existing = new DataValidation
+            {
+                Id = id,
+                AppliesTo = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 2, 2)),
+                Type = DvType.List,
+                Formula1 = "Red,Blue",
+                AllowBlank = false,
+                ShowDropdown = false,
+                AlertStyle = DvAlertStyle.Warning,
+                ShowInputMessage = false,
+                ShowErrorMessage = true,
+                ErrorTitle = "Bad choice",
+                ErrorMessage = "Pick from the list.",
+                PromptTitle = "Color",
+                PromptMessage = "Choose a color."
+            };
+
+            var dialog = new DataValidationDialog(existing);
+            dialog.Show();
+            try
+            {
+                SelectedTag(GetControl<ComboBox>(dialog, "TypeCombo")).Should().Be("List");
+                GetControl<TextBox>(dialog, "Formula1Box").Text.Should().Be("Red,Blue");
+                GetControl<CheckBox>(dialog, "AllowBlankBox").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "ShowDropdownBox").IsChecked.Should().BeFalse();
+                SelectedTag(GetControl<ComboBox>(dialog, "AlertStyleCombo")).Should().Be("Warning");
+                GetControl<TextBox>(dialog, "ErrorTitleBox").Text.Should().Be("Bad choice");
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+
+                dialog.Result.Should().NotBeNull();
+                dialog.Result!.Id.Should().Be(id);
+                dialog.Result.Type.Should().Be(DvType.List);
+                dialog.Result.Formula1.Should().Be("Red,Blue");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ClearAllButton_ResetsDialogWithoutClosing()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new DataValidation
+            {
+                Type = DvType.WholeNumber,
+                Operator = DvOperator.Between,
+                Formula1 = "1",
+                Formula2 = "10",
+                AllowBlank = false
+            };
+            var dialog = new DataValidationDialog(existing);
+            dialog.Show();
+            try
+            {
+                InvokePrivate(dialog, "ClearAllButton_Click");
+
+                dialog.IsVisible.Should().BeTrue();
+                dialog.ClearRequested.Should().BeTrue();
+                dialog.Result.Should().BeNull();
+                SelectedTag(GetControl<ComboBox>(dialog, "TypeCombo")).Should().Be("Any");
+                GetControl<TextBox>(dialog, "Formula1Box").Text.Should().BeEmpty();
+                GetControl<CheckBox>(dialog, "AllowBlankBox").IsChecked.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SourcePickerButton_PopulatesListSource()
     {
         StaTestRunner.Run(() =>
@@ -196,10 +290,27 @@ public sealed class DataValidationDialogTests
         method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
     }
 
+    private static void InvokePrivateAllowingNonModalDialogResult(DataValidationDialog dialog, string methodName)
+    {
+        var method = typeof(DataValidationDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
+    }
+
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
     {
         comboBox.SelectedItem = comboBox.Items
             .OfType<ComboBoxItem>()
             .Single(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal));
     }
+
+    private static string? SelectedTag(ComboBox comboBox) =>
+        (comboBox.SelectedItem as ComboBoxItem)?.Tag as string;
 }
