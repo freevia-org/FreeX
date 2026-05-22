@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" shape-rendering="crispEdges">
 <rect width="20" height="20" fill="none"/>
 <rect x="3" y="5" width="14" height="11" fill="#ffffff"/>
-<rect x="3" y="5" width="14" height="1" fill="#202124"/>
-<rect x="3" y="15" width="14" height="1" fill="#202124"/>
-<rect x="3" y="5" width="1" height="11" fill="#202124"/>
-<rect x="16" y="5" width="1" height="11" fill="#202124"/>
+<rect x="3" y="5" width="14" height="1" fill="#242424"/>
+<rect x="3" y="15" width="14" height="1" fill="#242424"/>
+<rect x="3" y="5" width="1" height="11" fill="#242424"/>
+<rect x="16" y="5" width="1" height="11" fill="#242424"/>
 <rect x="6" y="8" width="4" height="2" fill="#d9eadf"/>
 <rect x="11" y="8" width="3" height="2" fill="#fff2b8"/>
 <rect x="6" y="12" width="4" height="2" fill="#dcecff"/>
 <rect x="11" y="12" width="3" height="2" fill="#ffd7d7"/>
-<path d="M11 2l1 2 2.2.3-1.6 1.5.4 2.1-2-1-2 1 .4-2.1-1.6-1.5L10 4z" fill="#217346"/>
+<path d="M11 2l1 2 2.2.3-1.6 1.5.4 2.1-2-1-2 1 .4-2.1-1.6-1.5L10 4z" fill="#107c41"/>
 </svg>

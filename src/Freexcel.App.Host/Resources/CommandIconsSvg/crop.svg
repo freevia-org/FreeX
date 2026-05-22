@@ -1,11 +1,20 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Crop">
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Crop">
   <defs>
     <style>
-      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
-      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
-    </style>
+      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
+      .green{fill:#107c41}
+      .green2{fill:#dff6dd}
+      .blue{fill:#0078d4}
+      .yellow{fill:#ffb900}
+      .orange{fill:#f7630c}
+      .red{fill:#d32f2f}
+      .purple{fill:#8b5cf6}
+      .gray{fill:#5c5c5c}
+      .paper{fill:#ffffff}
+      .none{fill:none}
+</style>
   </defs>
   <rect width="54" height="54" fill="none"/>
   <g><rect fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2" x="13.5" y="13.5" width="24.84" height="24.84"/><path stroke="#202124" stroke-width="2.3" stroke-linecap="square" fill="none" d="M9.72 4.32v14.04h-5.4M9.72 4.32h14.04M44.28 49.68v-14.04h5.4M44.28 49.68h-14.04M38.34 13.5v24.84M13.5 38.34h24.84"/>  </g>

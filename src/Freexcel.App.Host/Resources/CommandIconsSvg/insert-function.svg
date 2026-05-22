@@ -1,11 +1,20 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Insert Function">
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Insert Function">
   <defs>
     <style>
-      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
-      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
-    </style>
+      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
+      .green{fill:#107c41}
+      .green2{fill:#dff6dd}
+      .blue{fill:#0078d4}
+      .yellow{fill:#ffb900}
+      .orange{fill:#f7630c}
+      .red{fill:#d32f2f}
+      .purple{fill:#8b5cf6}
+      .gray{fill:#5c5c5c}
+      .paper{fill:#ffffff}
+      .none{fill:none}
+</style>
   </defs>
   <rect width="54" height="54" fill="none"/>
   <g><text class="t" x="24.84" y="34.56" text-anchor="middle" font-size="22.68">fx</text><circle class="green2" cx="38.88" cy="13.5" r="4.32"/><path stroke="#fff" stroke-width="1.5" stroke-linecap="round" d="M38.88 10.8v5.4M36.18 13.5h5.4"/>  </g>
