@@ -45,5 +45,6 @@ public partial class MainWindow
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
+        TryStartScreenshotTour();
     }
 }
