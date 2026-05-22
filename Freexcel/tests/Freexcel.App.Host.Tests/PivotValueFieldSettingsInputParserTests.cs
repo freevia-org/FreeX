@@ -73,6 +73,9 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("Scientific", 11)]
     [InlineData("Scientific compact", 48)]
     [InlineData("Text", 49)]
+    [InlineData("Accounting 0 decimals", 42)]
+    [InlineData("Accounting no symbol", 43)]
+    [InlineData("Accounting no symbol 0 decimals", 41)]
     [InlineData("Accounting", 44)]
     public void ResolvePresetNumberFormatId_MapsExcelStylePresetLabels(string label, int? expected)
     {
@@ -89,6 +92,9 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("Elapsed Time", "[h]:mm:ss")]
     [InlineData("Scientific compact", "##0.0E+0")]
     [InlineData("Text", "@")]
+    [InlineData("Accounting 0 decimals", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)")]
+    [InlineData("Accounting no symbol", "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)")]
+    [InlineData("Accounting no symbol 0 decimals", "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)")]
     public void ResolvePresetNumberFormatCode_MapsExcelStylePresetLabels(string label, string expected)
     {
         PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(label).Should().Be(expected);
@@ -123,6 +129,9 @@ public sealed class PivotValueFieldSettingsInputParserTests
                 "Comma red negatives",
                 "Currency",
                 "Currency red negatives",
+                "Accounting 0 decimals",
+                "Accounting no symbol",
+                "Accounting no symbol 0 decimals",
                 "Accounting",
                 "Date",
                 "Short Date",
