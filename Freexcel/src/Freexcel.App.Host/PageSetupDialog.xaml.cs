@@ -40,6 +40,7 @@ public partial class PageSetupDialog : Window
     public bool DifferentOddEvenPages { get; private set; }
     public bool ScaleHeaderFooterWithDocument { get; private set; }
     public bool AlignHeaderFooterWithMargins { get; private set; }
+    public PageSetupDialogAction RequestedAction { get; private set; } = PageSetupDialogAction.Ok;
 
     public PageSetupDialog(Sheet sheet)
     {
@@ -169,7 +170,16 @@ public partial class PageSetupDialog : Window
         FitPagesTallBox.IsEnabled = fitTo;
     }
 
-    private void OkButton_Click(object sender, RoutedEventArgs e)
+    private void OkButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.Ok);
+
+    private void PrintButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.Print);
+
+    private void PrintPreviewButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.PrintPreview);
+
+    private void Accept(PageSetupDialogAction requestedAction)
     {
         var marginsText = string.Join(",",
             LeftMarginBox.Text,
@@ -273,6 +283,7 @@ public partial class PageSetupDialog : Window
         DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
         ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true;
         AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true;
+        RequestedAction = requestedAction;
         DialogResult = true;
         Close();
     }
@@ -383,4 +394,11 @@ public partial class PageSetupDialog : Window
         }
     }
 
+}
+
+public enum PageSetupDialogAction
+{
+    Ok,
+    Print,
+    PrintPreview
 }
