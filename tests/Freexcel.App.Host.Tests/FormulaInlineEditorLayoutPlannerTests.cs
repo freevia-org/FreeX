@@ -28,6 +28,38 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
     }
 
     [Fact]
+    public void Create_ExpandsTextSurfaceForLongFormulaWithoutExpandingCellChrome()
+    {
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            cellLeft: 100,
+            cellTop: 40,
+            cellWidth: 64,
+            cellHeight: 20,
+            desiredTextWidth: 340,
+            availableRight: 600);
+
+        layout.EditorRect.Should().Be(new Rect(100, 40, 64, 20));
+        layout.TextOverlayRect.Left.Should().Be(104);
+        layout.TextOverlayRect.Width.Should().BeGreaterThan(340);
+        layout.TextOverlayRect.Right.Should().BeLessThanOrEqualTo(600);
+    }
+
+    [Fact]
+    public void Create_BoundsExpandedTextSurfaceToVisibleRightEdge()
+    {
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            cellLeft: 100,
+            cellTop: 40,
+            cellWidth: 64,
+            cellHeight: 20,
+            desiredTextWidth: 340,
+            availableRight: 300);
+
+        layout.EditorRect.Should().Be(new Rect(100, 40, 64, 20));
+        layout.TextOverlayRect.Right.Should().Be(300);
+    }
+
+    [Fact]
     public void GetChromeBorderThickness_RemovesOverflowSideBorders()
     {
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(FormulaInlineEditorOverflow.None)
