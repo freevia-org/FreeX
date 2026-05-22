@@ -22,7 +22,7 @@ public sealed partial class NativeJsonAdapter
         }
     }
 
-    private static (CellAddress Address, string Target)? TryLoadHyperlink(HyperlinkDto? hyperlinkDto, SheetId sheetId)
+    private static (CellAddress Address, string Target, HyperlinkMetadata Metadata)? TryLoadHyperlink(HyperlinkDto? hyperlinkDto, SheetId sheetId)
     {
         if (string.IsNullOrWhiteSpace(hyperlinkDto?.Address) || hyperlinkDto.Target is null)
             return null;
@@ -31,7 +31,7 @@ public sealed partial class NativeJsonAdapter
         {
             var address = CellAddress.Parse(hyperlinkDto.Address, sheetId);
             return address.Sheet == sheetId
-                ? (address, hyperlinkDto.Target)
+                ? (address, hyperlinkDto.Target, ToHyperlinkMetadata(hyperlinkDto))
                 : null;
         }
         catch (FormatException)
@@ -46,9 +46,25 @@ public sealed partial class NativeJsonAdapter
         Text = pair.Value
     };
 
-    private static HyperlinkDto ToHyperlinkDto(KeyValuePair<CellAddress, string> pair) => new()
+    private static HyperlinkDto ToHyperlinkDto(Sheet sheet, KeyValuePair<CellAddress, string> pair)
     {
-        Address = pair.Key.ToA1(),
-        Target = pair.Value
-    };
+        sheet.HyperlinkMetadata.TryGetValue(pair.Key, out var metadata);
+        metadata ??= new HyperlinkMetadata();
+        return new HyperlinkDto
+        {
+            Address = pair.Key.ToA1(),
+            Target = pair.Value,
+            LinkType = metadata.LinkType,
+            ScreenTip = string.IsNullOrWhiteSpace(metadata.ScreenTip) ? null : metadata.ScreenTip,
+            Bookmark = string.IsNullOrWhiteSpace(metadata.Bookmark) ? null : metadata.Bookmark
+        };
+    }
+
+    private static HyperlinkMetadata ToHyperlinkMetadata(HyperlinkDto dto) =>
+        new(
+            dto.LinkType is { } linkType && Enum.IsDefined(linkType)
+                ? linkType
+                : HyperlinkTargetKind.ExistingFileOrWebPage,
+            (dto.ScreenTip ?? "").Trim(),
+            (dto.Bookmark ?? "").Trim());
 }

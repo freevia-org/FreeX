@@ -15,6 +15,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _commentSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
@@ -71,6 +72,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftCommentColumnsUp(sheet.ThreadedComments, _beforeCol, _count);
         _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
         InsertRowsCommand.ShiftCommentColumnsUp(sheet.Hyperlinks, _beforeCol, _count);
+        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        InsertRowsCommand.ShiftCommentColumnsUp(sheet.HyperlinkMetadata, _beforeCol, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = InsertRowsCommand.CaptureRuleRanges(sheet);
         InsertRowsCommand.ShiftRuleColumnsUp(sheet, _beforeCol, _count);
@@ -129,6 +132,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
+        InsertRowsCommand.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         InsertRowsCommand.RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
@@ -151,6 +155,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private Dictionary<CellAddress, string>? _commentSnapshot;
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
+    private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
@@ -207,6 +212,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftCommentColumnsDown(sheet.ThreadedComments, _startCol, _count);
         _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
         InsertRowsCommand.ShiftCommentColumnsDown(sheet.Hyperlinks, _startCol, _count);
+        _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
+        InsertRowsCommand.ShiftCommentColumnsDown(sheet.HyperlinkMetadata, _startCol, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = InsertRowsCommand.CaptureRuleRanges(sheet);
         InsertRowsCommand.ShiftRuleColumnsDown(sheet, _startCol, _count);
@@ -282,6 +289,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
+        InsertRowsCommand.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         InsertRowsCommand.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);

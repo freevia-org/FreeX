@@ -5038,6 +5038,10 @@ public partial class FileAdapterSmokeTests
         var address = new CellAddress(sheet.Id, 2, 3);
         sheet.SetCell(address, new TextValue("Docs"));
         sheet.Hyperlinks[address] = "https://example.com/docs";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open docs section",
+            "Docs!A1");
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -5049,6 +5053,10 @@ public partial class FileAdapterSmokeTests
         var loadedAddress = new CellAddress(loaded.GetSheetAt(0).Id, 2, 3);
         loaded.GetSheetAt(0).Hyperlinks.Should().ContainKey(loadedAddress);
         loaded.GetSheetAt(0).Hyperlinks[loadedAddress].Should().Be("https://example.com/docs");
+        loaded.GetSheetAt(0).HyperlinkMetadata[loadedAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open docs section",
+            "Docs!A1"));
     }
 
     [Fact]
@@ -5077,6 +5085,7 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.Hyperlinks.Should().ContainSingle();
         loadedSheet.Hyperlinks[new CellAddress(loadedSheet.Id, 2, 3)].Should().Be("https://example.com/docs");
+        loadedSheet.HyperlinkMetadata[new CellAddress(loadedSheet.Id, 2, 3)].Should().Be(new HyperlinkMetadata());
     }
 
     [Fact]
