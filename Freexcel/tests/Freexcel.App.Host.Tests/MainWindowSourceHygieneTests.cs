@@ -1157,6 +1157,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardWorksheetContextMenu_IsAnchoredToActiveCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("OpenKeyboardContextMenu()");
+        source.Should().Contain("TryGetCellOverlayRect(address)");
+        source.Should().Contain("menu.Placement = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint");
+        source.Should().Contain("menu.HorizontalOffset = screenPoint.X");
+        source.Should().Contain("menu.VerticalOffset = screenPoint.Y");
+        source.Should().NotContain("OnGridContextMenuRequested(address, default);");
+    }
+
+    [Fact]
     public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
     {
         var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
