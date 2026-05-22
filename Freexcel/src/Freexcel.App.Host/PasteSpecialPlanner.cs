@@ -16,6 +16,7 @@ public static class PasteSpecialPlanner
                 PasteSpecialDialogMode.AllMergingConditionalFormats => PasteSpecialContentKind.AllMergingConditionalFormats,
                 PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
                 PasteSpecialDialogMode.ValuesAndNumberFormats => PasteSpecialContentKind.ValuesAndNumberFormats,
+                PasteSpecialDialogMode.ValuesAndSourceFormatting => PasteSpecialContentKind.ValuesAndSourceFormatting,
                 _ => PasteSpecialContentKind.Default
             });
 

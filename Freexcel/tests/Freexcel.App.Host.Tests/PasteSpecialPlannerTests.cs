@@ -27,6 +27,7 @@ public sealed class PasteSpecialPlannerTests
     [InlineData(PasteSpecialDialogMode.AllMergingConditionalFormats, PasteSpecialContentKind.AllMergingConditionalFormats)]
     [InlineData(PasteSpecialDialogMode.FormulasAndNumberFormats, PasteSpecialContentKind.FormulasAndNumberFormats)]
     [InlineData(PasteSpecialDialogMode.ValuesAndNumberFormats, PasteSpecialContentKind.ValuesAndNumberFormats)]
+    [InlineData(PasteSpecialDialogMode.ValuesAndSourceFormatting, PasteSpecialContentKind.ValuesAndSourceFormatting)]
     [InlineData(PasteSpecialDialogMode.All, PasteSpecialContentKind.Default)]
     public void CreatePlan_MapsContentKind(PasteSpecialDialogMode mode, PasteSpecialContentKind expected)
     {
