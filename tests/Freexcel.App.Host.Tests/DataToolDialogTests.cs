@@ -62,6 +62,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Text _qualifier:");
         source.Should().Contain("_Treat consecutive delimiters as one");
         source.Should().Contain("_Destination:");
+        source.Should().Contain("Column data format");
+        source.Should().Contain("Content = \"_General\"");
+        source.Should().Contain("Content = \"_Text\"");
+        source.Should().Contain("Do not import column (_skip)");
     }
 
     [Fact]
@@ -87,6 +91,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("SelectedTextQualifier");
         source.Should().Contain("TreatConsecutiveDelimitersAsOne");
         source.Should().Contain("_destinationBox");
+        source.Should().Contain("_formatColumnBox");
+        source.Should().Contain("BuildColumnFormats");
         source.Should().Contain("ReferencePickerButton_Click");
     }
 
@@ -129,6 +135,31 @@ public sealed class DataToolDialogTests
         result.TextQualifier.Should().Be(TextToColumnsTextQualifier.SingleQuote);
         result.TextQualifierChar.Should().Be('\'');
         result.TreatConsecutiveDelimitersAsOne.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TextToColumnsResult_NormalizesTrailingGeneralColumnFormats()
+    {
+        TextToColumnsDialog.NormalizeColumnFormats(
+            [
+                TextToColumnsColumnFormat.Text,
+                TextToColumnsColumnFormat.General,
+                TextToColumnsColumnFormat.General
+            ])
+            .Should()
+            .Equal(TextToColumnsColumnFormat.Text);
+
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Comma],
+            columnFormats:
+            [
+                TextToColumnsColumnFormat.General,
+                TextToColumnsColumnFormat.Skip
+            ]);
+
+        result.ColumnFormats.Should().Equal(
+            TextToColumnsColumnFormat.General,
+            TextToColumnsColumnFormat.Skip);
     }
 
     [Fact]

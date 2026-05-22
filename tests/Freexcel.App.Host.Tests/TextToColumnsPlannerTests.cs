@@ -68,6 +68,33 @@ public sealed class TextToColumnsPlannerTests
     }
 
     [Fact]
+    public void BuildEdits_AppliesTextAndSkipColumnFormats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        var destination = new CellAddress(sheet.Id, 2, 5);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("00123,Skip Me,42"));
+
+        var edits = TextToColumnsPlanner.BuildEdits(
+            sheet,
+            range,
+            destination,
+            ',',
+            [
+                TextToColumnsColumnFormat.Text,
+                TextToColumnsColumnFormat.Skip,
+                TextToColumnsColumnFormat.General
+            ]);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 2, 5),
+            new CellAddress(sheet.Id, 2, 6));
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new TextValue("00123"),
+            new NumberValue(42));
+    }
+
+    [Fact]
     public void BuildEdits_SplitsOnAnySelectedDelimiter()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
