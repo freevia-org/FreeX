@@ -267,9 +267,10 @@ public sealed class ChartDialogTests
     public void ChartFormatDialogs_RouteColorFieldsThroughColorPickerButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         source.Should().Contain("AddColorText");
-        source.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
+        helperSource.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
         foreach (var colorLabel in new[]
         {
             "Chart area fill color",
@@ -576,17 +577,24 @@ public sealed class ChartDialogTests
     public void ChartDialogs_LabelEditableHelperControlsWithTargets()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         foreach (var expected in new[]
         {
             "new Label { Content = label, Target = box",
-            "new Label { Content = \"_Style\", Target = _styleGallery",
-            "new Label { Content = label, Target = comboBox",
-            "new Label { Content = label, Target = textBox"
+            "new Label { Content = \"_Style\", Target = _styleGallery"
         })
             source.Should().Contain(expected);
 
+        foreach (var expected in new[]
+        {
+            "new Label { Content = label, Target = comboBox",
+            "new Label { Content = label, Target = textBox"
+        })
+            helperSource.Should().Contain(expected);
+
         source.Should().NotContain("stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) })");
+        helperSource.Should().NotContain("stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) })");
     }
 
     private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
