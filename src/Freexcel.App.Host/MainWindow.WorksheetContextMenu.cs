@@ -14,8 +14,9 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is null)
             SetActiveCell(actualAddr);
 
+        var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
         var menu = new ContextMenu();
-        foreach (var command in WorksheetContextMenuPlanner.BuildCommands())
+        foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind))
         {
             if (command.IsSeparator)
             {
@@ -185,6 +186,34 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
                 break;
+            case WorksheetContextMenuAction.FormatPicture:
+                PictureSizeBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.CropPicture:
+                PictureCropBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ResetPictureCrop:
+                PictureResetCropMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.FormatDrawingObject:
+            case WorksheetContextMenuAction.ResizeDrawingObject:
+                ObjectSizeBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.RotateDrawingObject:
+                ObjectRotateBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShapeFill:
+                ObjectFillBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShapeOutline:
+                ObjectOutlineBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.BringForward:
+                BringForwardBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.SendBackward:
+                SendBackwardBtn_Click(this, new RoutedEventArgs());
+                break;
         }
     }
 
@@ -210,5 +239,19 @@ public partial class MainWindow
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint;
         menu.HorizontalOffset = screenPoint.X;
         menu.VerticalOffset = screenPoint.Y;
+    }
+
+    private WorksheetContextMenuTargetKind GetWorksheetContextMenuTargetKind(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (DrawingTargetResolver.GetTargetPicture(sheet, address) is not null)
+            return WorksheetContextMenuTargetKind.Picture;
+
+        return DrawingTargetResolver.GetTargetDrawingObject(sheet, address)?.Kind switch
+        {
+            DrawingObjectTargetKind.Shape => WorksheetContextMenuTargetKind.Shape,
+            DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
+            _ => WorksheetContextMenuTargetKind.Worksheet
+        };
     }
 }

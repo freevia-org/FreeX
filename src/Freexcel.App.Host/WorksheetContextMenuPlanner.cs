@@ -2,7 +2,19 @@ namespace Freexcel.App.Host;
 
 public static class WorksheetContextMenuPlanner
 {
-    public static IReadOnlyList<WorksheetContextMenuCommand> BuildCommands() =>
+    public static IReadOnlyList<WorksheetContextMenuCommand> BuildCommands(
+        WorksheetContextMenuTargetKind targetKind = WorksheetContextMenuTargetKind.Worksheet)
+    {
+        return targetKind switch
+        {
+            WorksheetContextMenuTargetKind.Picture => BuildPictureCommands(),
+            WorksheetContextMenuTargetKind.Shape => BuildDrawingObjectCommands("Format Shape...", includeReorder: true),
+            WorksheetContextMenuTargetKind.TextBox => BuildDrawingObjectCommands("Format Text Box...", includeReorder: false),
+            _ => BuildWorksheetCommands()
+        };
+    }
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildWorksheetCommands() =>
     [
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
@@ -61,6 +73,36 @@ public static class WorksheetContextMenuPlanner
         new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks"),
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildPictureCommands() =>
+    [
+        new("Format Picture...", WorksheetContextMenuAction.FormatPicture, AccessHeader: "_Format Picture..."),
+        new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
+        new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop")
+    ];
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildDrawingObjectCommands(
+        string formatHeader,
+        bool includeReorder)
+    {
+        var commands = new List<WorksheetContextMenuCommand>
+        {
+            new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: "_Format..."),
+            new("Size and Properties...", WorksheetContextMenuAction.ResizeDrawingObject, AccessHeader: "_Size and Properties..."),
+            new("Rotate...", WorksheetContextMenuAction.RotateDrawingObject, AccessHeader: "_Rotate..."),
+            new("Shape Fill...", WorksheetContextMenuAction.ShapeFill, AccessHeader: "Shape _Fill..."),
+            new("Shape Outline...", WorksheetContextMenuAction.ShapeOutline, AccessHeader: "Shape _Outline...")
+        };
+
+        if (includeReorder)
+        {
+            commands.Add(WorksheetContextMenuCommand.Separator);
+            commands.Add(new WorksheetContextMenuCommand("Bring Forward", WorksheetContextMenuAction.BringForward, AccessHeader: "Bring _Forward"));
+            commands.Add(new WorksheetContextMenuCommand("Send Backward", WorksheetContextMenuAction.SendBackward, AccessHeader: "Send _Backward"));
+        }
+
+        return commands;
+    }
 }
 
 public sealed record WorksheetContextMenuCommand(
@@ -126,5 +168,23 @@ public enum WorksheetContextMenuAction
     ClearFormats,
     ClearComments,
     ClearHyperlinks,
-    ClearContents
+    ClearContents,
+    FormatPicture,
+    CropPicture,
+    ResetPictureCrop,
+    FormatDrawingObject,
+    ResizeDrawingObject,
+    RotateDrawingObject,
+    ShapeFill,
+    ShapeOutline,
+    BringForward,
+    SendBackward
+}
+
+public enum WorksheetContextMenuTargetKind
+{
+    Worksheet,
+    Picture,
+    Shape,
+    TextBox
 }
