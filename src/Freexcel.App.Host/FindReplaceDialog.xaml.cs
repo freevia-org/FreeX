@@ -35,6 +35,8 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options <<";
+    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
 
     private void FindBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
