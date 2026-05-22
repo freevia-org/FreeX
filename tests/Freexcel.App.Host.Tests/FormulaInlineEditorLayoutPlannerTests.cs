@@ -31,9 +31,9 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
     public void GetChromeBorderThickness_RemovesRightBorderOnlyWhenTextSpillsRight()
     {
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(textSpillsRight: false)
-            .Should().Be(new Thickness(2));
+            .Should().Be(new Thickness(1));
 
         FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(textSpillsRight: true)
-            .Should().Be(new Thickness(2, 2, 0, 2));
+            .Should().Be(new Thickness(1, 1, 0, 1));
     }
 }

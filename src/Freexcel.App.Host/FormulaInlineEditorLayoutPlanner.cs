@@ -7,6 +7,7 @@ public sealed record FormulaInlineEditorLayout(Rect EditorRect, Rect TextOverlay
 public static class FormulaInlineEditorLayoutPlanner
 {
     private const double MinimumTextSurfaceWidth = 160;
+    private const double SelectionLikeBorderThickness = 1;
 
     public static FormulaInlineEditorLayout Create(double cellLeft, double cellTop, double cellWidth, double cellHeight)
     {
@@ -27,6 +28,6 @@ public static class FormulaInlineEditorLayoutPlanner
 
     public static Thickness GetChromeBorderThickness(bool textSpillsRight) =>
         textSpillsRight
-            ? new Thickness(2, 2, 0, 2)
-            : new Thickness(2);
+            ? new Thickness(SelectionLikeBorderThickness, SelectionLikeBorderThickness, 0, SelectionLikeBorderThickness)
+            : new Thickness(SelectionLikeBorderThickness);
 }
