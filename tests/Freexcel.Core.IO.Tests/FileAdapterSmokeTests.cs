@@ -10096,6 +10096,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetHeaderFooterNativeAttributes()
+    {
+        var workbook = new Workbook("HeaderFooterNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.PageHeader = new WorksheetHeaderFooter("Left", "Center", "Right");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetHeaderFooterNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+
+        headerFooter.Should().NotBeNull();
+        headerFooter!.Attribute("nativeHeaderFooterAttr").Should().NotBeNull();
+        headerFooter.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
+        headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectModeledPrintOptionsAttributes()
     {
         var workbook = new Workbook("WorksheetPrintOptionsAuthority");
@@ -14662,6 +14695,22 @@ public partial class FileAdapterSmokeTests
             pageMargins.SetAttributeValue("header", "0.35");
             pageMargins.SetAttributeValue("footer", "0.45");
             pageMargins.SetAttributeValue("customAttr", "page-margins-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetHeaderFooterNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+            headerFooter.Should().NotBeNull();
+            headerFooter!.SetAttributeValue("nativeHeaderFooterAttr", "kept");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
