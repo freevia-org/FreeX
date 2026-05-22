@@ -366,17 +366,21 @@
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <ToggleButton x:Name="BoldButton"
-                                                  Style="{StaticResource RibbonIconToggleButton}" FontWeight="Bold"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="BoldButton_Click"
                                                   local:RibbonTooltip.Title="Bold"
                                                   local:RibbonTooltip.KeyTip="1"
-                                                  local:RibbonTooltip.Description="Make the selected text bold (Ctrl+B).">B</ToggleButton>
+                                                  local:RibbonTooltip.Description="Make the selected text bold (Ctrl+B).">
+                                        <TextBlock Text="B" FontWeight="Bold"/>
+                                    </ToggleButton>
                                     <ToggleButton x:Name="ItalicButton"
-                                                  Style="{StaticResource RibbonIconToggleButton}" FontStyle="Italic"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="ItalicButton_Click"
                                                   local:RibbonTooltip.Title="Italic"
                                                   local:RibbonTooltip.KeyTip="2"
-                                                  local:RibbonTooltip.Description="Italicize the selected text (Ctrl+I).">I</ToggleButton>
+                                                  local:RibbonTooltip.Description="Italicize the selected text (Ctrl+I).">
+                                        <TextBlock Text="I" FontStyle="Italic"/>
+                                    </ToggleButton>
                                     <ToggleButton x:Name="UnderlineButton"
                                                   Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="UnderlineButton_Click"
@@ -720,7 +724,7 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <!-- Conditional Formatting -->
                                 <Button Width="94" Height="64" Margin="1,0" Tag="RibbonCompact:94:36"
                                         Style="{StaticResource RibbonTallButton}" Click="CfPickerBtn_Click"
@@ -945,7 +949,7 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
+                            <Grid Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
