@@ -41,6 +41,14 @@ internal static class XlsxWorksheetMetadataPreserver
         "verticalDpi"
     };
 
+    private static readonly HashSet<string> ModeledHeaderFooterAttributes = new(StringComparer.Ordinal)
+    {
+        "differentOddEven",
+        "differentFirst",
+        "scaleWithDoc",
+        "alignWithMargins"
+    };
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -121,6 +129,7 @@ internal static class XlsxWorksheetMetadataPreserver
             var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
             var sourcePageMargins = sourceWorksheetXml.Root?.Element(workbookNs + "pageMargins");
             var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
+            var sourceHeaderFooter = sourceWorksheetXml.Root?.Element(workbookNs + "headerFooter");
             var sourceColumns = sourceWorksheetXml.Root?.Element(workbookNs + "cols");
             var sourceSheetData = sourceWorksheetXml.Root?.Element(workbookNs + "sheetData");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
@@ -133,6 +142,7 @@ internal static class XlsxWorksheetMetadataPreserver
                 sourcePrintOptions is null &&
                 sourcePageMargins is null &&
                 sourcePageSetup is null &&
+                sourceHeaderFooter is null &&
                 sourceColumns is null &&
                 sourceSheetData is null &&
                 sourceSheetProtection is null &&
@@ -170,6 +180,12 @@ internal static class XlsxWorksheetMetadataPreserver
                     targetRoot,
                     workbookNs + "pageSetup",
                     ModeledPageSetupAttributes))
+                changed = true;
+            if (MergeWorksheetNativeOnlyElementAttributes(
+                    sourceHeaderFooter,
+                    targetRoot,
+                    workbookNs + "headerFooter",
+                    ModeledHeaderFooterAttributes))
                 changed = true;
             if (MergeWorksheetColumnAttributes(sourceColumns, targetRoot, workbookNs))
                 changed = true;
