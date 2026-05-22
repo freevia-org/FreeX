@@ -2,6 +2,9 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Media;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -319,7 +322,7 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
 
 public sealed class PivotChartOptionsDialog : Window
 {
-    private readonly TextBox _styleBox = new();
+    private readonly ListBox _styleGallery = new();
     private readonly CheckBox _showFieldButtonsBox = new() { Content = "_Show field buttons on chart" };
     private readonly CheckBox _showReportFilterButtonsBox = new() { Content = "Report _filter buttons" };
     private readonly CheckBox _showAxisFieldButtonsBox = new() { Content = "_Axis field buttons" };
@@ -337,7 +340,16 @@ public sealed class PivotChartOptionsDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _styleBox.Text = Result.ChartStyleId?.ToString() ?? "";
+        var styleOptions = ChartStyleDialog.GetStyleOptions();
+        _styleGallery.ItemsSource = styleOptions;
+        _styleGallery.ItemTemplate = CreateStyleGalleryTemplate();
+        var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "PivotChartStyleGalleryPanel");
+        itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
+        _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
+        _styleGallery.SelectedItem = styleOptions.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? styleOptions[0];
+        _styleGallery.Height = 126;
+        _styleGallery.Margin = new Thickness(0, 0, 0, 8);
+        AutomationProperties.SetName(_styleGallery, "PivotChart style gallery");
         _showFieldButtonsBox.IsChecked = Result.ShowFieldButtons;
         _showFieldButtonsBox.Margin = new Thickness(0, 0, 0, 8);
         _showReportFilterButtonsBox.IsChecked = Result.ShowReportFilterButtons;
@@ -349,7 +361,8 @@ public sealed class PivotChartOptionsDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        PivotDialogLayout.AddLabeledControl(stylePanel, "Chart _style ID", _styleBox);
+        stylePanel.Children.Add(new Label { Content = "Chart _style", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stylePanel.Children.Add(_styleGallery);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Chart style", stylePanel));
 
         var buttonPanel = PivotDialogLayout.CreateGroupPanel();
@@ -383,10 +396,26 @@ public sealed class PivotChartOptionsDialog : Window
             showAxisFieldButtons,
             showValueFieldButtons);
 
+    public static PivotChartOptionsDialogResult CreateResult(
+        int? chartStyleId,
+        bool showFieldButtons,
+        bool showReportFilterButtons = true,
+        bool showAxisFieldButtons = true,
+        bool showValueFieldButtons = true) =>
+        new(
+            NormalizeStyleId(chartStyleId),
+            showFieldButtons,
+            showReportFilterButtons,
+            showAxisFieldButtons,
+            showValueFieldButtons);
+
     private void Accept()
     {
+        var selectedStyleId = _styleGallery.SelectedItem is ChartStyleOption option
+            ? option.StyleId
+            : null;
         Result = CreateResult(
-            _styleBox.Text,
+            selectedStyleId,
             _showFieldButtonsBox.IsChecked == true,
             _showReportFilterButtonsBox.IsChecked == true,
             _showAxisFieldButtonsBox.IsChecked == true,
@@ -400,6 +429,47 @@ public sealed class PivotChartOptionsDialog : Window
             return null;
 
         return int.TryParse(text.Trim(), out var value) ? NormalizeStyleId(value) : null;
+    }
+
+    private static DataTemplate CreateStyleGalleryTemplate()
+    {
+        var root = new FrameworkElementFactory(typeof(StackPanel));
+        root.SetValue(StackPanel.MarginProperty, new Thickness(3));
+        root.SetValue(StackPanel.WidthProperty, 82.0);
+
+        var preview = new FrameworkElementFactory(typeof(Border));
+        preview.SetValue(Border.BorderBrushProperty, SystemColors.ControlDarkBrush);
+        preview.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        preview.SetValue(Border.HeightProperty, 28.0);
+        preview.SetValue(Border.BackgroundProperty, Brushes.White);
+
+        var bars = new FrameworkElementFactory(typeof(StackPanel));
+        bars.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        bars.SetValue(StackPanel.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        bars.SetValue(StackPanel.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Bottom);
+        bars.SetValue(StackPanel.MarginProperty, new Thickness(0, 0, 0, 4));
+        foreach (var height in new[] { 12.0, 19.0, 15.0 })
+        {
+            var bar = new FrameworkElementFactory(typeof(Border));
+            bar.SetValue(Border.WidthProperty, 8.0);
+            bar.SetValue(Border.HeightProperty, height);
+            bar.SetValue(Border.MarginProperty, new Thickness(2, 0, 2, 0));
+            bar.SetValue(Border.BackgroundProperty, SystemColors.HighlightBrush);
+            bars.AppendChild(bar);
+        }
+
+        preview.AppendChild(bars);
+        root.AppendChild(preview);
+
+        var label = new FrameworkElementFactory(typeof(TextBlock));
+        label.SetBinding(TextBlock.TextProperty, new Binding(nameof(ChartStyleOption.DisplayName)));
+        label.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        label.SetValue(TextBlock.FontSizeProperty, 10.0);
+        label.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        label.SetValue(TextBlock.MarginProperty, new Thickness(0, 3, 0, 0));
+        root.AppendChild(label);
+
+        return new DataTemplate { VisualTree = root };
     }
 
     private static int? NormalizeStyleId(int? value)
