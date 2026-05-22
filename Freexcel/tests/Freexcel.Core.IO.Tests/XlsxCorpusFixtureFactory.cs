@@ -18,6 +18,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-conditional-formatting-001",
         "generated-color-scales-001",
         "generated-data-bars-001",
+        "generated-icon-sets-001",
         "generated-text-boxes-shapes-001",
         "generated-images-sparklines-001",
         "generated-comments-hyperlinks-002",
@@ -78,6 +79,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-conditional-formatting-001" => CreateConditionalFormatting(),
         "generated-color-scales-001" => CreateColorScales(),
         "generated-data-bars-001" => CreateDataBars(),
+        "generated-icon-sets-001" => CreateIconSets(),
         "generated-text-boxes-shapes-001" => CreateTextBoxesAndShapes(),
         "generated-images-sparklines-001" => CreateImagesAndSparklines(),
         "generated-comments-hyperlinks-002" => CreateCommentsAndHyperlinks(),
@@ -529,6 +531,32 @@ internal static class XlsxCorpusFixtureFactory
             DataBarMaxThresholdValue = "100",
             DataBarShowValue = false
         });
+        return workbook;
+    }
+
+    private static Workbook CreateIconSets()
+    {
+        var workbook = NewWorkbook("generated-icon-sets-001");
+        var sheet = workbook.AddSheet("Icon Sets");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 20));
+
+        var rule = new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "A1", "A5"),
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows",
+            IconSetShowValue = false,
+            IconSetReverse = true
+        };
+        rule.IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percent, "25"),
+            new CfThresholdModel(CfThresholdType.Percent, "50"),
+            new CfThresholdModel(CfThresholdType.Percent, "75")
+        ]);
+        sheet.ConditionalFormats.Add(rule);
         return workbook;
     }
 
