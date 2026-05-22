@@ -902,7 +902,9 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowRowStripes,
     bool ShowColumnStripes,
     PivotReportLayout ReportLayout,
-    string? EmptyValueText = null);
+    string? EmptyValueText = null,
+    bool RefreshOnOpen = false,
+    bool SaveSourceData = true);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -929,12 +931,13 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _autofitColumnsBox = new() { Content = "_Autofit column widths on update", IsChecked = true };
     private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
+    private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
-    public PivotTableOptionsDialog(PivotTableModel pivotTable)
+    public PivotTableOptionsDialog(PivotTableModel pivotTable, PivotCacheModel? cache = null)
     {
-        Result = FromPivotTable(pivotTable);
+        Result = FromPivotTable(pivotTable, cache);
         Title = "PivotTable Options";
         Width = 520;
         Height = 500;
@@ -945,7 +948,7 @@ public sealed class PivotTableOptionsDialog : Window
         Load(Result);
     }
 
-    public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable) =>
+    public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable, PivotCacheModel? cache = null) =>
         CreateResult(
             pivotTable.ShowRowGrandTotals,
             pivotTable.ShowColumnGrandTotals,
@@ -959,7 +962,9 @@ public sealed class PivotTableOptionsDialog : Window
             pivotTable.ShowRowStripes,
             pivotTable.ShowColumnStripes,
             pivotTable.ReportLayout,
-            pivotTable.EmptyValueText);
+            pivotTable.EmptyValueText,
+            refreshOnOpen: cache?.RefreshOnLoad ?? false,
+            saveSourceData: cache?.SaveData ?? true);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -974,7 +979,9 @@ public sealed class PivotTableOptionsDialog : Window
         bool showRowStripes,
         bool showColumnStripes,
         PivotReportLayout reportLayout,
-        string? emptyValueText = null) =>
+        string? emptyValueText = null,
+        bool refreshOnOpen = false,
+        bool saveSourceData = true) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -988,7 +995,9 @@ public sealed class PivotTableOptionsDialog : Window
             showRowStripes,
             showColumnStripes,
             reportLayout,
-            NormalizeEmptyValueText(emptyValueText));
+            NormalizeEmptyValueText(emptyValueText),
+            refreshOnOpen,
+            saveSourceData);
 
     private DockPanel CreateContent()
     {
@@ -1056,6 +1065,7 @@ public sealed class PivotTableOptionsDialog : Window
         var stack = CreateTabPanel();
         var dataPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(dataPanel, _refreshOnOpenBox);
+        AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
         dataPanel.Children.Add(new TextBlock
         {
@@ -1121,6 +1131,8 @@ public sealed class PivotTableOptionsDialog : Window
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
+        _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
+        _saveSourceDataBox.IsChecked = result.SaveSourceData;
     }
 
     private void Accept()
@@ -1142,7 +1154,9 @@ public sealed class PivotTableOptionsDialog : Window
             _reportLayoutBox.SelectedItem is PivotReportLayout reportLayout
                 ? reportLayout
                 : PivotReportLayout.Tabular,
-            _emptyCellsBox.Text);
+            _emptyCellsBox.Text,
+            _refreshOnOpenBox.IsChecked == true,
+            _saveSourceDataBox.IsChecked == true);
         DialogResult = true;
     }
 

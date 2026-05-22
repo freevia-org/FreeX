@@ -1508,7 +1508,8 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().NotContain("Cycle grand totals");
         xaml.Should().NotContain("Cycle subtotals");
         xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
-        source.Should().Contain("new PivotTableOptionsDialog(pivotTable)");
+        source.Should().Contain("_workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId)");
+        source.Should().Contain("new PivotTableOptionsDialog(pivotTable, cache)");
         source.Should().Contain("ApplyPivotOptions(pivotTable, dialog.Result)");
         source.Should().NotContain("var reportLayout = pivotTable.ReportLayout switch");
         source.Should().NotContain("var styleName = pivotTable.StyleName switch");
