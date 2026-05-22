@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -66,6 +69,12 @@ public sealed class TextToColumnsDialog : Window
     private readonly ComboBox _textQualifierBox = new() { Width = 130, Margin = new Thickness(8, 0, 0, 0) };
     private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = "_Treat consecutive delimiters as one", Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
+    private readonly Canvas _fixedWidthRuler = new()
+    {
+        Height = 58,
+        Background = Brushes.White,
+        ClipToBounds = true
+    };
     private readonly TextBox _destinationBox = new() { Width = 120 };
     private readonly ComboBox _formatColumnBox = new() { Width = 110, Margin = new Thickness(0, 0, 10, 0) };
     private readonly RadioButton _formatGeneralButton = new() { Content = "_General", IsChecked = true };
@@ -77,6 +86,8 @@ public sealed class TextToColumnsDialog : Window
     private readonly CellAddress _defaultDestination;
     private int _previewColumnCount = 1;
     private bool _suppressColumnFormatSync;
+    private bool _suppressFixedWidthSync;
+    private int? _dragBreakIndex;
 
     public TextToColumnsDialogResult? Result { get; private set; }
 
@@ -105,7 +116,15 @@ public sealed class TextToColumnsDialog : Window
         _textQualifierBox.SelectionChanged += (_, _) => RefreshPreview();
         _treatConsecutiveDelimitersBox.Checked += (_, _) => RefreshPreview();
         _treatConsecutiveDelimitersBox.Unchecked += (_, _) => RefreshPreview();
-        _fixedWidthBreaksBox.TextChanged += (_, _) => RefreshPreview();
+        _fixedWidthBreaksBox.TextChanged += (_, _) =>
+        {
+            if (!_suppressFixedWidthSync)
+                RefreshPreview();
+        };
+        _fixedWidthRuler.MouseLeftButtonDown += FixedWidthRuler_MouseLeftButtonDown;
+        _fixedWidthRuler.MouseMove += FixedWidthRuler_MouseMove;
+        _fixedWidthRuler.MouseLeftButtonUp += FixedWidthRuler_MouseLeftButtonUp;
+        _fixedWidthRuler.MouseRightButtonDown += FixedWidthRuler_MouseRightButtonDown;
         _formatColumnBox.SelectionChanged += (_, _) => SyncColumnFormatControls();
         _formatGeneralButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.General);
         _formatTextButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Text);
@@ -285,26 +304,31 @@ public sealed class TextToColumnsDialog : Window
 
     private GroupBox CreateFixedWidthPanel()
     {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var label = new Label
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
         {
-            Content = "_Column breaks:",
+            Text = "Click the ruler to create a break line, drag to move it, or right-click a line to remove it.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        panel.Children.Add(_fixedWidthRuler);
+
+        var breakRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        breakRow.Children.Add(new Label
+        {
+            Content = "_Breaks:",
             Target = _fixedWidthBreaksBox,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 8, 0),
-            VerticalAlignment = System.Windows.VerticalAlignment.Center
-        };
-        Grid.SetColumn(label, 0);
-        grid.Children.Add(label);
-        Grid.SetColumn(_fixedWidthBreaksBox, 1);
-        grid.Children.Add(_fixedWidthBreaksBox);
+            Margin = new Thickness(0, 3, 8, 0)
+        });
+        _fixedWidthBreaksBox.Width = 160;
+        breakRow.Children.Add(_fixedWidthBreaksBox);
+        panel.Children.Add(breakRow);
 
         return new GroupBox
         {
             Header = "Fixed width",
-            Content = grid,
+            Content = panel,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -414,6 +438,48 @@ public sealed class TextToColumnsDialog : Window
         return normalized;
     }
 
+    public static IReadOnlyList<int> AddFixedWidthBreakPosition(
+        IReadOnlyList<int> breakPositions,
+        int position,
+        int maxLength)
+    {
+        if (maxLength <= 1)
+            return breakPositions.Distinct().Order().ToList();
+
+        var clamped = Math.Clamp(position, 1, maxLength - 1);
+        return breakPositions
+            .Append(clamped)
+            .Distinct()
+            .Order()
+            .ToList();
+    }
+
+    public static IReadOnlyList<int> MoveFixedWidthBreakPosition(
+        IReadOnlyList<int> breakPositions,
+        int index,
+        int position,
+        int maxLength)
+    {
+        if (index < 0 || index >= breakPositions.Count)
+            return breakPositions.Distinct().Order().ToList();
+
+        var updated = breakPositions.ToList();
+        updated.RemoveAt(index);
+        return AddFixedWidthBreakPosition(updated, position, maxLength);
+    }
+
+    public static IReadOnlyList<int> RemoveFixedWidthBreakPosition(
+        IReadOnlyList<int> breakPositions,
+        int index)
+    {
+        if (index < 0 || index >= breakPositions.Count)
+            return breakPositions.Distinct().Order().ToList();
+
+        var updated = breakPositions.ToList();
+        updated.RemoveAt(index);
+        return updated.Distinct().Order().ToList();
+    }
+
     private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
     {
         var panel = new DockPanel();
@@ -505,6 +571,8 @@ public sealed class TextToColumnsDialog : Window
         _textQualifierBox.IsEnabled = !fixedWidth;
         _treatConsecutiveDelimitersBox.IsEnabled = !fixedWidth;
         _fixedWidthBreaksBox.IsEnabled = fixedWidth;
+        _fixedWidthRuler.IsEnabled = fixedWidth;
+        _fixedWidthRuler.Opacity = fixedWidth ? 1.0 : 0.55;
         RefreshPreview();
     }
 
@@ -559,8 +627,159 @@ public sealed class TextToColumnsDialog : Window
 
         _previewGrid.View = view;
         _previewGrid.ItemsSource = rows.Select(row => PadRow(row, columnCount)).ToList();
+        RefreshFixedWidthRuler();
         RefreshColumnFormatChoices(columnCount);
     }
+
+    private void FixedWidthRuler_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_fixedWidthButton.IsChecked != true)
+            return;
+
+        var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
+        var x = e.GetPosition(_fixedWidthRuler).X;
+        var nearest = FindNearestBreakIndex(positions, x, tolerance: 8);
+        _dragBreakIndex = nearest >= 0
+            ? nearest
+            : AddFixedWidthBreakAt(x);
+        _fixedWidthRuler.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void FixedWidthRuler_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragBreakIndex is not { } index || e.LeftButton != MouseButtonState.Pressed)
+            return;
+
+        var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
+        UpdateFixedWidthBreakPositions(MoveFixedWidthBreakPosition(
+            positions,
+            index,
+            PositionFromRulerX(e.GetPosition(_fixedWidthRuler).X),
+            FixedWidthMaxLength()));
+        _dragBreakIndex = FindNearestBreakIndex(ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text), e.GetPosition(_fixedWidthRuler).X, tolerance: double.MaxValue);
+        e.Handled = true;
+    }
+
+    private void FixedWidthRuler_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _dragBreakIndex = null;
+        _fixedWidthRuler.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void FixedWidthRuler_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_fixedWidthButton.IsChecked != true)
+            return;
+
+        var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
+        var nearest = FindNearestBreakIndex(positions, e.GetPosition(_fixedWidthRuler).X, tolerance: 10);
+        if (nearest >= 0)
+            UpdateFixedWidthBreakPositions(RemoveFixedWidthBreakPosition(positions, nearest));
+        e.Handled = true;
+    }
+
+    private int AddFixedWidthBreakAt(double x)
+    {
+        var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
+        var position = Math.Clamp(PositionFromRulerX(x), 1, FixedWidthMaxLength() - 1);
+        var updated = AddFixedWidthBreakPosition(positions, position, FixedWidthMaxLength());
+        UpdateFixedWidthBreakPositions(updated);
+        return updated.ToList().IndexOf(position);
+    }
+
+    private int FindNearestBreakIndex(IReadOnlyList<int> positions, double x, double tolerance)
+    {
+        var nearestIndex = -1;
+        var nearestDistance = double.MaxValue;
+        for (var index = 0; index < positions.Count; index++)
+        {
+            var distance = Math.Abs(RulerXFromPosition(positions[index]) - x);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestIndex = index;
+            }
+        }
+
+        return nearestDistance <= tolerance ? nearestIndex : -1;
+    }
+
+    private void UpdateFixedWidthBreakPositions(IReadOnlyList<int> positions)
+    {
+        _suppressFixedWidthSync = true;
+        try
+        {
+            _fixedWidthBreaksBox.Text = string.Join(",", positions);
+        }
+        finally
+        {
+            _suppressFixedWidthSync = false;
+        }
+
+        RefreshPreview();
+    }
+
+    private void RefreshFixedWidthRuler()
+    {
+        _fixedWidthRuler.Children.Clear();
+        var sample = _previewRows.OrderByDescending(row => row.Length).FirstOrDefault() ?? string.Empty;
+        var text = new TextBlock
+        {
+            Text = sample,
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12,
+            Margin = new Thickness(4, 28, 4, 0)
+        };
+        _fixedWidthRuler.Children.Add(text);
+
+        for (var tick = 1; tick < FixedWidthMaxLength(); tick++)
+        {
+            var x = RulerXFromPosition(tick);
+            var line = new Line
+            {
+                X1 = x,
+                X2 = x,
+                Y1 = 0,
+                Y2 = tick % 5 == 0 ? 10 : 6,
+                Stroke = Brushes.Gray,
+                StrokeThickness = 1
+            };
+            _fixedWidthRuler.Children.Add(line);
+        }
+
+        foreach (var position in ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text))
+        {
+            var x = RulerXFromPosition(position);
+            var line = new Line
+            {
+                X1 = x,
+                X2 = x,
+                Y1 = 0,
+                Y2 = 56,
+                Stroke = Brushes.Black,
+                StrokeThickness = 2
+            };
+            _fixedWidthRuler.Children.Add(line);
+        }
+    }
+
+    private int FixedWidthMaxLength() =>
+        Math.Max(2, _previewRows.Count == 0 ? 2 : _previewRows.Max(row => row.Length));
+
+    private int PositionFromRulerX(double x)
+    {
+        var width = RulerWidth();
+        return (int)Math.Round(Math.Clamp(x, 0, width) / width * FixedWidthMaxLength());
+    }
+
+    private double RulerXFromPosition(int position)
+    {
+        return Math.Clamp(position, 0, FixedWidthMaxLength()) / (double)FixedWidthMaxLength() * RulerWidth();
+    }
+
+    private double RulerWidth() => _fixedWidthRuler.ActualWidth > 1 ? _fixedWidthRuler.ActualWidth : 440;
 
     private static string[] PadRow(IReadOnlyList<string> row, int columnCount)
     {
