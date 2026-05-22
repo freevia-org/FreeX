@@ -104,9 +104,9 @@ public partial class FormatCellsDialog : Window
         NumberNegativeNumbersList.ItemsSource = new[]
         {
             "-1234.10",
-            "1234.10",
+            "1234.10 (red)",
             "(1234.10)",
-            "-1234.10"
+            "(1234.10) (red)"
         };
         NumberNegativeNumbersList.SelectedIndex = 0;
         var option = FindNumberFormatOption(s.NumberFormat);
@@ -238,6 +238,80 @@ public partial class FormatCellsDialog : Window
         return null;
     }
 
+    public static string? ResolveNumberFormat(
+        string text,
+        int selectedIndex,
+        string? category,
+        string? decimalPlacesText,
+        string? symbol,
+        int negativeIndex)
+    {
+        var baseFormat = ResolveNumberFormat(text, selectedIndex);
+        if (baseFormat is null)
+            return null;
+
+        var decimals = ParseDecimalPlaces(decimalPlacesText);
+        if (decimals is null)
+            return baseFormat;
+
+        return category switch
+        {
+            "Number" => BuildNumberFormat(decimals.Value, negativeIndex),
+            "Currency" => BuildCurrencyFormat(decimals.Value, NormalizeSymbol(symbol), negativeIndex),
+            "Accounting" => BuildAccountingFormat(decimals.Value, NormalizeSymbol(symbol)),
+            "Percentage" => BuildPercentageFormat(decimals.Value),
+            _ => baseFormat
+        };
+    }
+
+    private static int? ParseDecimalPlaces(string? text)
+    {
+        if (!int.TryParse(text?.Trim(), out var decimals))
+            return null;
+
+        return Math.Clamp(decimals, 0, 30);
+    }
+
+    private static string NormalizeSymbol(string? symbol) =>
+        string.IsNullOrWhiteSpace(symbol) || string.Equals(symbol, "None", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : symbol.Trim();
+
+    private static string BuildNumberFormat(int decimals, int negativeIndex)
+    {
+        var format = $"#,##0{DecimalPart(decimals)}";
+        return ApplyNegativeFormat(format, negativeIndex);
+    }
+
+    private static string BuildCurrencyFormat(int decimals, string symbol, int negativeIndex)
+    {
+        var format = $"{symbol}#,##0{DecimalPart(decimals)}";
+        return ApplyNegativeFormat(format, negativeIndex);
+    }
+
+    private static string BuildAccountingFormat(int decimals, string symbol)
+    {
+        var decimalPart = DecimalPart(decimals);
+        var zeroPadding = decimals > 0 ? new string('?', decimals) : string.Empty;
+        var zeroPart = decimals > 0 ? $"\"-\"{zeroPadding}" : "\"-\"";
+        return $"_({symbol}* #,##0{decimalPart}_);_({symbol}* (#,##0{decimalPart});_({symbol}* {zeroPart}_);_(@_)";
+    }
+
+    private static string BuildPercentageFormat(int decimals) =>
+        $"0{DecimalPart(decimals)}%";
+
+    private static string ApplyNegativeFormat(string format, int negativeIndex) =>
+        negativeIndex switch
+        {
+            1 => $"{format};[Red]{format}",
+            2 => $"{format};({format})",
+            3 => $"{format};[Red]({format})",
+            _ => format
+        };
+
+    private static string DecimalPart(int decimals) =>
+        decimals > 0 ? "." + new string('0', decimals) : string.Empty;
+
     public static int? TryParseSupportedTextRotation(string text)
         => FormatCellsInputParser.TryParseSupportedTextRotation(text);
 
@@ -247,7 +321,13 @@ public partial class FormatCellsDialog : Window
         CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
         bool clearFill = DlgClearFillCheck.IsChecked == true;
 
-        string? numFmt = ResolveNumberFormat(NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex);
+        string? numFmt = ResolveNumberFormat(
+            NumberFormatCombo.Text,
+            NumberFormatCombo.SelectedIndex,
+            NumberCategoryList.SelectedItem as string,
+            NumberDecimalPlacesBox.Text,
+            NumberSymbolCombo.SelectedItem as string,
+            NumberNegativeNumbersList.SelectedIndex);
 
         double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);
 
