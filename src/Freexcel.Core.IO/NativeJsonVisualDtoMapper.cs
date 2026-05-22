@@ -11,6 +11,9 @@ internal static class NativeJsonVisualDtoMapper
         Kind = ValidEnumOrDefault(picture.Kind, PictureKind.CellRangeSnapshot),
         SourceRowCount = picture.SourceRowCount,
         SourceColumnCount = picture.SourceColumnCount,
+        IsLinkedToSourceRange = picture.IsLinkedToSourceRange,
+        LinkedSourceRange = picture.LinkedSourceRange?.ToString(),
+        LinkedSourceSheetName = picture.LinkedSourceSheetName,
         ImageBase64 = picture.ImageBytes is { Length: > 0 } bytes ? Convert.ToBase64String(bytes) : null,
         ContentType = picture.ContentType,
         Width = PositiveFiniteOrDefault(picture.Width, 240),
@@ -44,6 +47,9 @@ internal static class NativeJsonVisualDtoMapper
                 Kind = ValidEnumOrDefault(pictureDto.Kind, PictureKind.CellRangeSnapshot),
                 SourceRowCount = pictureDto.SourceRowCount,
                 SourceColumnCount = pictureDto.SourceColumnCount,
+                IsLinkedToSourceRange = pictureDto.IsLinkedToSourceRange,
+                LinkedSourceRange = pictureDto.LinkedSourceRange is null ? null : GridRange.Parse(pictureDto.LinkedSourceRange, sheetId),
+                LinkedSourceSheetName = pictureDto.LinkedSourceSheetName,
                 ImageBytes = string.IsNullOrEmpty(pictureDto.ImageBase64) ? null : Convert.FromBase64String(pictureDto.ImageBase64),
                 ContentType = pictureDto.ContentType,
                 Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
@@ -212,6 +218,9 @@ internal class PictureDto
     public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
     public uint SourceRowCount { get; set; }
     public uint SourceColumnCount { get; set; }
+    public bool IsLinkedToSourceRange { get; set; }
+    public string? LinkedSourceRange { get; set; }
+    public string? LinkedSourceSheetName { get; set; }
     public string? ImageBase64 { get; set; }
     public string? ContentType { get; set; }
     public double Width { get; set; } = 240;

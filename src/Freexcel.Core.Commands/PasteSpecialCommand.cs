@@ -571,7 +571,9 @@ public sealed class PasteRangeAsPictureCommand : IWorkbookCommand
         SheetId sheetId,
         GridRange sourceRange,
         IReadOnlyList<(CellAddress Address, string Text)> sourceCells,
-        CellAddress destination)
+        CellAddress destination,
+        bool isLinkedToSourceRange = false,
+        string? sourceSheetName = null)
     {
         _sheetId = sheetId;
         _picture = new PictureModel
@@ -579,6 +581,9 @@ public sealed class PasteRangeAsPictureCommand : IWorkbookCommand
             Anchor = destination,
             SourceRowCount = sourceRange.RowCount,
             SourceColumnCount = sourceRange.ColCount,
+            IsLinkedToSourceRange = isLinkedToSourceRange,
+            LinkedSourceRange = isLinkedToSourceRange ? sourceRange : null,
+            LinkedSourceSheetName = isLinkedToSourceRange ? sourceSheetName : null,
             Width = Math.Max(80, sourceRange.ColCount * 80),
             Height = Math.Max(40, sourceRange.RowCount * 20)
         };
