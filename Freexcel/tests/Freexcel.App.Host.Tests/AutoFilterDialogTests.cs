@@ -106,10 +106,23 @@ public sealed class AutoFilterDialogTests
             [new AutoFilterDialogItem("Apple", "Apple", true)],
             "",
             "",
-            color);
+            new AutoFilterColorFilter(AutoFilterColorFilterKind.CellFillColor, color));
 
-        result.ColorFilter.Should().Be(color);
+        result.ColorFilter.Should().Be(new AutoFilterColorFilter(AutoFilterColorFilterKind.CellFillColor, color));
         result.CriteriaText.Should().Be("Apple");
+    }
+
+    [Fact]
+    public void BuildResult_DistinguishesNoFillColorFilterFromNoColorSelection()
+    {
+        var result = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            [new AutoFilterDialogItem("Apple", "Apple", true)],
+            "",
+            "",
+            new AutoFilterColorFilter(AutoFilterColorFilterKind.NoFill, null));
+
+        result.ColorFilter.Should().Be(new AutoFilterColorFilter(AutoFilterColorFilterKind.NoFill, null));
     }
 
     [Fact]
@@ -206,9 +219,13 @@ public sealed class AutoFilterDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
-        source.Should().Contain("_filterByColorButton");
-        source.Should().Contain("Content = \"Filter by _Color\"");
-        source.Should().Contain("new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)");
+        source.Should().Contain("_filterByColorGroup");
+        source.Should().Contain("Header = \"Filter by Color\"");
+        source.Should().Contain("PopulateColorChoices");
+        source.Should().Contain("Cell Color");
+        source.Should().Contain("Font Color");
+        source.Should().Contain("CreateColorSwatch");
+        source.Should().NotContain("new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)");
         source.Should().Contain("HasFilterByColorEntry");
     }
 
@@ -217,8 +234,10 @@ public sealed class AutoFilterDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
 
-        source.Should().Contain("result.ColorFilter is { } fillColor");
+        source.Should().Contain("result.ColorFilter is { } colorFilter");
         source.Should().Contain("new CellFillColorFilterCommand");
+        source.Should().Contain("new CellNoFillColorFilterCommand");
+        source.Should().Contain("new CellFontColorFilterCommand");
         source.Should().Contain("filterText.StartsWith(\"and:\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("filterText.StartsWith(\"or:\", StringComparison.OrdinalIgnoreCase)");
     }

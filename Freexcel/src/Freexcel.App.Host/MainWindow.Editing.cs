@@ -258,7 +258,7 @@ public partial class MainWindow
             return;
         }
 
-        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan);
         if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
             return;
 
