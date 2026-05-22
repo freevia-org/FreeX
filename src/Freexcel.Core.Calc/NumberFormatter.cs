@@ -562,7 +562,7 @@ public static class NumberFormatter
             normalized = "0";
 
         if (!LocaleFormatCatalog.TryGetValue(normalized, out var separators))
-            return false;
+            return TryCreateCultureInfoLocaleFormats(normalized, out numberFormat, out dateTimeFormat);
 
         numberFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
         numberFormat.NumberDecimalSeparator = separators.DecimalSeparator;
@@ -577,6 +577,36 @@ public static class NumberFormatter
         dateTimeFormat = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
         dateTimeFormat.DateSeparator = separators.DateSeparator;
         return true;
+    }
+
+    private static bool TryCreateCultureInfoLocaleFormats(
+        string normalizedLocaleToken,
+        out NumberFormatInfo numberFormat,
+        out DateTimeFormatInfo dateTimeFormat)
+    {
+        numberFormat = CultureInfo.InvariantCulture.NumberFormat;
+        dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
+
+        if (!int.TryParse(
+                normalizedLocaleToken,
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out var lcid))
+        {
+            return false;
+        }
+
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(lcid);
+            numberFormat = (NumberFormatInfo)culture.NumberFormat.Clone();
+            dateTimeFormat = (DateTimeFormatInfo)culture.DateTimeFormat.Clone();
+            return true;
+        }
+        catch (CultureNotFoundException)
+        {
+            return false;
+        }
     }
 
     private static string RemoveSpacingAndFillDirectives(string format)
