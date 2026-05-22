@@ -179,6 +179,8 @@ internal static class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetInlineStringMetadata(sourceSheetData, targetRoot, targetArchive, workbookNs))
                 changed = true;
+            if (MergeWorksheetFormulaMetadata(sourceSheetData, targetRoot, workbookNs))
+                changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
@@ -552,6 +554,74 @@ internal static class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static bool MergeWorksheetFormulaMetadata(
+        XElement? sourceSheetData,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        if (sourceSheetData is null)
+            return false;
+
+        var sourceFormulaCells = sourceSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell =>
+                cell.Element(workbookNs + "f")?.HasAttributes == true &&
+                !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToList();
+        if (sourceFormulaCells.Count == 0)
+            return false;
+
+        var targetSheetData = targetRoot.Element(workbookNs + "sheetData");
+        if (targetSheetData is null)
+            return false;
+
+        var targetCellsByAddress = targetSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToDictionary(
+                cell => cell.Attribute("r")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceCell in sourceFormulaCells)
+        {
+            var address = sourceCell.Attribute("r")!.Value;
+            if (!targetCellsByAddress.TryGetValue(address, out var targetCell))
+                continue;
+
+            var sourceFormula = sourceCell.Element(workbookNs + "f");
+            var targetFormula = targetCell.Element(workbookNs + "f");
+            if (sourceFormula is null ||
+                targetFormula is null ||
+                !string.Equals(
+                    NormalizeFormulaXmlText(sourceFormula.Value),
+                    NormalizeFormulaXmlText(targetFormula.Value),
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var attribute in sourceFormula.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration)
+                    continue;
+
+                if (string.Equals(targetFormula.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+                    continue;
+
+                targetFormula.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static string NormalizeFormulaXmlText(string? formula)
+    {
+        return (formula ?? string.Empty).Trim().TrimStart('=');
     }
 
     private static IReadOnlyList<string> LoadSharedStringPlainText(ZipArchive archive, XNamespace workbookNs)
