@@ -418,13 +418,14 @@ internal static class XlsxWorksheetMetadataPreserver
         if (targetColumns is null)
             return false;
 
+        var changed = MergeMissingAttributes(sourceColumns, targetColumns);
+
         var targetColumnsByRange = targetColumns
             .Elements(workbookNs + "col")
             .Where(column => !string.IsNullOrWhiteSpace(column.Attribute("min")?.Value) &&
                              !string.IsNullOrWhiteSpace(column.Attribute("max")?.Value))
             .ToDictionary(ColumnRangeKey, StringComparer.OrdinalIgnoreCase);
 
-        var changed = false;
         foreach (var sourceColumn in sourceColumns.Elements(workbookNs + "col"))
         {
             var key = ColumnRangeKey(sourceColumn);
