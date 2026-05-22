@@ -122,6 +122,27 @@ public sealed class GridViewSelectionLayoutTests
             columnHeaderHeight: 18).Should().BeNull();
     }
 
+    [Fact]
+    public void CalculateQuickAnalysisPreviewRect_ReturnsVisibleRectangle_ForHoverRange()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 3, 3));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20), new RowMetric(3, 20, 40)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64), new ColMetric(3, 64, 128)]);
+
+        var rect = GridView.CalculateQuickAnalysisPreviewRect(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rect.Should().Be(new Rect(94, 38, 128, 40));
+    }
+
     private static ViewportModel Viewport() =>
         new(
             [],
