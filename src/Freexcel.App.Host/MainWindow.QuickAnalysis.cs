@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -172,6 +174,12 @@ public partial class MainWindow
             case QuickAnalysisCommand.Count:
                 AutoSumCountMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.PercentTotal:
+                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildPercentTotalEdits, "Quick Analysis % Total");
+                break;
+            case QuickAnalysisCommand.RunningTotal:
+                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildRunningTotalEdits, "Quick Analysis Running Total");
+                break;
             case QuickAnalysisCommand.Max:
                 AutoSumMaxMenuItem_Click(sender, e);
                 break;
@@ -194,6 +202,28 @@ public partial class MainWindow
                 SparklineWinLossBtn_Click(sender, e);
                 break;
         }
+    }
+
+    private void InsertQuickAnalysisTotalFormulas(
+        Func<GridRange, IReadOnlyList<(CellAddress Address, Cell NewCell)>> buildEdits,
+        string title)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var edits = buildEdits(range);
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => new EditCellsCommand(_currentSheetId, edits));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, title);
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(edit => edit.Address).ToList());
+        SetActiveCell(edits[^1].Address);
+        UpdateViewport();
     }
 
     private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)

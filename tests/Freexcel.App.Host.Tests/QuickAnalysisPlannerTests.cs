@@ -57,6 +57,8 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.RadarChart,
                 QuickAnalysisCommand.StockChart,
                 QuickAnalysisCommand.Sum,
+                QuickAnalysisCommand.PercentTotal,
+                QuickAnalysisCommand.RunningTotal,
                 QuickAnalysisCommand.Max,
                 QuickAnalysisCommand.Min,
                 QuickAnalysisCommand.FormatAsTable,
@@ -124,6 +126,8 @@ public sealed class QuickAnalysisPlannerTests
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Chart);
         options.Single(option => option.Command == QuickAnalysisCommand.Sum)
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Total);
+        options.Single(option => option.Command == QuickAnalysisCommand.PercentTotal)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Total);
         options.Single(option => option.Command == QuickAnalysisCommand.FormatAsTable)
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Table);
         options.Single(option => option.Command == QuickAnalysisCommand.LineSparkline)
@@ -172,10 +176,14 @@ public sealed class QuickAnalysisPlannerTests
         var selection = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 5));
         var sum = QuickAnalysisPlanner.BuildOptions(selection)
             .Single(option => option.Command == QuickAnalysisCommand.Sum);
+        var percentTotal = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.PercentTotal);
         var sparkline = QuickAnalysisPlanner.BuildOptions(selection)
             .Single(option => option.Command == QuickAnalysisCommand.LineSparkline);
 
         QuickAnalysisPlanner.BuildHoverPreview(selection, sum)!.Range.Should().Be(
+            new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+        QuickAnalysisPlanner.BuildHoverPreview(selection, percentTotal)!.Range.Should().Be(
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
         QuickAnalysisPlanner.BuildHoverPreview(selection, sparkline)!.Range.Should().Be(
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
