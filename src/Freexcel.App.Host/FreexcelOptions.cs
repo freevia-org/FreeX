@@ -3,6 +3,21 @@ using System.Text.Json;
 
 namespace Freexcel.App.Host;
 
+public enum FreexcelEnterDirection
+{
+    Down,
+    Right,
+    Up,
+    Left
+}
+
+public enum FreexcelObjectDisplay
+{
+    All,
+    Placeholders,
+    Nothing
+}
+
 public sealed class FreexcelOptions
 {
     // General — new workbooks
@@ -18,6 +33,11 @@ public sealed class FreexcelOptions
     // View
     public bool ShowFormulaBar { get; set; } = true;
     public bool FormulaBarExpanded { get; set; }
+    public bool MoveSelectionAfterEnter { get; set; } = true;
+    public FreexcelEnterDirection AfterEnterDirection { get; set; } = FreexcelEnterDirection.Down;
+    public bool ShowGridlines { get; set; } = true;
+    public bool ShowHeadings { get; set; } = true;
+    public FreexcelObjectDisplay ObjectsDisplay { get; set; } = FreexcelObjectDisplay.All;
 
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";

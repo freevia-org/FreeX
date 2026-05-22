@@ -267,7 +267,8 @@
                         <TextBlock Text="Editing options"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
-                        <CheckBox Content="After pressing Enter, _move selection"
+                        <CheckBox x:Name="OptMoveAfterEnter"
+                                  Content="After pressing Enter, _move selection"
                                   IsChecked="True" FontSize="12" Margin="0,0,0,8"/>
                         <Grid Margin="18,0,0,9">
                             <Grid.ColumnDefinitions>
