@@ -1683,6 +1683,21 @@ internal static class XlsxWorksheetMetadataPreserver
             changed = true;
         }
 
+        var existingChildrenByKey = targetSheetFormatProperties
+            .Elements()
+            .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        foreach (var sourceChild in sourceSheetFormatProperties.Elements())
+        {
+            var key = ElementIdentityKey(sourceChild);
+            if (existingChildrenByKey.ContainsKey(key))
+                continue;
+
+            targetSheetFormatProperties.Add(new XElement(sourceChild));
+            existingChildrenByKey[key] = targetSheetFormatProperties.Elements().Last();
+            changed = true;
+        }
+
         return changed;
     }
 

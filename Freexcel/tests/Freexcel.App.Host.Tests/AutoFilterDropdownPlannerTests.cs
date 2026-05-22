@@ -140,6 +140,37 @@ public sealed class AutoFilterDropdownPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_IncludesExcelStyleSectionSeparators()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        menu.Entries.Select(entry => entry.Kind).Should().ContainInOrder(
+            AutoFilterMenuEntryKind.SortAscending,
+            AutoFilterMenuEntryKind.SortDescending,
+            AutoFilterMenuEntryKind.Separator,
+            AutoFilterMenuEntryKind.ClearFilter,
+            AutoFilterMenuEntryKind.FilterByColor,
+            AutoFilterMenuEntryKind.FilterFamily,
+            AutoFilterMenuEntryKind.Separator,
+            AutoFilterMenuEntryKind.Search,
+            AutoFilterMenuEntryKind.SelectAll,
+            AutoFilterMenuEntryKind.Separator,
+            AutoFilterMenuEntryKind.ChecklistItem,
+            AutoFilterMenuEntryKind.ChecklistItem);
+    }
+
+    [Fact]
     public void CreateMenuPlan_ChoosesNumberAndDateFilterFamiliesFromBodyValues()
     {
         var numberSheet = new Sheet(SheetId, "Sheet1");

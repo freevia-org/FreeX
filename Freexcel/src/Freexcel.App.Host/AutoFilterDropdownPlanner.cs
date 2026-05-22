@@ -44,6 +44,7 @@ public enum AutoFilterMenuEntryKind
 {
     SortAscending,
     SortDescending,
+    Separator,
     ClearFilter,
     FilterByColor,
     FilterFamily,
@@ -154,11 +155,14 @@ public static class AutoFilterDropdownPlanner
         {
             new("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
             new("Sort Z to A", AutoFilterMenuEntryKind.SortDescending),
+            new(string.Empty, AutoFilterMenuEntryKind.Separator),
             new($"Clear Filter From \"{headerText}\"", AutoFilterMenuEntryKind.ClearFilter),
             new("Filter by Color", AutoFilterMenuEntryKind.FilterByColor),
             filterEntry,
+            new(string.Empty, AutoFilterMenuEntryKind.Separator),
             new("Search", AutoFilterMenuEntryKind.Search),
-            new("(Select All)", AutoFilterMenuEntryKind.SelectAll)
+            new("(Select All)", AutoFilterMenuEntryKind.SelectAll),
+            new(string.Empty, AutoFilterMenuEntryKind.Separator)
         };
 
         entries.AddRange(CreateChecklistItems(sheet, plan)
