@@ -219,12 +219,30 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("_criteriaOperatorBox");
         source.Should().Contain("_criteriaValueBox");
+        source.Should().Contain("_criteriaConnectorBox");
+        source.Should().Contain("_criteriaOperatorBox2");
+        source.Should().Contain("_criteriaValueBox2");
         source.Should().Contain("_customFilterGroup");
         source.Should().Contain("Header = \"Custom filter\"");
         source.Should().Contain("IsReadOnly = true");
         source.Should().Contain("_customFilterGroup.Visibility = Visibility.Visible");
         source.Should().Contain("_criteriaSuggestionLabel.Visibility = Visibility.Visible");
         source.Should().Contain("BuildCriteriaText");
+        source.Should().Contain("BuildCompositeCriteriaText");
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
+    }
+
+    [Theory]
+    [InlineData("And", ">10", "<20", "and:>10|<20")]
+    [InlineData("Or", "begins:Red", "ends:Apple", "or:begins:Red|ends:Apple")]
+    public void BuildCompositeCriteriaText_ComposesExcelCustomFilterRows(
+        string connector,
+        string firstCriteria,
+        string secondCriteria,
+        string expected)
+    {
+        AutoFilterDialog.BuildCompositeCriteriaText(firstCriteria, connector, secondCriteria)
+            .Should()
+            .Be(expected);
     }
 }

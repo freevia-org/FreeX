@@ -373,10 +373,68 @@ public static class RibbonIconFactory
 
     private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
     {
+        if (UseBaseHomeIconArtwork(slug))
+        {
+            yield return slug;
+            yield break;
+        }
+
         if (!monochrome)
             yield return size <= 22 ? slug + "-small" : slug + "-large";
         yield return slug;
     }
+
+    private static bool UseBaseHomeIconArtwork(string slug) => slug switch
+    {
+        "paste" or
+        "cut" or
+        "copy" or
+        "format-painter" or
+        "bold" or
+        "italic" or
+        "underline" or
+        "double-underline" or
+        "strikethrough" or
+        "borders" or
+        "border-presets" or
+        "grow-font" or
+        "shrink-font" or
+        "increase-font-size" or
+        "decrease-font-size" or
+        "font-color" or
+        "fill-color" or
+        "theme-colors" or
+        "top-align" or
+        "middle-align" or
+        "bottom-align" or
+        "align-left" or
+        "center" or
+        "align-right" or
+        "orientation" or
+        "decrease-indent" or
+        "increase-indent" or
+        "wrap-text" or
+        "merge-center" or
+        "accounting-currency" or
+        "percent-style" or
+        "comma-style" or
+        "increase-decimal" or
+        "decrease-decimal" or
+        "conditional-formatting" or
+        "format-as-table" or
+        "cell-styles" or
+        "styles" or
+        "cells" or
+        "insert" or
+        "delete" or
+        "format" or
+        "editing" or
+        "sort" or
+        "find" or
+        "clear" or
+        "fill" => true,
+        _ => false
+    };
 
     private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath, double targetSize)
     {
