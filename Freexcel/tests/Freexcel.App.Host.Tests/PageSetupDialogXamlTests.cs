@@ -154,12 +154,20 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
-    public void Footer_DoesNotExposeUnwiredPrintActions()
+    public void Footer_ExposesExcelPrintActionsAndHonestOptionsState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
-            xaml.Should().NotContain($"Content=\"{content}\"");
+            xaml.Should().Contain($"Content=\"{content}\"");
+
+        xaml.Should().Contain("ToolTip=\"Printer driver options are not available yet.\"");
+        source.Should().Contain("PageSetupDialogAction.PrintPreview");
+        source.Should().Contain("PageSetupDialogAction.Print");
+        handlerSource.Should().Contain("dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview");
+        handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
     }
 
     [Fact]
