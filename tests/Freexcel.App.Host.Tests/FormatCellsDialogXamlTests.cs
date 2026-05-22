@@ -389,7 +389,7 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
-    public void FormatCellsDialog_FillTab_ExposesBackgroundColorAndSamplePreviewWithoutUnsupportedPatternControls()
+    public void FormatCellsDialog_FillTab_ExposesBackgroundPatternControlsAndSamplePreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
@@ -397,6 +397,8 @@ public sealed class FormatCellsDialogXamlTests
         foreach (var text in new[]
         {
             "Content=\"_Background Color:\"",
+            "Content=\"Pattern _Color:\"",
+            "Content=\"Pattern _Style:\"",
             "Text=\"Sample\""
         })
             xaml.Should().Contain(text);
@@ -405,15 +407,14 @@ public sealed class FormatCellsDialogXamlTests
         {
             "DlgFillBackgroundPreview",
             "DlgFillSamplePreview",
-            "DlgFillPalettePanel"
+            "DlgFillPalettePanel",
+            "DlgFillPatternColorBox",
+            "DlgFillPatternStyleBox"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
 
-        foreach (var unsupported in new[] { "DlgFillPatternColorBox", "DlgFillPatternStyleBox", "Pattern _Color:", "Pattern _Style:" })
-        {
-            xaml.Should().NotContain(unsupported);
-            source.Should().NotContain(unsupported);
-        }
+        source.Should().Contain("FillPatternOptions");
+        source.Should().Contain("FillPatternStyle:");
     }
 
     [Fact]
@@ -442,7 +443,9 @@ public sealed class FormatCellsDialogXamlTests
 
         foreach (var target in new[]
         {
-            "Content=\"_Background Color:\" Target=\"{Binding ElementName=DlgFillColorBox}\""
+            "Content=\"_Background Color:\" Target=\"{Binding ElementName=DlgFillColorBox}\"",
+            "Content=\"Pattern _Color:\" Target=\"{Binding ElementName=DlgFillPatternColorBox}\"",
+            "Content=\"Pattern _Style:\" Target=\"{Binding ElementName=DlgFillPatternStyleBox}\""
         })
             xaml.Should().Contain(target);
     }
@@ -782,6 +785,8 @@ public sealed class FormatCellsDialogXamlTests
             try
             {
                 GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "12,34,56";
+                GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "90,80,70";
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
                 GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thick);
                 GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "1,2,3";
                 GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
@@ -796,6 +801,8 @@ public sealed class FormatCellsDialogXamlTests
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.FillColor.Should().Be(new CellColor(12, 34, 56));
+                dialog.ResultDiff.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
                 dialog.ResultDiff.ClearFill.Should().BeNull();
                 dialog.ResultDiff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)));
                 dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(4, 5, 6)));
@@ -815,7 +822,12 @@ public sealed class FormatCellsDialogXamlTests
     {
         StaTestRunner.Run(() =>
         {
-            var current = new CellStyle { FillColor = new CellColor(12, 34, 56) };
+            var current = new CellStyle
+            {
+                FillColor = new CellColor(12, 34, 56),
+                FillPatternStyle = CellFillPatternStyle.DarkGrid,
+                FillPatternColor = new CellColor(90, 80, 70)
+            };
             var dialog = ShowDialogForTest(current);
             try
             {
@@ -825,6 +837,8 @@ public sealed class FormatCellsDialogXamlTests
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.FillColor.Should().BeNull();
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.None);
+                dialog.ResultDiff.FillPatternColor.Should().BeNull();
                 dialog.ResultDiff.ClearFill.Should().BeTrue();
             }
             finally

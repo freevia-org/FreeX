@@ -59,8 +59,19 @@ internal static class XlsxDifferentialStyleReader
         var patternFill = dxf
             .Element(workbookNs + "fill")?
             .Element(workbookNs + "patternFill");
-        if (XlsxColorReader.TryReadCellColor(patternFill?.Element(workbookNs + "fgColor"), out var fillColor))
-            style.FillColor = fillColor;
+        if (patternFill is not null)
+        {
+            style.FillPatternStyle = FromPatternType(patternFill.Attribute("patternType")?.Value);
+            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "bgColor"), out var backgroundColor))
+                style.FillColor = backgroundColor;
+            if (XlsxColorReader.TryReadCellColor(patternFill.Element(workbookNs + "fgColor"), out var foregroundColor))
+            {
+                if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
+                    style.FillColor = foregroundColor;
+                else
+                    style.FillPatternColor = foregroundColor;
+            }
+        }
 
         var border = dxf.Element(workbookNs + "border");
         if (border is not null)
@@ -157,4 +168,28 @@ internal static class XlsxDifferentialStyleReader
 
     private static bool IsSupportedFontSize(double fontSize) =>
         fontSize >= 1 && fontSize <= 409;
+
+    private static CellFillPatternStyle FromPatternType(string? patternType) =>
+        patternType switch
+        {
+            "solid" => CellFillPatternStyle.Solid,
+            "gray0625" => CellFillPatternStyle.Gray0625,
+            "gray125" => CellFillPatternStyle.Gray125,
+            "lightGray" => CellFillPatternStyle.LightGray,
+            "mediumGray" => CellFillPatternStyle.MediumGray,
+            "darkGray" => CellFillPatternStyle.DarkGray,
+            "lightHorizontal" => CellFillPatternStyle.LightHorizontal,
+            "lightVertical" => CellFillPatternStyle.LightVertical,
+            "lightDown" => CellFillPatternStyle.LightDown,
+            "lightUp" => CellFillPatternStyle.LightUp,
+            "lightGrid" => CellFillPatternStyle.LightGrid,
+            "lightTrellis" => CellFillPatternStyle.LightTrellis,
+            "darkHorizontal" => CellFillPatternStyle.DarkHorizontal,
+            "darkVertical" => CellFillPatternStyle.DarkVertical,
+            "darkDown" => CellFillPatternStyle.DarkDown,
+            "darkUp" => CellFillPatternStyle.DarkUp,
+            "darkGrid" => CellFillPatternStyle.DarkGrid,
+            "darkTrellis" => CellFillPatternStyle.DarkTrellis,
+            _ => CellFillPatternStyle.None
+        };
 }
