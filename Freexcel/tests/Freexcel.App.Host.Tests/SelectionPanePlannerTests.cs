@@ -157,6 +157,17 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_AllowsInlineRenameInObjectList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("new FrameworkElementFactory(typeof(TextBox))");
+        source.Should().Contain("TextBox.TextProperty");
+        source.Should().Contain("UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged");
+        source.Should().Contain("ToolTipProperty, \"Rename object\"");
+    }
+
+    [Fact]
     public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
