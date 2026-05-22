@@ -48,6 +48,12 @@ public sealed class AutoFilterDialog : Window
         DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
     };
     private readonly TextBox _criteriaValueBox = new() { Visibility = Visibility.Collapsed };
+    private readonly StackPanel _betweenCriteriaPanel = new() { Visibility = Visibility.Collapsed };
+    private readonly TextBox _betweenMinBox = new() { Width = 82 };
+    private readonly TextBox _betweenMaxBox = new() { Width = 82 };
+    private readonly StackPanel _topBottomCriteriaPanel = new() { Visibility = Visibility.Collapsed };
+    private readonly TextBox _topBottomCountBox = new() { Width = 54, Text = "10" };
+    private readonly TextBlock _topBottomUnitText = new() { VerticalAlignment = System.Windows.VerticalAlignment.Center };
     private readonly ComboBox _criteriaConnectorBox = new()
     {
         Visibility = Visibility.Collapsed,
@@ -214,6 +220,8 @@ public sealed class AutoFilterDialog : Window
         _criteriaValueBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaValueBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaValueBox);
+        customFilterPanel.Children.Add(CreateBetweenCriteriaPanel());
+        customFilterPanel.Children.Add(CreateTopBottomCriteriaPanel());
 
         customFilterPanel.Children.Add(new Label { Content = "_And / Or", Target = _criteriaConnectorBox, Padding = new Thickness(0) });
         _criteriaConnectorBox.Margin = new Thickness(0, 4, 0, 4);
@@ -397,6 +405,16 @@ public sealed class AutoFilterDialog : Window
         return $"{option.CriteriaPrefix}{value?.Trim() ?? string.Empty}";
     }
 
+    public static string BuildBetweenCriteriaText(AutoFilterCriteriaOption option, string? minimum, string? maximum)
+    {
+        return $"{option.CriteriaPrefix}{minimum?.Trim() ?? string.Empty}:{maximum?.Trim() ?? string.Empty}";
+    }
+
+    public static string BuildTopBottomCriteriaText(AutoFilterCriteriaOption option, string? count)
+    {
+        return $"{option.CriteriaPrefix}{count?.Trim() ?? string.Empty}";
+    }
+
     public static string BuildCompositeCriteriaText(string? firstCriteria, string? connector, string? secondCriteria)
     {
         var first = firstCriteria?.Trim() ?? string.Empty;
@@ -468,7 +486,7 @@ public sealed class AutoFilterDialog : Window
         if (_criteriaOperatorBox.SelectedItem is not AutoFilterCriteriaOption option)
             return;
 
-        var firstCriteria = BuildCriteriaText(option, _criteriaValueBox.Text);
+        var firstCriteria = BuildPrimaryCriteriaText(option);
         var secondCriteria = _criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption option2 &&
             (!option2.RequiresValue || !string.IsNullOrWhiteSpace(_criteriaValueBox2.Text))
                 ? BuildCriteriaText(option2, _criteriaValueBox2.Text)
@@ -477,9 +495,71 @@ public sealed class AutoFilterDialog : Window
             firstCriteria,
             _criteriaConnectorBox.SelectedItem as string,
             secondCriteria);
-        _criteriaValueBox.IsEnabled = option.RequiresValue;
+        RefreshSpecialCriteriaPanels(option);
         if (_criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption secondOption)
             _criteriaValueBox2.IsEnabled = secondOption.RequiresValue;
+    }
+
+    private string BuildPrimaryCriteriaText(AutoFilterCriteriaOption option)
+    {
+        if (IsBetweenOption(option))
+            return BuildBetweenCriteriaText(option, _betweenMinBox.Text, _betweenMaxBox.Text);
+
+        if (IsTopBottomOption(option))
+            return BuildTopBottomCriteriaText(option, _topBottomCountBox.Text);
+
+        return BuildCriteriaText(option, _criteriaValueBox.Text);
+    }
+
+    private void RefreshSpecialCriteriaPanels(AutoFilterCriteriaOption option)
+    {
+        var isBetween = IsBetweenOption(option);
+        var isTopBottom = IsTopBottomOption(option);
+        _criteriaValueBox.IsEnabled = option.RequiresValue && !isBetween && !isTopBottom;
+        _criteriaValueBox.Visibility = option.RequiresValue && !isBetween && !isTopBottom
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _betweenCriteriaPanel.Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed;
+        _topBottomCriteriaPanel.Visibility = isTopBottom ? Visibility.Visible : Visibility.Collapsed;
+        _topBottomUnitText.Text = option.CriteriaPrefix.Contains("percent", StringComparison.OrdinalIgnoreCase)
+            ? "Percent"
+            : "Items";
+    }
+
+    private static bool IsBetweenOption(AutoFilterCriteriaOption option) =>
+        option.CriteriaPrefix.Equals("between:", StringComparison.OrdinalIgnoreCase) ||
+        option.CriteriaPrefix.Equals("datebetween:", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTopBottomOption(AutoFilterCriteriaOption option) =>
+        option.CriteriaPrefix.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
+        option.CriteriaPrefix.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase) ||
+        option.CriteriaPrefix.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
+        option.CriteriaPrefix.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase);
+
+    private StackPanel CreateBetweenCriteriaPanel()
+    {
+        _betweenMinBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        _betweenMaxBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        var panel = _betweenCriteriaPanel;
+        panel.Orientation = Orientation.Horizontal;
+        panel.Margin = new Thickness(0, 4, 0, 4);
+        panel.Children.Add(new TextBlock { Text = "_Minimum:", Margin = new Thickness(0, 3, 6, 0) });
+        panel.Children.Add(_betweenMinBox);
+        panel.Children.Add(new TextBlock { Text = "And _maximum:", Margin = new Thickness(10, 3, 6, 0) });
+        panel.Children.Add(_betweenMaxBox);
+        return panel;
+    }
+
+    private StackPanel CreateTopBottomCriteriaPanel()
+    {
+        _topBottomCountBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        var panel = _topBottomCriteriaPanel;
+        panel.Orientation = Orientation.Horizontal;
+        panel.Margin = new Thickness(0, 4, 0, 4);
+        panel.Children.Add(new TextBlock { Text = "_Show:", Margin = new Thickness(0, 3, 6, 0) });
+        panel.Children.Add(_topBottomCountBox);
+        panel.Children.Add(_topBottomUnitText);
+        return panel;
     }
 
     private void PopulateColorChoices(IReadOnlyList<AutoFilterColorOption> colorOptions)

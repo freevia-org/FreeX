@@ -194,9 +194,17 @@ public sealed class SelectionPaneDialog : Window
         checkBox.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsVisible)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.AppendChild(checkBox);
 
-        var name = new FrameworkElementFactory(typeof(TextBlock));
-        name.SetValue(TextBlock.MarginProperty, new Thickness(8, 0, 0, 0));
-        name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.Name)));
+        var name = new FrameworkElementFactory(typeof(TextBox));
+        name.SetValue(TextBox.MarginProperty, new Thickness(8, 0, 0, 0));
+        name.SetValue(TextBox.WidthProperty, 160.0);
+        name.SetValue(TextBox.BorderThicknessProperty, new Thickness(0));
+        name.SetValue(TextBox.BackgroundProperty, Brushes.Transparent);
+        name.SetValue(TextBox.ToolTipProperty, "Rename object");
+        name.SetBinding(TextBox.TextProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.Name))
+        {
+            Mode = System.Windows.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged
+        });
         panel.AppendChild(name);
 
         var kind = new FrameworkElementFactory(typeof(TextBlock));
