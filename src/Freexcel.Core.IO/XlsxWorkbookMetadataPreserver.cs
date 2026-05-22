@@ -186,31 +186,9 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        var changed = false;
-        foreach (var attribute in sourceWorkbookProtection.Attributes())
-        {
-            if (targetWorkbookProtection.Attribute(attribute.Name) is not null)
-                continue;
-
-            targetWorkbookProtection.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var existingChildNames = targetWorkbookProtection
-            .Elements()
-            .Select(element => element.Name)
-            .ToHashSet();
-        foreach (var sourceChild in sourceWorkbookProtection.Elements())
-        {
-            if (existingChildNames.Contains(sourceChild.Name))
-                continue;
-
-            targetWorkbookProtection.Add(new XElement(sourceChild));
-            existingChildNames.Add(sourceChild.Name);
-            changed = true;
-        }
-
-        return changed;
+        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+            sourceWorkbookProtection,
+            targetWorkbookProtection);
     }
 
     private static bool MergeCalculationProperties(XElement? sourceCalculationProperties, XElement targetRoot, XNamespace workbookNs)
@@ -266,31 +244,9 @@ internal static class XlsxWorkbookMetadataPreserver
             return true;
         }
 
-        var changed = false;
-        foreach (var attribute in sourceWorkbookProperties.Attributes())
-        {
-            if (targetWorkbookProperties.Attribute(attribute.Name) is not null)
-                continue;
-
-            targetWorkbookProperties.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var existingChildNames = targetWorkbookProperties
-            .Elements()
-            .Select(element => element.Name)
-            .ToHashSet();
-        foreach (var sourceChild in sourceWorkbookProperties.Elements())
-        {
-            if (existingChildNames.Contains(sourceChild.Name))
-                continue;
-
-            targetWorkbookProperties.Add(new XElement(sourceChild));
-            existingChildNames.Add(sourceChild.Name);
-            changed = true;
-        }
-
-        return changed;
+        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+            sourceWorkbookProperties,
+            targetWorkbookProperties);
     }
 
     private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
