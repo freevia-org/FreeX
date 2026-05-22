@@ -139,7 +139,7 @@ public sealed class PivotWorkflowDialogTests
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Date field to connect\", _fieldBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Timeline _caption\", _nameBox",
             "InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery",
-            "PivotDialogLayout.AddLabeledControl(stylePanel, \"Chart _style ID\", _styleBox",
+            "AutomationProperties.SetName(_styleGallery, \"PivotChart style gallery\")",
             "AddCombo(selectionPanel, \"_Field\", _fieldBox",
             "AddCombo(groupingPanel, \"_Group by\", _groupingBox",
             "AddTextBox(rangePanel, \"_Starting at\", _startBox",
@@ -647,6 +647,15 @@ public sealed class PivotWorkflowDialogTests
                 showValueFieldButtons: false)
             .Should()
             .Be(new PivotChartOptionsDialogResult(null, true, false, true, false));
+
+        PivotChartOptionsDialog.CreateResult(
+                99,
+                showFieldButtons: true,
+                showReportFilterButtons: true,
+                showAxisFieldButtons: true,
+                showValueFieldButtons: true)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(48, true, true, true, true));
     }
 
     [Fact]
@@ -672,6 +681,10 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Chart style");
+        source.Should().Contain("_styleGallery");
+        source.Should().Contain("PivotChart style gallery");
+        source.Should().Contain("ChartStyleDialog.GetStyleOptions()");
+        source.Should().NotContain("Chart _style ID");
         source.Should().Contain("Field buttons");
         source.Should().Contain("_Show field buttons on chart");
         source.Should().Contain("Report _filter buttons");
@@ -679,6 +692,31 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("_Value field buttons");
         source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
         source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_UsesVisualStyleGalleryAndPreservesCurrentStyle()
+    {
+        var chart = new ChartModel
+        {
+            IsPivotChart = true,
+            ChartStyleId = 12
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotChartOptionsDialog(chart);
+            var gallery = (ListBox)typeof(PivotChartOptionsDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleOptions = gallery.Items.Cast<ChartStyleOption>().ToList();
+
+            styleOptions.Should().HaveCount(49);
+            styleOptions[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
+            gallery.SelectedItem.Should().Be(styleOptions.Single(option => option.StyleId == 12));
+
+            dialog.Close();
+        });
     }
 
     [Fact]
