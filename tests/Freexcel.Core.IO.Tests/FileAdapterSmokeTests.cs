@@ -3689,6 +3689,10 @@ public partial class FileAdapterSmokeTests
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("objects")?.Value).Should().Be("1");
         (protection.Attribute("scenarios")?.Value).Should().Be("1");
+        protection.Elements(XName.Get("sheetProtectionNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -3855,6 +3859,10 @@ public partial class FileAdapterSmokeTests
         (protection.Attribute("saltValue")?.Value).Should().Be("salt456");
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("lockWindows")?.Value).Should().Be("1");
+        protection.Elements(XName.Get("workbookProtectionNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -9570,6 +9578,10 @@ public partial class FileAdapterSmokeTests
         workbookPr!.Attribute("date1904").Should().NotBeNull();
         workbookPr.Attribute("date1904")!.Value.Should().Be("1");
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
+        workbookPr.Elements(XName.Get("workbookPrNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -11029,6 +11041,10 @@ public partial class FileAdapterSmokeTests
         sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
         sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
+        sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -15385,6 +15401,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
@@ -15402,6 +15419,9 @@ public partial class FileAdapterSmokeTests
                     new XAttribute("autoPageBreaks", "0")));
             }
 
+            sheetPr.Add(
+                new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "second")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15620,6 +15640,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Element(worksheetNs + "sheetProtection")?.Remove();
@@ -15631,7 +15652,9 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("saltValue", "salt123"),
                 new XAttribute("spinCount", "100000"),
                 new XAttribute("objects", "1"),
-                new XAttribute("scenarios", "1")));
+                new XAttribute("scenarios", "1"),
+                new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "second"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15689,6 +15712,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Element(workbookNs + "workbookProtection")?.Remove();
@@ -15700,7 +15724,9 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("algorithmName", "SHA-512"),
                 new XAttribute("hashValue", "def456"),
                 new XAttribute("saltValue", "salt456"),
-                new XAttribute("spinCount", "100000")));
+                new XAttribute("spinCount", "100000"),
+                new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

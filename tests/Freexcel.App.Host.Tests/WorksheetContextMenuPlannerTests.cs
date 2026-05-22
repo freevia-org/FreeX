@@ -130,9 +130,12 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Select(command => command.Header).Should().ContainInOrder(
             "Format Picture...",
             "Crop...",
-            "Reset Crop");
+            "Reset Crop",
+            "Edit Alt Text...");
         commands.Single(command => command.Header == "Format Picture...")
             .Action.Should().Be(WorksheetContextMenuAction.FormatPicture);
+        commands.Single(command => command.Header == "Edit Alt Text...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditAltText);
     }
 
     [Theory]
@@ -150,7 +153,8 @@ public sealed class WorksheetContextMenuPlannerTests
             "Size and Properties...",
             "Rotate...",
             "Shape Fill...",
-            "Shape Outline...");
+            "Shape Outline...",
+            "Edit Alt Text...");
         if (includesReorder)
         {
             commands.Select(command => command.Header).Should().ContainInOrder(
@@ -160,5 +164,57 @@ public sealed class WorksheetContextMenuPlannerTests
 
         commands.Single(command => command.Header == formatHeader)
             .Action.Should().Be(WorksheetContextMenuAction.FormatDrawingObject);
+    }
+
+    [Fact]
+    public void BuildCommands_ForWholeRowSelectionIncludesOnlyRowLayoutCommands()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.RowSelection);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
+            "Insert Row Above",
+            "Delete Row(s)",
+            "Row Height...",
+            "AutoFit Row Height",
+            "Hide Rows",
+            "Unhide Rows",
+            "Clear Contents");
+        commands.Select(command => command.Header).Should().NotContain([
+            "Insert Column Left",
+            "Delete Column(s)",
+            "Column Width...",
+            "AutoFit Column Width",
+            "Hide Columns",
+            "Unhide Columns"
+        ]);
+    }
+
+    [Fact]
+    public void BuildCommands_ForWholeColumnSelectionIncludesOnlyColumnLayoutCommands()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.ColumnSelection);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
+            "Insert Column Left",
+            "Delete Column(s)",
+            "Column Width...",
+            "AutoFit Column Width",
+            "Hide Columns",
+            "Unhide Columns",
+            "Clear Contents");
+        commands.Select(command => command.Header).Should().NotContain([
+            "Insert Row Above",
+            "Delete Row(s)",
+            "Row Height...",
+            "AutoFit Row Height",
+            "Hide Rows",
+            "Unhide Rows"
+        ]);
     }
 }

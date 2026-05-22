@@ -1,4 +1,4 @@
-using Freexcel.Core.Model;
+﻿using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Formula;
 
@@ -370,4 +370,119 @@ public static partial class BuiltInFunctions
         if (matchIdx < 0) return ErrorValue.NA;
         return matchIdx < resultVector.Count ? resultVector[matchIdx] : ErrorValue.NA;
     }
+
+    // Modern lookup: XLOOKUP and shared approximate-match helpers.
+
+    private static ScalarValue Xlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var lookupArr = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
+        if (args[2] is ErrorValue e2) return e2;
+        var returnArr = args[2] is RangeValue returnRange
+            ? returnRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[2] } });
+        var lookupIsVertical = lookupArr.ColCount == 1;
+        var lookupIsHorizontal = lookupArr.RowCount == 1;
+        if (!lookupIsVertical && !lookupIsHorizontal) return ErrorValue.Value;
+        if (lookupIsVertical && returnArr.RowCount != lookupArr.RowCount) return ErrorValue.Value;
+        if (lookupIsHorizontal && returnArr.ColCount != lookupArr.ColCount) return ErrorValue.Value;
+
+        var lookupValue = args[0];
+        var lookupFlat = lookupArr.Flatten();
+
+        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
+        ScalarValue ifNotFound = args.Count > 3 && args[3] is not BlankValue ? args[3] : ErrorValue.NA;
+        if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
+        if (args.Count > 5 && args[5] is ErrorValue e5) return e5;
+        double rawXMatchMode  = args.Count > 4 ? ToNumber(args[4]) : 0;
+        double rawXSearchMode = args.Count > 5 ? ToNumber(args[5]) : 1;
+        if (!double.IsFinite(rawXMatchMode) || !double.IsFinite(rawXSearchMode)) return ErrorValue.Value;
+        int matchMode  = (int)rawXMatchMode;  // 0=exact
+        int searchMode = (int)rawXSearchMode; // 1=first-to-last
+        if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
+        if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
+
+        var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
+        if (searchMode is -1 or -2) indices.Reverse();
+
+        if (matchMode == 0)
+        {
+            // Exact match
+            foreach (int i in indices)
+                if (ScalarEquals(lookupFlat[i], lookupValue))
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
+            return ifNotFound;
+        }
+        else if (matchMode == 2)
+        {
+            string pattern = ToText(lookupValue);
+            foreach (int i in indices)
+                if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
+            return ifNotFound;
+        }
+        else if (matchMode == -1)
+        {
+            int best = FindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: true);
+            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
+        }
+        else
+        {
+            int best = FindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: false);
+            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
+        }
+    }
+
+    private static int FindApproximateMatchIndex(
+        IReadOnlyList<ScalarValue> lookupFlat,
+        ScalarValue lookupValue,
+        IReadOnlyList<int> searchIndices,
+        bool nextSmaller)
+    {
+        foreach (int i in searchIndices)
+            if (ScalarEquals(lookupFlat[i], lookupValue))
+                return i;
+
+        int best = -1;
+        foreach (int i in searchIndices)
+        {
+            int candidateVsLookup = CompareScalar(lookupFlat[i], lookupValue);
+            if (nextSmaller)
+            {
+                if (candidateVsLookup > 0) continue;
+                if (best < 0 || CompareScalar(lookupFlat[i], lookupFlat[best]) > 0)
+                    best = i;
+            }
+            else
+            {
+                if (candidateVsLookup < 0) continue;
+                if (best < 0 || CompareScalar(lookupFlat[i], lookupFlat[best]) < 0)
+                    best = i;
+            }
+        }
+
+        return best;
+    }
+
+    private static ScalarValue XlookupReturnAt(RangeValue returnArr, int index, bool lookupIsVertical)
+    {
+        if (lookupIsVertical)
+        {
+            if (returnArr.ColCount == 1) return returnArr.Cells[index, 0];
+            var row = new ScalarValue[1, returnArr.ColCount];
+            for (int c = 0; c < returnArr.ColCount; c++)
+                row[0, c] = returnArr.Cells[index, c];
+            return new RangeValue(row);
+        }
+
+        if (returnArr.RowCount == 1) return returnArr.Cells[0, index];
+        var col = new ScalarValue[returnArr.RowCount, 1];
+        for (int r = 0; r < returnArr.RowCount; r++)
+            col[r, 0] = returnArr.Cells[r, index];
+        return new RangeValue(col);
+    }
 }
+

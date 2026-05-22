@@ -1182,6 +1182,20 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("PictureSizeBtn_Click(this, new RoutedEventArgs());");
         source.Should().Contain("case WorksheetContextMenuAction.FormatDrawingObject:");
         source.Should().Contain("ObjectSizeBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.EditAltText:");
+        source.Should().Contain("SetAltTextBtn_Click(this, new RoutedEventArgs());");
+    }
+
+    [Fact]
+    public void WorksheetContextMenu_UsesRowAndColumnSelectionTargetKinds()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
+        source.Should().Contain("SelectionRangeService.IsWholeRowSelection(selectedRange)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.RowSelection");
+        source.Should().Contain("SelectionRangeService.IsWholeColumnSelection(selectedRange)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.ColumnSelection");
     }
 
     [Fact]
