@@ -14,6 +14,7 @@ public sealed record AdvancedFilterDialogResult(
 public sealed class AdvancedFilterDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly Func<string, SheetId?> _resolveSheetId;
     private readonly TextBox _listRangeBox = new();
     private readonly TextBox _criteriaRangeBox = new();
     private readonly TextBox _copyToBox = new();
@@ -30,9 +31,10 @@ public sealed class AdvancedFilterDialog : Window
 
     public AdvancedFilterDialogResult? Result { get; private set; }
 
-    public AdvancedFilterDialog(SheetId sheetId, string defaultListRange)
+    public AdvancedFilterDialog(SheetId sheetId, string defaultListRange, Func<string, SheetId?>? resolveSheetId = null)
     {
         _sheetId = sheetId;
+        _resolveSheetId = resolveSheetId ?? (_ => null);
         Title = "Advanced Filter";
         Width = 420;
         Height = 340;
@@ -94,19 +96,21 @@ public sealed class AdvancedFilterDialog : Window
         string criteriaRangeText,
         string? copyToCellText,
         bool uniqueRecordsOnly,
+        Func<string, SheetId?>? resolveSheetId,
         out AdvancedFilterDialogResult result,
         out string? error)
     {
         result = default!;
         error = null;
+        resolveSheetId ??= _ => null;
 
-        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, listRangeText, _ => null, out var listRange))
+        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, listRangeText, resolveSheetId, out var listRange))
         {
             error = "Enter a valid list range.";
             return false;
         }
 
-        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, _ => null, out var criteriaRange))
+        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
         {
             error = "Enter a valid criteria range.";
             return false;
@@ -127,6 +131,44 @@ public sealed class AdvancedFilterDialog : Window
         string listRangeText,
         string criteriaRangeText,
         string? copyToCellText,
+        bool uniqueRecordsOnly,
+        out AdvancedFilterDialogResult result,
+        out string? error) =>
+        TryParse(
+            currentSheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToCellText,
+            uniqueRecordsOnly,
+            resolveSheetId: null,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId currentSheetId,
+        string listRangeText,
+        string criteriaRangeText,
+        string? copyToCellText,
+        bool copyToAnotherLocation,
+        bool uniqueRecordsOnly,
+        Func<string, SheetId?>? resolveSheetId,
+        out AdvancedFilterDialogResult result,
+        out string? error) =>
+        TryParse(
+            currentSheetId,
+            listRangeText,
+            criteriaRangeText,
+            copyToAnotherLocation ? copyToCellText : "",
+            uniqueRecordsOnly,
+            resolveSheetId,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId currentSheetId,
+        string listRangeText,
+        string criteriaRangeText,
+        string? copyToCellText,
         bool copyToAnotherLocation,
         bool uniqueRecordsOnly,
         out AdvancedFilterDialogResult result,
@@ -137,6 +179,7 @@ public sealed class AdvancedFilterDialog : Window
             criteriaRangeText,
             copyToAnotherLocation ? copyToCellText : "",
             uniqueRecordsOnly,
+            resolveSheetId: null,
             out result,
             out error);
 
@@ -206,6 +249,7 @@ public sealed class AdvancedFilterDialog : Window
                 _copyToBox.Text,
                 _copyToAnotherLocationButton.IsChecked == true,
                 _uniqueBox.IsChecked == true,
+                _resolveSheetId,
                 out var result,
                 out var error))
         {
