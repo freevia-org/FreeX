@@ -51,15 +51,26 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [Theory]
     [InlineData("General", null)]
     [InlineData("Number", 2)]
+    [InlineData("Number 0 decimals", 1)]
     [InlineData("Number with thousands", 4)]
+    [InlineData("Comma 0 decimals", 3)]
+    [InlineData("Comma red negatives", 38)]
     [InlineData("Percentage", 10)]
+    [InlineData("Percentage 0 decimals", 9)]
     [InlineData("Date", 14)]
+    [InlineData("Day Month", 16)]
+    [InlineData("Month Year", 17)]
     [InlineData("Currency", 7)]
+    [InlineData("Currency red negatives", 8)]
     [InlineData("Short Date", 14)]
     [InlineData("Long Date", 15)]
     [InlineData("Time", 21)]
+    [InlineData("Time AM/PM", 18)]
+    [InlineData("Elapsed Time", 46)]
     [InlineData("Fraction", 12)]
+    [InlineData("Fraction two digits", 13)]
     [InlineData("Scientific", 11)]
+    [InlineData("Scientific compact", 48)]
     [InlineData("Text", 49)]
     [InlineData("Accounting", 44)]
     public void ResolvePresetNumberFormatId_MapsExcelStylePresetLabels(string label, int? expected)
@@ -75,17 +86,28 @@ public sealed class PivotValueFieldSettingsInputParserTests
             .Should()
             .Contain([
                 "General",
+                "Number 0 decimals",
                 "Number",
+                "Comma 0 decimals",
                 "Number with thousands",
+                "Comma red negatives",
                 "Currency",
+                "Currency red negatives",
                 "Accounting",
                 "Date",
                 "Short Date",
                 "Long Date",
+                "Day Month",
+                "Month Year",
                 "Time",
+                "Time AM/PM",
+                "Elapsed Time",
                 "Percentage",
+                "Percentage 0 decimals",
                 "Fraction",
+                "Fraction two digits",
                 "Scientific",
+                "Scientific compact",
                 "Text"
             ]);
     }
