@@ -85,21 +85,21 @@
                 <Label Content="_Within:" Target="{Binding ElementName=WithinCombo}" VerticalAlignment="Center"/>
                 <ComboBox x:Name="WithinCombo" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
                     <ComboBoxItem Content="Workbook"/>
-                    <ComboBoxItem Content="Sheet" IsEnabled="False" ToolTip="Sheet-scoped find is not available yet."/>
+                    <ComboBoxItem Content="Sheet"/>
                 </ComboBox>
 
                 <Label Content="_Search:" Target="{Binding ElementName=SearchCombo}" Grid.Column="2" VerticalAlignment="Center"/>
                 <ComboBox x:Name="SearchCombo" Grid.Column="3" SelectedIndex="0" Margin="0,0,0,6">
                     <ComboBoxItem Content="By Rows"/>
-                    <ComboBoxItem Content="By Columns" IsEnabled="False" ToolTip="Column-order find is not available yet."/>
+                    <ComboBoxItem Content="By Columns"/>
                 </ComboBox>
 
                 <Label Content="_Look in:" Target="{Binding ElementName=LookInCombo}" Grid.Row="1" VerticalAlignment="Center"/>
                 <ComboBox x:Name="LookInCombo" Grid.Row="1" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
                     <ComboBoxItem Content="Formulas"/>
                     <ComboBoxItem Content="Values"/>
-                    <ComboBoxItem Content="Notes" IsEnabled="False" ToolTip="Notes search is not available yet."/>
-                    <ComboBoxItem Content="Comments" IsEnabled="False" ToolTip="Comments search is not available yet."/>
+                    <ComboBoxItem Content="Notes"/>
+                    <ComboBoxItem Content="Comments"/>
                 </ComboBox>
 
                 <CheckBox x:Name="MatchCaseBox" Grid.Row="2" Grid.ColumnSpan="2" Content="Match _case" Margin="0,2,12,0"/>

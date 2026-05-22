@@ -110,7 +110,7 @@ public partial class MainWindow
 
     private void FindButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: false)
+        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: false, () => _currentSheetId)
         {
             Owner = this
         };
@@ -119,7 +119,7 @@ public partial class MainWindow
 
     private void ReplaceButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: true)
+        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: true, () => _currentSheetId)
         {
             Owner = this
         };

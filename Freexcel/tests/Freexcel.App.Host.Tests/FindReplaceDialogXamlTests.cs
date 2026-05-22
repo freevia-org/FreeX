@@ -76,12 +76,16 @@ public sealed class FindReplaceDialogXamlTests
             .Attribute("IsExpanded")?.Value.Should().Be("False");
 
         AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Workbook", "Sheet"]);
-        AssertDisabledComboBoxItem(document, presentation, "Sheet");
         AssertComboBoxContainsExactly(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);
-        AssertDisabledComboBoxItem(document, presentation, "By Columns");
         AssertComboBoxContainsExactly(document, presentation, xaml, "LookInCombo", ["Formulas", "Values", "Notes", "Comments"]);
-        AssertDisabledComboBoxItem(document, presentation, "Notes");
-        AssertDisabledComboBoxItem(document, presentation, "Comments");
+        document.Descendants(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("IsEnabled")?.Value)
+            .Should()
+            .NotContain("False");
+        document.Descendants(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("ToolTip")?.Value ?? string.Empty)
+            .Should()
+            .NotContain(value => value.Contains("not available yet", StringComparison.OrdinalIgnoreCase));
 
         AssertCheckBoxContent(document, presentation, xaml, "MatchCaseBox", "Match _case");
         AssertCheckBoxContent(document, presentation, xaml, "MatchEntireBox", "Match entire cell _contents");
@@ -143,6 +147,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("private void ReplaceAll_Click");
         source.Should().Contain("private void FindAll_Click");
         source.Should().Contain("FindReplaceTabs.SelectedItem = ReplaceTab");
+        source.Should().Contain("CreateFindOptions()");
         source.Should().Contain("OptionsExpander_Expanded");
         source.Should().Contain("OptionsExpander.Header = \"_Options <<\"");
         source.Should().Contain("OptionsExpander_Collapsed");
@@ -191,14 +196,6 @@ public sealed class FindReplaceDialogXamlTests
             .Equal(values);
     }
 
-    private static void AssertDisabledComboBoxItem(XDocument document, XNamespace presentation, string content)
-    {
-        document.Descendants(presentation + "ComboBoxItem")
-            .Single(element => element.Attribute("Content")?.Value == content)
-            .Attribute("IsEnabled")?.Value
-            .Should()
-            .Be("False");
-    }
 }
 
 file sealed class SimpleCommandContext : ICommandContext

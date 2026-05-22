@@ -8,15 +8,22 @@ namespace Freexcel.App.Host;
 public sealed partial class FindReplaceDialog : Window
 {
     private readonly Func<Workbook> _getWorkbook;
+    private readonly Func<SheetId?> _getCurrentSheetId;
     private readonly ICommandBus _commandBus;
     private readonly Action<CellAddress> _navigateTo;
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
     private string _lastSearch = string.Empty;
 
-    public FindReplaceDialog(Func<Workbook> getWorkbook, ICommandBus commandBus, Action<CellAddress> navigateTo, bool replaceMode = false)
+    public FindReplaceDialog(
+        Func<Workbook> getWorkbook,
+        ICommandBus commandBus,
+        Action<CellAddress> navigateTo,
+        bool replaceMode = false,
+        Func<SheetId?>? getCurrentSheetId = null)
     {
         _getWorkbook = getWorkbook;
+        _getCurrentSheetId = getCurrentSheetId ?? (() => null);
         _commandBus = commandBus;
         _navigateTo = navigateTo;
         InitializeComponent();
@@ -56,9 +63,9 @@ public sealed partial class FindReplaceDialog : Window
 
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
+            CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true,
-            searchFormulas: SearchFormulas);
+            matchEntireCell: MatchEntireBox.IsChecked == true);
 
         UpdateResultsGrid();
 
@@ -84,9 +91,9 @@ public sealed partial class FindReplaceDialog : Window
         _currentIndex = -1;
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
+            CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true,
-            searchFormulas: SearchFormulas);
+            matchEntireCell: MatchEntireBox.IsChecked == true);
 
         UpdateResultsGrid();
         StatusLabel.Text = _results.Count == 0 ? "No matches found." : $"{_results.Count} cell(s) found.";
@@ -99,6 +106,7 @@ public sealed partial class FindReplaceDialog : Window
 
         var count = FindReplaceService.ReplaceAll(
             _getWorkbook(), _commandBus, search, ReplaceBox.Text,
+            CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true);
 
@@ -143,7 +151,18 @@ public sealed partial class FindReplaceDialog : Window
 
     private string SearchText => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox.Text : FindBox.Text;
 
-    private bool SearchFormulas => LookInCombo.SelectedIndex == 0;
+    private FindOptions CreateFindOptions() =>
+        new(
+            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Sheet : FindWithin.Workbook,
+            CurrentSheetId: _getCurrentSheetId(),
+            SearchOrder: SearchCombo.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
+            LookIn: LookInCombo.SelectedIndex switch
+            {
+                0 => FindLookIn.Formulas,
+                2 => FindLookIn.Notes,
+                3 => FindLookIn.Comments,
+                _ => FindLookIn.Values
+            });
 
     private void UpdateResultsGrid()
     {
