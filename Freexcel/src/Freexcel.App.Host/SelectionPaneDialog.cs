@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -15,11 +17,14 @@ public sealed record SelectionPaneVisibilityChange(SelectionPaneObjectKind Kind,
 
 public sealed record SelectionPaneRenameChange(SelectionPaneObjectKind Kind, Guid Id, string Name);
 
+public sealed record SelectionPaneMoveChange(SelectionPaneObjectKind Kind, Guid Id, bool Forward);
+
 public sealed record SelectionPaneDialogResult(
     SelectionPaneDialogAction Action,
     SelectionPaneItem? Target,
     IReadOnlyList<SelectionPaneVisibilityChange> VisibilityChanges,
-    IReadOnlyList<SelectionPaneRenameChange> RenameChanges);
+    IReadOnlyList<SelectionPaneRenameChange> RenameChanges,
+    IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
 
 internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 {
@@ -33,12 +38,13 @@ public sealed class SelectionPaneDialog : Window
 {
     private readonly IReadOnlyList<SelectionPaneItem> _sourceItems;
     private readonly List<SelectionPaneDialogItem> _items;
+    private readonly List<SelectionPaneMoveChange> _moveChanges = [];
     private readonly ListBox _list = new();
     private readonly TextBox _searchBox = new() { Width = 180, Margin = new Thickness(0, 0, 8, 0) };
     private readonly ComboBox _filterBox = new() { Width = 110, Margin = new Thickness(0, 0, 0, 0) };
     private readonly TextBox _renameBox = new() { Width = 180, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _renameButton = new() { Content = "_Rename", Width = 78, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _toggleVisibilityButton = new() { Content = "Eye", Width = 54, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Toggle visibility" };
+    private readonly Button _toggleVisibilityButton = new() { Content = CreateEyeIcon(), Width = 32, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Toggle visibility" };
     private readonly Button _moveUpButton = new() { Content = "_Bring Forward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _moveDownButton = new() { Content = "Send _Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _showAllButton = new() { Content = "Show _All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
@@ -49,7 +55,7 @@ public sealed class SelectionPaneDialog : Window
     public SelectionPaneDialog(IReadOnlyList<SelectionPaneItem> items)
     {
         _sourceItems = items;
-        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], []);
+        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], [], []);
         Title = "Selection Pane";
         Width = 380;
         Height = 360;
@@ -91,6 +97,7 @@ public sealed class SelectionPaneDialog : Window
         searchRow.Children.Add(_filterBox);
 
         var renameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        renameRow.Children.Add(new Label { Content = "_Name:", Target = _renameBox, Padding = new Thickness(0, 4, 6, 0) });
         renameRow.Children.Add(_renameBox);
         renameRow.Children.Add(_renameButton);
         renameRow.Children.Add(_toggleVisibilityButton);
@@ -158,7 +165,8 @@ public sealed class SelectionPaneDialog : Window
             action,
             target,
             CreateVisibilityChanges(originalItems, currentStates),
-            CreateRenameChanges(originalItems, currentStates));
+            CreateRenameChanges(originalItems, currentStates),
+            []);
 
     public static SelectionPaneDialogResult CreateResult(
         SelectionPaneDialogAction action,
@@ -177,9 +185,12 @@ public sealed class SelectionPaneDialog : Window
     {
         var panel = new FrameworkElementFactory(typeof(StackPanel));
         panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        panel.SetValue(FrameworkElement.MinHeightProperty, 24.0);
 
         var checkBox = new FrameworkElementFactory(typeof(CheckBox));
         checkBox.SetValue(CheckBox.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        checkBox.SetValue(FrameworkElement.WidthProperty, 24.0);
+        checkBox.SetValue(CheckBox.ToolTipProperty, "Show or hide object");
         checkBox.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsVisible)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.AppendChild(checkBox);
 
@@ -197,13 +208,46 @@ public sealed class SelectionPaneDialog : Window
         return new DataTemplate { VisualTree = panel };
     }
 
+    private static Viewbox CreateEyeIcon()
+    {
+        return new Viewbox
+        {
+            Width = 14,
+            Height = 14,
+            Child = new Grid
+            {
+                Width = 16,
+                Height = 16,
+                Children =
+                {
+                    new Path
+                    {
+                        Data = Geometry.Parse("M1.5,8 C3.7,4.2 5.9,3 8,3 C10.1,3 12.3,4.2 14.5,8 C12.3,11.8 10.1,13 8,13 C5.9,13 3.7,11.8 1.5,8 Z"),
+                        Stroke = Brushes.Black,
+                        StrokeThickness = 1.1,
+                        Fill = Brushes.Transparent
+                    },
+                    new Ellipse
+                    {
+                        Width = 4,
+                        Height = 4,
+                        Fill = Brushes.Black,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center
+                    }
+                }
+            }
+        };
+    }
+
     private void AcceptVisibility()
     {
         Result = new SelectionPaneDialogResult(
             SelectionPaneDialogAction.ApplyVisibility,
             null,
             CurrentVisibilityChanges(),
-            CurrentRenameChanges());
+            CurrentRenameChanges(),
+            _moveChanges.ToList());
         DialogResult = true;
     }
 
@@ -212,12 +256,15 @@ public sealed class SelectionPaneDialog : Window
         if (_list.SelectedItem is not SelectionPaneDialogItem selected)
             return;
 
-        Result = CreateResult(
-            action,
-            selected.Source,
-            _sourceItems,
-            _items.Select(item => (item.Source.Id, item.IsVisible, item.Name)).ToList());
-        DialogResult = true;
+        var forward = action == SelectionPaneDialogAction.MoveUp;
+        var currentIndex = _items.IndexOf(selected);
+        var targetIndex = FindMoveTargetIndex(currentIndex, forward);
+        if (targetIndex < 0)
+            return;
+
+        _moveChanges.Add(new SelectionPaneMoveChange(selected.Source.Kind, selected.Source.Id, forward));
+        (_items[currentIndex], _items[targetIndex]) = (_items[targetIndex], _items[currentIndex]);
+        ApplySearchAndFilter(selected.Source.Id);
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
@@ -238,7 +285,9 @@ public sealed class SelectionPaneDialog : Window
         _list.Items.Refresh();
     }
 
-    private void ApplySearchAndFilter()
+    private void ApplySearchAndFilter() => ApplySearchAndFilter(null);
+
+    private void ApplySearchAndFilter(Guid? preferredSelection)
     {
         var search = _searchBox.Text.Trim();
         var filter = _filterBox.SelectedItem as string ?? "All";
@@ -247,6 +296,8 @@ public sealed class SelectionPaneDialog : Window
             MatchesFilter(item, filter)).ToList();
 
         _list.ItemsSource = filtered;
+        if (preferredSelection is { } id)
+            _list.SelectedItem = filtered.FirstOrDefault(item => item.Source.Id == id);
         if (_list.SelectedIndex < 0 && _list.Items.Count > 0)
             _list.SelectedIndex = 0;
         UpdateMoveButtons();
@@ -294,6 +345,21 @@ public sealed class SelectionPaneDialog : Window
         _list.Items.Refresh();
     }
 
+    private int FindMoveTargetIndex(int currentIndex, bool forward)
+    {
+        if (currentIndex < 0 || currentIndex >= _items.Count)
+            return -1;
+
+        var step = forward ? -1 : 1;
+        for (var index = currentIndex + step; index >= 0 && index < _items.Count; index += step)
+        {
+            if (_items[index].Source.Kind == _items[currentIndex].Source.Kind)
+                return index;
+        }
+
+        return -1;
+    }
+
     private void UpdateRenameBox()
     {
         if (_list.SelectedItem is SelectionPaneDialogItem selected)
@@ -309,7 +375,8 @@ public sealed class SelectionPaneDialog : Window
             return;
         }
 
-        _moveUpButton.IsEnabled = selected.Source.CanMoveUp;
-        _moveDownButton.IsEnabled = selected.Source.CanMoveDown;
+        var currentIndex = _items.IndexOf(selected);
+        _moveUpButton.IsEnabled = FindMoveTargetIndex(currentIndex, forward: true) >= 0;
+        _moveDownButton.IsEnabled = FindMoveTargetIndex(currentIndex, forward: false) >= 0;
     }
 }
