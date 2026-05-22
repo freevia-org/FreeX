@@ -9840,6 +9840,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSheetViewsNativeAttributes()
+    {
+        var workbook = new Workbook("WorksheetSheetViewsNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSheetViewsNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+        sheetViews.Should().NotBeNull();
+        sheetViews!.Attribute("nativeSheetViewsAttr").Should().NotBeNull();
+        sheetViews.Attribute("nativeSheetViewsAttr")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_MergesExistingWorksheetSheetViewChildNativeMetadata()
     {
         var workbook = new Workbook("ExistingWorksheetSheetViewChildMetadata");
@@ -14534,6 +14564,22 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("start", "0"),
                 new XAttribute("min", "0"),
                 new XAttribute("max", "0")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetSheetViewsNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+            sheetViews.Should().NotBeNull();
+            sheetViews!.SetAttributeValue("nativeSheetViewsAttr", "kept");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

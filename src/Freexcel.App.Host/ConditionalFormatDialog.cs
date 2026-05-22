@@ -20,6 +20,7 @@ public class ConditionalFormatDialog : Window
     private ComboBox _iconSetStyleBox;
     private CheckBox _iconSetShowValueBox;
     private CheckBox _iconSetReverseBox;
+    private TextBox _topBottomRankBox;
     private ComboBox _dataBarMinTypeBox;
     private TextBox _dataBarMinValueBox;
     private ComboBox _dataBarMaxTypeBox;
@@ -112,11 +113,12 @@ public class ConditionalFormatDialog : Window
         _iconSetStyleBox.SelectedIndex = 0;
         _iconSetShowValueBox = new CheckBox { Content = "_Show value", Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
         _iconSetReverseBox = new CheckBox { Content = "_Reverse icon order", Margin = new Thickness(0, 0, 0, 12) };
+        _topBottomRankBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "10" };
         _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
         _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
         _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-        _dataBarShowValueBox = new CheckBox { Content = "_Show bar only when cleared", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+        _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
         _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
         _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
@@ -126,6 +128,8 @@ public class ConditionalFormatDialog : Window
         _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
         _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
         _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
+        _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
+        _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
         _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
         _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
@@ -245,6 +249,13 @@ public class ConditionalFormatDialog : Window
                 inner.Children.Add(_value1Box);
                 if (isBetween) { inner.Children.Add(_value2Label); inner.Children.Add(_value2Box); }
             }
+            else if (ruleType is "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%")
+            {
+                Height = 220;
+                _topBottomRankBox.Text = ruleType is "Top 10%" or "Bottom 10%" ? "10" : "10";
+                inner.Children.Add(CreateAccessLabel(ruleType is "Top 10%" or "Bottom 10%" ? "_Percent:" : "_Rank:", _topBottomRankBox));
+                inner.Children.Add(_topBottomRankBox);
+            }
         }
 
         _colorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
@@ -283,6 +294,7 @@ public class ConditionalFormatDialog : Window
 
         inner.Children.Add(btnRow);
         Content = BuildExcelRuleShell(ruleType, inner);
+        UpdateColorScaleMidpointState();
     }
 
     /// <summary>Creates an edit dialog pre-populated with <paramref name="existingRule"/>.</summary>
@@ -322,7 +334,7 @@ public class ConditionalFormatDialog : Window
                 _dataBarMinValueBox.Text = existingRule.DataBarMinThresholdValue ?? "";
                 _dataBarMaxTypeBox.SelectedItem = existingRule.DataBarMaxThresholdType;
                 _dataBarMaxValueBox.Text = existingRule.DataBarMaxThresholdValue ?? "";
-                _dataBarShowValueBox.IsChecked = existingRule.DataBarShowValue;
+                _dataBarShowValueBox.IsChecked = !existingRule.DataBarShowValue;
                 _dataBarMinLengthBox.Text = existingRule.DataBarMinLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
                 _dataBarMaxLengthBox.Text = existingRule.DataBarMaxLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
             }
@@ -338,6 +350,7 @@ public class ConditionalFormatDialog : Window
                 _colorScaleMaxTypeBox.SelectedItem = existingRule.MaxThresholdType;
                 _colorScaleMaxValueBox.Text = existingRule.MaxThresholdValue ?? "";
                 _colorScaleMaxColorBox.Text = FormatRgb(existingRule.MaxColor);
+                UpdateColorScaleMidpointState();
             }
             else if (existingRule.RuleType is CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith)
             {
@@ -350,6 +363,10 @@ public class ConditionalFormatDialog : Window
             else if (existingRule.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues)
             {
                 _duplicateValuesKindBox.SelectedItem = existingRule.RuleType == CfRuleType.UniqueValues ? "Unique" : "Duplicate";
+            }
+            else if (existingRule.RuleType == CfRuleType.Top10)
+            {
+                _topBottomRankBox.Text = existingRule.TopBottomRank.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
         }
 
@@ -457,7 +474,7 @@ public class ConditionalFormatDialog : Window
                 cf.DataBarMinThresholdValue = BlankToNull(_dataBarMinValueBox.Text);
                 cf.DataBarMaxThresholdType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max);
                 cf.DataBarMaxThresholdValue = BlankToNull(_dataBarMaxValueBox.Text);
-                cf.DataBarShowValue = _dataBarShowValueBox.IsChecked == true;
+                cf.DataBarShowValue = _dataBarShowValueBox.IsChecked != true;
                 cf.DataBarMinLength = ParseOptionalPercent(_dataBarMinLengthBox.Text);
                 cf.DataBarMaxLength = ParseOptionalPercent(_dataBarMaxLengthBox.Text);
             }
@@ -485,6 +502,8 @@ public class ConditionalFormatDialog : Window
 
             cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
             cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
+            if (cf.RuleType == CfRuleType.Top10)
+                cf.TopBottomRank = ParseTopBottomRank(_topBottomRankBox.Text);
         }
 
         if (cf.RuleType is not (CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale))
@@ -538,6 +557,19 @@ public class ConditionalFormatDialog : Window
             return null;
 
         return Math.Clamp(value, 0, 100);
+    }
+
+    private static int ParseTopBottomRank(string text) =>
+        int.TryParse(text.Trim(), out var value)
+            ? Math.Clamp(value, 1, 1000)
+            : 10;
+
+    private void UpdateColorScaleMidpointState()
+    {
+        var enabled = _colorScaleUseThreeColorBox.IsChecked == true;
+        _colorScaleMidTypeBox.IsEnabled = enabled;
+        _colorScaleMidValueBox.IsEnabled = enabled;
+        _colorScaleMidColorBox.IsEnabled = enabled;
     }
 
     private static string FormatRgb(RgbColor color) =>
@@ -626,6 +658,9 @@ public class ConditionalFormatDialog : Window
         var needsValue = ruleType is "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains";
         var isBetween = ruleType is "Between";
         var isFormula = ruleType is "Formula" or "Use a Formula";
+        var isIconSet = ruleType is "Icon Set";
+        var isDataBar = ruleType is "Data Bar";
+        var isColorScale = ruleType is "Color Scale";
         var isDuplicateValues = ruleType is "Duplicate Values";
         var isDateOccurring = ruleType is "Date Occurring";
 
@@ -635,6 +670,88 @@ public class ConditionalFormatDialog : Window
             _formulaBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "=" };
             inner.Children.Add(CreateAccessLabel("_Formula:", _formulaBox));
             inner.Children.Add(_formulaBox);
+            _value1Box = new TextBox();
+            _value2Box = new TextBox();
+            _value2Label = new Label();
+        }
+        else if (isDataBar)
+        {
+            Height = 430;
+            _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+            _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+            _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
+            _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
+            inner.Children.Add(CreateAccessLabel("_Minimum type:", _dataBarMinTypeBox));
+            inner.Children.Add(_dataBarMinTypeBox);
+            inner.Children.Add(CreateAccessLabel("Minimum _value:", _dataBarMinValueBox));
+            inner.Children.Add(_dataBarMinValueBox);
+            inner.Children.Add(CreateAccessLabel("Ma_ximum type:", _dataBarMaxTypeBox));
+            inner.Children.Add(_dataBarMaxTypeBox);
+            inner.Children.Add(CreateAccessLabel("Maximum _value:", _dataBarMaxValueBox));
+            inner.Children.Add(_dataBarMaxValueBox);
+            inner.Children.Add(_dataBarShowValueBox);
+            inner.Children.Add(CreateAccessLabel("_Minimum bar length (%):", _dataBarMinLengthBox));
+            inner.Children.Add(_dataBarMinLengthBox);
+            inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
+            inner.Children.Add(_dataBarMaxLengthBox);
+            _value1Box = new TextBox();
+            _value2Box = new TextBox();
+            _value2Label = new Label();
+        }
+        else if (isColorScale)
+        {
+            Height = 520;
+            _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+            _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
+            _colorScaleUseThreeColorBox = new CheckBox { Content = "Use _three-color scale", Margin = new Thickness(0, 0, 0, 8) };
+            _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
+            _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
+            _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
+            _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
+            _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
+            _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+            _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+            _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
+            inner.Children.Add(CreateAccessLabel("_Minimum type:", _colorScaleMinTypeBox));
+            inner.Children.Add(_colorScaleMinTypeBox);
+            inner.Children.Add(CreateAccessLabel("Minimum _value:", _colorScaleMinValueBox));
+            inner.Children.Add(_colorScaleMinValueBox);
+            inner.Children.Add(CreateAccessLabel("_Minimum color (R,G,B):", _colorScaleMinColorBox));
+            inner.Children.Add(_colorScaleMinColorBox);
+            inner.Children.Add(_colorScaleUseThreeColorBox);
+            inner.Children.Add(CreateAccessLabel("_Midpoint type:", _colorScaleMidTypeBox));
+            inner.Children.Add(_colorScaleMidTypeBox);
+            inner.Children.Add(CreateAccessLabel("Midpoint _value:", _colorScaleMidValueBox));
+            inner.Children.Add(_colorScaleMidValueBox);
+            inner.Children.Add(CreateAccessLabel("Midpoint _color (R,G,B):", _colorScaleMidColorBox));
+            inner.Children.Add(_colorScaleMidColorBox);
+            inner.Children.Add(CreateAccessLabel("Ma_ximum type:", _colorScaleMaxTypeBox));
+            inner.Children.Add(_colorScaleMaxTypeBox);
+            inner.Children.Add(CreateAccessLabel("Maximum _value:", _colorScaleMaxValueBox));
+            inner.Children.Add(_colorScaleMaxValueBox);
+            inner.Children.Add(CreateAccessLabel("Ma_ximum color (R,G,B):", _colorScaleMaxColorBox));
+            inner.Children.Add(_colorScaleMaxColorBox);
+            _value1Box = new TextBox();
+            _value2Box = new TextBox();
+            _value2Label = new Label();
+            UpdateColorScaleMidpointState();
+        }
+        else if (isIconSet)
+        {
+            Height = 230;
+            _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
+            foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
+            _iconSetStyleBox.SelectedIndex = 0;
+            _iconSetShowValueBox = new CheckBox { Content = "_Show value", Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
+            _iconSetReverseBox = new CheckBox { Content = "_Reverse icon order", Margin = new Thickness(0, 0, 0, 12) };
+            inner.Children.Add(CreateAccessLabel("_Icon set:", _iconSetStyleBox));
+            inner.Children.Add(_iconSetStyleBox);
+            inner.Children.Add(_iconSetShowValueBox);
+            inner.Children.Add(_iconSetReverseBox);
             _value1Box = new TextBox();
             _value2Box = new TextBox();
             _value2Label = new Label();
@@ -692,6 +809,13 @@ public class ConditionalFormatDialog : Window
                     inner.Children.Add(_value2Box);
                 }
             }
+            else if (ruleType is "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%")
+            {
+                Height = 220;
+                _topBottomRankBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "10" };
+                inner.Children.Add(CreateAccessLabel(ruleType is "Top 10%" or "Bottom 10%" ? "_Percent:" : "_Rank:", _topBottomRankBox));
+                inner.Children.Add(_topBottomRankBox);
+            }
         }
 
         _colorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
@@ -714,6 +838,8 @@ public class ConditionalFormatDialog : Window
             if (ruleType is not "Data Bar")
                 inner.Children.Add(formatButton);
         }
+        if (isIconSet || isColorScale || isDataBar)
+            AddVisualPreview(inner, ruleType);
 
         var btnRow = new StackPanel
         {
