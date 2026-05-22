@@ -1943,31 +1943,9 @@ internal static class XlsxWorksheetMetadataPreserver
             return true;
         }
 
-        var changed = false;
-        foreach (var attribute in sourceSheetProtection.Attributes())
-        {
-            if (targetSheetProtection.Attribute(attribute.Name) is not null)
-                continue;
-
-            targetSheetProtection.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var existingChildNames = targetSheetProtection
-            .Elements()
-            .Select(element => element.Name)
-            .ToHashSet();
-        foreach (var sourceChild in sourceSheetProtection.Elements())
-        {
-            if (existingChildNames.Contains(sourceChild.Name))
-                continue;
-
-            targetSheetProtection.Add(new XElement(sourceChild));
-            existingChildNames.Add(sourceChild.Name);
-            changed = true;
-        }
-
-        return changed;
+        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+            sourceSheetProtection,
+            targetSheetProtection);
     }
 
     private static bool MergeMissingNativeChildren(
@@ -2011,31 +1989,9 @@ internal static class XlsxWorksheetMetadataPreserver
             return true;
         }
 
-        var changed = false;
-        foreach (var attribute in sourceSheetProperties.Attributes())
-        {
-            if (targetSheetProperties.Attribute(attribute.Name) is not null)
-                continue;
-
-            targetSheetProperties.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var existingChildNames = targetSheetProperties
-            .Elements()
-            .Select(element => element.Name)
-            .ToHashSet();
-        foreach (var sourceChild in sourceSheetProperties.Elements())
-        {
-            if (existingChildNames.Contains(sourceChild.Name))
-                continue;
-
-            targetSheetProperties.Add(new XElement(sourceChild));
-            existingChildNames.Add(sourceChild.Name);
-            changed = true;
-        }
-
-        return changed;
+        return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
+            sourceSheetProperties,
+            targetSheetProperties);
     }
 
 }

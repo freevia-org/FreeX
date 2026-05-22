@@ -345,6 +345,7 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
@@ -356,6 +357,9 @@ public partial class FileAdapterSmokeTests
 
             workbookPr.SetAttributeValue("date1904", "1");
             workbookPr.SetAttributeValue("defaultThemeVersion", "166925");
+            workbookPr.Add(
+                new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "workbookPrNativeChild", new XAttribute("id", "second")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
