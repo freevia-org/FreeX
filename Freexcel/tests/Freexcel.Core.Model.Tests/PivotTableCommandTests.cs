@@ -611,7 +611,9 @@ public sealed class PivotTableCommandTests
             ShowRowHeaders = true,
             ShowColumnHeaders = true,
             ShowRowStripes = false,
-            ShowColumnStripes = false
+            ShowColumnStripes = false,
+            AltTextTitle = "Old title",
+            AltTextDescription = "Old description"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -633,7 +635,11 @@ public sealed class PivotTableCommandTests
             showRowHeaders: false,
             showColumnHeaders: false,
             showRowStripes: true,
-            showColumnStripes: true);
+            showColumnStripes: true,
+            printTitles: true,
+            printExpandCollapseButtons: true,
+            altTextTitle: "Sales pivot",
+            altTextDescription: "Quarterly sales summary");
 
         command.Apply(ctx).Success.Should().BeTrue();
 
@@ -649,6 +655,10 @@ public sealed class PivotTableCommandTests
         pivot.ShowColumnHeaders.Should().BeFalse();
         pivot.ShowRowStripes.Should().BeTrue();
         pivot.ShowColumnStripes.Should().BeTrue();
+        pivot.PrintTitles.Should().BeTrue();
+        pivot.PrintExpandCollapseButtons.Should().BeTrue();
+        pivot.AltTextTitle.Should().Be("Sales pivot");
+        pivot.AltTextDescription.Should().Be("Quarterly sales summary");
         sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("A Total"));
 
         command.Revert(ctx);
@@ -664,6 +674,10 @@ public sealed class PivotTableCommandTests
         pivot.ShowColumnHeaders.Should().BeTrue();
         pivot.ShowRowStripes.Should().BeFalse();
         pivot.ShowColumnStripes.Should().BeFalse();
+        pivot.PrintTitles.Should().BeFalse();
+        pivot.PrintExpandCollapseButtons.Should().BeFalse();
+        pivot.AltTextTitle.Should().Be("Old title");
+        pivot.AltTextDescription.Should().Be("Old description");
         sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("A"));
         sheet.GetCell(Addr(sheet, "E6"))!.Value.Should().Be(new TextValue("Grand Total"));
     }

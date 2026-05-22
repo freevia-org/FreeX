@@ -974,7 +974,11 @@ public sealed record PivotTableOptionsDialogResult(
     PivotReportLayout ReportLayout,
     string? EmptyValueText = null,
     bool RefreshOnOpen = false,
-    bool SaveSourceData = true);
+    bool SaveSourceData = true,
+    bool PrintTitles = false,
+    bool PrintExpandCollapseButtons = false,
+    string? AltTextTitle = null,
+    string? AltTextDescription = null);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -1002,6 +1006,10 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
+    private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
+    private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
+    private readonly TextBox _altTextTitleBox = new();
+    private readonly TextBox _altTextDescriptionBox = new() { AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
@@ -1034,7 +1042,11 @@ public sealed class PivotTableOptionsDialog : Window
             pivotTable.ReportLayout,
             pivotTable.EmptyValueText,
             refreshOnOpen: cache?.RefreshOnLoad ?? false,
-            saveSourceData: cache?.SaveData ?? true);
+            saveSourceData: cache?.SaveData ?? true,
+            printTitles: pivotTable.PrintTitles,
+            printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
+            altTextTitle: pivotTable.AltTextTitle,
+            altTextDescription: pivotTable.AltTextDescription);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1051,7 +1063,11 @@ public sealed class PivotTableOptionsDialog : Window
         PivotReportLayout reportLayout,
         string? emptyValueText = null,
         bool refreshOnOpen = false,
-        bool saveSourceData = true) =>
+        bool saveSourceData = true,
+        bool printTitles = false,
+        bool printExpandCollapseButtons = false,
+        string? altTextTitle = null,
+        string? altTextDescription = null) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1067,7 +1083,11 @@ public sealed class PivotTableOptionsDialog : Window
             reportLayout,
             NormalizeEmptyValueText(emptyValueText),
             refreshOnOpen,
-            saveSourceData);
+            saveSourceData,
+            printTitles,
+            printExpandCollapseButtons,
+            NormalizeOptionalText(altTextTitle),
+            NormalizeOptionalText(altTextDescription));
 
     private DockPanel CreateContent()
     {
@@ -1078,7 +1098,9 @@ public sealed class PivotTableOptionsDialog : Window
         tabs.Items.Add(new TabItem { Header = "Layout & Format", Content = CreateLayoutAndFormatTab() });
         tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
         tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
+        tabs.Items.Add(new TabItem { Header = "Printing", Content = CreatePrintingTab() });
         tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
+        tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateAltTextTab() });
 
         root.Children.Add(tabs);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
@@ -1146,6 +1168,26 @@ public sealed class PivotTableOptionsDialog : Window
         return stack;
     }
 
+    private StackPanel CreatePrintingTab()
+    {
+        var stack = CreateTabPanel();
+        var printPanel = PivotDialogLayout.CreateGroupPanel();
+        AddCheckBox(printPanel, _printTitlesBox);
+        AddCheckBox(printPanel, _printExpandCollapseBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Print options", printPanel));
+        return stack;
+    }
+
+    private StackPanel CreateAltTextTab()
+    {
+        var stack = CreateTabPanel();
+        var altPanel = PivotDialogLayout.CreateGroupPanel();
+        AddLabeledControl(altPanel, "_Title:", _altTextTitleBox);
+        AddLabeledControl(altPanel, "_Description:", _altTextDescriptionBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Alt Text", altPanel));
+        return stack;
+    }
+
     private static StackPanel CreateTabPanel() => new() { Margin = new Thickness(10) };
 
     private static void AddSectionHeader(Panel stack, string text) =>
@@ -1203,6 +1245,10 @@ public sealed class PivotTableOptionsDialog : Window
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
+        _printTitlesBox.IsChecked = result.PrintTitles;
+        _printExpandCollapseBox.IsChecked = result.PrintExpandCollapseButtons;
+        _altTextTitleBox.Text = result.AltTextTitle ?? "";
+        _altTextDescriptionBox.Text = result.AltTextDescription ?? "";
     }
 
     private void Accept()
@@ -1226,11 +1272,17 @@ public sealed class PivotTableOptionsDialog : Window
                 : PivotReportLayout.Tabular,
             _emptyCellsBox.Text,
             _refreshOnOpenBox.IsChecked == true,
-            _saveSourceDataBox.IsChecked == true);
+            _saveSourceDataBox.IsChecked == true,
+            _printTitlesBox.IsChecked == true,
+            _printExpandCollapseBox.IsChecked == true,
+            _altTextTitleBox.Text,
+            _altTextDescriptionBox.Text);
         DialogResult = true;
     }
 
-    private static string? NormalizeEmptyValueText(string? text)
+    private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
+
+    private static string? NormalizeOptionalText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return null;
