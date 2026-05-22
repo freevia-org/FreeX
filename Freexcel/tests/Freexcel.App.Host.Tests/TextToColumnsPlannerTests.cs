@@ -70,6 +70,40 @@ public sealed class TextToColumnsPlannerTests
     }
 
     [Fact]
+    public void SplitText_HonorsExcelTextQualifier()
+    {
+        TextToColumnsPlanner.SplitText("\"Smith, John\",42,\"He said \"\"OK\"\"\"", ",", '"', false)
+            .Should()
+            .Equal("Smith, John", "42", "He said \"OK\"");
+    }
+
+    [Fact]
+    public void SplitText_CanTreatConsecutiveDelimitersAsOne()
+    {
+        TextToColumnsPlanner.SplitText("A,,B", ",", '"', true)
+            .Should()
+            .Equal("A", "B");
+
+        TextToColumnsPlanner.SplitText("A,,B", ",", '"', false)
+            .Should()
+            .Equal("A", "", "B");
+    }
+
+    [Fact]
+    public void BuildEdits_UsesTextQualifierAndConsecutiveDelimiterOptions()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("\"Smith, John\",,42"));
+
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, ",", '"', true);
+
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new TextValue("Smith, John"),
+            new NumberValue(42));
+    }
+
+    [Fact]
     public void SplitFixedWidthText_UsesSortedUniqueBreakPositions()
     {
         TextToColumnsPlanner.SplitFixedWidthText("East0042Open", [8, 4, 4])
