@@ -87,6 +87,16 @@ public partial class MainWindow
 
         var value = result.CriteriaText;
         var filterText = value.TrimStart();
+        if (result.ColorFilter is { } fillColor)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Filter by Cell Color",
+                    range,
+                    currentRange => new CellFillColorFilterCommand(_currentSheetId, currentRange, filterColOffset, fillColor)))
+                return false;
+            return true;
+        }
+
         if (!string.IsNullOrWhiteSpace(filterText) &&
             (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
@@ -135,6 +145,8 @@ public partial class MainWindow
              filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith('>') ||
              filterText.StartsWith('<') ||
