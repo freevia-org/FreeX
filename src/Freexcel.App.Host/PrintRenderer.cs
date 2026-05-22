@@ -778,9 +778,14 @@ public static class PrintRenderer
             .Replace("&[Path]", workbookName, StringComparison.OrdinalIgnoreCase)
             .Replace("&[Tab]", sheetName, StringComparison.OrdinalIgnoreCase)
             .Replace("&[Picture]", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("&G", "", StringComparison.Ordinal)
-            .Replace("&P", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            .Replace("&N", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            .Replace("&G", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("&P", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&N", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&D", now.ToString("d", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&T", now.ToString("t", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("&F", workbookName, StringComparison.OrdinalIgnoreCase)
+            .Replace("&Z", workbookName, StringComparison.OrdinalIgnoreCase)
+            .Replace("&A", sheetName, StringComparison.OrdinalIgnoreCase);
 
     private static (double Width, double Height) GetPaperSizeInches(WorksheetPaperSize paperSize) =>
         paperSize switch
