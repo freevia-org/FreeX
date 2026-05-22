@@ -831,11 +831,14 @@ public sealed class MainWindowSourceHygieneTests
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
         var appHostDirectory = Directory.GetParent(mainWindowPath)!.FullName;
         var xaml = File.ReadAllText(mainWindowPath);
+        var resourcesPath = Path.Combine(appHostDirectory, "Resources", "MainWindowResources.xaml");
+        var resourcesXaml = File.ReadAllText(resourcesPath);
 
         File.Exists(Path.Combine(appHostDirectory, "Resources", "ThemeResources.xaml")).Should().BeTrue();
         File.Exists(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml")).Should().BeTrue();
-        xaml.Should().Contain("Source=\"Resources/ThemeResources.xaml\"");
-        xaml.Should().Contain("Source=\"Resources/IconResources.xaml\"");
+        xaml.Should().Contain("Source=\"Resources/MainWindowResources.xaml\"");
+        resourcesXaml.Should().Contain("Source=\"ThemeResources.xaml\"");
+        resourcesXaml.Should().Contain("Source=\"IconResources.xaml\"");
     }
 
     [Fact]
