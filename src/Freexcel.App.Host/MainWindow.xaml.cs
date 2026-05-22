@@ -147,7 +147,7 @@ public partial class MainWindow : Window
         FormulaBar.TextChanged += (_, _) =>
         {
             if (ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar) &&
-                FormulaBar.Text == "=")
+                FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(FormulaBar.Text))
             {
                 _formulaRangeEntryMode = true;
             }

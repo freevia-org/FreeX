@@ -471,6 +471,14 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Top row");
         source.Should().Contain("_Left column");
         source.Should().Contain("Create _links to source data");
+        source.Should().Contain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
+        source.Should().Contain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
+        source.Should().Contain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
+        source.Should().Contain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
+        source.Should().Contain("Only Sum consolidation is currently applied.");
+        source.Should().Contain("source ranges are consolidated by position");
+        source.Should().Contain("consolidated values are written as results");
+        source.Should().Contain("AutomationProperties.SetHelpText(control, helpText)");
     }
 
     [Fact]
