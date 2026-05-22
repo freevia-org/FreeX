@@ -93,6 +93,20 @@ public sealed class PivotValueFieldSettingsInputParserTests
         PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(label).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("General", null)]
+    [InlineData("0.00", 2)]
+    [InlineData("#,##0.00", 4)]
+    [InlineData("$#,##0.00", 7)]
+    [InlineData("$#,##0.00;[Red]($#,##0.00)", 8)]
+    [InlineData("m/d/yy", 14)]
+    [InlineData("[h]:mm:ss", 46)]
+    [InlineData("#,##0.0 \"kg\"", null)]
+    public void ResolveBuiltInNumberFormatIdForCode_MapsKnownPresetCodes(string formatCode, int? expected)
+    {
+        PivotValueFieldSettingsInputParser.ResolveBuiltInNumberFormatIdForCode(formatCode).Should().Be(expected);
+    }
+
     [Fact]
     public void NumberFormatPresets_ExposeExcelStyleLabels()
     {

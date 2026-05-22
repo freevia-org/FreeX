@@ -95,4 +95,24 @@ public static class PivotValueFieldSettingsInputParser
             .FirstOrDefault(preset => string.Equals(preset.Label, label.Trim(), StringComparison.OrdinalIgnoreCase))
             ?.FormatCode;
     }
+
+    public static int? ResolveBuiltInNumberFormatIdForCode(string? formatCode) =>
+        TryResolveBuiltInNumberFormatIdForCode(formatCode, out var numberFormatId)
+            ? numberFormatId
+            : null;
+
+    public static bool TryResolveBuiltInNumberFormatIdForCode(string? formatCode, out int? numberFormatId)
+    {
+        numberFormatId = null;
+        if (string.IsNullOrWhiteSpace(formatCode))
+            return false;
+
+        var preset = NumberFormatPresets
+            .FirstOrDefault(preset => string.Equals(preset.FormatCode, formatCode.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (preset is null)
+            return false;
+
+        numberFormatId = preset.NumberFormatId;
+        return true;
+    }
 }
