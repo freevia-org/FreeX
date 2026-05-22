@@ -54,6 +54,13 @@ public sealed class AutoFilterDialog : Window
     private readonly StackPanel _topBottomCriteriaPanel = new() { Visibility = Visibility.Collapsed };
     private readonly TextBox _topBottomCountBox = new() { Width = 54, Text = "10" };
     private readonly TextBlock _topBottomUnitText = new() { VerticalAlignment = System.Windows.VerticalAlignment.Center };
+    private readonly ComboBox _datePresetBox = new()
+    {
+        Visibility = Visibility.Collapsed,
+        Width = 150,
+        ItemsSource = new[] { "Custom", "Today", "Yesterday", "Tomorrow", "This Month", "Last Month", "Next Month" },
+        SelectedIndex = 0
+    };
     private readonly ComboBox _criteriaConnectorBox = new()
     {
         Visibility = Visibility.Collapsed,
@@ -126,6 +133,9 @@ public sealed class AutoFilterDialog : Window
             _criteriaBox.ToolTip = "Generated criterion that will be applied.";
             _customFilterGroup.Visibility = Visibility.Visible;
         }
+
+        if (menuPlan.FilterKind == AutoFilterMenuFilterKind.Date)
+            _datePresetBox.Visibility = Visibility.Visible;
 
         var colorOptions = menuPlan.ColorOptions ?? [];
         if (colorOptions.Count > 0)
@@ -211,6 +221,10 @@ public sealed class AutoFilterDialog : Window
         stack.Children.Add(_customFilterGroup);
 
         customFilterPanel.Children.Add(new Label { Content = "Show rows where:", Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = "Date _preset", Target = _datePresetBox, Padding = new Thickness(0) });
+        _datePresetBox.Margin = new Thickness(0, 4, 0, 4);
+        _datePresetBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        customFilterPanel.Children.Add(_datePresetBox);
         customFilterPanel.Children.Add(new Label { Content = "Filter _operator", Target = _criteriaOperatorBox, Padding = new Thickness(0) });
         _criteriaOperatorBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaOperatorBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
@@ -415,6 +429,27 @@ public sealed class AutoFilterDialog : Window
         return $"{option.CriteriaPrefix}{count?.Trim() ?? string.Empty}";
     }
 
+    public static string BuildDatePresetCriteriaText(string preset, DateTime today)
+    {
+        var date = today.Date;
+        return preset switch
+        {
+            "Today" => $"date={date:yyyy-MM-dd}",
+            "Yesterday" => $"date={date.AddDays(-1):yyyy-MM-dd}",
+            "Tomorrow" => $"date={date.AddDays(1):yyyy-MM-dd}",
+            "This Month" => BuildDateBetweenCriteria(new DateTime(date.Year, date.Month, 1)),
+            "Last Month" => BuildDateBetweenCriteria(new DateTime(date.Year, date.Month, 1).AddMonths(-1)),
+            "Next Month" => BuildDateBetweenCriteria(new DateTime(date.Year, date.Month, 1).AddMonths(1)),
+            _ => string.Empty
+        };
+    }
+
+    private static string BuildDateBetweenCriteria(DateTime firstDayOfMonth)
+    {
+        var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+        return $"datebetween:{firstDayOfMonth:yyyy-MM-dd}:{lastDayOfMonth:yyyy-MM-dd}";
+    }
+
     public static string BuildCompositeCriteriaText(string? firstCriteria, string? connector, string? secondCriteria)
     {
         var first = firstCriteria?.Trim() ?? string.Empty;
@@ -486,6 +521,13 @@ public sealed class AutoFilterDialog : Window
         if (_criteriaOperatorBox.SelectedItem is not AutoFilterCriteriaOption option)
             return;
 
+        if (SelectedDatePresetCriteria() is { Length: > 0 } datePresetCriteria)
+        {
+            _criteriaBox.Text = datePresetCriteria;
+            RefreshSpecialCriteriaPanels(option);
+            return;
+        }
+
         var firstCriteria = BuildPrimaryCriteriaText(option);
         var secondCriteria = _criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption option2 &&
             (!option2.RequiresValue || !string.IsNullOrWhiteSpace(_criteriaValueBox2.Text))
@@ -509,6 +551,16 @@ public sealed class AutoFilterDialog : Window
             return BuildTopBottomCriteriaText(option, _topBottomCountBox.Text);
 
         return BuildCriteriaText(option, _criteriaValueBox.Text);
+    }
+
+    private string SelectedDatePresetCriteria()
+    {
+        var preset = _datePresetBox.Visibility == Visibility.Visible
+            ? _datePresetBox.SelectedItem as string
+            : null;
+        return string.IsNullOrWhiteSpace(preset) || preset == "Custom"
+            ? string.Empty
+            : BuildDatePresetCriteriaText(preset, DateTime.Today);
     }
 
     private void RefreshSpecialCriteriaPanels(AutoFilterCriteriaOption option)

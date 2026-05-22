@@ -189,6 +189,20 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
+    [InlineData("Today", "date=2026-05-22")]
+    [InlineData("Yesterday", "date=2026-05-21")]
+    [InlineData("Tomorrow", "date=2026-05-23")]
+    [InlineData("This Month", "datebetween:2026-05-01:2026-05-31")]
+    [InlineData("Last Month", "datebetween:2026-04-01:2026-04-30")]
+    [InlineData("Next Month", "datebetween:2026-06-01:2026-06-30")]
+    public void BuildDatePresetCriteriaText_UsesExcelDateFilterPresets(string preset, string expected)
+    {
+        AutoFilterDialog.BuildDatePresetCriteriaText(preset, new DateTime(2026, 5, 22))
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
     [InlineData(AutoFilterMenuFilterKind.Text, "Blanks", "blank")]
     [InlineData(AutoFilterMenuFilterKind.Number, "Above Average", "above average")]
     [InlineData(AutoFilterMenuFilterKind.Date, "Between", "datebetween:")]
@@ -278,6 +292,8 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("_betweenMaxBox");
         source.Should().Contain("_topBottomCriteriaPanel");
         source.Should().Contain("_topBottomCountBox");
+        source.Should().Contain("_datePresetBox");
+        source.Should().Contain("Date _preset");
         source.Should().Contain("_criteriaConnectorBox");
         source.Should().Contain("_criteriaOperatorBox2");
         source.Should().Contain("_criteriaValueBox2");
@@ -289,8 +305,10 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("BuildCriteriaText");
         source.Should().Contain("BuildBetweenCriteriaText");
         source.Should().Contain("BuildTopBottomCriteriaText");
+        source.Should().Contain("BuildDatePresetCriteriaText");
         source.Should().Contain("BuildCompositeCriteriaText");
         source.Should().Contain("RefreshSpecialCriteriaPanels");
+        source.Should().Contain("SelectedDatePresetCriteria");
         source.Should().Contain("!string.IsNullOrWhiteSpace(_criteriaValueBox2.Text)");
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
     }
