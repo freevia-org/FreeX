@@ -9,6 +9,7 @@ namespace Freexcel.App.Host;
 public partial class PageSetupDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly GridRange? _currentSelection;
 
     public WorksheetPageOrientation Orientation { get; private set; }
     public WorksheetPaperSize PaperSize { get; private set; }
@@ -42,10 +43,15 @@ public partial class PageSetupDialog : Window
     public bool AlignHeaderFooterWithMargins { get; private set; }
     public PageSetupDialogAction RequestedAction { get; private set; } = PageSetupDialogAction.Ok;
 
-    public PageSetupDialog(Sheet sheet)
+    public PageSetupDialog(Sheet sheet, GridRange? currentSelection = null)
     {
         InitializeComponent();
         _sheetId = sheet.Id;
+        _currentSelection = currentSelection is { } selection &&
+                            selection.Start.Sheet == sheet.Id &&
+                            selection.End.Sheet == sheet.Id
+            ? selection
+            : null;
         Orientation = sheet.PageOrientation;
         PaperSize = sheet.PaperSize;
         Margins = sheet.PageMargins;
@@ -153,6 +159,16 @@ public partial class PageSetupDialog : Window
         if (sender is not Button { Tag: string targetName } ||
             FindName(targetName) is not TextBox target)
             return;
+
+        if (_currentSelection is { } selection)
+        {
+            target.Text = targetName switch
+            {
+                nameof(RowsRepeatBox) => $"{selection.Start.Row}:{selection.End.Row}",
+                nameof(ColumnsRepeatBox) => $"{CellAddress.NumberToColumnName(selection.Start.Col)}:{CellAddress.NumberToColumnName(selection.End.Col)}",
+                _ => selection.ToString()
+            };
+        }
 
         target.Focus();
         target.SelectAll();
