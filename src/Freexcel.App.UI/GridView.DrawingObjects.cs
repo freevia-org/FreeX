@@ -9,6 +9,10 @@ public partial class GridView
 {
     // Floating drawing objects, pictures, charts, and worksheet background rendering.
 
+    private static readonly Brush ObjectPlaceholderFill = MakeBrushAlpha(48, 255, 255, 255);
+    private static readonly Brush ObjectPlaceholderTextBrush = MakeBrush(89, 89, 89);
+    private static readonly Pen ObjectPlaceholderPen = CreateFrozenPen(MakeBrush(120, 120, 120), 1);
+
     private void RenderCharts(DrawingContext dc)
     {
         if (Charts == null || Viewport == null) return;
@@ -319,6 +323,130 @@ public partial class GridView
         picture.CropTop > 0 ||
         picture.CropRight > 0 ||
         picture.CropBottom > 0;
+
+    private void RenderObjectPlaceholders(DrawingContext dc)
+    {
+        if (Viewport == null) return;
+
+        if (Charts is not null)
+        {
+            var index = 1;
+            foreach (var chart in Charts)
+            {
+                if (chart.IsVisible)
+                    DrawObjectPlaceholder(dc, new Rect(
+                        chart.Left + ActualRowHeaderWidth,
+                        chart.Top + EffectiveColHeaderHeight,
+                        Math.Max(24, chart.Width),
+                        Math.Max(18, chart.Height)), CreateObjectPlaceholderLabel("Chart", chart.Name, index));
+                index++;
+            }
+        }
+
+        if (DrawingShapes is not null)
+        {
+            var index = 1;
+            foreach (var shape in DrawingShapes)
+            {
+                if (shape.IsVisible && TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect))
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index));
+                index++;
+            }
+        }
+
+        if (Pictures is not null)
+        {
+            var index = 1;
+            foreach (var picture in Pictures)
+            {
+                if (picture.IsVisible && TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect))
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index));
+                index++;
+            }
+        }
+
+        if (TextBoxes is not null)
+        {
+            var index = 1;
+            foreach (var textBox in TextBoxes)
+            {
+                if (textBox.IsVisible && TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect))
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index));
+                index++;
+            }
+        }
+    }
+
+    public static string CreateObjectPlaceholderLabel(string objectType, string? objectName, int index)
+    {
+        var fallback = index <= 1 ? objectType : $"{objectType} {index}";
+        return string.IsNullOrWhiteSpace(objectName) ? fallback : objectName.Trim();
+    }
+
+    public bool TryCreateAnchoredObjectRect(
+        CellAddress anchor,
+        double width,
+        double height,
+        double minimumWidth,
+        double minimumHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (Viewport == null)
+            return false;
+
+        var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == anchor.Row);
+        var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == anchor.Col);
+        if (row is null || col is null)
+            return false;
+
+        rect = new Rect(
+            col.LeftOffset + ActualRowHeaderWidth,
+            row.TopOffset + EffectiveColHeaderHeight,
+            Math.Max(minimumWidth, width),
+            Math.Max(minimumHeight, height));
+        return true;
+    }
+
+    private void DrawObjectPlaceholder(DrawingContext dc, Rect rect, string label)
+    {
+        dc.DrawRectangle(ObjectPlaceholderFill, ObjectPlaceholderPen, rect);
+        DrawPlaceholderDiagonals(dc, rect);
+
+        var text = new FormattedText(
+            label,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            11,
+            ObjectPlaceholderTextBrush,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip)
+        {
+            MaxTextWidth = Math.Max(1, rect.Width - 8),
+            MaxTextHeight = Math.Max(1, rect.Height - 8),
+            Trimming = TextTrimming.CharacterEllipsis
+        };
+
+        var textPoint = new Point(
+            rect.Left + Math.Max(4, (rect.Width - text.Width) / 2),
+            rect.Top + Math.Max(4, (rect.Height - text.Height) / 2));
+        dc.PushClip(new RectangleGeometry(new Rect(rect.Left + 4, rect.Top + 4, Math.Max(1, rect.Width - 8), Math.Max(1, rect.Height - 8))));
+        dc.DrawText(text, textPoint);
+        dc.Pop();
+    }
+
+    private static void DrawPlaceholderDiagonals(DrawingContext dc, Rect rect)
+    {
+        dc.DrawLine(ObjectPlaceholderPen, rect.TopLeft, rect.BottomRight);
+        dc.DrawLine(ObjectPlaceholderPen, rect.TopRight, rect.BottomLeft);
+    }
+
+    private static Pen CreateFrozenPen(Brush brush, double thickness)
+    {
+        var pen = new Pen(brush, thickness);
+        pen.Freeze();
+        return pen;
+    }
 
     private void RenderWorksheetBackground(DrawingContext dc)
     {
