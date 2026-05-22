@@ -27,6 +27,7 @@ public partial class MainWindow
             PlacementTarget = SheetGrid,
             Placement = PlacementMode.MousePoint
         };
+        menu.Closed += (_, _) => SheetGrid.QuickAnalysisPreviewRange = null;
 
         string? currentGroup = null;
         foreach (var option in options)
@@ -233,11 +234,13 @@ public partial class MainWindow
             return;
 
         var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+        SheetGrid.QuickAnalysisPreviewRange = preview.Range;
         StatusReadyText.Text = preview.StatusText;
     }
 
     private void QuickAnalysisMenuItem_MouseLeave(object sender, MouseEventArgs e)
     {
+        SheetGrid.QuickAnalysisPreviewRange = null;
         StatusReadyText.Text = "Ready";
     }
 }
