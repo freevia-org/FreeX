@@ -322,6 +322,15 @@ public partial class MainWindow
 
     private void InlineEditor_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
+        {
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(_inlineEditor.Text, _formulaRangeEntryMode);
+            if (!_formulaRangeEntryMode)
+                ClearFormulaReferenceEntrySpan();
+            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(_inlineEditor.Text);
+            return;
+        }
+
         if (e.Key == Key.F4 && _inlineEditor is not null)
         {
             if (TryCycleFormulaReference(_inlineEditor))
@@ -352,7 +361,9 @@ public partial class MainWindow
         if (selectedRange is null)
             return;
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
-        var inlineEditorCommitsOnArrow = !formulaRangeEntryActive;
+        var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
+            _inlineEditor?.Text,
+            _formulaRangeEntryMode);
         var current = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
@@ -476,7 +487,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return editor.Text.StartsWith("=", StringComparison.Ordinal);
+        return FormulaEditInteractionPlanner.IsRangeEntryActive(editor.Text, _formulaRangeEntryMode);
     }
 
     private bool IsFormulaReferenceHighlightActive(System.Windows.Controls.TextBox? editor)
@@ -484,7 +495,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return editor.Text.StartsWith("=", StringComparison.Ordinal);
+        return FormulaEditInteractionPlanner.IsFormulaText(editor.Text);
     }
 
     private System.Windows.Controls.TextBox? GetFormulaRangeEntryEditor()
@@ -708,7 +719,14 @@ public partial class MainWindow
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.F4)
+        if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(FormulaBar.Text, _formulaRangeEntryMode);
+            if (!_formulaRangeEntryMode)
+                ClearFormulaReferenceEntrySpan();
+            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
+        }
+        else if (e.Key == Key.F4)
         {
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
@@ -730,6 +748,7 @@ public partial class MainWindow
         else if (SheetGrid.SelectedRange is { } selectedRange)
         {
             var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
+            var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
             var current = formulaRangeEntryActive
                 ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
                 : selectedRange.Start;
@@ -739,7 +758,7 @@ public partial class MainWindow
                 e.KeyboardDevice.Modifiers,
                 current,
                 pageSize,
-                allowFormulaBarNavigationKeys: true,
+                allowFormulaBarNavigationKeys: !formulaTextActive,
                 formulaRangeEntryActive: formulaRangeEntryActive);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
