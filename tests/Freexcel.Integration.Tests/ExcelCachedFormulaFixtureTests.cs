@@ -171,6 +171,21 @@ public sealed class ExcelCachedFormulaFixtureTests
                     <row r="10">
                       <c r="C10" t="str"><f>TEXTJOIN("|",TRUE,"A","","B")</f><v>A|B</v></c>
                     </row>
+                    <row r="11">
+                      <c r="A11" t="e"><v>#DIV/0!</v></c>
+                      <c r="A12"><v>4</v></c>
+                      <c r="A13"><v>6</v></c>
+                      <c r="B11" t="str"><v>error row</v></c>
+                      <c r="B12" t="str"><v>smaller</v></c>
+                      <c r="B13" t="str"><v>larger</v></c>
+                      <c r="D11" t="e"><f>XLOOKUP(5,A11:A13,B11:B13,"",-1)</f><v>#DIV/0!</v></c>
+                    </row>
+                    <row r="14">
+                      <c r="A14" t="e"><v>#DIV/0!</v></c>
+                      <c r="A15"><v>4</v></c>
+                      <c r="A16"><v>6</v></c>
+                      <c r="D14" t="e"><f>XMATCH(5,A14:A16,-1)</f><v>#DIV/0!</v></c>
+                    </row>
                   </sheetData>
                 </worksheet>
                 """);
