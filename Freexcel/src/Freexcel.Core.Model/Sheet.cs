@@ -2,6 +2,19 @@ namespace Freexcel.Core.Model;
 
 public sealed record ThreadedComment(string Text, string Author = "Freexcel");
 
+public enum HyperlinkTargetKind
+{
+    ExistingFileOrWebPage,
+    CreateNewDocument,
+    PlaceInThisDocument,
+    EmailAddress
+}
+
+public sealed record HyperlinkMetadata(
+    HyperlinkTargetKind LinkType = HyperlinkTargetKind.ExistingFileOrWebPage,
+    string ScreenTip = "",
+    string Bookmark = "");
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -298,6 +311,9 @@ public sealed class Sheet
 
     /// <summary>Cell hyperlinks keyed by address. Value is the target URL/location.</summary>
     public Dictionary<CellAddress, string> Hyperlinks { get; } = [];
+
+    /// <summary>Excel hyperlink metadata keyed by address.</summary>
+    public Dictionary<CellAddress, HyperlinkMetadata> HyperlinkMetadata { get; } = [];
 
     /// <summary>True when the sheet is protected against edits.</summary>
     public bool IsProtected { get; set; }
@@ -660,6 +676,8 @@ public sealed class Sheet
             copy.ThreadedComments[RemapAddress(address, newId)] = comment;
         foreach (var (address, hyperlink) in Hyperlinks)
             copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
+        foreach (var (address, metadata) in HyperlinkMetadata)
+            copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata;
 
         // Allow-edit ranges (protection)
         foreach (var range in AllowEditRanges)

@@ -177,7 +177,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var hyperlinkDto in sDto.Hyperlinks ?? [])
             {
                 if (TryLoadHyperlink(hyperlinkDto, sheet.Id) is { } hyperlink)
+                {
                     sheet.Hyperlinks[hyperlink.Address] = hyperlink.Target;
+                    sheet.HyperlinkMetadata[hyperlink.Address] = hyperlink.Metadata;
+                }
             }
             foreach (var allowEditRange in sDto.AllowEditRanges ?? [])
             {
@@ -553,7 +556,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     .ToList(),
                 Hyperlinks = s.Hyperlinks
                     .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
-                    .Select(ToHyperlinkDto)
+                    .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
                 AllowEditRanges = s.AllowEditRanges
                     .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)

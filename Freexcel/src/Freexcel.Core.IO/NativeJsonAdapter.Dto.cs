@@ -289,6 +289,9 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Address { get; set; }
         public string? Target { get; set; }
+        public HyperlinkTargetKind? LinkType { get; set; }
+        public string? ScreenTip { get; set; }
+        public string? Bookmark { get; set; }
     }
 
     private class UIntDoubleDto
