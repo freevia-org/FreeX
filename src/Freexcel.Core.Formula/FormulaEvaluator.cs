@@ -1043,6 +1043,7 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
+        ErrorValue e => e,
         NumberValue => v,
         BlankValue => new NumberValue(0),
         BoolValue b => new NumberValue(b.Value ? 1 : 0),
