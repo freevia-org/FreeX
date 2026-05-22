@@ -1897,17 +1897,8 @@ internal static class XlsxWorksheetMetadataPreserver
             changed = true;
         }
 
-        var existingChildNames = targetRange
-            .Elements()
-            .Select(element => element.Name)
-            .ToHashSet();
-        foreach (var sourceChild in sourceRange.Elements())
+        if (MergeMissingNativeChildren(sourceRange, targetRange, _ => true))
         {
-            if (existingChildNames.Contains(sourceChild.Name))
-                continue;
-
-            targetRange.Add(new XElement(sourceChild));
-            existingChildNames.Add(sourceChild.Name);
             changed = true;
         }
 
