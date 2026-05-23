@@ -91,6 +91,17 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void F6ShellFocusCycle_ContinuesWhenRegionRejectsFocus()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        selectionSource.Should().Contain("if (FocusShellRegion(current))");
+        selectionSource.Should().Contain("return FormulaBar.Focus();");
+        selectionSource.Should().Contain("return AddSheetButton.Focus();");
+        selectionSource.Should().Contain("return ZoomSlider.Focus();");
+    }
+
+    [Fact]
     public void BackstageSidebarButtons_RenderAccessKeyMarkersAsMnemonics()
     {
         var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
