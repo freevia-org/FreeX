@@ -999,6 +999,7 @@ public partial class MainWindow
         if (button is Control control)
             control.Padding = new Thickness(4, 2, 4, 2);
         button.Content = CreateRibbonCommandContent(commandName, commandName, RibbonCommandLayoutKind.Small);
+        button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
         return true;
@@ -1043,6 +1044,8 @@ public partial class MainWindow
             layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24);
 
         commandButton.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
+        if (layoutKind is RibbonCommandLayoutKind.Small)
+            commandButton.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         commandButton.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
             ? System.Windows.HorizontalAlignment.Left
             : System.Windows.HorizontalAlignment.Center;
@@ -1489,6 +1492,7 @@ public partial class MainWindow
                 button.Height = Math.Max(button.Height is > 0 ? button.Height : 0, 24);
                 button.Padding = new Thickness(4, 2, 4, 2);
                 button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
                 button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
                 break;
         }
@@ -1574,6 +1578,7 @@ public partial class MainWindow
         SetRibbonCompactWidthTag(button, button.Width, 24);
         button.Padding = new Thickness(4, 2, 4, 2);
         button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
     }

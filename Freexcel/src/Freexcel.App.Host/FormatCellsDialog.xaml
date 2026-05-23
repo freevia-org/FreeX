@@ -298,7 +298,13 @@
                             <Button x:Name="DlgBorderPreviewLeftButton" Grid.Row="1" Grid.Column="0" Content="L_eft" MinWidth="48" ToolTip="Apply left border" Click="DlgBorderPreviewLeftButton_Click"/>
                             <Border x:Name="DlgBorderPreviewArea" Grid.Row="1" Grid.Column="1"
                                     BorderBrush="Black" BorderThickness="1" Background="White">
-                                <TextBlock Text="Text" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Grid>
+                                    <TextBlock Text="Text" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Border x:Name="DlgBorderPreviewInsideVertical" Width="0" HorizontalAlignment="Center"
+                                            BorderBrush="Black" BorderThickness="1,0,0,0" Visibility="Collapsed"/>
+                                    <Border x:Name="DlgBorderPreviewInsideHorizontal" Height="0" VerticalAlignment="Center"
+                                            BorderBrush="Black" BorderThickness="0,1,0,0" Visibility="Collapsed"/>
+                                </Grid>
                             </Border>
                             <Button x:Name="DlgBorderPreviewRightButton" Grid.Row="1" Grid.Column="2" Content="Ri_ght" MinWidth="48" ToolTip="Apply right border" Click="DlgBorderPreviewRightButton_Click"/>
                             <Button x:Name="DlgBorderPreviewBottomButton" Grid.Row="2" Grid.Column="1" Content="Botto_m" MinHeight="30" ToolTip="Apply bottom border" Click="DlgBorderPreviewBottomButton_Click"/>
