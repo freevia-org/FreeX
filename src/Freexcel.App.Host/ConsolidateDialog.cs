@@ -14,6 +14,17 @@ public sealed record ConsolidateDialogResult(
     bool UseLeftColumnLabels = false,
     bool CreateLinksToSourceData = false);
 
+public enum ConsolidateRangeSelectionTarget
+{
+    Reference,
+    DestinationCell
+}
+
+public sealed record ConsolidateRangeSelectionRequest(
+    ConsolidateRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public sealed class ConsolidateDialog : Window
 {
     private readonly SheetId _sheetId;
@@ -25,12 +36,19 @@ public sealed class ConsolidateDialog : Window
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
     private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
+    private readonly Action<ConsolidateRangeSelectionRequest>? _requestRangeSelection;
 
     public ConsolidateDialogResult? Result { get; private set; }
+    public ConsolidateRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public ConsolidateDialog(SheetId sheetId, string defaultSource, string defaultDestination)
+    public ConsolidateDialog(
+        SheetId sheetId,
+        string defaultSource,
+        string defaultDestination,
+        Action<ConsolidateRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
+        _requestRangeSelection = requestRangeSelection;
         Title = "Consolidate";
         Width = 380;
         Height = 420;
@@ -52,7 +70,7 @@ public sealed class ConsolidateDialog : Window
         _functionBox.Margin = new Thickness(0, 0, 0, 8);
         root.Children.Add(_functionBox);
         root.Children.Add(new Label { Content = "_Reference:", Target = _referenceBox, Padding = new Thickness(0) });
-        root.Children.Add(CreateReferenceEditor(_referenceBox, "Select reference range"));
+        root.Children.Add(CreateReferenceEditor(_referenceBox, "Select reference range", ConsolidateRangeSelectionTarget.Reference));
         var referenceButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -68,7 +86,7 @@ public sealed class ConsolidateDialog : Window
         root.Children.Add(new Label { Content = "_All references:", Target = _referencesList, Padding = new Thickness(0) });
         root.Children.Add(_referencesList);
         root.Children.Add(new Label { Content = "_Destination cell:", Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
+        root.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell));
         root.Children.Add(new Label { Content = "Use _labels in:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
         var labelOptions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         _topRowBox.Margin = new Thickness(0, 0, 16, 0);
@@ -185,8 +203,25 @@ public sealed class ConsolidateDialog : Window
         return true;
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
-        DialogReferencePicker.CreateEditor(textBox, automationName);
+    public static ConsolidateRangeSelectionRequest CreateRangeSelectionRequest(
+        ConsolidateRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private DockPanel CreateReferenceEditor(
+        TextBox textBox,
+        string automationName,
+        ConsolidateRangeSelectionTarget target) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request => RequestRangeSelection(target, request));
+
+    private void RequestRangeSelection(ConsolidateRangeSelectionTarget target, DialogReferencePickerRequest request)
+    {
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
+    }
 
     private void AddReferenceButton_Click(object sender, RoutedEventArgs e)
     {
