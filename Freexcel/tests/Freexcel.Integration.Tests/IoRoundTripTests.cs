@@ -31,6 +31,28 @@ public class IoRoundTripTests
     }
 
     [Fact]
+    public void Csv_RoundTrip_PreservesDateAndTimeValues()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+
+        var adapter = new CsvFileAdapter();
+        using var ms = new MemoryStream();
+        adapter.Save(wb, ms);
+        ms.Position = 0;
+
+        var wb2 = adapter.Load(ms);
+        var sheet2 = wb2.Sheets[0];
+
+        sheet2.GetValue(new CellAddress(sheet2.Id, 1, 1)).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet2.GetValue(new CellAddress(sheet2.Id, 1, 2)).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        sheet2.GetValue(new CellAddress(sheet2.Id, 1, 3)).Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+    }
+
+    [Fact]
     public void Json_RoundTrip_PreservesValuesAndFormulas()
     {
         var wb    = new Workbook("Book1");
