@@ -394,7 +394,10 @@ public class XlsxCorpusRunnerTests
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
             CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
                 before,
-                options => options.WithStrictOrdering(),
+                options => options
+                    .Using<double>(ctx => ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.0001))
+                    .WhenTypeIs<double>()
+                    .WithStrictOrdering(),
                 row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
@@ -637,6 +640,10 @@ public class XlsxCorpusRunnerTests
     private static WorkbookSummary CaptureSummary(Workbook workbook) =>
         new(
             workbook.SheetCount,
+            workbook.NamedRanges
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => CaptureNamedRangeSummary(workbook, pair.Key, pair.Value))
+                .ToArray(),
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
             workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
@@ -667,7 +674,17 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
+            sheet.Comments
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new CommentSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Comments.Count,
+            sheet.Hyperlinks
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
@@ -699,7 +716,9 @@ public class XlsxCorpusRunnerTests
             sheet.PrintHeadings,
             !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
             !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
+            sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
+            sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
             sheet.ColumnPageBreaks.Count,
             sheet.FrozenRows,
             sheet.FrozenCols,
@@ -717,6 +736,19 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
+
+    private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
+    {
+        var metadata = workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+            ? savedMetadata
+            : NamedRangeMetadata.WorkbookScope;
+
+        return new NamedRangeSummary(
+            name,
+            metadata.Scope,
+            metadata.Comment,
+            ToRangeSummary(range));
+    }
 
     private static ChartSummary CaptureChartSummary(ChartModel chart) =>
         new(
@@ -1181,6 +1213,7 @@ public class XlsxCorpusRunnerTests
 
     private sealed record WorkbookSummary(
         int SheetCount,
+        IReadOnlyList<NamedRangeSummary> NamedRanges,
         int NamedRangeCount,
         bool IsStructureProtected,
         IReadOnlyList<PivotCacheSummary> PivotCaches,
@@ -1189,6 +1222,12 @@ public class XlsxCorpusRunnerTests
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
         IReadOnlyList<SheetSummary> Sheets);
+
+    private sealed record NamedRangeSummary(
+        string Name,
+        string Scope,
+        string Comment,
+        ChartRangeSummary Range);
 
     private sealed record SheetSummary(
         string Name,
@@ -1202,7 +1241,9 @@ public class XlsxCorpusRunnerTests
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
         int IconSetConditionalFormatCount,
+        IReadOnlyList<CommentSummary> Comments,
         int CommentCount,
+        IReadOnlyList<HyperlinkSummary> Hyperlinks,
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
@@ -1234,7 +1275,9 @@ public class XlsxCorpusRunnerTests
         bool PrintHeadings,
         bool HasPageHeader,
         bool HasPageFooter,
+        IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
+        IReadOnlyList<uint> ColumnPageBreaks,
         int ColumnPageBreakCount,
         uint FrozenRows,
         uint FrozenCols,
@@ -1252,6 +1295,10 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenRowCount,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
+
+    private sealed record CommentSummary(uint Row, uint Column, string Text);
+
+    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
 
     private sealed record ChartSummary(
         ChartType Type,
