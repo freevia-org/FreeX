@@ -1,6 +1,7 @@
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -656,6 +657,11 @@ public class XlsxCorpusRunnerTests
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
             sheet.Name,
+            sheet.EnumerateCells()
+                .OrderBy(item => item.Address.Row)
+                .ThenBy(item => item.Address.Col)
+                .Select(item => CaptureCellSummary(workbook, item.Address, item.Cell))
+                .ToArray(),
             sheet.CellCount,
             sheet.EnumerateCells().Count(item => item.Cell.HasFormula),
             sheet.MergedRegions.Count,
@@ -788,6 +794,26 @@ public class XlsxCorpusRunnerTests
             metadata.Comment,
             ToRangeSummary(range));
     }
+
+    private static CellSummary CaptureCellSummary(Workbook workbook, CellAddress address, Cell cell) =>
+        new(
+            address.Row,
+            address.Col,
+            cell.HasFormula ? new ScalarValueSummary("FormulaCachedValue", "") : CaptureScalarValueSummary(cell.Value),
+            cell.FormulaText ?? "",
+            cell.IgnoreFormulaError);
+
+    private static ScalarValueSummary CaptureScalarValueSummary(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => new ScalarValueSummary("Blank", ""),
+            NumberValue number => new ScalarValueSummary("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            BoolValue boolean => new ScalarValueSummary("Boolean", boolean.Value ? "TRUE" : "FALSE"),
+            TextValue text => new ScalarValueSummary("Text", text.Value),
+            DateTimeValue dateTime => new ScalarValueSummary("DateTime", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
+            ErrorValue error => new ScalarValueSummary("Error", error.Code),
+            _ => new ScalarValueSummary(value.GetType().Name, value.ToString() ?? "")
+        };
 
     private static ChartSummary CaptureChartSummary(ChartModel chart) =>
         new(
@@ -1049,6 +1075,7 @@ public class XlsxCorpusRunnerTests
             Sheets = summary.Sheets
                 .Select(sheet => sheet with
                 {
+                    Cells = [],
                     StyleOnlyCells = [],
                     StyleOnlyCellCount = 0
                 })
@@ -1279,6 +1306,7 @@ public class XlsxCorpusRunnerTests
 
     private sealed record SheetSummary(
         string Name,
+        IReadOnlyList<CellSummary> Cells,
         int CellCount,
         int FormulaCount,
         int MergedRegionCount,
@@ -1355,6 +1383,15 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenColumnCount,
         IReadOnlyList<StyleOnlyCellSummary> StyleOnlyCells,
         int StyleOnlyCellCount);
+
+    private sealed record CellSummary(
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value,
+        string FormulaText,
+        bool IgnoreFormulaError);
+
+    private sealed record ScalarValueSummary(string Kind, string Value);
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
 
