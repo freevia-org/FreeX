@@ -243,7 +243,7 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
-    public void SelectDataSourceDialog_DisablesDeferredSeriesAndAxisButtonsWithHelpText()
+    public void SelectDataSourceDialog_EnablesExcelStyleSeriesAndAxisActions()
     {
         StaTestRunner.Run(() =>
         {
@@ -254,13 +254,30 @@ public sealed class ChartDialogTests
 
             foreach (var label in new[] { "_Add series", "_Edit series", "_Remove series", "_Edit Axis Labels" })
             {
-                buttons[label].IsEnabled.Should().BeFalse();
-                buttons[label].ToolTip.Should().Be("Edit the chart data range to change inferred series and category labels.");
-                AutomationProperties.GetHelpText(buttons[label])
-                    .Should()
-                    .Be("Edit the chart data range to change inferred series and category labels.");
+                buttons[label].IsEnabled.Should().BeTrue();
+                buttons[label].ToolTip.Should().BeNull();
+                AutomationProperties.GetHelpText(buttons[label]).Should().BeEmpty();
             }
+
+            buttons.Should().ContainKey("_Hidden and Empty Cells");
         });
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_InferPreviewEntriesFromChartRange()
+    {
+        var preview = SelectDataSourceDialog.InferPreviewEntries("Sheet1!$A$1:$C$5", firstColumnIsCategories: true);
+
+        preview.Series.Select(series => series.Name).Should().ContainInOrder("Series 1", "Series 2");
+        preview.Series.Select(series => series.ValuesRangeText).Should().ContainInOrder(
+            "Sheet1!$B$2:$B$5",
+            "Sheet1!$C$2:$C$5");
+        preview.Categories.Select(category => category.Label).Should().ContainInOrder(
+            "Category 1",
+            "Category 2",
+            "Category 3",
+            "Category 4");
+        preview.CategoryRangeText.Should().Be("Sheet1!$A$2:$A$5");
     }
 
     [Fact]
