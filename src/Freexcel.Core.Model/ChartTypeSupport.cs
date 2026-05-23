@@ -9,6 +9,7 @@ public static class ChartTypeSupport
             or ChartType.StackedColumn
             or ChartType.PercentStackedColumn
             or ChartType.Line
+            or ChartType.ThreeDLine
             or ChartType.Pie
             or ChartType.ThreeDPie
             or ChartType.Doughnut
@@ -25,10 +26,10 @@ public static class ChartTypeSupport
             or ChartType.ThreeDArea;
 
     public static bool SupportsTrendlines(ChartType type) =>
-        type is ChartType.Column or ChartType.Line or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
+        type is ChartType.Column or ChartType.Line or ChartType.ThreeDLine or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
 
     public static bool SupportsSecondaryAxis(ChartType type) =>
-        type is ChartType.Column or ChartType.Line or ChartType.Area or ChartType.ThreeDArea or ChartType.Scatter;
+        type is ChartType.Column or ChartType.Line or ChartType.ThreeDLine or ChartType.Area or ChartType.ThreeDArea or ChartType.Scatter;
 
     public static bool SupportsAxes(ChartType type) =>
         type is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
@@ -43,14 +44,14 @@ public static class ChartTypeSupport
         type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar or ChartType.Scatter or ChartType.Bubble;
 
     public static bool SupportsYAxisLogScale(ChartType type) =>
-        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
 
     public static bool SupportsXAxisBounds(ChartType type) => SupportsXAxisLogScale(type);
 
     public static bool SupportsYAxisBounds(ChartType type) => SupportsYAxisLogScale(type);
 
     public static bool SupportsSeriesMarkers(ChartType type) =>
-        type is ChartType.Line or ChartType.Scatter;
+        type is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
 
     public static bool SupportsPercentageDataLabels(ChartType type) =>
         type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut or ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
