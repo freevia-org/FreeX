@@ -325,6 +325,10 @@ public sealed class ChartModel
     public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
     public double ErrorBarValue { get; set; } = 5;
     public bool ErrorBarEndCaps { get; set; } = true;
+    public CellColor? ErrorBarColor { get; set; }
+    public WorkbookThemeColorReference? ErrorBarThemeColor { get; set; }
+    public double ErrorBarThickness { get; set; } = 1;
+    public ChartLineDashStyle ErrorBarDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowDropLines { get; set; }
     public bool ShowHighLowLines { get; set; }
     public bool ShowUpDownBars { get; set; }
