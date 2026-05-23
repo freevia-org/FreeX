@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -77,6 +78,7 @@ public sealed class CellShiftDialog : Window
         root.Children.Add(buttons);
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>
@@ -106,6 +108,14 @@ public sealed class CellShiftDialog : Window
             (CellShiftDialogMode.Delete, _) => KeyboardInsertDeleteDialogChoice.ShiftLeft,
             _ => KeyboardInsertDeleteDialogChoice.ShiftRight
         };
+
+    private void FocusInitialKeyboardTarget()
+    {
+        var firstButton = _buttons.FirstOrDefault();
+        _buttons.FirstOrDefault()?.Focus();
+        if (firstButton is not null)
+            Keyboard.Focus(firstButton);
+    }
 
     private void Accept()
     {
