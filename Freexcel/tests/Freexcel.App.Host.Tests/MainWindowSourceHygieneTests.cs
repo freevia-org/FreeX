@@ -1227,6 +1227,23 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardContextMenu_RoutesFocusedSheetTabToSheetTabMenu()
+    {
+        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        contextMenuSource.Should().Contain("if (TryOpenFocusedSheetTabContextMenu())");
+        sheetTabsSource.Should().Contain("private bool TryOpenFocusedSheetTabContextMenu()");
+        sheetTabsSource.Should().Contain("Keyboard.FocusedElement is not DependencyObject focusedElement");
+        sheetTabsSource.Should().Contain("contextMenu.PlacementTarget = target;");
+        sheetTabsSource.Should().Contain("contextMenu.IsOpen = true;");
+        selectionSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
+        xaml.Should().Contain("Focusable=\"True\"");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
