@@ -37,6 +37,40 @@ public sealed class PasteFormatsCommandTests
         sheet.GetCell(addr)!.Value.Should().Be(new NumberValue(12));
     }
 
+    [Fact]
+    public void PasteFormatsCommand_RejectsProtectedSheetWithoutFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var style = wb.RegisterStyle(new CellStyle { Italic = true });
+        sheet.IsProtected = true;
+
+        var outcome = new PasteFormatsCommand(sheet.Id, [(addr, style)]).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetCell(addr).Should().BeNull();
+    }
+
+    [Fact]
+    public void PasteFormatsCommand_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var style = wb.RegisterStyle(new CellStyle { Italic = true });
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+
+        var outcome = new PasteFormatsCommand(sheet.Id, [(addr, style)]).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(addr)!.StyleId.Should().Be(style);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
