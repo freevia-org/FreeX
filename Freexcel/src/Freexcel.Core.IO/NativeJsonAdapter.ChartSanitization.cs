@@ -14,6 +14,7 @@ public sealed partial class NativeJsonAdapter
             chart.XAxisTitle = null;
             chart.YAxisTitle = null;
             chart.AxisTitleTextColor = null;
+            chart.AxisTitleTextThemeColor = null;
             chart.AxisTitleFontSize = 12;
         }
         chart.PlotAreaBorderThickness = Math.Clamp(chart.PlotAreaBorderThickness, 0, 10);
@@ -177,6 +178,7 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMinorTickStyle = ChartAxisTickStyle.None;
         chart.ShowXAxisLabels = true;
         chart.XAxisLabelTextColor = null;
+        chart.XAxisLabelTextThemeColor = null;
         chart.XAxisLabelFontSize = 11;
         chart.XAxisLabelAngle = 0;
         chart.XAxisLineColor = null;
@@ -200,6 +202,7 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisMinorTickStyle = ChartAxisTickStyle.None;
         chart.ShowYAxisLabels = true;
         chart.YAxisLabelTextColor = null;
+        chart.YAxisLabelTextThemeColor = null;
         chart.YAxisLabelFontSize = 11;
         chart.YAxisLabelAngle = 0;
         chart.YAxisLineColor = null;

@@ -109,7 +109,11 @@ public sealed record ChartLayoutOptions(
     WorkbookThemeColorReference? DataLabelFillThemeColor = null,
     WorkbookThemeColorReference? DataLabelBorderThemeColor = null,
     WorkbookThemeColorReference? DataLabelTextThemeColor = null,
-    WorkbookThemeColorReference? TrendlineThemeColor = null);
+    WorkbookThemeColorReference? TrendlineThemeColor = null,
+    WorkbookThemeColorReference? ChartTitleTextThemeColor = null,
+    WorkbookThemeColorReference? AxisTitleTextThemeColor = null,
+    WorkbookThemeColorReference? XAxisLabelTextThemeColor = null,
+    WorkbookThemeColorReference? YAxisLabelTextThemeColor = null);
 
 public sealed partial class SetChartLayoutCommand : IWorkbookCommand
 {
@@ -256,6 +260,10 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
             DataLabelFillThemeColor: chart.DataLabelFillThemeColor,
             DataLabelBorderThemeColor: chart.DataLabelBorderThemeColor,
             DataLabelTextThemeColor: chart.DataLabelTextThemeColor,
-            TrendlineThemeColor: chart.TrendlineThemeColor);
+            TrendlineThemeColor: chart.TrendlineThemeColor,
+            ChartTitleTextThemeColor: chart.ChartTitleTextThemeColor,
+            AxisTitleTextThemeColor: chart.AxisTitleTextThemeColor,
+            XAxisLabelTextThemeColor: chart.XAxisLabelTextThemeColor,
+            YAxisLabelTextThemeColor: chart.YAxisLabelTextThemeColor);
 
 }
