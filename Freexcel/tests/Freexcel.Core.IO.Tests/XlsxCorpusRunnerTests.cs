@@ -731,7 +731,9 @@ public class XlsxCorpusRunnerTests
             sheet.ScaleToFit,
             sheet.PrintGridlines,
             sheet.PrintHeadings,
+            CaptureHeaderFooterSummary(sheet.PageHeader),
             !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
+            CaptureHeaderFooterSummary(sheet.PageFooter),
             !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
             sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
@@ -951,6 +953,22 @@ public class XlsxCorpusRunnerTests
 
     private static RepeatRangeSummary ToRepeatRangeSummary(WorksheetRepeatRange range) =>
         new(range.Start, range.End);
+
+    private static HeaderFooterSummary CaptureHeaderFooterSummary(WorksheetHeaderFooter value) =>
+        new(
+            NormalizeHeaderFooterText(value.Left),
+            NormalizeHeaderFooterText(value.Center),
+            NormalizeHeaderFooterText(value.Right));
+
+    private static string NormalizeHeaderFooterText(string text) =>
+        text
+            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Date]", "&D", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Time]", "&T", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[File]", "&F", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Tab]", "&A", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Path]", "&Z", StringComparison.OrdinalIgnoreCase);
 
     private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
         new(
@@ -1354,7 +1372,9 @@ public class XlsxCorpusRunnerTests
         WorksheetScaleToFit ScaleToFit,
         bool PrintGridlines,
         bool PrintHeadings,
+        HeaderFooterSummary PageHeader,
         bool HasPageHeader,
+        HeaderFooterSummary PageFooter,
         bool HasPageFooter,
         IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
@@ -1404,6 +1424,8 @@ public class XlsxCorpusRunnerTests
     private sealed record RepeatRangeSummary(uint Start, uint End);
 
     private sealed record BackgroundImageSummary(string ContentType, string FileName, int ImageByteCount);
+
+    private sealed record HeaderFooterSummary(string Left, string Center, string Right);
 
     private sealed record ChartSummary(
         ChartType Type,
