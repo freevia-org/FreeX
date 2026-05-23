@@ -1317,6 +1317,13 @@ internal static class XlsxCorpusFixtureFactory
         sheet.ViewLeftCol = 2;
         sheet.ActiveRow = 6;
         sheet.ActiveCol = 3;
+        workbook.WatchedCells.Add(Addr(sheet, "A2"));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Print Forecast",
+            [
+                new ScenarioCellValue(Addr(sheet, "A2"), new NumberValue(84)),
+                new ScenarioCellValue(Addr(sheet, "B2"), new TextValue("Scenario"))
+            ]));
         workbook.CustomViews.Add(new WorkbookCustomView(
             "Print Review",
             [
