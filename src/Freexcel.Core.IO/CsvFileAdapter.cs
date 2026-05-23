@@ -18,23 +18,34 @@ public sealed class CsvFileAdapter : IFileAdapter
     {
         if (workbook.Sheets.Count == 0) return;
         var sheet = workbook.Sheets[0];
-        var range = sheet.GetUsedRange();
-        if (range is null) return;
+        var usedCells = sheet.GetUsedCells()
+            .Where(pair => IsValidCsvCellAddress(pair.Key.Row, pair.Key.Col))
+            .ToDictionary(pair => (pair.Key.Row, pair.Key.Col), pair => pair.Value);
+        if (usedCells.Count == 0) return;
+
+        var startRow = usedCells.Keys.Min(key => key.Row);
+        var endRow = usedCells.Keys.Max(key => key.Row);
+        var startCol = usedCells.Keys.Min(key => key.Col);
+        var endCol = usedCells.Keys.Max(key => key.Col);
 
         using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
-        for (uint r = range.Value.Start.Row; r <= range.Value.End.Row; r++)
+        for (uint r = startRow; r <= endRow; r++)
         {
-            var parts = new string[range.Value.End.Col - range.Value.Start.Col + 1];
-            for (uint c = range.Value.Start.Col; c <= range.Value.End.Col; c++)
+            var parts = new string[endCol - startCol + 1];
+            for (uint c = startCol; c <= endCol; c++)
             {
-                var cell = sheet.GetCell(r, c);
+                usedCells.TryGetValue((r, c), out var cell);
                 var raw = cell is null ? "" : FormatValue(cell.Value);
-                parts[c - range.Value.Start.Col] = EscapeCsvField(raw);
+                parts[c - startCol] = EscapeCsvField(raw);
             }
             writer.Write(string.Join(',', parts));
             writer.Write("\r\n");
         }
     }
+
+    private static bool IsValidCsvCellAddress(uint row, uint col) =>
+        row is >= 1 and <= CellAddress.MaxRow &&
+        col is >= 1 and <= CellAddress.MaxCol;
 
     private static string EscapeCsvField(string value)
     {
