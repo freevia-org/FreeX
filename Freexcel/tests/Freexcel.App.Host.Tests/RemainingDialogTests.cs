@@ -238,6 +238,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void RemainingNonChartDialogs_UseSharedExcelStyleButtonRows()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_TryCreateResult_RequiresPositivePeriods()
     {
         ForecastSheetDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
