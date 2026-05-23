@@ -658,6 +658,10 @@ public class XlsxCorpusRunnerTests
             workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
+            workbook.PivotTableStyles
+                .OrderBy(style => style.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CapturePivotTableStyleSummary)
+                .ToArray(),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
             workbook.CustomViews
@@ -788,7 +792,7 @@ public class XlsxCorpusRunnerTests
             sheet.Hyperlinks
                 .OrderBy(pair => pair.Key.Row)
                 .ThenBy(pair => pair.Key.Col)
-                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .Select(pair => CaptureHyperlinkSummary(sheet, pair))
                 .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
@@ -936,6 +940,19 @@ public class XlsxCorpusRunnerTests
                 background.ContentType,
                 background.FileName ?? "",
                 background.ImageBytes.Length);
+
+    private static HyperlinkSummary CaptureHyperlinkSummary(Sheet sheet, KeyValuePair<CellAddress, string> pair)
+    {
+        sheet.HyperlinkMetadata.TryGetValue(pair.Key, out var metadata);
+        metadata ??= new HyperlinkMetadata();
+        return new HyperlinkSummary(
+            pair.Key.Row,
+            pair.Key.Col,
+            pair.Value,
+            metadata.LinkType,
+            metadata.ScreenTip,
+            metadata.Bookmark);
+    }
 
     private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
     {
@@ -1104,6 +1121,21 @@ public class XlsxCorpusRunnerTests
                     filter.ColumnId,
                     filter.Values.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     filter.IncludeBlank))
+                .ToArray());
+
+    private static PivotTableStyleSummary CapturePivotTableStyleSummary(PivotTableStyleModel style) =>
+        new(
+            style.Name,
+            style.AppliesToPivotTables,
+            style.AppliesToTables,
+            style.Elements
+                .OrderBy(element => element.Type, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(element => element.DifferentialFormatId)
+                .ThenBy(element => element.Size)
+                .Select(element => new PivotTableStyleElementSummary(
+                    element.Type,
+                    element.DifferentialFormatId,
+                    element.Size))
                 .ToArray());
 
     private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
@@ -1558,6 +1590,7 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<PivotCacheSummary> PivotCaches,
         int PivotCacheCount,
         int PivotCacheFieldCount,
+        IReadOnlyList<PivotTableStyleSummary> PivotTableStyles,
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
         IReadOnlyList<CustomViewSummary> CustomViews,
@@ -1789,7 +1822,13 @@ public class XlsxCorpusRunnerTests
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
 
-    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
+    private sealed record HyperlinkSummary(
+        uint Row,
+        uint Column,
+        string Target,
+        HyperlinkTargetKind LinkType,
+        string ScreenTip,
+        string Bookmark);
 
     private sealed record OutlineLevelSummary(uint Index, int Level);
 
@@ -1963,6 +2002,17 @@ public class XlsxCorpusRunnerTests
         int? BaseFieldIndex,
         string BaseItem,
         string NumberFormatCode);
+
+    private sealed record PivotTableStyleSummary(
+        string Name,
+        bool AppliesToPivotTables,
+        bool AppliesToTables,
+        IReadOnlyList<PivotTableStyleElementSummary> Elements);
+
+    private sealed record PivotTableStyleElementSummary(
+        string Type,
+        int? DifferentialFormatId,
+        int? Size);
 
     private sealed record SparklineSummary(
         SparklineKind Kind,
