@@ -221,6 +221,15 @@ public static partial class ChartRenderer
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
+                    else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
+                        && cellLookup.TryGetValue((r, col), out cell)
+                        && string.IsNullOrWhiteSpace(cell.DisplayText))
+                    {
+                        series.Items.Add(new RectangleBarItem(i - 0.35, 0, i + 0.35, 0));
+                        trendPoints?.Add(new DataPoint(i, 0));
+                        if (ShouldUseAnnotationLabels(chart))
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                    }
                 }
                 if (firstSeriesPoints is null)
                     firstSeriesPoints = trendPoints;
@@ -256,6 +265,15 @@ public static partial class ChartRenderer
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v, i, v);
+                    }
+                    else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
+                        && cellLookup.TryGetValue((r, col), out cell)
+                        && string.IsNullOrWhiteSpace(cell.DisplayText))
+                    {
+                        series.Items.Add(new BarItem { Value = 0 });
+                        trendPoints?.Add(new DataPoint(i, 0));
+                        if (ShouldUseAnnotationLabels(chart))
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), 0, i, 0);
                     }
                 }
                 if (firstSeriesPoints is null)

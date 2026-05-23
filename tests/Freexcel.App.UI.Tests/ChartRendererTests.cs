@@ -204,6 +204,66 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_HonorsBlankDisplayAsZero()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, ""),
+                Cell(4, 1, "C"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.Items.Should().HaveCount(3);
+        series.Items.Should().Contain(item => item.X0 == 0.65 && item.X1 == 1.35 && item.Y0 == 0 && item.Y1 == 0);
+    }
+
+    [Fact]
+    public void BarRenderer_HonorsBlankDisplayAsZero()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, ""),
+                Cell(4, 1, "C"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.Items.Should().HaveCount(3);
+        series.Items.Should().Contain(item => item.Value == 0);
+    }
+
+    [Fact]
     public void PivotChartRenderer_AddsFieldButtonAnnotations()
     {
         var sheetId = SheetId.New();
