@@ -7477,6 +7477,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartAxisLabelFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisLabelFormattingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales",
+            XAxisLabelTextColor = new CellColor(70, 70, 70),
+            XAxisLabelFontSize = 10,
+            XAxisLabelAngle = -45,
+            YAxisLabelTextColor = new CellColor(80, 80, 80),
+            YAxisLabelFontSize = 12,
+            YAxisLabelAngle = 90,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.XAxisLabelTextColor.Should().Be(new CellColor(70, 70, 70));
+        loadedChart.XAxisLabelFontSize.Should().Be(10);
+        loadedChart.XAxisLabelAngle.Should().Be(-45);
+        loadedChart.YAxisLabelTextColor.Should().Be(new CellColor(80, 80, 80));
+        loadedChart.YAxisLabelFontSize.Should().Be(12);
+        loadedChart.YAxisLabelAngle.Should().Be(90);
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartAxisTitleFormattingPackagePart()
     {
         var workbook = new Workbook("ChartAxisTitleFormattingPackageSave");
