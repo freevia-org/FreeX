@@ -25,9 +25,13 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
 
         foreach (var cell in _scenario.ChangingCells)
         {
-            if (ctx.Workbook.GetSheet(cell.Address.Sheet) is null)
+            var sheet = ctx.Workbook.GetSheet(cell.Address.Sheet);
+            if (sheet is null)
                 return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
         }
+
+        if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _scenario.ChangingCells) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousIndex = ctx.Workbook.Scenarios.FindIndex(s =>
             string.Equals(s.Name, _scenario.Name, StringComparison.OrdinalIgnoreCase));
@@ -83,6 +87,8 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
             string.Equals(s.Name, _name, StringComparison.OrdinalIgnoreCase));
         if (scenario is null)
             return new CommandOutcome(false, "Scenario was not found.");
+        if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } protectedOutcome)
+            return protectedOutcome;
 
         _snapshot = [];
         foreach (var change in scenario.ChangingCells)
@@ -142,6 +148,9 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
             return new CommandOutcome(false, "Scenario was not found.");
 
         _removedScenario = ctx.Workbook.Scenarios[_removedIndex];
+        if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _removedScenario.ChangingCells) is { } protectedOutcome)
+            return protectedOutcome;
+
         ctx.Workbook.Scenarios.RemoveAt(_removedIndex);
         _applied = true;
         return new CommandOutcome(true, AffectedCells: _removedScenario.ChangingCells.Select(c => c.Address).ToList());
@@ -155,6 +164,25 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
         var index = Math.Clamp(_removedIndex, 0, ctx.Workbook.Scenarios.Count);
         ctx.Workbook.Scenarios.Insert(index, _removedScenario);
         _applied = false;
+    }
+}
+
+internal static class ScenarioProtectionGuards
+{
+    public static CommandOutcome? RejectIfChangingCellsProtected(
+        Workbook workbook,
+        IEnumerable<ScenarioCellValue> changingCells)
+    {
+        foreach (var sheetId in changingCells.Select(cell => cell.Address.Sheet).Distinct())
+        {
+            var sheet = workbook.GetSheet(sheetId);
+            if (sheet is null)
+                return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
+            if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditScenarios) is { } protectedOutcome)
+                return protectedOutcome;
+        }
+
+        return null;
     }
 }
 
