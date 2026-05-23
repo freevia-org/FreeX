@@ -36,6 +36,21 @@ internal static partial class XlsxChartXmlWriter
             ToChartBooleanValueXml(chartNs, "showKeys", dataTable.ShowLegendKeys));
     }
 
+    private static XElement? ToChart3DViewXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.ThreeDView is not { } view)
+            return null;
+
+        var element = new XElement(chartNs + "view3D");
+        AddOptionalIntElement(element, chartNs, "rotX", view.RotationX);
+        AddOptionalIntElement(element, chartNs, "hPercent", view.HeightPercent);
+        AddOptionalIntElement(element, chartNs, "rotY", view.RotationY);
+        AddOptionalIntElement(element, chartNs, "depthPercent", view.DepthPercent);
+        AddOptionalBoolElement(element, chartNs, "rAngAx", view.RightAngleAxes);
+        AddOptionalIntElement(element, chartNs, "perspective", view.Perspective);
+        return element.HasElements ? element : null;
+    }
+
     private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
         chart.BlankDisplayMode == ChartBlankDisplayMode.Gap
             ? null
@@ -138,6 +153,18 @@ internal static partial class XlsxChartXmlWriter
     {
         if (value is { } boolValue)
             element.SetAttributeValue(name, boolValue ? "1" : "0");
+    }
+
+    private static void AddOptionalBoolElement(XElement element, XNamespace chartNs, string name, bool? value)
+    {
+        if (value is { } boolValue)
+            element.Add(new XElement(chartNs + name, new XAttribute("val", boolValue ? "1" : "0")));
+    }
+
+    private static void AddOptionalIntElement(XElement element, XNamespace chartNs, string name, int? value)
+    {
+        if (value is { } intValue)
+            element.Add(new XElement(chartNs + name, new XAttribute("val", intValue.ToString(CultureInfo.InvariantCulture))));
     }
 
     private static void AddOptionalDoubleAttribute(XElement element, string name, double? value)
