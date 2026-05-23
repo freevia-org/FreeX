@@ -48,6 +48,9 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotTable requires at least one data field.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+            return protectedOutcome;
+
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
         _targetSnapshot = Snapshot(sheet, _targetRange);
         var headers = ReadHeaders(sourceSheet, fieldCount);
