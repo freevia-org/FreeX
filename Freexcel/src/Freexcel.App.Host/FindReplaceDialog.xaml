@@ -115,10 +115,15 @@
                   IsReadOnly="True"
                   HeadersVisibility="Column"
                   MinHeight="120"
-                  Margin="0,0,0,8">
+                  Margin="0,0,0,8"
+                  SelectionChanged="FindResultsGrid_SelectionChanged">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Cell" Binding="{Binding Address}" Width="90"/>
+                <DataGridTextColumn Header="Book" Binding="{Binding Book}" Width="110"/>
+                <DataGridTextColumn Header="Sheet" Binding="{Binding Sheet}" Width="100"/>
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="90"/>
+                <DataGridTextColumn Header="Cell" Binding="{Binding Cell}" Width="70"/>
                 <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                <DataGridTextColumn Header="Formula" Binding="{Binding Formula}" Width="*"/>
             </DataGrid.Columns>
         </DataGrid>
 
