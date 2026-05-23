@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="ExcelDataReader" Version="3.8.0" />
   </ItemGroup>
 
   <PropertyGroup>
