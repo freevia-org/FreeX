@@ -288,7 +288,7 @@ public static class RibbonAdaptiveLayoutPlanner
             return;
         }
 
-        if (availableWidth <= 1700 &&
+        if (availableWidth <= 1500 &&
             TryFindGroupIndex(groupNames, "Editing", out var editingIndex))
         {
             for (var i = editingIndex; i < states.Length; i++)
