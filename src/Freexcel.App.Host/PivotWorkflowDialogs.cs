@@ -1050,6 +1050,7 @@ file static class PivotFormulaInsertion
     }
 }
 
+#if false
 public sealed record PivotTableOptionsDialogResult(
     bool ShowRowGrandTotals,
     bool ShowColumnGrandTotals,
@@ -1488,3 +1489,4 @@ public sealed class PivotTableOptionsDialog : Window
         return text.Trim();
     }
 }
+#endif
