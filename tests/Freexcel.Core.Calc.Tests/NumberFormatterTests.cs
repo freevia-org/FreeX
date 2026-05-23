@@ -90,6 +90,21 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[Blue] [>100]0;0", 50, "50", null)]
+    [InlineData("[Blue] [>100]0;0", 150, "150", "#0070C0")]
+    public void CustomNumberSubset_AllowsWhitespaceBetweenLeadingBracketDirectives(
+        string format,
+        double value,
+        string expectedText,
+        string? expectedColor)
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(value), format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
     [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
     [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0070C0")]
     [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
