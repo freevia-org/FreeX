@@ -134,12 +134,33 @@ internal static class DelimitedTextWorkbookReader
             return new BoolValue(true);
         if (string.Equals(field, "FALSE", StringComparison.OrdinalIgnoreCase))
             return new BoolValue(false);
+        if (TryReadError(field, out var error))
+            return error;
         if (TryParsePercentage(field, out var percentage))
             return new NumberValue(percentage);
         if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return new NumberValue(number);
 
         return new TextValue(field);
+    }
+
+    private static bool TryReadError(string field, out ErrorValue error)
+    {
+        error = field.Trim().ToUpperInvariant() switch
+        {
+            "#DIV/0!" => ErrorValue.DivByZero,
+            "#VALUE!" => ErrorValue.Value,
+            "#REF!" => ErrorValue.Ref,
+            "#NAME?" => ErrorValue.Name,
+            "#NULL!" => ErrorValue.Null,
+            "#N/A" => ErrorValue.NA,
+            "#NUM!" => ErrorValue.Num,
+            "#SPILL!" => ErrorValue.Spill,
+            "#CALC!" => ErrorValue.Calc,
+            _ => null!
+        };
+
+        return error is not null;
     }
 
     private static bool TryReadFormula(string field, out string formulaText)
