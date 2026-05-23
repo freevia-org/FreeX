@@ -870,6 +870,7 @@ public static partial class BuiltInFunctions
     }
 
     private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
+    private const string RegexTextElement = @"(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\uD800-\uDFFF])";
 
     private static string WildcardToRegexPattern(string pattern, bool anchored = true)
     {
@@ -885,8 +886,8 @@ public static partial class BuiltInFunctions
 
             switch (ch)
             {
-                case '*': sb.Append(".*"); break;
-                case '?': sb.Append('.'); break;
+                case '*': sb.Append(RegexTextElement).Append('*'); break;
+                case '?': sb.Append(RegexTextElement); break;
                 default:  sb.Append(Regex.Escape(ch.ToString())); break;
             }
         }
