@@ -703,6 +703,30 @@ public class XlsxCorpusRunnerTests
                     link.PackagePart,
                     link.TargetUri ?? "",
                     link.TargetMode ?? ""))
+                .ToArray(),
+            workbook.WatchedCells
+                .Select(address => new WatchedCellSummary(
+                    workbook.GetSheet(address.Sheet)?.Name ?? "",
+                    address.Row,
+                    address.Col))
+                .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(cell => cell.Row)
+                .ThenBy(cell => cell.Column)
+                .ToArray(),
+            workbook.Scenarios
+                .OrderBy(scenario => scenario.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(scenario => new ScenarioSummary(
+                    scenario.Name,
+                    scenario.ChangingCells
+                        .Select(change => new ScenarioCellSummary(
+                            workbook.GetSheet(change.Address.Sheet)?.Name ?? "",
+                            change.Address.Row,
+                            change.Address.Col,
+                            CaptureScalarValueSummary(change.Value)))
+                        .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(cell => cell.Row)
+                        .ThenBy(cell => cell.Column)
+                        .ToArray()))
                 .ToArray());
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
@@ -919,11 +943,46 @@ public class XlsxCorpusRunnerTests
             chart.Title ?? "",
             chart.ShowLegend,
             chart.IsPivotChart,
+            chart.ChartStyleId,
+            chart.RoundedCorners,
+            chart.BlankDisplayMode,
+            chart.ShowDataInHiddenRowsAndColumns,
+            chart.LegendPosition,
+            chart.LegendOverlay,
+            chart.ShowDataLabels,
+            chart.ShowDataLabelCategoryName,
+            chart.ShowDataLabelSeriesName,
+            chart.ShowDataLabelPercentage,
+            chart.BarGapWidth,
+            chart.BarOverlap,
+            chart.VaryColorsByPoint,
+            CaptureChartDataTableSummary(chart.DataTable),
+            CaptureChart3DViewSummary(chart.ThreeDView),
             new ChartRangeSummary(
                 chart.DataRange.Start.Row,
                 chart.DataRange.Start.Col,
                 chart.DataRange.End.Row,
                 chart.DataRange.End.Col));
+
+    private static ChartDataTableSummary? CaptureChartDataTableSummary(ChartDataTableModel? dataTable) =>
+        dataTable is null
+            ? null
+            : new ChartDataTableSummary(
+                dataTable.ShowHorizontalBorder,
+                dataTable.ShowVerticalBorder,
+                dataTable.ShowOutline,
+                dataTable.ShowLegendKeys);
+
+    private static Chart3DViewSummary? CaptureChart3DViewSummary(Chart3DViewModel? view) =>
+        view is null
+            ? null
+            : new Chart3DViewSummary(
+                view.RotationX,
+                view.HeightPercent,
+                view.RotationY,
+                view.DepthPercent,
+                view.RightAngleAxes,
+                view.Perspective);
 
     private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
         new(
@@ -1427,7 +1486,9 @@ public class XlsxCorpusRunnerTests
     private sealed record WorkbookMetadataSummary(
         IReadOnlyList<SlicerSummary> Slicers,
         IReadOnlyList<TimelineSummary> Timelines,
-        IReadOnlyList<ExternalLinkSummary> ExternalLinks);
+        IReadOnlyList<ExternalLinkSummary> ExternalLinks,
+        IReadOnlyList<WatchedCellSummary> WatchedCells,
+        IReadOnlyList<ScenarioSummary> Scenarios);
 
     private sealed record SlicerSummary(
         string Name,
@@ -1456,6 +1517,21 @@ public class XlsxCorpusRunnerTests
         string PackagePart,
         string TargetUri,
         string TargetMode);
+
+    private sealed record WatchedCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column);
+
+    private sealed record ScenarioSummary(
+        string Name,
+        IReadOnlyList<ScenarioCellSummary> ChangingCells);
+
+    private sealed record ScenarioCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value);
 
     private sealed record NamedRangeSummary(
         string Name,
@@ -1619,7 +1695,36 @@ public class XlsxCorpusRunnerTests
         string Title,
         bool ShowLegend,
         bool IsPivotChart,
+        int? ChartStyleId,
+        bool RoundedCorners,
+        ChartBlankDisplayMode BlankDisplayMode,
+        bool ShowDataInHiddenRowsAndColumns,
+        ChartLegendPosition LegendPosition,
+        bool LegendOverlay,
+        bool ShowDataLabels,
+        bool ShowDataLabelCategoryName,
+        bool ShowDataLabelSeriesName,
+        bool ShowDataLabelPercentage,
+        int? BarGapWidth,
+        int? BarOverlap,
+        bool? VaryColorsByPoint,
+        ChartDataTableSummary? DataTable,
+        Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
+
+    private sealed record ChartDataTableSummary(
+        bool? ShowHorizontalBorder,
+        bool? ShowVerticalBorder,
+        bool? ShowOutline,
+        bool? ShowLegendKeys);
+
+    private sealed record Chart3DViewSummary(
+        int? RotationX,
+        int? HeightPercent,
+        int? RotationY,
+        int? DepthPercent,
+        bool? RightAngleAxes,
+        int? Perspective);
 
     private sealed record ChartRangeSummary(
         uint StartRow,
