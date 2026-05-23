@@ -145,9 +145,9 @@ public sealed class PageSetupDialogXamlTests
 
         foreach (var (buttonName, targetName, automationName) in new[]
         {
-            ("PrintAreaPickerButton", "PrintAreaBox", "Insert current selection as print area"),
-            ("RowsRepeatPickerButton", "RowsRepeatBox", "Insert current selection rows"),
-            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Insert current selection columns")
+            ("PrintAreaPickerButton", "PrintAreaBox", "Select print area"),
+            ("RowsRepeatPickerButton", "RowsRepeatBox", "Select rows to repeat"),
+            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Select columns to repeat")
         })
         {
             var button = document.Descendants(presentation + "Button")
@@ -156,7 +156,7 @@ public sealed class PageSetupDialogXamlTests
             button.Should().NotBeNull($"{buttonName} should expose Excel-like picker affordance");
             button!.Attribute("Content")?.Value.Should().Be("...");
             button.Attribute("Click")?.Value.Should().Be("RangePickerButton_Click");
-            button.Attribute("ToolTip")?.Value.Should().Contain("selection");
+            button.Attribute("ToolTip")?.Value.Should().Contain("Collapse dialog");
             button.Attribute("Tag")?.Value.Should().Be(targetName);
             button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
             button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
@@ -164,11 +164,22 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("RangePickerButton_Click");
         source.Should().Contain("private readonly GridRange? _currentSelection");
+        source.Should().Contain("PageSetupRangeSelectionRequest");
+        source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("target.Text = targetName switch");
         source.Should().Contain("selection.ToString()");
         source.Should().Contain("CellAddress.NumberToColumnName(selection.Start.Col)");
         source.Should().Contain("target.Focus()");
         source.Should().Contain("target.SelectAll()");
+    }
+
+    [Fact]
+    public void PageSetupRangeSelectionRequest_UsesExcelCollapseIntent()
+    {
+        PageSetupDialog.CreateRangeSelectionRequest(PageSetupRangeSelectionTarget.PrintArea, " A1:C10 ")
+            .Should()
+            .Be(new PageSetupRangeSelectionRequest(PageSetupRangeSelectionTarget.PrintArea, "A1:C10", CollapseDialog: true));
     }
 
     [Fact]
