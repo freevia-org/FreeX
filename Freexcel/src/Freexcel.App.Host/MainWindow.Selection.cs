@@ -262,6 +262,12 @@ public partial class MainWindow
         if (commandShortcut is not (KeyboardCommandShortcut.ShowKeyTips or KeyboardCommandShortcut.OpenContextMenu))
             return;
 
+        if (commandShortcut == KeyboardCommandShortcut.OpenContextMenu && TryOpenFocusedBackstageContextMenu())
+        {
+            e.Handled = true;
+            return;
+        }
+
         ExecuteCommandShortcut(commandShortcut, sender, e);
         e.Handled = true;
     }

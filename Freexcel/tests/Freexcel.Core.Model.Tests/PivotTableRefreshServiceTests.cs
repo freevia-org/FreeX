@@ -841,6 +841,62 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MergeAndCenterLabelsMergesRepeatedOuterRowLabels()
+    {
+        var workbook = new Workbook("PivotMergeLabelsRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I10"),
+            ShowSubtotals = false,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E3"), Addr(sheet, "E4")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E5"), Addr(sheet, "E6")));
+        Text(sheet, "E3").Should().Be("East");
+        sheet.GetCell(Addr(sheet, "E4")).Should().BeNull();
+        Text(sheet, "E5").Should().Be("West");
+        sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MergeAndCenterLabelsRemovesStalePivotMergesWhenDisabled()
+    {
+        var workbook = new Workbook("PivotMergeLabelsRefreshDisableTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        sheet.AddMergedRegion(new GridRange(Addr(sheet, "E3"), Addr(sheet, "E4")));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I10"),
+            ShowSubtotals = false,
+            MergeAndCenterLabels = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().BeEmpty();
+        Text(sheet, "E3").Should().Be("East");
+        Text(sheet, "E4").Should().Be("East");
+    }
+
+    [Fact]
     public void Refresh_CompactReportLayoutUsesSingleRowLabelColumnForMatrix()
     {
         var workbook = new Workbook("PivotCompactMatrixLayoutTest");
