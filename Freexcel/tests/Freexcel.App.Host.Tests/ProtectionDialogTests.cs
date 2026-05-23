@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Model;
 using System.IO;
@@ -121,12 +124,46 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Target = _rangeBox");
         source.Should().Contain("Header = \"Range\"");
         source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = \"Select editable range\"");
+        source.Should().Contain("ToolTip = \"Collapse dialog and select editable range\"");
         source.Should().Contain("AutomationProperties.SetName(rangePicker, \"Select editable range\")");
+        source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("rangePicker.Click += RangePicker_Click");
         source.Should().Contain("private void RangePicker_Click");
+        source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("_rangeBox.SelectAll()");
         source.Should().Contain("Use an A1-style range");
+    }
+
+    [Fact]
+    public void AllowEditRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        AllowEditRangeDialog.CreateRangeSelectionRequest(" $A$1:$C$10 ")
+            .Should()
+            .Be(new AllowEditRangeSelectionRequest("$A$1:$C$10", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void AllowEditRangePicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<AllowEditRangeSelectionRequest>();
+            var dialog = new AllowEditRangeDialog(SheetId.New(), " $A$1:$C$10 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                InvokePrivate(dialog, "RangePicker_Click");
+
+                requests.Should().Equal(new AllowEditRangeSelectionRequest("$A$1:$C$10", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+                GetPrivateField<TextBox>(dialog, "_rangeBox").SelectionLength.Should().Be("$A$1:$C$10".Length + 2);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -143,5 +180,20 @@ public sealed class ProtectionDialogTests
         source.Should().NotContain("_Confirm password:");
         source.Should().Contain("Select locked cells");
         source.Should().Contain("Edit scenarios");
+    }
+
+    private static T GetPrivateField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
+    }
+
+    private static void InvokePrivate(AllowEditRangeDialog dialog, string methodName)
+    {
+        var method = typeof(AllowEditRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
     }
 }
