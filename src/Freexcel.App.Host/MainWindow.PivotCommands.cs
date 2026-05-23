@@ -733,7 +733,8 @@ public partial class MainWindow
         string? altTextTitle = null,
         string? altTextDescription = null,
         int? compactRowLabelIndent = null,
-        bool updateAltText = false)
+        bool updateAltText = false,
+        bool? showExpandCollapseButtons = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -760,7 +761,8 @@ public partial class MainWindow
                     altTextTitle,
                     altTextDescription,
                     compactRowLabelIndent,
-                    updateAltText),
+                    updateAltText,
+                    showExpandCollapseButtons),
                 "PivotTable Options"))
             return;
 
@@ -971,7 +973,8 @@ public partial class MainWindow
             result.AltTextTitle,
             result.AltTextDescription,
             result.CompactRowLabelIndent,
-            updateAltText: true);
+            updateAltText: true,
+            showExpandCollapseButtons: result.ShowExpandCollapseButtons);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
