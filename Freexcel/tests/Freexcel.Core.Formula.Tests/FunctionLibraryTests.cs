@@ -1051,6 +1051,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Find_WithinTextError_PropagatesError()
     {
         var sheet = MakeSheet();
