@@ -6,7 +6,7 @@ namespace Freexcel.Core.IO;
 
 internal static class DelimitedTextWorkbookReader
 {
-    public static Workbook Load(Stream stream, char delimiter)
+    public static Workbook Load(Stream stream, char delimiter, bool allowSeparatorDirective = false)
     {
         var workbook = new Workbook("Untitled");
         var sheet = workbook.AddSheet("Sheet1");
@@ -15,6 +15,12 @@ internal static class DelimitedTextWorkbookReader
         uint row = 1;
         while (TryReadRecord(reader, delimiter, out var fields))
         {
+            if (row == 1 && allowSeparatorDirective && TryReadSeparatorDirective(fields, out var directiveDelimiter))
+            {
+                delimiter = directiveDelimiter;
+                continue;
+            }
+
             for (var i = 0; i < fields.Count; i++)
             {
                 var field = fields[i];
@@ -28,6 +34,21 @@ internal static class DelimitedTextWorkbookReader
         }
 
         return workbook;
+    }
+
+    private static bool TryReadSeparatorDirective(IReadOnlyList<string> fields, out char delimiter)
+    {
+        delimiter = default;
+
+        if (fields.Count != 1)
+            return false;
+
+        var directive = fields[0];
+        if (!directive.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) || directive.Length != 5)
+            return false;
+
+        delimiter = directive[4];
+        return delimiter is not '\r' and not '\n';
     }
 
     internal static bool TryReadRecord(TextReader reader, char delimiter, out List<string> fields)
