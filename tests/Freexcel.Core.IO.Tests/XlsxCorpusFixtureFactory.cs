@@ -738,6 +738,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "C1", new NumberValue(3));
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Corpus Image 1",
             Anchor = Addr(sheet, "E2"),
             Kind = PictureKind.Image,
             ImageBytes = MinimalPngBytes(),
@@ -762,6 +763,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "A1", new TextValue("Drawing objects"));
         sheet.TextBoxes.Add(new TextBoxModel
         {
+            Name = "Corpus Text Box 1",
             Anchor = Addr(sheet, "B2"),
             Text = "Corpus note",
             Width = 200,
@@ -772,6 +774,7 @@ internal static class XlsxCorpusFixtureFactory
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
+            Name = "Corpus Ellipse 1",
             Anchor = Addr(sheet, "D5"),
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
@@ -1045,6 +1048,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "C2", new NumberValue(8));
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Additional Corpus Image 1",
             Anchor = Addr(sheet, "F2"),
             Kind = PictureKind.Image,
             ImageBytes = MinimalPngBytes(),
