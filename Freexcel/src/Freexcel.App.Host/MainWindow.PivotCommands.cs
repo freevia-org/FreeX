@@ -743,7 +743,8 @@ public partial class MainWindow
         bool updateAltText = false,
         bool? showExpandCollapseButtons = null,
         bool? autofitColumnsOnUpdate = null,
-        bool? preserveFormattingOnUpdate = null)
+        bool? preserveFormattingOnUpdate = null,
+        bool? showFieldHeaders = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -776,7 +777,8 @@ public partial class MainWindow
                     updateAltText,
                     showExpandCollapseButtons,
                     autofitColumnsOnUpdate,
-                    preserveFormattingOnUpdate),
+                    preserveFormattingOnUpdate,
+                    showFieldHeaders),
                 "PivotTable Options"))
             return;
 
@@ -993,7 +995,8 @@ public partial class MainWindow
             updateAltText: true,
             showExpandCollapseButtons: result.ShowExpandCollapseButtons,
             autofitColumnsOnUpdate: result.AutofitColumnsOnUpdate,
-            preserveFormattingOnUpdate: result.PreserveFormattingOnUpdate);
+            preserveFormattingOnUpdate: result.PreserveFormattingOnUpdate,
+            showFieldHeaders: result.ShowFieldHeaders);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
