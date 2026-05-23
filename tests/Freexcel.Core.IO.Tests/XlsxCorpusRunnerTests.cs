@@ -1088,8 +1088,10 @@ public class XlsxCorpusRunnerTests
             cache.RefreshOnLoad,
             cache.SaveData,
             cache.EnableRefresh,
+            cache.PreserveSourceSortFilter,
             cache.MissingItemsLimit,
             cache.RefreshedVersion,
+            cache.RefreshedBy ?? "",
             cache.Fields
                 .Select(field => new PivotCacheFieldSummary(
                     field.Name,
@@ -1982,8 +1984,10 @@ public class XlsxCorpusRunnerTests
         bool RefreshOnLoad,
         bool SaveData,
         bool EnableRefresh,
+        bool PreserveSourceSortFilter,
         int? MissingItemsLimit,
         int? RefreshedVersion,
+        string RefreshedBy,
         IReadOnlyList<PivotCacheFieldSummary> Fields);
 
     private sealed record PivotCacheFieldSummary(
