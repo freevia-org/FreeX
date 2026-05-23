@@ -184,23 +184,8 @@ public sealed class AdvancedFilterDialog : Window
             out result,
             out error);
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
-    {
-        var panel = new DockPanel();
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox,
-            ToolTip = automationName
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
-        return panel;
-    }
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
+        DialogReferencePicker.CreateEditor(textBox, automationName);
 
     private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
     {
@@ -222,15 +207,6 @@ public sealed class AdvancedFilterDialog : Window
         Grid.SetRow(editor, row);
         Grid.SetColumn(editor, 1);
         grid.Children.Add(editor);
-    }
-
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
-
-        textBox.Focus();
-        textBox.SelectAll();
     }
 
     private void UpdateCopyToState()

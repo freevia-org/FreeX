@@ -666,6 +666,8 @@ public class XlsxCorpusRunnerTests
                 .ToArray(),
             workbook.CustomViews.Count,
             CaptureWorkbookMetadataSummary(workbook),
+            CaptureWorkbookCalculationSummary(workbook),
+            CaptureWorkbookThemeSummary(workbook.Theme),
             workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
 
     private static WorkbookMetadataSummary CaptureWorkbookMetadataSummary(Workbook workbook) =>
@@ -703,7 +705,53 @@ public class XlsxCorpusRunnerTests
                     link.PackagePart,
                     link.TargetUri ?? "",
                     link.TargetMode ?? ""))
+                .ToArray(),
+            workbook.WatchedCells
+                .Select(address => new WatchedCellSummary(
+                    workbook.GetSheet(address.Sheet)?.Name ?? "",
+                    address.Row,
+                    address.Col))
+                .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(cell => cell.Row)
+                .ThenBy(cell => cell.Column)
+                .ToArray(),
+            workbook.Scenarios
+                .OrderBy(scenario => scenario.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(scenario => new ScenarioSummary(
+                    scenario.Name,
+                    scenario.ChangingCells
+                        .Select(change => new ScenarioCellSummary(
+                            workbook.GetSheet(change.Address.Sheet)?.Name ?? "",
+                            change.Address.Row,
+                            change.Address.Col,
+                            CaptureScalarValueSummary(change.Value)))
+                        .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(cell => cell.Row)
+                        .ThenBy(cell => cell.Column)
+                        .ToArray()))
                 .ToArray());
+
+    private static WorkbookCalculationSummary CaptureWorkbookCalculationSummary(Workbook workbook) =>
+        new(
+            workbook.CalculationMode,
+            workbook.FullCalculationOnLoad,
+            workbook.ForceFullCalculation,
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange);
+
+    private static WorkbookThemeSummary CaptureWorkbookThemeSummary(WorkbookTheme theme) =>
+        new(
+            theme.Name,
+            theme.MajorFontName,
+            theme.MinorFontName,
+            theme.EffectsName,
+            Enum.GetValues<WorkbookThemeColorSlot>()
+                .Select(slot => new ThemeColorSummary(slot, ToColorSummary(theme.GetColor(slot))))
+                .ToArray());
+
+    private static string ToColorSummary(CellColor color) =>
+        FormattableString.Invariant($"{color.R:X2}{color.G:X2}{color.B:X2}");
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
@@ -1457,12 +1505,16 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<CustomViewSummary> CustomViews,
         int CustomViewCount,
         WorkbookMetadataSummary Metadata,
+        WorkbookCalculationSummary Calculation,
+        WorkbookThemeSummary Theme,
         IReadOnlyList<SheetSummary> Sheets);
 
     private sealed record WorkbookMetadataSummary(
         IReadOnlyList<SlicerSummary> Slicers,
         IReadOnlyList<TimelineSummary> Timelines,
-        IReadOnlyList<ExternalLinkSummary> ExternalLinks);
+        IReadOnlyList<ExternalLinkSummary> ExternalLinks,
+        IReadOnlyList<WatchedCellSummary> WatchedCells,
+        IReadOnlyList<ScenarioSummary> Scenarios);
 
     private sealed record SlicerSummary(
         string Name,
@@ -1491,6 +1543,40 @@ public class XlsxCorpusRunnerTests
         string PackagePart,
         string TargetUri,
         string TargetMode);
+
+    private sealed record WatchedCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column);
+
+    private sealed record ScenarioSummary(
+        string Name,
+        IReadOnlyList<ScenarioCellSummary> ChangingCells);
+
+    private sealed record ScenarioCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value);
+
+    private sealed record WorkbookCalculationSummary(
+        WorkbookCalculationMode Mode,
+        bool FullCalculationOnLoad,
+        bool ForceFullCalculation,
+        bool IterativeCalculation,
+        int? MaxIterations,
+        double? MaxChange);
+
+    private sealed record WorkbookThemeSummary(
+        string Name,
+        string MajorFontName,
+        string MinorFontName,
+        string EffectsName,
+        IReadOnlyList<ThemeColorSummary> Colors);
+
+    private sealed record ThemeColorSummary(
+        WorkbookThemeColorSlot Slot,
+        string Color);
 
     private sealed record NamedRangeSummary(
         string Name,
