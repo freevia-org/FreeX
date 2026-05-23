@@ -9,7 +9,8 @@ public sealed partial class TextToColumnsDialog
         TextToColumnsDelimiterKind delimiterKind,
         string? customDelimiter = null,
         CellAddress? destination = null,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
         var delimiter = delimiterKind switch
         {
@@ -27,7 +28,8 @@ public sealed partial class TextToColumnsDialog
             delimiterKind,
             delimiter,
             Destination: destination,
-            ColumnFormats: NormalizeColumnFormats(columnFormats));
+            ColumnFormats: NormalizeColumnFormats(columnFormats),
+            AdvancedOptions: advancedOptions);
     }
 
     public static TextToColumnsDialogResult CreateResult(
@@ -36,7 +38,8 @@ public sealed partial class TextToColumnsDialog
         TextToColumnsTextQualifier textQualifier = TextToColumnsTextQualifier.DoubleQuote,
         bool treatConsecutiveDelimitersAsOne = false,
         CellAddress? destination = null,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
         var kinds = delimiterKinds.Distinct().ToList();
         if (kinds.Count == 0)
@@ -52,13 +55,15 @@ public sealed partial class TextToColumnsDialog
             TextQualifier: textQualifier,
             TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne,
             Destination: destination,
-            ColumnFormats: NormalizeColumnFormats(columnFormats));
+            ColumnFormats: NormalizeColumnFormats(columnFormats),
+            AdvancedOptions: advancedOptions);
     }
 
     public static TextToColumnsDialogResult CreateFixedWidthResult(
         string? breakPositionsText,
         CellAddress? destination = null,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
         var positions = ParseFixedWidthBreakPositions(breakPositionsText);
         if (positions.Count == 0)
@@ -70,7 +75,8 @@ public sealed partial class TextToColumnsDialog
             TextToColumnsSplitMode.FixedWidth,
             positions,
             Destination: destination,
-            ColumnFormats: NormalizeColumnFormats(columnFormats));
+            ColumnFormats: NormalizeColumnFormats(columnFormats),
+            AdvancedOptions: advancedOptions);
     }
 
     public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)

@@ -31,6 +31,11 @@ public enum TextToColumnsColumnFormat
     Skip
 }
 
+public sealed record TextToColumnsAdvancedOptions(
+    string DecimalSeparator = ".",
+    string ThousandsSeparator = ",",
+    bool TrailingMinusNumbers = false);
+
 public sealed record TextToColumnsDialogResult(
     TextToColumnsDelimiterKind DelimiterKind,
     string Delimiter,
@@ -39,7 +44,8 @@ public sealed record TextToColumnsDialogResult(
     TextToColumnsTextQualifier TextQualifier = TextToColumnsTextQualifier.DoubleQuote,
     bool TreatConsecutiveDelimitersAsOne = false,
     CellAddress? Destination = null,
-    IReadOnlyList<TextToColumnsColumnFormat>? ColumnFormats = null)
+    IReadOnlyList<TextToColumnsColumnFormat>? ColumnFormats = null,
+    TextToColumnsAdvancedOptions? AdvancedOptions = null)
 {
     public string Delimiters => Delimiter;
     public char? TextQualifierChar => TextQualifier switch
