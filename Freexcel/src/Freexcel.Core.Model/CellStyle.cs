@@ -168,6 +168,9 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Whether the cell is locked when worksheet protection is enabled.</summary>
     public bool Locked { get; set; } = true;
 
+    /// <summary>Whether the cell formula is hidden when worksheet protection is enabled.</summary>
+    public bool Hidden { get; set; }
+
     /// <summary>Native dxf attributes not modeled by Freexcel, retained for conditional-format XLSX fidelity.</summary>
     public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
 
@@ -208,6 +211,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         IndentLevel = IndentLevel,
         TextRotation = TextRotation,
         Locked = Locked,
+        Hidden = Hidden,
         NativeDifferentialAttributes = NativeDifferentialAttributes,
         NativeDifferentialChildXmls = NativeDifferentialChildXmls,
         NativeDifferentialElementXmls = NativeDifferentialElementXmls,
@@ -245,7 +249,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && DoubleUnderline == other.DoubleUnderline
             && IndentLevel == other.IndentLevel
             && TextRotation == other.TextRotation
-            && Locked == other.Locked;
+            && Locked == other.Locked
+            && Hidden == other.Hidden;
     }
 
     /// <inheritdoc/>
@@ -277,6 +282,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(IndentLevel);
         h.Add(TextRotation);
         h.Add(Locked);
+        h.Add(Hidden);
         return h.ToHashCode();
     }
 }
@@ -309,6 +315,7 @@ public record StyleDiff(
     CellBorder? BorderBottom    = null,
     CellBorder? BorderLeft      = null,
     bool? Locked                = null,
+    bool? Hidden                = null,
     bool? ClearFill             = null,
     CellFillPatternStyle? FillPatternStyle = null,
     CellColor? FillPatternColor = null
@@ -340,7 +347,8 @@ public record StyleDiff(
         BorderRight:     style.BorderRight,
         BorderBottom:    style.BorderBottom,
         BorderLeft:      style.BorderLeft,
-        Locked:          style.Locked
+        Locked:          style.Locked,
+        Hidden:          style.Hidden
     );
 
     /// <summary>Apply this diff to a base style, returning a new style with only non-null fields overridden.</summary>
@@ -388,6 +396,7 @@ public record StyleDiff(
         if (BorderBottom   is not null) s.BorderBottom  = BorderBottom.Value;
         if (BorderLeft     is not null) s.BorderLeft    = BorderLeft.Value;
         if (Locked         is not null) s.Locked        = Locked.Value;
+        if (Hidden         is not null) s.Hidden        = Hidden.Value;
         return s;
     }
 }
