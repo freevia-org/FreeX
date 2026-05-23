@@ -29,6 +29,19 @@ public sealed class CsvFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Café"));
     }
 
+    [Theory]
+    [MemberData(nameof(Utf32BomCsvPayloads))]
+    public void Load_HonorsUtf32ByteOrderMarks(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new BoolValue(true));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(42));
+    }
+
     [Fact]
     public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
     {
@@ -294,4 +307,13 @@ public sealed class CsvFileAdapterTests
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("2,=A1*2\r\n");
     }
+
+    public static TheoryData<byte[]> Utf32BomCsvPayloads() => new()
+    {
+        Encoding.UTF32.GetPreamble().Concat(Encoding.UTF32.GetBytes("TRUE,42\r\n")).ToArray(),
+        new UTF32Encoding(bigEndian: true, byteOrderMark: true)
+            .GetPreamble()
+            .Concat(new UTF32Encoding(bigEndian: true, byteOrderMark: true).GetBytes("TRUE,42\r\n"))
+            .ToArray()
+    };
 }

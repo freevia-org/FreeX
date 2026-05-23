@@ -169,6 +169,25 @@ internal static class DelimitedTextWorkbookReader
             return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
         }
 
+        if (bytes.Length >= 4 &&
+            bytes[0] == 0xFF &&
+            bytes[1] == 0xFE &&
+            bytes[2] == 0x00 &&
+            bytes[3] == 0x00)
+        {
+            return Encoding.UTF32.GetString(bytes, 4, bytes.Length - 4);
+        }
+
+        if (bytes.Length >= 4 &&
+            bytes[0] == 0x00 &&
+            bytes[1] == 0x00 &&
+            bytes[2] == 0xFE &&
+            bytes[3] == 0xFF)
+        {
+            return new UTF32Encoding(bigEndian: true, byteOrderMark: true)
+                .GetString(bytes, 4, bytes.Length - 4);
+        }
+
         if (bytes.Length >= 2 &&
             bytes[0] == 0xFF &&
             bytes[1] == 0xFE)
