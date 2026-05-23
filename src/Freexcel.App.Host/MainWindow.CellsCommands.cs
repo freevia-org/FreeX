@@ -568,7 +568,91 @@ public partial class MainWindow
         var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
         var dlg = new FormatCellsDialog(currentStyle, initialTab) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
-        ApplyStyleDiff(dlg.ResultDiff);
+        ApplyFormatCellsDialogResult(range, dlg.ResultDiff, dlg.ResultBorderSelection);
+    }
+
+    private void ApplyFormatCellsDialogResult(
+        GridRange range,
+        StyleDiff diff,
+        FormatCellsBorderSelection borderSelection)
+    {
+        if (!borderSelection.HasRangeOperations)
+        {
+            ApplyStyleDiff(diff);
+            return;
+        }
+
+        var nonBorderDiff = diff with
+        {
+            BorderTop = null,
+            BorderRight = null,
+            BorderBottom = null,
+            BorderLeft = null
+        };
+
+        IWorkbookCommand CreateSheetCommand(SheetId sheetId)
+        {
+            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            var commands = new List<IWorkbookCommand>
+            {
+                new ApplyStyleCommand(sheetId, sheetRange, nonBorderDiff)
+            };
+
+            if (borderSelection.Clear)
+            {
+                commands.Add(new ApplyStyleCommand(sheetId, sheetRange, BorderShortcutService.GetClearBorderDiff()));
+            }
+
+            if (borderSelection.Outline is { } outline)
+            {
+                commands.AddRange(CreateBorderCommands(
+                    sheetId,
+                    sheetRange,
+                    (currentRange, address) => BorderShortcutService.GetOutlineBorderDiff(
+                        currentRange,
+                        address,
+                        outline.Style,
+                        outline.Color)));
+            }
+
+            if (borderSelection.Inside is { } inside)
+            {
+                commands.AddRange(CreateBorderCommands(
+                    sheetId,
+                    sheetRange,
+                    (currentRange, address) => BorderShortcutService.GetInsideBorderDiff(
+                        currentRange,
+                        address,
+                        inside.Style,
+                        inside.Color)));
+            }
+
+            return commands.Count == 1
+                ? commands[0]
+                : new CompositeWorkbookCommand("Format Cells", commands);
+        }
+
+        if (!TryExecuteRepeatableGroupedSheetCommand("Format Cells", CreateSheetCommand))
+            return;
+
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private static IReadOnlyList<IWorkbookCommand> CreateBorderCommands(
+        SheetId sheetId,
+        GridRange range,
+        Func<GridRange, CellAddress, StyleDiff> createDiff)
+    {
+        return range
+            .AllCells()
+            .Select(address => (Address: address, Diff: createDiff(range, address)))
+            .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))
+            .Select(plan => (IWorkbookCommand)new ApplyStyleCommand(
+                sheetId,
+                new GridRange(plan.Address, plan.Address),
+                plan.Diff))
+            .ToList();
     }
 
     private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
