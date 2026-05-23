@@ -155,6 +155,20 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void CreateClearFilterResult_RequestsExplicitClearAction()
+    {
+        AutoFilterDialog.CreateClearFilterResult()
+            .Should()
+            .Be(new AutoFilterDialogResult(
+                AutoFilterSortDirection.None,
+                [],
+                "",
+                "",
+                null,
+                AutoFilterDialogAction.ClearFilter));
+    }
+
+    [Fact]
     public void GetCriteriaSuggestions_ReturnsFilterFamilyCriteriaFromMenuPlan()
     {
         var menuPlan = new AutoFilterMenuPlan(
@@ -311,6 +325,8 @@ public sealed class AutoFilterDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
 
+        source.Should().Contain("result.Action == AutoFilterDialogAction.ClearFilter");
+        source.Should().Contain("\"Clear Filter\"");
         source.Should().Contain("result.ColorFilter is { } colorFilter");
         source.Should().Contain("new CellFillColorFilterCommand");
         source.Should().Contain("new CellNoFillColorFilterCommand");

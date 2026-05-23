@@ -28,6 +28,9 @@ public static partial class PivotTableRefreshService
             .Where(row => MatchesFieldSelections(row, pivotTable.RowFields))
             .Where(row => MatchesFieldSelections(row, columnFields))
             .ToList();
+
+        WritePageFields(targetSheet, pivotTable, headers);
+
         if (pivotTable.RowFields.Count == 0 && columnFields.Count == 0)
             WriteValuesOnlyPivot(workbook, targetSheet, pivotTable, headers, rows);
         else if (pivotTable.RowFields.Count == 0)
@@ -72,6 +75,28 @@ public static partial class PivotTableRefreshService
         pivotTable.ReportLayout == PivotReportLayout.Compact && pivotTable.RowFields.Count > 1
             ? 1
             : pivotTable.RowFields.Count;
+
+    private static CellAddress GetPivotBodyStart(PivotTableModel pivotTable)
+    {
+        var start = pivotTable.TargetRange.Start;
+        var pageFieldRows = GetPageFieldRowSpan(pivotTable);
+        return pageFieldRows == 0
+            ? start
+            : new CellAddress(start.Sheet, start.Row + pageFieldRows + 1, start.Col);
+    }
+
+    private static uint GetPageFieldRowSpan(PivotTableModel pivotTable)
+    {
+        var count = pivotTable.PageFields.Count;
+        if (count == 0)
+            return 0;
+
+        var wrap = Math.Max(0, pivotTable.PageWrap);
+        if (pivotTable.PageOverThenDown)
+            return (uint)(wrap <= 0 ? 1 : (int)Math.Ceiling(count / (double)wrap));
+
+        return (uint)(wrap <= 0 ? count : Math.Min(count, wrap));
+    }
 
     private static IReadOnlyList<string> ReadHeaders(Sheet sheet, GridRange range)
     {

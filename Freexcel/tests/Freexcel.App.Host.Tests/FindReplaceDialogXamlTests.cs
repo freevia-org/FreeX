@@ -98,6 +98,9 @@ public sealed class FindReplaceDialogXamlTests
         AssertNamedButton(document, presentation, xaml, "FindFormatButton", "For_mat...", "FindFormatButton_Click");
         AssertNamedButton(document, presentation, xaml, "ReplaceFindFormatButton", "For_mat...", "FindFormatButton_Click");
         AssertNamedButton(document, presentation, xaml, "ReplaceWithFormatButton", "For_mat...", "ReplaceWithFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "FindChooseFormatFromCellButton", "Choose From _Cell...", "ChooseFindFormatFromCellButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceFindChooseFormatFromCellButton", "Choose From _Cell...", "ChooseFindFormatFromCellButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceWithChooseFormatFromCellButton", "Choose From _Cell...", "ChooseReplaceWithFormatFromCellButton_Click");
         AssertNamedButton(document, presentation, xaml, "FindClearFormatButton", "_Clear", "FindClearFormatButton_Click");
         AssertNamedButton(document, presentation, xaml, "ReplaceFindClearFormatButton", "_Clear", "FindClearFormatButton_Click");
         AssertNamedButton(document, presentation, xaml, "ReplaceWithClearFormatButton", "_Clear", "ReplaceWithClearFormatButton_Click");
@@ -189,6 +192,29 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void CreateFormatDiffFromCell_CapturesSelectedCellStyle()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Budget");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = new CellColor(1, 2, 3),
+            NumberFormat = "$#,##0.00"
+        });
+        sheet.SetCell(address, Cell.FromValue(new TextValue("Budget")));
+        sheet.GetCell(address)!.StyleId = styleId;
+
+        var diff = FindReplaceDialogPlanner.CreateFormatDiffFromCell(workbook, address);
+
+        diff.Should().NotBeNull();
+        diff!.Bold.Should().BeTrue();
+        diff.FillColor.Should().Be(new CellColor(1, 2, 3));
+        diff.NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void Dialog_SourcePreservesHandlersAndSelectsReplaceTabForReplaceMode()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
@@ -202,6 +228,10 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font)");
         source.Should().Contain("FindFormatButton_Click");
         source.Should().Contain("ReplaceWithFormatButton_Click");
+        source.Should().Contain("ChooseFindFormatFromCellButton_Click");
+        source.Should().Contain("ChooseReplaceWithFormatFromCellButton_Click");
+        source.Should().Contain("PickFormatFromSelectedResult");
+        source.Should().Contain("CreateFormatDiffFromCell(_getWorkbook(), row.Address)");
         source.Should().Contain("FindClearFormatButton_Click");
         source.Should().Contain("ReplaceWithClearFormatButton_Click");
         source.Should().Contain("UpdateFormatStateButtons");

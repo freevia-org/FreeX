@@ -59,7 +59,9 @@ public sealed class GridViewDrawingObjectThemeTests
     [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var source =
+            File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs")) +
+            File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.RenderDispatch.cs"));
         var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Properties.cs"));
 
         source.Should().Contain("public enum GridObjectDisplayMode");
