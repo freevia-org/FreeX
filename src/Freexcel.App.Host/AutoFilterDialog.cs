@@ -12,6 +12,11 @@ public sealed partial class AutoFilterDialog : Window
     private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
+    private readonly CheckBox _addCurrentSelectionToFilterBox = new()
+    {
+        Content = "_Add current selection to filter",
+        Margin = new Thickness(0, 0, 0, 8)
+    };
     private readonly TextBox _criteriaBox = new() { IsReadOnly = true };
     private readonly ComboBox _criteriaSuggestionBox = new()
     {
@@ -184,6 +189,7 @@ public sealed partial class AutoFilterDialog : Window
         _searchBox.ToolTip = "Search";
         _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
         stack.Children.Add(_searchBox);
+        stack.Children.Add(_addCurrentSelectionToFilterBox);
 
         var list = new ListBox
         {
@@ -267,7 +273,13 @@ public sealed partial class AutoFilterDialog : Window
         var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
-            Result = BuildResult(GetSortDirection(), _allItems, _searchBox.Text, _criteriaBox.Text, _selectedColorFilter);
+            Result = BuildResult(
+                GetSortDirection(),
+                _allItems,
+                _searchBox.Text,
+                _criteriaBox.Text,
+                _selectedColorFilter,
+                _addCurrentSelectionToFilterBox.IsChecked == true);
             DialogResult = true;
         };
         var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };

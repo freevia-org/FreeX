@@ -8,7 +8,7 @@ public sealed record ZoomDialogResult(int ZoomPercent, bool FitSelection = false
 
 public sealed class ZoomDialog : Window
 {
-    private static readonly int[] ZoomPresets = [200, 100, 75, 50, 25];
+    private static readonly int[] ZoomPresets = [400, 200, 100, 75, 50, 25];
     private readonly TextBox _zoomBox = new();
     private readonly RadioButton _customZoomButton = new() { Content = "_Custom:", GroupName = "Zoom", IsChecked = true };
     private readonly RadioButton _fitSelectionButton = new() { Content = "Fit _selection", GroupName = "Zoom" };
