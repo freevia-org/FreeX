@@ -260,7 +260,8 @@ public static class FindReplaceService
             && Matches(requiredFormat.BorderRight, style.BorderRight)
             && Matches(requiredFormat.BorderBottom, style.BorderBottom)
             && Matches(requiredFormat.BorderLeft, style.BorderLeft)
-            && Matches(requiredFormat.Locked, style.Locked);
+            && Matches(requiredFormat.Locked, style.Locked)
+            && Matches(requiredFormat.Hidden, style.Hidden);
     }
 
     private static bool Matches<T>(T? expected, T actual)
