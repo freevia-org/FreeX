@@ -8452,7 +8452,13 @@ public partial class FileAdapterSmokeTests
                 new CellAddress(sheet.Id, 4, 3)),
             ShowDropLines = true,
             ShowHighLowLines = true,
-            ShowUpDownBars = true
+            ShowUpDownBars = true,
+            DropLineColor = new CellColor(91, 155, 213),
+            DropLineThickness = 1.5,
+            DropLineDashStyle = ChartLineDashStyle.Dot,
+            HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+            HighLowLineThickness = 2,
+            HighLowLineDashStyle = ChartLineDashStyle.Dash
         });
 
         var saved = new MemoryStream();
@@ -8467,6 +8473,20 @@ public partial class FileAdapterSmokeTests
         lineChart.Element(chartNs + "dropLines").Should().NotBeNull();
         lineChart.Element(chartNs + "hiLowLines").Should().NotBeNull();
         lineChart.Element(chartNs + "upDownBars").Should().NotBeNull();
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var dropLine = lineChart.Element(chartNs + "dropLines")!
+            .Element(chartNs + "spPr")!
+            .Element(drawingNs + "ln")!;
+        dropLine.Attribute("w")!.Value.Should().Be("19050");
+        dropLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("5B9BD5");
+        dropLine.Element(drawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dot");
+
+        var highLowLine = lineChart.Element(chartNs + "hiLowLines")!
+            .Element(chartNs + "spPr")!
+            .Element(drawingNs + "ln")!;
+        highLowLine.Attribute("w")!.Value.Should().Be("25400");
+        highLowLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent4");
+        highLowLine.Element(drawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dash");
     }
 
     [Fact]
@@ -9662,6 +9682,49 @@ public partial class FileAdapterSmokeTests
         recovery.Should().NotBeNull();
         recovery!.Attribute("autoRecover")!.Value.Should().Be("1");
         recovery.Attribute("crashSave")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesMultipleWorkbookFileRecoveryProperties()
+    {
+        var workbook = new Workbook("WorkbookMultiFileRecoveryRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(
+                new XElement(workbookNs + "fileRecoveryPr",
+                    new XAttribute("autoRecover", "1"),
+                    new XAttribute("crashSave", "1")),
+                new XElement(workbookNs + "fileRecoveryPr",
+                    new XAttribute("dataExtractLoad", "1"),
+                    new XAttribute("repairLoad", "1")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorkbookXml = LoadPackageXml(savedArchive.GetEntry("xl/workbook.xml")!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var recoveryBlocks = savedWorkbookXml.Root!.Elements(ns + "fileRecoveryPr").ToArray();
+        recoveryBlocks.Should().HaveCount(2);
+        recoveryBlocks[0].Attribute("autoRecover")!.Value.Should().Be("1");
+        recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1");
     }
 
     [Fact]
