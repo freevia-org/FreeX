@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -143,6 +143,7 @@ internal static partial class XlsxPivotTableReader
             name,
             cacheId,
             targetReference,
+            pivotCache?.SourceReference ?? "",
             pivotPath,
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "defaultSubtotal"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "subtotalTop")
@@ -464,6 +465,7 @@ internal static partial class XlsxPivotTableReader
         {
             Name = pending.Name,
             CacheId = pending.CacheId,
+            SourceRange = ParseOptionalRange(pending.SourceReference, sheetId),
             TargetRange = GridRange.Parse(pending.TargetReference, sheetId),
             PackagePart = pending.PackagePart,
             ShowSubtotals = pending.ShowSubtotals,
@@ -503,6 +505,21 @@ internal static partial class XlsxPivotTableReader
         return pivotTable;
     }
 
+    private static GridRange ParseOptionalRange(string reference, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return default;
+
+        try
+        {
+            return GridRange.Parse(reference, sheetId);
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
 
     public sealed record PivotPackageMetadata(
         IReadOnlyList<PivotCacheModel> PivotCaches,
@@ -517,6 +534,7 @@ internal static partial class XlsxPivotTableReader
         string Name,
         int CacheId,
         string TargetReference,
+        string SourceReference,
         string PackagePart,
         bool ShowSubtotals,
         PivotSubtotalPlacement SubtotalPlacement,

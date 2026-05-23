@@ -5560,6 +5560,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_OmittedPadWith_DefaultsToNA()
+    {
+        var rowSheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)));
+        var rows = _eval.Evaluate("=WRAPROWS(A1:C1,2,)", rowSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rows.Cells[1, 1].Should().Be(ErrorValue.NA);
+
+        var colSheet = MakeSheet(
+            (1,1,new NumberValue(1)), (2,1,new NumberValue(2)), (3,1,new NumberValue(3)));
+        var cols = _eval.Evaluate("=WRAPCOLS(A1:A3,2,)", colSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        cols.Cells[1, 1].Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Wrapcols_WrapsColumnVectorByColumns()
     {
         var sheet = MakeSheet(
@@ -5657,6 +5675,18 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new NumberValue(1));
         rv.Cells[0, 1].Should().Be(new TextValue("x"));
         rv.Cells[1, 0].Should().Be(new TextValue("x"));
+    }
+
+    [Fact]
+    public void Expand_OmittedPadWith_DefaultsToNA()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 1].Should().Be(ErrorValue.NA);
+        rv.Cells[1, 0].Should().Be(ErrorValue.NA);
     }
 
     [Fact]

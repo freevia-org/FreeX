@@ -611,6 +611,7 @@ public class XlsxCorpusRunnerTests
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
+            sheet.PivotTables.Select(CapturePivotTableSummary).ToArray(),
             sheet.PivotTables.Count,
             sheet.PivotTables.Sum(pivot => pivot.RowFields.Count + pivot.ColumnFields.Count + pivot.PageFields.Count + pivot.DataFields.Count),
             sheet.StructuredTables.Select(CaptureStructuredTableSummary).ToArray(),
@@ -690,6 +691,65 @@ public class XlsxCorpusRunnerTests
                     column.CalculatedColumnFormula ?? "",
                     column.TotalsRowFormula ?? ""))
                 .ToArray());
+
+    private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
+        new(
+            pivot.Name,
+            pivot.CacheId,
+            ToRangeSummary(pivot.SourceRange),
+            ToRangeSummary(pivot.TargetRange),
+            pivot.ShowSubtotals,
+            pivot.SubtotalPlacement,
+            pivot.ShowRowGrandTotals,
+            pivot.ShowColumnGrandTotals,
+            pivot.RepeatItemLabels,
+            pivot.BlankLineAfterItems,
+            pivot.ReportLayout,
+            pivot.StyleName,
+            pivot.ShowRowHeaders,
+            pivot.ShowColumnHeaders,
+            pivot.ShowRowStripes,
+            pivot.ShowColumnStripes,
+            pivot.ShowFieldHeaders,
+            pivot.EmptyValueText ?? "",
+            pivot.AutofitColumnsOnUpdate,
+            pivot.PreserveFormattingOnUpdate,
+            pivot.ShowExpandCollapseButtons,
+            pivot.PrintTitles,
+            pivot.PrintExpandCollapseButtons,
+            pivot.RowFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.ColumnFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.PageFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.DataFields.Select(CapturePivotDataFieldSummary).ToArray());
+
+    private static PivotFieldSummary CapturePivotFieldSummary(PivotFieldModel field) =>
+        new(
+            field.SourceFieldIndex,
+            field.SelectedItem ?? "",
+            field.SelectedItems?.ToArray() ?? [],
+            field.Grouping,
+            field.GroupStart,
+            field.GroupEnd,
+            field.GroupInterval);
+
+    private static PivotDataFieldSummary CapturePivotDataFieldSummary(PivotDataFieldModel field) =>
+        new(
+            field.SourceFieldIndex,
+            field.Name,
+            field.SummaryFunction,
+            field.NumberFormatId,
+            field.CalculatedFieldName ?? "",
+            field.ShowValuesAs,
+            field.BaseFieldIndex,
+            field.BaseItem ?? "",
+            field.NumberFormatCode ?? "");
+
+    private static ChartRangeSummary ToRangeSummary(GridRange range) =>
+        new(
+            range.Start.Row,
+            range.Start.Col,
+            range.End.Row,
+            range.End.Col);
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -929,6 +989,7 @@ public class XlsxCorpusRunnerTests
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
+        IReadOnlyList<PivotTableSummary> PivotTables,
         int PivotTableCount,
         int PivotTableFieldCount,
         IReadOnlyList<StructuredTableSummary> StructuredTables,
@@ -1004,6 +1065,55 @@ public class XlsxCorpusRunnerTests
         string TotalsRowFunction,
         string CalculatedColumnFormula,
         string TotalsRowFormula);
+
+    private sealed record PivotTableSummary(
+        string Name,
+        int CacheId,
+        ChartRangeSummary SourceRange,
+        ChartRangeSummary TargetRange,
+        bool ShowSubtotals,
+        PivotSubtotalPlacement SubtotalPlacement,
+        bool ShowRowGrandTotals,
+        bool ShowColumnGrandTotals,
+        bool RepeatItemLabels,
+        bool BlankLineAfterItems,
+        PivotReportLayout ReportLayout,
+        string StyleName,
+        bool ShowRowHeaders,
+        bool ShowColumnHeaders,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
+        bool ShowFieldHeaders,
+        string EmptyValueText,
+        bool AutofitColumnsOnUpdate,
+        bool PreserveFormattingOnUpdate,
+        bool ShowExpandCollapseButtons,
+        bool PrintTitles,
+        bool PrintExpandCollapseButtons,
+        IReadOnlyList<PivotFieldSummary> RowFields,
+        IReadOnlyList<PivotFieldSummary> ColumnFields,
+        IReadOnlyList<PivotFieldSummary> PageFields,
+        IReadOnlyList<PivotDataFieldSummary> DataFields);
+
+    private sealed record PivotFieldSummary(
+        int SourceFieldIndex,
+        string SelectedItem,
+        IReadOnlyList<string> SelectedItems,
+        PivotFieldGrouping Grouping,
+        double? GroupStart,
+        double? GroupEnd,
+        double? GroupInterval);
+
+    private sealed record PivotDataFieldSummary(
+        int SourceFieldIndex,
+        string Name,
+        string SummaryFunction,
+        int? NumberFormatId,
+        string CalculatedFieldName,
+        PivotShowValuesAs ShowValuesAs,
+        int? BaseFieldIndex,
+        string BaseItem,
+        string NumberFormatCode);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
