@@ -105,7 +105,7 @@ public partial class DataValidationDialog : Window
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
         Formula1Box.Visibility   = isAny ? Visibility.Collapsed : Visibility.Visible;
-        SourcePickerButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
+        SourcePickerButton.Visibility = !isAny && !string.IsNullOrWhiteSpace(SelectionSource)
             ? Visibility.Visible
             : Visibility.Collapsed;
         UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
