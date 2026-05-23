@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Freexcel.Core.Model;
@@ -291,11 +292,18 @@ public sealed partial class AutoFilterDialog : Window
         stack.Children.Add(buttons);
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private static void AddFilterMenuSeparator(Panel stack)
     {
         stack.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 8) });
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _sortAscending.Focus();
+        Keyboard.Focus(_sortAscending);
     }
 
     private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
