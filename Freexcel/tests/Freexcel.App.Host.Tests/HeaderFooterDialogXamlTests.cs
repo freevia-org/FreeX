@@ -85,11 +85,18 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         document.Descendants(presentation + "ComboBox")
             .Select(element => element.Attributes().FirstOrDefault(a => a.Name.LocalName == "Name")?.Value)
             .Should()
             .Contain(["HeaderPresetBox", "FooterPresetBox"]);
+
+        var headerPresets = GetPresetContents(document, presentation, x, "HeaderPresetBox");
+        var footerPresets = GetPresetContents(document, presentation, x, "FooterPresetBox");
+
+        headerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Confidential, Page 1", "Date, Page 1", "File path"]);
+        footerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Time", "Date, Page 1", "File name"]);
     }
 
     [Fact]
@@ -199,4 +206,16 @@ public sealed class HeaderFooterDialogXamlTests
     {
         HeaderFooterDialog.InsertToken("Page  of", caretIndex: 5, "&[Page]").Should().Be("Page &[Page] of");
     }
+
+    private static IReadOnlyList<string?> GetPresetContents(
+        XDocument document,
+        XNamespace presentation,
+        XNamespace x,
+        string comboBoxName) =>
+        document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == comboBoxName)
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value)
+            .ToList();
 }
