@@ -171,6 +171,11 @@ public sealed class WorkbookThemeDialogXamlTests
         xaml.Should().Contain("x:Name=\"PreviewAccentStrip\"");
         xaml.Should().Contain("Sample");
         source.Should().Contain("UpdatePreview");
+        source.Should().Contain("WirePreviewRefresh");
+        source.Should().Contain("HeadingFontBox.SelectionChanged += (_, _) => UpdatePreview()");
+        source.Should().Contain("HeadingFontBox.AddHandler(TextBox.TextChangedEvent");
+        source.Should().Contain("colorBox.TextChanged += (_, _) => UpdatePreview()");
+        source.Should().Contain("ThemeColorTextBoxes");
         source.Should().Contain("PreviewHeadingText.FontFamily");
         source.Should().Contain("PreviewAccentStrip");
     }

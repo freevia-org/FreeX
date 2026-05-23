@@ -2,6 +2,7 @@ using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
+using System.Reflection;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -407,4 +408,11 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
+    }
+    private static T GetField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }}

@@ -34,6 +34,8 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.ThreeDArea)]
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.ThreeDSurface)]
     [InlineData(ChartType.ThreeDColumn)]
     [InlineData(ChartType.ThreeDBar)]
     public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
@@ -43,7 +45,6 @@ public sealed class ChartCommandTests
     }
 
     [Theory]
-    [InlineData(ChartType.Surface)]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
     [InlineData(ChartType.Histogram)]
@@ -353,7 +354,6 @@ public sealed class ChartCommandTests
     }
 
     [Theory]
-    [InlineData(ChartType.Surface)]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
     [InlineData(ChartType.Histogram)]

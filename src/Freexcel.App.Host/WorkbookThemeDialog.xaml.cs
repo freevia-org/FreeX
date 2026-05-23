@@ -16,6 +16,7 @@ public partial class WorkbookThemeDialog : Window
         _initialTheme = theme;
         InitializeComponent();
         PopulateOptions();
+        WirePreviewRefresh();
         LoadTheme(theme);
     }
 
@@ -27,6 +28,16 @@ public partial class WorkbookThemeDialog : Window
         HeadingFontBox.ItemsSource = fonts;
         BodyFontBox.ItemsSource = fonts;
         EffectsBox.ItemsSource = new[] { "Office", "Subtle", "Refined" };
+    }
+
+    private void WirePreviewRefresh()
+    {
+        HeadingFontBox.SelectionChanged += (_, _) => UpdatePreview();
+        BodyFontBox.SelectionChanged += (_, _) => UpdatePreview();
+        HeadingFontBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdatePreview()));
+        BodyFontBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdatePreview()));
+        foreach (var colorBox in ThemeColorTextBoxes())
+            colorBox.TextChanged += (_, _) => UpdatePreview();
     }
 
     private void LoadTheme(WorkbookTheme theme)
@@ -92,14 +103,14 @@ public partial class WorkbookThemeDialog : Window
 
         PreviewAccentStrip.Children.Clear();
         foreach (var colorBox in new[]
-        {
-            Accent1ColorBox,
-            Accent2ColorBox,
-            Accent3ColorBox,
-            Accent4ColorBox,
-            Accent5ColorBox,
-            Accent6ColorBox
-        })
+                 {
+                     Accent1ColorBox,
+                     Accent2ColorBox,
+                     Accent3ColorBox,
+                     Accent4ColorBox,
+                     Accent5ColorBox,
+                     Accent6ColorBox
+                 })
         {
             PreviewAccentStrip.Children.Add(new Border
             {
@@ -124,6 +135,22 @@ public partial class WorkbookThemeDialog : Window
     }
 
     private static Color ToMediaColor(CellColor color) => Color.FromRgb(color.R, color.G, color.B);
+
+    private IEnumerable<TextBox> ThemeColorTextBoxes()
+    {
+        yield return Dark1ColorBox;
+        yield return Light1ColorBox;
+        yield return Dark2ColorBox;
+        yield return Light2ColorBox;
+        yield return Accent1ColorBox;
+        yield return Accent2ColorBox;
+        yield return Accent3ColorBox;
+        yield return Accent4ColorBox;
+        yield return Accent5ColorBox;
+        yield return Accent6ColorBox;
+        yield return HyperlinkColorBox;
+        yield return FollowedHyperlinkColorBox;
+    }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {

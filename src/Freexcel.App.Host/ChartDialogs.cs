@@ -41,9 +41,9 @@ public sealed class ChartTitlesDialog : Window
         _yAxisTitleBox.Text = yAxisTitle ?? "";
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        AddInput(stack, "Chart title", _chartTitleBox);
-        AddInput(stack, "Horizontal axis title", _xAxisTitleBox);
-        AddInput(stack, "Vertical axis title", _yAxisTitleBox);
+        AddInput(stack, "_Chart title:", _chartTitleBox);
+        AddInput(stack, "_Primary horizontal axis title:", _xAxisTitleBox);
+        AddInput(stack, "Primary _vertical axis title:", _yAxisTitleBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
             Result = CreateResult(_chartTitleBox.Text, _xAxisTitleBox.Text, _yAxisTitleBox.Text);

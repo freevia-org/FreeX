@@ -29,6 +29,7 @@ public sealed partial class NamedRangeDialog : Window
         _commandBus = commandBus;
         InitializeComponent();
         RefreshList();
+        RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
 
         _initialRefersTo = initialRange.HasValue ? FormatRange(initialRange.Value, workbook) : "";
     }
@@ -74,6 +75,8 @@ public sealed partial class NamedRangeDialog : Window
         {
             RefersToBox.Text = vm.RefersTo;
         }
+
+        RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
     }
 
     private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
@@ -89,7 +92,16 @@ public sealed partial class NamedRangeDialog : Window
 
         NamesList.ItemsSource = NamedRangeDialogPlanner.FilterItems(_items, selected).ToList();
         if (NamesList.SelectedItem is not NamedRangeViewModel)
+        {
             RefersToBox.Clear();
+            RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+        }
+    }
+
+    private void RefersToPickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        RefersToBox.Focus();
+        RefersToBox.SelectAll();
     }
 
     private void NewButton_Click(object sender, RoutedEventArgs e)

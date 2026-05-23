@@ -43,6 +43,33 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void TryParseReferenceRange_ResolvesDefinedNameToFullRange()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 10, 2),
+            new CellAddress(sheetId, 12, 4));
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sales_Total"] = range
+        };
+
+        GoToDialog.TryParseReferenceRange("sales_total", sheetId, names, out var parsed).Should().BeTrue();
+
+        parsed.Should().Be(range);
+    }
+
+    [Fact]
+    public void TryParseReferenceRange_AcceptsTypedCurrentSheetRange()
+    {
+        var sheetId = SheetId.New();
+
+        GoToDialog.TryParseReferenceRange("A1:C3", sheetId, definedNames: null, out var range).Should().BeTrue();
+
+        range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)));
+    }
+
+    [Fact]
     public void BuildReferenceChoices_PutsDefaultThenRecentThenSortedNamesWithoutDuplicates()
     {
         var choices = GoToDialog.BuildReferenceChoices(
@@ -67,6 +94,7 @@ public sealed class GoToDialogsTests
         source.Should().Contain("SelectedSpecialKind");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });");
         source.Should().NotContain("Select a named or recently used reference");
     }
 
@@ -78,6 +106,9 @@ public sealed class GoToDialogsTests
         source.Should().Contain("new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges)");
         source.Should().Contain("dialog.SelectedSpecialKind is { } specialKind");
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
+        source.Should().Contain("dialog.SelectedRange is { } selectedRange");
+        source.Should().Contain("SheetGrid.SelectedRange = selectedRange");
+        source.Should().Contain("CellAddressBox.Text = FormatRangeReference(selectedRange.Start, selectedRange.End)");
     }
 
     [Fact]

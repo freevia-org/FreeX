@@ -29,6 +29,36 @@ public static class DeferredCommandMessages
             "PivotTable",
             "Freexcel loads and saves PivotTable and pivot caches metadata, including external/OLAP cache source metadata, creates and refreshes worksheet-range PivotTables from same-sheet or cross-sheet sources, supports Field List layout editing, GETPIVOTDATA, PivotChart field-button filtering and chart-type changes, Insert Slicer/Timeline authoring, slicer/timeline filtering, and preserves native PivotTable package parts where possible. Exact full-gallery PivotStyle theme semantics, full PivotChart Tools layout/design editing, and external/OLAP/data-model refresh or execution remain partial or excluded.");
 
+    public static DeferredCommandMessage AutoCorrectOptions() =>
+        new(
+            "AutoCorrect Options",
+            "AutoCorrect replacement dictionaries are not implemented in Freexcel. Proofing options shown here are informational until a local spelling and replacement dictionary model exists.");
+
+    public static DeferredCommandMessage EditingLanguages() =>
+        new(
+            "Editing Languages",
+            "Editing language installation and Office language packs are not implemented in Freexcel. Freexcel uses the local app culture and workbook content as-is.");
+
+    public static DeferredCommandMessage RibbonCustomizationImportExport() =>
+        new(
+            "Ribbon Customization",
+            "Custom ribbon import/export is not implemented in Freexcel. Custom Ribbon UI package parts are retained as unsupported XLSX metadata where safe, but Freexcel does not run or edit them.");
+
+    public static DeferredCommandMessage QuickAccessToolbarReset() =>
+        new(
+            "Quick Access Toolbar",
+            "Quick Access Toolbar customization is not persisted in Freexcel yet, so there is no custom toolbar state to reset.");
+
+    public static DeferredCommandMessage OfficeAddIns() =>
+        new(
+            "Office Add-ins",
+            "Office add-ins are excluded from Freexcel. Add-in package metadata may be detected and retained, but add-ins are not installed, loaded, or executed.");
+
+    public static DeferredCommandMessage TrustCenterSettings() =>
+        new(
+            "Trust Center",
+            "Trust Center policy settings are informational in Freexcel because Freexcel does not execute VBA macros, Office add-ins, ActiveX controls, Power Query, or external data-model refresh.");
+
     public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
     {
         ArgumentNullException.ThrowIfNull(report);

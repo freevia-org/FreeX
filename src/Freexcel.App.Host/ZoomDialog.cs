@@ -21,7 +21,7 @@ public sealed class ZoomDialog : Window
         Result = new ZoomDialogResult(currentZoomPercent);
         Title = "Zoom";
         Width = 300;
-        Height = 150;
+        Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -68,8 +68,17 @@ public sealed class ZoomDialog : Window
 
     private UIElement CreateZoomContent(int currentZoomPercent)
     {
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Magnification", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        var stack = new StackPanel { Margin = new Thickness(12) };
+        var group = new GroupBox
+        {
+            Header = "Magnification",
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var choices = new Grid();
+        choices.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+        choices.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var presets = new StackPanel();
         foreach (var preset in ZoomPresets)
         {
             var button = new RadioButton
@@ -81,19 +90,25 @@ public sealed class ZoomDialog : Window
                 Margin = new Thickness(0, 0, 0, 4)
             };
             _presetButtons.Add(button);
-            stack.Children.Add(button);
+            presets.Children.Add(button);
         }
 
+        choices.Children.Add(presets);
+        var customChoices = new StackPanel();
         _customZoomButton.IsChecked = !ZoomPresets.Contains(currentZoomPercent);
-        _fitSelectionButton.Margin = new Thickness(0, 2, 0, 4);
-        stack.Children.Add(_fitSelectionButton);
-        var customRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 16) };
+        _fitSelectionButton.Margin = new Thickness(0, 0, 0, 10);
+        customChoices.Children.Add(_fitSelectionButton);
+        var customRow = new StackPanel { Orientation = Orientation.Horizontal };
         customRow.Children.Add(_customZoomButton);
         _zoomBox.Width = 72;
         _zoomBox.Height = 24;
         customRow.Children.Add(_zoomBox);
         customRow.Children.Add(new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) });
-        stack.Children.Add(customRow);
+        customChoices.Children.Add(customRow);
+        Grid.SetColumn(customChoices, 1);
+        choices.Children.Add(customChoices);
+        group.Content = choices;
+        stack.Children.Add(group);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return stack;
     }

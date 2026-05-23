@@ -11,9 +11,13 @@ namespace Freexcel.App.Host;
 public partial class FormatCellsDialog : Window
 {
     public StyleDiff? ResultDiff { get; private set; }
+    public FormatCellsBorderSelection ResultBorderSelection { get; private set; } = FormatCellsBorderSelection.None;
 
     private readonly CellStyle _current;
     private bool _syncingNumberControls;
+    private bool _borderPresetClearRequested;
+    private CellBorder? _borderPresetOutline;
+    private CellBorder? _borderPresetInside;
 
     private sealed record NumberFormatOption(string Category, string Label, string Code, string Preview);
 
@@ -424,6 +428,10 @@ public partial class FormatCellsDialog : Window
             Hidden:          DlgHiddenCheck.IsChecked,
             ClearFill:       clearFill ? true : null
         );
+        ResultBorderSelection = new FormatCellsBorderSelection(
+            _borderPresetClearRequested,
+            _borderPresetOutline,
+            _borderPresetInside);
 
         DialogResult = true;
     }
@@ -495,13 +503,13 @@ public partial class FormatCellsDialog : Window
         PickColorInto(DlgBorderLeftColorBox, allowNoColor: false);
 
     private void DlgBorderPresetNoneButton_Click(object sender, RoutedEventArgs e) =>
-        ApplyBorderPreset(BorderStyle.None);
+        ApplyBorderClearPreset();
 
     private void DlgBorderPresetOutlineButton_Click(object sender, RoutedEventArgs e) =>
-        ApplyBorderPreset(SelectedBorderLineStyle());
+        ApplyBorderOutlinePreset();
 
     private void DlgBorderPresetInsideButton_Click(object sender, RoutedEventArgs e) =>
-        ApplyBorderPreset(SelectedBorderLineStyle());
+        ApplyBorderInsidePreset();
 
     private void DlgBorderPreviewTopButton_Click(object sender, RoutedEventArgs e) =>
         ApplyBorderSide(DlgBorderTopStyleBox, DlgBorderTopColorBox);
@@ -523,6 +531,28 @@ public partial class FormatCellsDialog : Window
             return;
 
         target.Text = dialog.SelectedColor is { } color ? ColorInputParser.FormatRgbColor(color) : "";
+    }
+
+    private void ApplyBorderClearPreset()
+    {
+        _borderPresetClearRequested = true;
+        _borderPresetOutline = null;
+        _borderPresetInside = null;
+        ApplyBorderPreset(BorderStyle.None);
+    }
+
+    private void ApplyBorderOutlinePreset()
+    {
+        _borderPresetClearRequested = false;
+        _borderPresetOutline = SelectedBorderLine();
+        ApplyBorderPreset(_borderPresetOutline.Value.Style);
+    }
+
+    private void ApplyBorderInsidePreset()
+    {
+        _borderPresetClearRequested = false;
+        _borderPresetInside = SelectedBorderLine();
+        UpdateBorderPreview();
     }
 
     private void ApplyBorderPreset(BorderStyle style)
@@ -553,6 +583,9 @@ public partial class FormatCellsDialog : Window
             && Enum.IsDefined(parsedStyle)
                 ? parsedStyle
                 : BorderStyle.Thin;
+
+    private CellBorder SelectedBorderLine() =>
+        new(SelectedBorderLineStyle(), TryParseColor(DlgBorderLineColorBox.Text) ?? CellColor.Black);
 
     private void UpdateFontPreview()
     {
@@ -624,6 +657,19 @@ public partial class FormatCellsDialog : Window
             TryParseColor(DlgBorderLineColorBox.Text) ?? TryParseColor(DlgBorderBottomColorBox.Text),
             Brushes.Black);
         DlgBorderLineColorPreview.Background = BrushForColor(TryParseColor(DlgBorderLineColorBox.Text), Brushes.Black);
+
+        var insideThickness = _borderPresetInside is { } inside
+            ? PreviewThickness(inside.Style.ToString())
+            : 0;
+        var insideBrush = _borderPresetInside is { } insideBorder
+            ? BrushForColor(insideBorder.Color, Brushes.Black)
+            : Brushes.Black;
+        DlgBorderPreviewInsideVertical.BorderThickness = new Thickness(insideThickness, 0, 0, 0);
+        DlgBorderPreviewInsideHorizontal.BorderThickness = new Thickness(0, insideThickness, 0, 0);
+        DlgBorderPreviewInsideVertical.BorderBrush = insideBrush;
+        DlgBorderPreviewInsideHorizontal.BorderBrush = insideBrush;
+        DlgBorderPreviewInsideVertical.Visibility = insideThickness > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DlgBorderPreviewInsideHorizontal.Visibility = insideThickness > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static CellColor? TryParseColor(string text)
@@ -888,4 +934,14 @@ public enum FormatCellsDialogTab
     Fill,
     Border,
     Protection
+}
+
+public sealed record FormatCellsBorderSelection(
+    bool Clear,
+    CellBorder? Outline,
+    CellBorder? Inside)
+{
+    public static FormatCellsBorderSelection None { get; } = new(false, null, null);
+
+    public bool HasRangeOperations => Clear || Outline is not null || Inside is not null;
 }

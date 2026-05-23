@@ -3245,6 +3245,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Workday_ResultOutsideExcelDateRange_ReturnsNumError()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=WORKDAY(2958465,1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WORKDAY.INTL(2958465,1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void Workday_DateTimeHolidayRange_SkipsHoliday()
     {
         double mon = new DateTime(2024, 1, 8).ToOADate();
@@ -3259,11 +3268,50 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Workday_DateTimeScalarHoliday_SkipsHoliday()
+    {
+        double mon = new DateTime(2024, 1, 8).ToOADate();
+        double expected = new DateTime(2024, 1, 16).ToOADate();
+        var holiday = DateTimeValue.FromDateTime(new DateTime(2024, 1, 15));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(mon)),
+            (1, 2, holiday));
+
+        ((NumberValue)_eval.Evaluate("=WORKDAY(A1,5,B1)", sheet)).Value
+            .Should().BeApproximately(expected, 1);
+
+        ((NumberValue)_eval.Evaluate("=WORKDAY(A1,5,DATE(2024,1,15))", sheet)).Value
+            .Should().BeApproximately(expected, 1);
+    }
+
+    [Fact]
     public void Workday_HolidaysError_PropagatesError()
     {
         double mon = new DateTime(2024, 1, 8).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(mon)));
         _eval.Evaluate("=WORKDAY(A1,5,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void WorkdayNetworkdays_InvalidHolidaySerial_ReturnsNumError()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=WORKDAY(DATE(2024,1,8),5,-1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=NETWORKDAYS(DATE(2024,1,8),DATE(2024,1,12),-1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WORKDAY.INTL(DATE(2024,1,8),5,1,-1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=NETWORKDAYS.INTL(DATE(2024,1,8),DATE(2024,1,12),1,-1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void WorkdayNetworkdays_HolidayRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, ErrorValue.NA));
+
+        _eval.Evaluate("=WORKDAY(DATE(2024,1,8),5,A1:A1)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=NETWORKDAYS(DATE(2024,1,8),DATE(2024,1,12),A1:A1)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=WORKDAY.INTL(DATE(2024,1,8),5,1,A1:A1)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=NETWORKDAYS.INTL(DATE(2024,1,8),DATE(2024,1,12),1,A1:A1)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact] public void Networkdays_MonToFri_Returns5()
@@ -3286,6 +3334,21 @@ public class FunctionLibraryTests
             (1, 3, holiday));
 
         _eval.Evaluate("=NETWORKDAYS(A1,B1,C1:C1)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Networkdays_DateTimeScalarHoliday_ExcludesHoliday()
+    {
+        double mon = new DateTime(2024, 1, 8).ToOADate();
+        double fri = new DateTime(2024, 1, 12).ToOADate();
+        var holiday = DateTimeValue.FromDateTime(new DateTime(2024, 1, 10));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(mon)),
+            (1, 2, new NumberValue(fri)),
+            (1, 3, holiday));
+
+        _eval.Evaluate("=NETWORKDAYS(A1,B1,C1)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=NETWORKDAYS(A1,B1,DATE(2024,1,10))", sheet).Should().Be(new NumberValue(4));
     }
 
     [Fact]

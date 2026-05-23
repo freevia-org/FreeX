@@ -13,6 +13,7 @@ public sealed class GoToDialog : Window
     private readonly ListBox _historyList = new();
 
     public CellAddress SelectedAddress { get; private set; }
+    public GridRange? SelectedRange { get; private set; }
     public GoToSpecialKind? SelectedSpecialKind { get; private set; }
     public GoToSpecialOptions? SelectedSpecialOptions { get; private set; }
 
@@ -36,6 +37,7 @@ public sealed class GoToDialog : Window
 
         var root = new Grid { Margin = new Thickness(12) };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
@@ -139,13 +141,14 @@ public sealed class GoToDialog : Window
 
     private void Accept()
     {
-        if (!TryParseReference(_addressBox.Text, _sheetId, _definedNames, out var address))
+        if (!TryParseReferenceRange(_addressBox.Text, _sheetId, _definedNames, out var range))
         {
             MessageBox.Show(this, "Reference is not valid.", "Go To", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        SelectedAddress = address;
+        SelectedRange = range;
+        SelectedAddress = range.Start;
         SelectedSpecialKind = null;
         SelectedSpecialOptions = null;
         DialogResult = true;
@@ -184,16 +187,40 @@ public sealed class GoToDialog : Window
         IReadOnlyDictionary<string, GridRange>? definedNames,
         out CellAddress address)
     {
-        if (TryParseAddress(text, sheetId, out address))
+        if (TryParseReferenceRange(text, sheetId, definedNames, out var range))
+        {
+            address = range.Start;
+            return true;
+        }
+
+        address = default;
+        return false;
+    }
+
+    public static bool TryParseReferenceRange(
+        string text,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        out GridRange range)
+    {
+        if (TryParseAddress(text, sheetId, out var address))
+        {
+            range = new GridRange(address, address);
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(text) &&
+            WorkbookRangeTextCodec.TryParse(sheetId, text, _ => null, out range))
             return true;
 
         if (definedNames is not null &&
             definedNames.TryGetValue(text.Trim(), out var namedRange))
         {
-            address = namedRange.Start;
+            range = namedRange;
             return true;
         }
 
+        range = default;
         return false;
     }
 }

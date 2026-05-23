@@ -95,6 +95,16 @@ public sealed class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"OptObjectsDisplay\"");
         xaml.Should().Contain("x:Name=\"PanelTrustCenter\"");
         xaml.Should().Contain("Trust Center _Settings...");
+        foreach (var clickHandler in new[]
+        {
+            "AutoCorrectOptionsButton_Click",
+            "AddLanguageButton_Click",
+            "RibbonImportExportButton_Click",
+            "QuickAccessResetButton_Click",
+            "AddInsGoButton_Click",
+            "TrustCenterSettingsButton_Click"
+        })
+            xaml.Should().Contain($"Click=\"{clickHandler}\"");
 
         source.Should().Contain("PanelAdvanced.Visibility");
         source.Should().Contain("OptAfterEnterDirection.ItemsSource");
@@ -103,6 +113,13 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("ShowHeadings = OptShowHeadings.IsChecked == true");
         source.Should().Contain("ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch");
         source.Should().Contain("OptObjectsDisplay.ItemsSource");
+        source.Should().Contain("ShowDeferredOptionsMessage");
+        source.Should().Contain("DeferredCommandMessages.AutoCorrectOptions()");
+        source.Should().Contain("DeferredCommandMessages.EditingLanguages()");
+        source.Should().Contain("DeferredCommandMessages.RibbonCustomizationImportExport()");
+        source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
+        source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
+        source.Should().Contain("DeferredCommandMessages.TrustCenterSettings()");
     }
 
     [Fact]

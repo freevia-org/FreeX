@@ -24,7 +24,6 @@ public sealed class ConsolidateDialog : Window
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
     private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
-    private const string SourceLinksHelpText = "Source links are not available yet; consolidated values are written as results.";
 
     public ConsolidateDialogResult? Result { get; private set; }
 
@@ -76,7 +75,7 @@ public sealed class ConsolidateDialog : Window
         labelOptions.Children.Add(_leftColumnBox);
         root.Children.Add(labelOptions);
         _createLinksBox.Margin = new Thickness(0, 0, 0, 12);
-        DisableUnsupported(_createLinksBox, SourceLinksHelpText);
+        _createLinksBox.ToolTip = "Write formulas that reference the source cells while keeping the consolidated result value.";
         root.Children.Add(_createLinksBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
@@ -199,13 +198,6 @@ public sealed class ConsolidateDialog : Window
         panel.Children.Add(pickerButton);
         panel.Children.Add(textBox);
         return panel;
-    }
-
-    private static void DisableUnsupported(Control control, string helpText)
-    {
-        control.IsEnabled = false;
-        control.ToolTip = helpText;
-        AutomationProperties.SetHelpText(control, helpText);
     }
 
     private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)

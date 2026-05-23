@@ -43,7 +43,9 @@ public static class ChartTypePickerPlanner
         new(ChartType.Area, "Area"),
         new(ChartType.ThreeDArea, "3D Area"),
         new(ChartType.Radar, "Radar"),
-        new(ChartType.Stock, "Stock")
+        new(ChartType.Stock, "Stock"),
+        new(ChartType.Surface, "Surface"),
+        new(ChartType.ThreeDSurface, "3D Surface")
     ];
 
     public static IReadOnlyList<ChartTypePickerOption> GetSupportedOptions() =>
@@ -74,7 +76,8 @@ public static class ChartTypePickerPlanner
                 ("Area", [ChartType.Area, ChartType.ThreeDArea]),
                 ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),
                 ("Stock", [ChartType.Stock]),
-                ("Radar", [ChartType.Radar])
+                ("Radar", [ChartType.Radar]),
+                ("Surface", [ChartType.Surface, ChartType.ThreeDSurface])
             }
             .Select(category => new ChartTypePickerCategory(
                 category.Name,

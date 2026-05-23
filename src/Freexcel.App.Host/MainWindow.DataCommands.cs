@@ -164,7 +164,12 @@ public partial class MainWindow
 
         var outcome = _commandBus.Execute(
             _workbook.Id,
-            new AdvancedFilterCommand(dialog.Result.ListRange, dialog.Result.CriteriaRange, dialog.Result.CopyToCell, dialog.Result.UniqueRecordsOnly));
+            new AdvancedFilterCommand(
+                dialog.Result.ListRange,
+                dialog.Result.CriteriaRange,
+                dialog.Result.CopyToCell,
+                dialog.Result.UniqueRecordsOnly,
+                dialog.Result.CopyToRange));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Advanced Filter");
@@ -203,7 +208,8 @@ public partial class MainWindow
                 dialog.Result.DestinationCell,
                 dialog.Result.Function,
                 dialog.Result.UseTopRowLabels,
-                dialog.Result.UseLeftColumnLabels));
+                dialog.Result.UseLeftColumnLabels,
+                dialog.Result.CreateLinksToSourceData));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Consolidate");

@@ -62,6 +62,11 @@ public sealed class NamedRangeDialogXamlTests
         document.Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "FilterBox")
             .Attribute("SelectionChanged")?.Value.Should().Be("FilterBox_SelectionChanged");
+
+        var picker = document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "RefersToPickerButton");
+        picker.Attribute("Click")?.Value.Should().Be("RefersToPickerButton_Click");
+        picker.Attribute("IsEnabled").Should().BeNull("the picker state is managed from the selected name");
     }
 
     [Fact]
@@ -92,6 +97,9 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("_rangePickerButton");
         source.Should().Contain("_rangePickerButton.Click");
         source.Should().Contain("_refersToBox.SelectAll");
+        source.Should().Contain("RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel");
+        source.Should().Contain("RefersToPickerButton_Click");
+        source.Should().Contain("RefersToBox.SelectAll()");
         source.Should().NotContain("IsEnabled = false");
         source.Should().Contain("GetScopeOptions");
         source.Should().Contain("NamedRangeMetadata");
