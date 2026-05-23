@@ -486,6 +486,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialogOpenedFromKeyboard_FocusesGroupColumnChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_groupColumnBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_groupColumnBox);");
+    }
+
+    [Fact]
     public void SubtotalDialog_OrdersControlsLikeExcelSubtotalDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
