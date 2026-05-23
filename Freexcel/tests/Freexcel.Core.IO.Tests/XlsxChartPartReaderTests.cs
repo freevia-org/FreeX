@@ -647,7 +647,8 @@ public sealed class XlsxChartPartReaderTests
     {
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
-            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
                 <c:plotArea>
                   <c:barChart>
@@ -673,7 +674,8 @@ public sealed class XlsxChartPartReaderTests
     {
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
-            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
                 <c:plotArea>
                   <c:barChart>
@@ -792,7 +794,8 @@ public sealed class XlsxChartPartReaderTests
     {
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
-            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:chart>
                 <c:plotArea>
                   <c:lineChart>
@@ -808,8 +811,12 @@ public sealed class XlsxChartPartReaderTests
                       <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
                       <c:val><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f></c:numRef></c:val>
                     </c:ser>
-                    <c:dropLines/>
-                    <c:hiLowLines/>
+                    <c:dropLines>
+                      <c:spPr><a:ln w="19050"><a:solidFill><a:srgbClr val="5B9BD5"/></a:solidFill><a:prstDash val="dot"/></a:ln></c:spPr>
+                    </c:dropLines>
+                    <c:hiLowLines>
+                      <c:spPr><a:ln w="25400"><a:solidFill><a:schemeClr val="accent4"/></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr>
+                    </c:hiLowLines>
                     <c:upDownBars/>
                   </c:lineChart>
                 </c:plotArea>
@@ -823,6 +830,14 @@ public sealed class XlsxChartPartReaderTests
         chart.ShowDropLines.Should().BeTrue();
         chart.ShowHighLowLines.Should().BeTrue();
         chart.ShowUpDownBars.Should().BeTrue();
+        chart.DropLineColor.Should().Be(new CellColor(91, 155, 213));
+        chart.DropLineThemeColor.Should().BeNull();
+        chart.DropLineThickness.Should().Be(1.5);
+        chart.DropLineDashStyle.Should().Be(ChartLineDashStyle.Dot);
+        chart.HighLowLineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4));
+        chart.HighLowLineColor.Should().BeNull();
+        chart.HighLowLineThickness.Should().Be(2);
+        chart.HighLowLineDashStyle.Should().Be(ChartLineDashStyle.Dash);
     }
 
     [Fact]
