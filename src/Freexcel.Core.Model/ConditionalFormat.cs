@@ -115,6 +115,8 @@ public sealed class ConditionalFormat
     public bool DataBarShowValue { get; set; } = true;
     public int? DataBarMinLength { get; set; }
     public int? DataBarMaxLength { get; set; }
+    /// <summary>When false the bar uses a solid fill instead of the default gradient.</summary>
+    public bool DataBarGradient { get; set; } = true;
 
     // ── AboveAverage rule ───────────────────────────────────────────────────
 
