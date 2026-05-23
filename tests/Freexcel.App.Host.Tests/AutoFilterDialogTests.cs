@@ -62,6 +62,20 @@ public sealed class AutoFilterDialogTests
         AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(AutoFilterMenuFilterKind.Text, "Sort _A to Z", "Sort _Z to A")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "Sort _Smallest to Largest", "Sort _Largest to Smallest")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "Sort _Oldest to Newest", "Sort _Newest to Oldest")]
+    public void GetSortLabels_ReturnsExcelLabelsForDetectedFilterValueType(
+        AutoFilterMenuFilterKind filterKind,
+        string expectedAscending,
+        string expectedDescending)
+    {
+        AutoFilterDialog.GetSortLabels(filterKind)
+            .Should()
+            .Be((expectedAscending, expectedDescending));
+    }
+
     [Fact]
     public void DialogItems_AreMutableForChecklistBinding()
     {

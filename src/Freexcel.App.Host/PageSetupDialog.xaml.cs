@@ -6,10 +6,23 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public enum PageSetupRangeSelectionTarget
+{
+    PrintArea,
+    RepeatRows,
+    RepeatColumns
+}
+
+public sealed record PageSetupRangeSelectionRequest(
+    PageSetupRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public partial class PageSetupDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly GridRange? _currentSelection;
+    private readonly Action<PageSetupRangeSelectionRequest>? _requestRangeSelection;
 
     public WorksheetPageOrientation Orientation { get; private set; }
     public WorksheetPaperSize PaperSize { get; private set; }
@@ -48,10 +61,15 @@ public partial class PageSetupDialog : Window
     public bool ScaleHeaderFooterWithDocument { get; private set; }
     public bool AlignHeaderFooterWithMargins { get; private set; }
     public PageSetupDialogAction RequestedAction { get; private set; } = PageSetupDialogAction.Ok;
+    public PageSetupRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public PageSetupDialog(Sheet sheet, GridRange? currentSelection = null)
+    public PageSetupDialog(
+        Sheet sheet,
+        GridRange? currentSelection = null,
+        Action<PageSetupRangeSelectionRequest>? requestRangeSelection = null)
     {
         InitializeComponent();
+        _requestRangeSelection = requestRangeSelection;
         _sheetId = sheet.Id;
         _currentSelection = currentSelection is { } selection &&
                             selection.Start.Sheet == sheet.Id &&
@@ -172,7 +190,10 @@ public partial class PageSetupDialog : Window
             FindName(targetName) is not TextBox target)
             return;
 
-        if (_currentSelection is { } selection)
+        RangeSelectionRequest = CreateRangeSelectionRequest(GetRangeSelectionTarget(targetName), target.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
+
+        if (_requestRangeSelection is null && _currentSelection is { } selection)
         {
             target.Text = targetName switch
             {
@@ -185,6 +206,19 @@ public partial class PageSetupDialog : Window
         target.Focus();
         target.SelectAll();
     }
+
+    public static PageSetupRangeSelectionRequest CreateRangeSelectionRequest(
+        PageSetupRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private static PageSetupRangeSelectionTarget GetRangeSelectionTarget(string targetName) =>
+        targetName switch
+        {
+            nameof(RowsRepeatBox) => PageSetupRangeSelectionTarget.RepeatRows,
+            nameof(ColumnsRepeatBox) => PageSetupRangeSelectionTarget.RepeatColumns,
+            _ => PageSetupRangeSelectionTarget.PrintArea
+        };
 
     private void UpdateScalingInputState()
     {
