@@ -1229,9 +1229,14 @@ public static partial class BuiltInFunctions
         int numChars = (int)rawNumChars;
         if (startNum < 1 || numChars < 0) return ErrorValue.Value;
 
-        int start = Math.Min(startNum - 1, text.Length);
+        bool hasSurrogatePair = ContainsSurrogatePair(text);
+        int start = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(text, startNum)
+            : Math.Min(startNum - 1, text.Length);
         var newText = ToText(args[3]);
-        int end = Math.Min(start + numChars, text.Length);
+        int end = hasSurrogatePair
+            ? AdvanceTextElements(text, start, numChars)
+            : Math.Min(start + numChars, text.Length);
         return TextResult(text[..start] + newText + text[end..]);
     }
 
