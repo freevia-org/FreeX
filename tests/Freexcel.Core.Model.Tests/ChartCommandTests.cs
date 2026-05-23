@@ -621,6 +621,46 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotChartOptionsCommand_UpdatesDataTableAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotChartOptionsDataTableCommandTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            DataTable = new ChartDataTableModel { ShowLegendKeys = false }
+        };
+        sheet.Charts.Add(chart);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            12,
+            showFieldButtons: true,
+            showDataTable: true,
+            showDataTableLegendKeys: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeTrue();
+        chart.DataTable.ShowHorizontalBorder.Should().BeTrue();
+        chart.DataTable.ShowVerticalBorder.Should().BeTrue();
+        chart.DataTable.ShowOutline.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetChartStyleCommand_UpdatesStyleAndUndoRestores()
     {
         var wb = new Workbook("test");
