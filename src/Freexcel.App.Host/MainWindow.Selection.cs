@@ -528,6 +528,12 @@ public partial class MainWindow
             return false;
         }
 
+        if (IsStartScreenVisible() && TryHandleBackstageShellFocusCycle(Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            e.Handled = true;
+            return true;
+        }
+
         ExecuteCommandShortcut(commandShortcut, this, e);
         e.Handled = true;
         return true;
