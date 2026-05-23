@@ -172,12 +172,19 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
     {
         _copySnapshot = [];
         var outputRowCount = 1 + rows.Count;
-        for (uint r = 0; r < outputRowCount; r++)
+        var rowsToReplace = Math.Max(outputRowCount, CountExistingDestinationRows(sheet));
+        for (uint r = 0; r < rowsToReplace; r++)
         {
             for (uint c = 0; c < _listRange.ColCount; c++)
             {
                 var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
                 _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
+                if (r >= outputRowCount)
+                {
+                    sheet.ClearCell(target);
+                    continue;
+                }
+
                 var sourceRow = r == 0 ? _listRange.Start.Row : rows[(int)r - 1];
                 var source = new CellAddress(sheet.Id, sourceRow, _listRange.Start.Col + c);
                 var sourceCell = sheet.GetCell(source)?.Clone()
@@ -185,6 +192,36 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
                 sheet.SetCell(target, sourceCell);
             }
         }
+    }
+
+    private uint CountExistingDestinationRows(Sheet sheet)
+    {
+        if (_copyTo is null)
+            return 0;
+
+        if (sheet.GetUsedRange() is not { } usedRange || _copyTo.Value.Row > usedRange.End.Row)
+            return 0;
+
+        uint count = 0;
+        for (var row = _copyTo.Value.Row; row <= usedRange.End.Row; row++)
+        {
+            var hasOutputCell = false;
+            for (uint colOffset = 0; colOffset < _listRange.ColCount; colOffset++)
+            {
+                if (sheet.GetCell(row, _copyTo.Value.Col + colOffset) is null)
+                    continue;
+
+                hasOutputCell = true;
+                break;
+            }
+
+            if (!hasOutputCell)
+                break;
+
+            count++;
+        }
+
+        return count;
     }
 
     private static IFilterCriterion CreateCriterion(string criteriaText)

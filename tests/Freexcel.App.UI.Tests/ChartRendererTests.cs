@@ -1873,6 +1873,49 @@ public sealed class ChartRendererTests
         ((firstVolume.X0 + firstVolume.X1) / 2).Should().BeApproximately(stockSeries.Items[0].X, 0.0001);
     }
 
+    [Fact]
+    public void StockRenderer_UsesCandlestickSeriesWhenUpDownBarsAreEnabled()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.OpenHighLowClose,
+            ShowUpDownBars = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Open"),
+                Cell(1, 3, "High"),
+                Cell(1, 4, "Low"),
+                Cell(1, 5, "Close"),
+                Cell(2, 1, "2026-01-02"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "15"),
+                Cell(2, 4, "9"),
+                Cell(2, 5, "13"),
+                Cell(3, 1, "2026-01-05"),
+                Cell(3, 2, "13"),
+                Cell(3, 3, "18"),
+                Cell(3, 4, "12"),
+                Cell(3, 5, "11")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<CandleStickSeries>().Subject;
+        series.IncreasingColor.Should().Be(OxyColors.White);
+        series.DecreasingColor.Should().Be(OxyColors.Black);
+        series.Items.Should().HaveCount(2);
+        series.Items[0].Open.Should().Be(10);
+        series.Items[0].Close.Should().Be(13);
+        series.Items[1].Open.Should().Be(13);
+        series.Items[1].Close.Should().Be(11);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
         var method = typeof(ChartRenderer).GetMethod(
