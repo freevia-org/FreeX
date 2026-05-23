@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     private bool _suppressViewOptionSync;
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;
+    private bool _isSavingFile;
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;

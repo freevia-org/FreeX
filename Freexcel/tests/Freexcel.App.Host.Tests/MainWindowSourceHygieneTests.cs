@@ -42,14 +42,14 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void UpdateSsRecentList(");
         mainSource.Should().NotContain("private async Task OpenFileAsync(");
         mainSource.Should().NotContain("private async void OpenButton_Click(");
-        mainSource.Should().NotContain("private bool SaveWorkbookWithDialog()");
+        mainSource.Should().NotContain("private async Task<bool> SaveWorkbookWithDialogAsync()");
 
         backstageSource.Should().Contain("private void ShowStartScreen()");
         backstageSource.Should().Contain("private void UpdateSsRecentList(");
         backstageSource.Should().Contain("private async Task OpenFileAsync(");
         backstageSource.Should().Contain("private async void OpenButton_Click(");
-        backstageSource.Should().Contain("private bool SaveWorkbookWithDialog()");
-        backstageSource.Should().Contain("private void SaveAsButton_Click(");
+        backstageSource.Should().Contain("private async Task<bool> SaveWorkbookWithDialogAsync()");
+        backstageSource.Should().Contain("private async void SaveAsButton_Click(");
     }
 
     [Fact]
@@ -60,8 +60,8 @@ public sealed class MainWindowSourceHygieneTests
 
         xaml.Should().Contain("Content=\"Save _As\"");
         xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
-        backstageSource.Should().Contain("private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>");
-        backstageSource.Should().Contain("SaveWorkbookWithDialog();");
+        backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e) =>");
+        backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync();");
     }
 
     [Fact]

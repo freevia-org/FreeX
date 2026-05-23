@@ -498,21 +498,21 @@ public partial class MainWindow
             await OpenFileAsync(dialog.FileName);
     }
 
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         if (FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target))
         {
-            SaveWorkbookToTarget(target!);
+            await SaveWorkbookToTargetAsync(target!);
             return;
         }
 
-        SaveWorkbookWithDialog();
+        await SaveWorkbookWithDialogAsync();
     }
 
-    private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
-        SaveWorkbookWithDialog();
+    private async void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
+        await SaveWorkbookWithDialogAsync();
 
-    private bool SaveWorkbookWithDialog()
+    private async Task<bool> SaveWorkbookWithDialogAsync()
     {
         var filter = FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters);
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -529,22 +529,28 @@ public partial class MainWindow
             if (adapter == null)
                 return false;
 
-            return SaveWorkbookToTarget(new FileSaveTarget(dialog.FileName, adapter));
+            return await SaveWorkbookToTargetAsync(new FileSaveTarget(dialog.FileName, adapter));
         }
 
         return false;
     }
 
-    private bool SaveWorkbookToTarget(FileSaveTarget target)
+    private async Task<bool> SaveWorkbookToTargetAsync(FileSaveTarget target)
     {
+        if (_isSavingFile)
+            return false;
+
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
             return false;
 
         try
         {
-            using var stream = System.IO.File.Create(target.Path);
-            target.Adapter.Save(_workbook, stream);
+            _isSavingFile = true;
+            ShowSaveProgress("Saving workbook", "Saving file (preparing)", 1);
+            var progress = new Progress<SaveProgressUpdate>(
+                update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
+            await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
             _currentFilePath = target.Path;
             _recentFiles.AddOrUpdate(target.Path);
             UpdateTitleBar();
@@ -556,6 +562,32 @@ public partial class MainWindow
                 MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
+        finally
+        {
+            _isSavingFile = false;
+            HideSaveProgress();
+        }
+    }
+
+    private void ShowSaveProgress(string title, string detail, double? percent = null)
+    {
+        if (StatusSaveProgressPanel is null)
+            return;
+
+        StatusSaveProgressText.Text = $"{title}: {detail}";
+        if (StatusSaveProgressBar is not null)
+        {
+            StatusSaveProgressBar.IsIndeterminate = !percent.HasValue;
+            if (percent.HasValue)
+                StatusSaveProgressBar.Value = Math.Clamp(percent.Value, StatusSaveProgressBar.Minimum, StatusSaveProgressBar.Maximum);
+        }
+        StatusSaveProgressPanel.Visibility = Visibility.Visible;
+    }
+
+    private void HideSaveProgress()
+    {
+        if (StatusSaveProgressPanel is not null)
+            StatusSaveProgressPanel.Visibility = Visibility.Collapsed;
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()
