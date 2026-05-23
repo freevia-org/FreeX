@@ -119,6 +119,20 @@ public sealed class PageSetupDialogXamlTests
                 .Any(element => element.Attribute(x + "Name")?.Value == name)
                 .Should().BeTrue($"{name} should exist on the Page Setup Header/Footer tab");
         }
+
+        var headerPresets = tab
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "HeaderPresetBox")
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value);
+        var footerPresets = tab
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FooterPresetBox")
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value);
+
+        headerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Confidential, Page 1", "Date, Page 1", "File path"]);
+        footerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Time", "Date, Page 1", "File name"]);
     }
 
     [Fact]
