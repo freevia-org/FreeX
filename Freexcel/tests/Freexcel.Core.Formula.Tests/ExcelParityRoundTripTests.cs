@@ -156,6 +156,33 @@ public sealed class ExcelParityRoundTripTests
         Number($"=BITRSHIFT(BITLSHIFT({D(value)},{D(shift)}),{D(shift)})").Should().Be(value);
     }
 
+    [Fact]
+    public void Property_DistributionInversePairs_RoundTripAcrossRepresentativeProbabilities()
+    {
+        foreach (var probability in new[] { 0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99 })
+        {
+            var p = D(probability);
+            var normX = Number($"=NORM.INV({p},2,3)");
+            Number($"=NORM.DIST({D(normX)},2,3,TRUE)").Should().BeApproximately(probability, 1e-6);
+
+            var gammaX = Number($"=GAMMA.INV({p},4,2)");
+            Number($"=GAMMA.DIST({D(gammaX)},4,2,TRUE)").Should().BeApproximately(probability, 1e-5);
+        }
+    }
+
+    [Fact]
+    public void Property_EngineeringBaseConversions_RoundTripAcrossBoundaries()
+    {
+        foreach (var value in new[] { -512d, -129d, -1d, 0d, 1d, 127d, 255d, 511d })
+            Number($"=BIN2DEC(DEC2BIN({D(value)}))").Should().Be(value);
+
+        foreach (var value in new[] { -536870912d, -1024d, -1d, 0d, 1d, 1024d, 536870911d })
+            Number($"=OCT2DEC(DEC2OCT({D(value)}))").Should().Be(value);
+
+        foreach (var value in new[] { -549755813888d, -65535d, -1d, 0d, 1d, 65535d, 549755813887d })
+            Number($"=HEX2DEC(DEC2HEX({D(value)}))").Should().Be(value);
+    }
+
     private double Number(string formula)
     {
         var value = _eval.Evaluate(formula, new Sheet(SheetId.New(), "S"));

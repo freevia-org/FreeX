@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -60,16 +61,24 @@ public partial class MainWindow
 
         if (_inlineEditor == null)
         {
+            _inlineEditorChrome = new System.Windows.Controls.Border
+            {
+                Background = System.Windows.Media.Brushes.White,
+                BorderThickness = new System.Windows.Thickness(2),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(33, 115, 70)),
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
             _inlineEditor = new System.Windows.Controls.TextBox
             {
-                BorderThickness = new System.Windows.Thickness(2),
-                BorderBrush     = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(33, 115, 70)),
-                Padding         = new System.Windows.Thickness(1),
+                BorderThickness = new System.Windows.Thickness(0),
+                Padding         = new System.Windows.Thickness(4, 0, 4, 0),
                 FontFamily      = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize        = 15.0,
                 Background      = System.Windows.Media.Brushes.Transparent,
                 AcceptsReturn   = false,
+                VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
             };
             TextOptions.SetTextFormattingMode(_inlineEditor, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineEditor, TextRenderingMode.ClearType);
@@ -79,6 +88,8 @@ public partial class MainWindow
             _inlineEditor.TextChanged += (_, _) =>
             {
                 FormulaBar.Text = _inlineEditor.Text;
+                RefreshInlineEditorTextSurface();
+                RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
             };
             _inlineFormulaReferenceOverlay = new System.Windows.Controls.TextBlock
@@ -86,15 +97,16 @@ public partial class MainWindow
                 FontFamily = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize = 15.0,
                 IsHitTestVisible = false,
-                Margin = new Thickness(4, 3, 2, 2),
+                Margin = new Thickness(0),
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Visibility = Visibility.Collapsed
             };
             TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
             TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
-            EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
+            EditOverlay.Children.Add(_inlineEditorChrome);
             EditOverlay.Children.Add(_inlineEditor);
+            EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
         }
 
         // Cell metrics are in unzoomed coordinates; the EditOverlay is not transformed, so scale.
@@ -103,21 +115,30 @@ public partial class MainWindow
         double cy = (rowMetric.TopOffset  + Freexcel.App.UI.GridView.ColHeaderHeight) * zoom;
         double cellW = colMetric.Width  * zoom;
         double cellH = rowMetric.Height * zoom;
+        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
-        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, cx - 2);
-        System.Windows.Controls.Canvas.SetTop(_inlineEditor,  cy - 2);
-        _inlineEditor.Width  = cellW + 4;
-        _inlineEditor.Height = Math.Max(cellH + 4, 20);
+        _inlineEditorChromeBaseRect = layout.EditorRect;
+        ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow.None);
+
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
+        _inlineEditor.Width  = layout.TextOverlayRect.Width + 8;
+        _inlineEditor.Height = layout.EditorRect.Height;
         if (_inlineFormulaReferenceOverlay is not null)
         {
-            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, cx + 2);
-            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, cy + 1);
-            _inlineFormulaReferenceOverlay.Width = cellW;
-            _inlineFormulaReferenceOverlay.Height = Math.Max(cellH, 18);
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Top);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+            _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
         }
+        RefreshInlineEditorTextSurface();
+        RefreshInlineEditorChromeBorder();
 
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Visible;
         _inlineEditor.Visibility  = Visibility.Visible;
+        SheetGrid.EditingCell = addr;
         EditOverlay.IsHitTestVisible = true;
         RefreshFormulaReferenceHighlights();
         _inlineEditor.Focus();
@@ -125,10 +146,93 @@ public partial class MainWindow
         _inlineEditor.SelectionLength = 0;
     }
 
+    private void RefreshInlineEditorTextSurface()
+    {
+        if (_inlineEditor is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var desiredTextWidth = MeasureEditorTextWidth(_inlineEditor);
+        var layout = FormulaInlineEditorLayoutPlanner.Create(
+            chromeBaseRect.Left,
+            chromeBaseRect.Top,
+            chromeBaseRect.Width,
+            chromeBaseRect.Height,
+            desiredTextWidth,
+            EditOverlay.ActualWidth);
+
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.TextOverlayRect.Left - 4);
+        _inlineEditor.Width = layout.TextOverlayRect.Width + 8;
+
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+        }
+    }
+
+    private void RefreshInlineEditorChromeBorder()
+    {
+        if (_inlineEditorChrome is null || _inlineEditor is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var overflow = GetInlineEditorTextOverflow(_inlineEditor, chromeBaseRect.Width);
+        ApplyInlineEditorChromeFrame(overflow);
+    }
+
+    private void ApplyInlineEditorChromeFrame(FormulaInlineEditorOverflow overflow)
+    {
+        if (_inlineEditorChrome is null || _inlineEditorChromeBaseRect is not { } chromeBaseRect)
+            return;
+
+        var chromeRect = FormulaInlineEditorLayoutPlanner.GetChromeRect(chromeBaseRect, overflow);
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditorChrome, chromeRect.Left);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditorChrome, chromeRect.Top);
+        _inlineEditorChrome.Width = chromeRect.Width;
+        _inlineEditorChrome.Height = chromeRect.Height;
+        _inlineEditorChrome.BorderThickness = FormulaInlineEditorLayoutPlanner.GetChromeBorderThickness(overflow);
+    }
+
+    private static FormulaInlineEditorOverflow GetInlineEditorTextOverflow(System.Windows.Controls.TextBox editor, double chromeWidth)
+    {
+        if (chromeWidth <= 0 || string.IsNullOrEmpty(editor.Text))
+            return FormulaInlineEditorOverflow.None;
+
+        var formattedText = CreateEditorFormattedText(editor);
+
+        var innerWidth = Math.Max(0, chromeWidth - editor.Padding.Left - editor.Padding.Right);
+        var scrollOffset = Math.Max(0, editor.HorizontalOffset);
+        var spillsLeft = scrollOffset > 0;
+        var spillsRight = formattedText.WidthIncludingTrailingWhitespace - scrollOffset > innerWidth;
+        return new FormulaInlineEditorOverflow(spillsLeft, spillsRight);
+    }
+
+    private static double MeasureEditorTextWidth(System.Windows.Controls.TextBox editor) =>
+        string.IsNullOrEmpty(editor.Text)
+            ? 0
+            : CreateEditorFormattedText(editor).WidthIncludingTrailingWhitespace;
+
+    private static FormattedText CreateEditorFormattedText(System.Windows.Controls.TextBox editor)
+    {
+        var typeface = new Typeface(editor.FontFamily, editor.FontStyle, editor.FontWeight, editor.FontStretch);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(editor).PixelsPerDip;
+        return new FormattedText(
+            editor.Text,
+            CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            editor.FontSize,
+            Brushes.Black,
+            pixelsPerDip);
+    }
+
     private void HideInlineEditor(bool commit)
     {
         if (_inlineEditor == null) return;
         _inlineEditor.Visibility = Visibility.Collapsed;
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Collapsed;
+        _inlineEditorChromeBaseRect = null;
+        SheetGrid.EditingCell = null;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();
         EditOverlay.IsHitTestVisible = false;
@@ -234,7 +338,7 @@ public partial class MainWindow
             return;
         }
 
-        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan);
         if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
             return;
 
@@ -298,6 +402,15 @@ public partial class MainWindow
 
     private void InlineEditor_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.F2 && Keyboard.Modifiers == ModifierKeys.None && _inlineEditor is not null)
+        {
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(_inlineEditor.Text, _formulaRangeEntryMode);
+            if (!_formulaRangeEntryMode)
+                ClearFormulaReferenceEntrySpan();
+            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(_inlineEditor.Text);
+            return;
+        }
+
         if (e.Key == Key.F4 && _inlineEditor is not null)
         {
             if (TryCycleFormulaReference(_inlineEditor))
@@ -328,6 +441,9 @@ public partial class MainWindow
         if (selectedRange is null)
             return;
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
+        var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
+            _inlineEditor?.Text,
+            _formulaRangeEntryMode);
         var current = formulaRangeEntryActive
             ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
             : selectedRange.Value.Start;
@@ -339,7 +455,9 @@ public partial class MainWindow
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
             allowFormulaBarNavigationKeys: false,
             formulaRangeEntryActive: formulaRangeEntryActive,
-            emptyInlineEditorActive: !formulaRangeEntryActive && string.IsNullOrEmpty(_inlineEditor?.Text));
+            inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
+            moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
+            enterDirection: _options.AfterEnterDirection);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -375,6 +493,16 @@ public partial class MainWindow
         {
             var text = _inlineEditor!.Text;
             FormulaBar.Text = text;
+            if (string.IsNullOrEmpty(text))
+            {
+                HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
+                SetActiveCell(next);
+                EnsureCellVisible(next);
+                e.Handled = true;
+                return;
+            }
+
             if (CommitEdit())
             {
                 HideInlineEditor(commit: false);
@@ -441,7 +569,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return _formulaRangeEntryMode && editor.Text.StartsWith("=", StringComparison.Ordinal);
+        return FormulaEditInteractionPlanner.IsRangeEntryActive(editor.Text, _formulaRangeEntryMode);
     }
 
     private bool IsFormulaReferenceHighlightActive(System.Windows.Controls.TextBox? editor)
@@ -449,7 +577,7 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
-        return editor.Text.StartsWith("=", StringComparison.Ordinal);
+        return FormulaEditInteractionPlanner.IsFormulaText(editor.Text);
     }
 
     private System.Windows.Controls.TextBox? GetFormulaRangeEntryEditor()
@@ -552,7 +680,7 @@ public partial class MainWindow
         }
         else
         {
-            _inlineEditor!.Foreground = highlights.Count > 0
+            _inlineEditor!.Foreground = editor.Text.StartsWith("=", StringComparison.Ordinal)
                 ? System.Windows.Media.Brushes.Transparent
                 : normalBrush;
             FormulaReferenceTextOverlay.Apply(
@@ -560,7 +688,8 @@ public partial class MainWindow
                 editor.Text,
                 highlights,
                 _formulaReferenceBrushes,
-                normalBrush);
+                normalBrush,
+                keepFormulaVisibleWithoutHighlights: true);
             FormulaBar.Foreground = highlights.Count > 0
                 ? System.Windows.Media.Brushes.Transparent
                 : normalBrush;
@@ -672,7 +801,14 @@ public partial class MainWindow
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.F4)
+        if (e.Key == Key.F2 && e.KeyboardDevice.Modifiers == ModifierKeys.None)
+        {
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.TogglePointMode(FormulaBar.Text, _formulaRangeEntryMode);
+            if (!_formulaRangeEntryMode)
+                ClearFormulaReferenceEntrySpan();
+            e.Handled = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
+        }
+        else if (e.Key == Key.F4)
         {
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
@@ -694,6 +830,7 @@ public partial class MainWindow
         else if (SheetGrid.SelectedRange is { } selectedRange)
         {
             var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
+            var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
             var current = formulaRangeEntryActive
                 ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
                 : selectedRange.Start;
@@ -703,8 +840,10 @@ public partial class MainWindow
                 e.KeyboardDevice.Modifiers,
                 current,
                 pageSize,
-                allowFormulaBarNavigationKeys: true,
-                formulaRangeEntryActive: formulaRangeEntryActive);
+                allowFormulaBarNavigationKeys: !formulaTextActive,
+                formulaRangeEntryActive: formulaRangeEntryActive,
+                moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
+                enterDirection: _options.AfterEnterDirection);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {

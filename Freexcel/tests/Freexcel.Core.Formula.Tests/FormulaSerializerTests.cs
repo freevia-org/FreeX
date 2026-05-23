@@ -107,6 +107,46 @@ public class FormulaSerializerTests
     public void Serialize_FunctionCall() => RoundTrip("=SUM(A1:A3)").Should().Be("SUM(A1:A3)");
 
     [Fact]
+    public void Serialize_CombinedStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[#Data],[Amount]])")
+            .Should().Be("SUM(SALES[[#Data],[Amount]])");
+    }
+
+    [Fact]
+    public void Serialize_CurrentRowStructuredReference()
+    {
+        RoundTrip("=[@Amount]").Should().Be("[@Amount]");
+    }
+
+    [Fact]
+    public void Serialize_TableQualifiedCurrentRowStructuredReference()
+    {
+        RoundTrip("=Sales[@Amount]").Should().Be("SALES[@Amount]");
+    }
+
+    [Fact]
+    public void Serialize_MultiColumnStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[Amount]:[Tax]])")
+            .Should().Be("SUM(SALES[[Amount]:[Tax]])");
+    }
+
+    [Fact]
+    public void Serialize_ThisRowStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[#This Row],[Amount]:[Tax]])")
+            .Should().Be("SUM(SALES[[#This Row],[Amount]:[Tax]])");
+    }
+
+    [Fact]
+    public void Serialize_UnqualifiedThisRowStructuredReference()
+    {
+        RoundTrip("=SUM([[#This Row],[Amount]:[Tax]])")
+            .Should().Be("SUM([[#This Row],[Amount]:[Tax]])");
+    }
+
+    [Fact]
     public void Serialize_FunctionNoArgs() => RoundTrip("=NOW()").Should().Be("NOW()");
 
     [Fact]

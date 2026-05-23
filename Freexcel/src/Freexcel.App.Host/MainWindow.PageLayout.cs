@@ -333,7 +333,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var dialog = new PageSetupDialog(sheet) { Owner = this };
+        var dialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -374,12 +374,32 @@ public partial class MainWindow
                             dialog.DifferentFirstPage,
                             dialog.DifferentOddEvenPages,
                             dialog.ScaleHeaderFooterWithDocument,
-                            dialog.AlignHeaderFooterWithMargins)
+                            dialog.AlignHeaderFooterWithMargins,
+                            dialog.HeaderPictures,
+                            dialog.FooterPictures,
+                            dialog.FirstPageHeaderPictures,
+                            dialog.FirstPageFooterPictures,
+                            dialog.EvenPageHeaderPictures,
+                            dialog.EvenPageFooterPictures)
                     ])))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
+        if (dialog.RequestedAction == PageSetupDialogAction.Options)
+        {
+            ShowPageSetupPrinterOptions();
+            return;
+        }
+
+        if (dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
+            PrintButton_Click(this, new RoutedEventArgs());
+    }
+
+    private void ShowPageSetupPrinterOptions()
+    {
+        var dialog = new System.Windows.Controls.PrintDialog();
+        dialog.ShowDialog();
     }
 
     private void PrintGridlinesChk_Click(object sender, RoutedEventArgs e)

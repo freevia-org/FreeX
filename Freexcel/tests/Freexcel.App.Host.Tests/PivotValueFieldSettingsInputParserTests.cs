@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -51,20 +52,66 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [Theory]
     [InlineData("General", null)]
     [InlineData("Number", 2)]
+    [InlineData("Number 0 decimals", 1)]
     [InlineData("Number with thousands", 4)]
+    [InlineData("Comma 0 decimals", 3)]
+    [InlineData("Comma red negatives", 38)]
     [InlineData("Percentage", 10)]
+    [InlineData("Percentage 0 decimals", 9)]
     [InlineData("Date", 14)]
+    [InlineData("Day Month", 16)]
+    [InlineData("Month Year", 17)]
     [InlineData("Currency", 7)]
+    [InlineData("Currency red negatives", 8)]
     [InlineData("Short Date", 14)]
     [InlineData("Long Date", 15)]
     [InlineData("Time", 21)]
+    [InlineData("Time AM/PM", 18)]
+    [InlineData("Elapsed Time", 46)]
     [InlineData("Fraction", 12)]
+    [InlineData("Fraction two digits", 13)]
     [InlineData("Scientific", 11)]
+    [InlineData("Scientific compact", 48)]
     [InlineData("Text", 49)]
+    [InlineData("Accounting 0 decimals", 42)]
+    [InlineData("Accounting no symbol", 43)]
+    [InlineData("Accounting no symbol 0 decimals", 41)]
     [InlineData("Accounting", 44)]
     public void ResolvePresetNumberFormatId_MapsExcelStylePresetLabels(string label, int? expected)
     {
         PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(label).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("General", "General")]
+    [InlineData("Number", "0.00")]
+    [InlineData("Number with thousands", "#,##0.00")]
+    [InlineData("Currency", "$#,##0.00")]
+    [InlineData("Currency red negatives", "$#,##0.00;[Red]($#,##0.00)")]
+    [InlineData("Short Date", "m/d/yy")]
+    [InlineData("Elapsed Time", "[h]:mm:ss")]
+    [InlineData("Scientific compact", "##0.0E+0")]
+    [InlineData("Text", "@")]
+    [InlineData("Accounting 0 decimals", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)")]
+    [InlineData("Accounting no symbol", "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)")]
+    [InlineData("Accounting no symbol 0 decimals", "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)")]
+    public void ResolvePresetNumberFormatCode_MapsExcelStylePresetLabels(string label, string expected)
+    {
+        PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(label).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("General", null)]
+    [InlineData("0.00", 2)]
+    [InlineData("#,##0.00", 4)]
+    [InlineData("$#,##0.00", 7)]
+    [InlineData("$#,##0.00;[Red]($#,##0.00)", 8)]
+    [InlineData("m/d/yy", 14)]
+    [InlineData("[h]:mm:ss", 46)]
+    [InlineData("#,##0.0 \"kg\"", null)]
+    public void ResolveBuiltInNumberFormatIdForCode_MapsKnownPresetCodes(string formatCode, int? expected)
+    {
+        PivotValueFieldSettingsInputParser.ResolveBuiltInNumberFormatIdForCode(formatCode).Should().Be(expected);
     }
 
     [Fact]
@@ -75,17 +122,31 @@ public sealed class PivotValueFieldSettingsInputParserTests
             .Should()
             .Contain([
                 "General",
+                "Number 0 decimals",
                 "Number",
+                "Comma 0 decimals",
                 "Number with thousands",
+                "Comma red negatives",
                 "Currency",
+                "Currency red negatives",
+                "Accounting 0 decimals",
+                "Accounting no symbol",
+                "Accounting no symbol 0 decimals",
                 "Accounting",
                 "Date",
                 "Short Date",
                 "Long Date",
+                "Day Month",
+                "Month Year",
                 "Time",
+                "Time AM/PM",
+                "Elapsed Time",
                 "Percentage",
+                "Percentage 0 decimals",
                 "Fraction",
+                "Fraction two digits",
                 "Scientific",
+                "Scientific compact",
                 "Text"
             ]);
     }
@@ -97,5 +158,17 @@ public sealed class PivotValueFieldSettingsInputParserTests
             .First(preset => preset.NumberFormatId == 14);
 
         firstBuiltIn14.Label.Should().Be("Short Date");
+    }
+
+    [Fact]
+    public void NumberFormatPresets_UseSharedBuiltInCatalogCodes()
+    {
+        foreach (var preset in PivotValueFieldSettingsInputParser.NumberFormatPresets)
+        {
+            BuiltInNumberFormatCatalog.TryResolveFormatCode(preset.NumberFormatId, out var formatCode)
+                .Should().BeTrue();
+
+            preset.FormatCode.Should().Be(formatCode);
+        }
     }
 }

@@ -151,7 +151,42 @@ internal static class XlsxConditionalFormatClosedXmlMapper
         if (style.FontColor != def.FontColor)
             xlStyle.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
 
-        if (style.FillColor.HasValue)
+        if (style.FillPatternStyle != CellFillPatternStyle.None)
+        {
+            xlStyle.Fill.PatternType = style.FillPatternStyle switch
+            {
+                CellFillPatternStyle.Solid => XLFillPatternValues.Solid,
+                CellFillPatternStyle.Gray0625 => XLFillPatternValues.Gray0625,
+                CellFillPatternStyle.Gray125 => XLFillPatternValues.Gray125,
+                CellFillPatternStyle.LightGray => XLFillPatternValues.LightGray,
+                CellFillPatternStyle.MediumGray => XLFillPatternValues.MediumGray,
+                CellFillPatternStyle.DarkGray => XLFillPatternValues.DarkGray,
+                CellFillPatternStyle.LightHorizontal => XLFillPatternValues.LightHorizontal,
+                CellFillPatternStyle.LightVertical => XLFillPatternValues.LightVertical,
+                CellFillPatternStyle.LightDown => XLFillPatternValues.LightDown,
+                CellFillPatternStyle.LightUp => XLFillPatternValues.LightUp,
+                CellFillPatternStyle.LightGrid => XLFillPatternValues.LightGrid,
+                CellFillPatternStyle.LightTrellis => XLFillPatternValues.LightTrellis,
+                CellFillPatternStyle.DarkHorizontal => XLFillPatternValues.DarkHorizontal,
+                CellFillPatternStyle.DarkVertical => XLFillPatternValues.DarkVertical,
+                CellFillPatternStyle.DarkDown => XLFillPatternValues.DarkDown,
+                CellFillPatternStyle.DarkUp => XLFillPatternValues.DarkUp,
+                CellFillPatternStyle.DarkGrid => XLFillPatternValues.DarkGrid,
+                CellFillPatternStyle.DarkTrellis => XLFillPatternValues.DarkTrellis,
+                _ => XLFillPatternValues.None
+            };
+            if (style.FillColor.HasValue)
+                xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255,
+                    style.FillColor.Value.R,
+                    style.FillColor.Value.G,
+                    style.FillColor.Value.B);
+            if (style.FillPatternColor.HasValue)
+                xlStyle.Fill.PatternColor = XLColor.FromArgb(255,
+                    style.FillPatternColor.Value.R,
+                    style.FillPatternColor.Value.G,
+                    style.FillPatternColor.Value.B);
+        }
+        else if (style.FillColor.HasValue)
         {
             xlStyle.Fill.PatternType = XLFillPatternValues.Solid;
             xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255,

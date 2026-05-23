@@ -29,6 +29,23 @@ public sealed class ProtectionDialogTests
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().Be("secret");
+        result.SelectedSheetPermissions.Should().Equal(["Select locked cells", "Select unlocked cells"]);
+    }
+
+    [Fact]
+    public void SheetProtectionDialogResult_ForUnprotectedSheetKeepsSelectedPermissions()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        var result = ProtectionDialogPlanner.CreateSheetResult(
+            sheet,
+            password: "secret",
+            selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
+
+        result.Mode.Should().Be(ProtectionDialogMode.Protect);
+        result.Password.Should().Be("secret");
+        result.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
     }
 
     [Fact]
@@ -107,7 +124,7 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
-    public void ProtectSheetDialog_ExposesPermissionChecklistAndConfirmation()
+    public void ProtectSheetDialog_ExposesPermissionChecklistAndFollowUpConfirmation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
 
@@ -115,7 +132,9 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Header = \"Password\"");
         source.Should().Contain("Protect worksheet and contents of locked cells");
         source.Should().Contain("Caution: lost or forgotten passwords cannot be recovered.");
-        source.Should().Contain("_Confirm password:");
+        source.Should().Contain("ConfirmPasswordDialog");
+        source.Should().Contain("Confirm Password");
+        source.Should().NotContain("_Confirm password:");
         source.Should().Contain("Select locked cells");
         source.Should().Contain("Edit scenarios");
     }

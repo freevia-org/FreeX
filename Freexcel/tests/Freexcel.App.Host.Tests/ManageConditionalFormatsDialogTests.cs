@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Model;
@@ -131,7 +132,8 @@ public sealed class ManageConditionalFormatsDialogTests
         source.Should().Contain("typeof(Button)");
         source.Should().Contain("new Binding(nameof(ConditionalFormat.AppliesTo))");
         source.Should().Contain("new AppliesToRangeConverter(_sheet.Id)");
-        source.Should().Contain("ToolTipProperty, \"Select range\"");
+        source.Should().Contain("ToolTipProperty, \"Select Applies To range text\"");
+        source.Should().Contain("RangePickerButton_Click");
     }
 
     [Fact]
@@ -142,6 +144,16 @@ public sealed class ManageConditionalFormatsDialogTests
 
         ManageConditionalFormatsDialog.TryParseAppliesToText("$B$2:$D$5", sheetId, fallback)
             .Should().Be(new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 5, 4)));
+    }
+
+    [Fact]
+    public void AppliesToRangeConverter_InvalidTextRejectsEditInsteadOfFallingBackToA1()
+    {
+        var sheetId = SheetId.New();
+        var converter = new AppliesToRangeConverter(sheetId);
+
+        converter.ConvertBack("not a range", typeof(GridRange), parameter: null!, System.Globalization.CultureInfo.InvariantCulture)
+            .Should().BeSameAs(Binding.DoNothing);
     }
 
     [Fact]
@@ -216,7 +228,8 @@ public sealed class ManageConditionalFormatsDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
 
         source.Should().Contain("Content = \"_New Rule...\"");
-        source.Should().Contain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
+        source.Should().Contain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
+        source.Should().NotContain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("_newRuleTypeBox");
         source.Should().NotContain("toolBar.Children.Add(_newRuleTypeBox)");
     }

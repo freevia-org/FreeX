@@ -253,7 +253,33 @@ public sealed class Parser
                     return fullRowRange;
 
                 var token = Advance();
+                if (Current.Type == TokenType.StructuredReferenceSelector)
+                {
+                    var selector = Advance();
+                    if (string.IsNullOrWhiteSpace(selector.Value))
+                        throw new FormulaParseException(
+                            $"Expected structured reference column name at position {selector.Position}");
+                    if (selector.Value.Trim().StartsWith('@'))
+                        return new StructuredCurrentRowReferenceNode(
+                            selector.Value.Trim()[1..].Trim(),
+                            token.Value);
+                    return new StructuredReferenceNode(token.Value, selector.Value.Trim());
+                }
+
                 return new NamedRangeNode(token.Value);
+            }
+
+            case TokenType.StructuredReferenceSelector:
+            {
+                var selector = Advance();
+                var value = selector.Value.Trim();
+                if (value.StartsWith('@') && value.Length > 1)
+                    return new StructuredCurrentRowReferenceNode(value[1..].Trim());
+                if (value.Contains("#This Row", StringComparison.OrdinalIgnoreCase))
+                    return new StructuredReferenceNode("", value);
+
+                throw new FormulaParseException(
+                    $"Expected current-row structured reference at position {selector.Position}");
             }
 
             case TokenType.OpenParen:

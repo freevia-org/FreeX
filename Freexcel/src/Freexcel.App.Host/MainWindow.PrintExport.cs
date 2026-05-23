@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Documents;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -19,11 +20,22 @@ public partial class MainWindow
             doc,
             settings,
             showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
-            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()))
+            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
+            refreshPreview: BuildActiveSheetPrintPreview)
         {
             Owner = this
         };
         dialog.ShowDialog();
+    }
+
+    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview()
+    {
+        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var settings = sheet is null
+            ? new PrintSettingsPlan(["Print active sheet"])
+            : PrintSettingsPlanner.Build(sheet);
+        return (document, settings);
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
@@ -41,7 +53,10 @@ public partial class MainWindow
         };
         if (saveDlg.ShowDialog() != true) return;
 
-        var request = ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result);
+        var selectedFormat = saveDlg.FilterIndex == 2
+            ? ExportFormat.Xps
+            : ExportFormat.Pdf;
+        var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
         var exported = request.Format == ExportFormat.Pdf
             ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
             : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
@@ -58,7 +73,13 @@ public partial class MainWindow
                 throw new InvalidOperationException(pageRangeError);
 
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
-            PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange, options.Quality);
+            PdfDocumentExporter.Save(
+                document,
+                pdfPath,
+                properties,
+                options.PageRange,
+                options.Quality,
+                CreatePdfBookmarks(options));
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
@@ -151,13 +172,50 @@ public partial class MainWindow
 
     private System.Windows.Documents.FixedDocument RenderExportDocument(ExportOptions options) =>
         options.Scope == ExportContentScope.EntireWorkbook
-            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService)
-            : PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ResolveExportRange(options));
+            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService, options.IgnorePrintAreas)
+            : PrintRenderer.RenderWorksheet(
+                _workbook,
+                _currentSheetId,
+                _viewportService,
+                ResolveExportRange(options),
+                options.IgnorePrintAreas);
+
+    private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)
+    {
+        if (!options.CreateBookmarks)
+            return null;
+
+        var result = new List<PdfBookmark>();
+        var pageIndex = 0;
+        IEnumerable<Sheet> sheets = options.Scope == ExportContentScope.EntireWorkbook
+            ? _workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
+            : _workbook.GetSheet(_currentSheetId) is { } activeSheet
+                ? [activeSheet]
+                : [];
+
+        foreach (var sheet in sheets)
+        {
+            var range = options.Scope == ExportContentScope.Selection && sheet.Id == _currentSheetId
+                ? ResolveExportRange(options)
+                : null;
+            var document = PrintRenderer.RenderWorksheet(
+                _workbook,
+                sheet.Id,
+                _viewportService,
+                range,
+                options.IgnorePrintAreas);
+            if (document.Pages.Count > 0)
+                result.Add(new PdfBookmark(sheet.Name, pageIndex));
+            pageIndex += document.Pages.Count;
+        }
+
+        return result;
+    }
 
     private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options)
     {
         var paginator = options.Scope == ExportContentScope.EntireWorkbook
-            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService)
+            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService, options.IgnorePrintAreas)
             : RenderExportDocument(options).DocumentPaginator;
 
         if (!ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount, out var pageRangeError))

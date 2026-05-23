@@ -64,14 +64,28 @@ internal static class XlsxWorksheetPageSetupMapper
     }
 
     public static string ToHeaderFooterText(string text) =>
-        text
-            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase);
+        ReplaceHeaderFooterTokens(text, [
+            new("&[Page]", "&P"),
+            new("&[Pages]", "&N"),
+            new("&[Date]", "&D"),
+            new("&[Time]", "&T"),
+            new("&[File]", "&F"),
+            new("&[Path]", "&Z"),
+            new("&[Tab]", "&A"),
+            new("&[Picture]", "&G")
+        ], StringComparison.OrdinalIgnoreCase);
 
     public static string FromHeaderFooterText(string text) =>
-        text
-            .Replace("&P", "&[Page]", StringComparison.Ordinal)
-            .Replace("&N", "&[Pages]", StringComparison.Ordinal);
+        ReplaceHeaderFooterTokens(text, [
+            new("&P", "&[Page]"),
+            new("&N", "&[Pages]"),
+            new("&D", "&[Date]"),
+            new("&T", "&[Time]"),
+            new("&F", "&[File]"),
+            new("&Z", "&[Path]"),
+            new("&A", "&[Tab]"),
+            new("&G", "&[Picture]")
+        ], StringComparison.OrdinalIgnoreCase);
 
     public static XLPrintErrorValues ToPrintErrorValue(WorksheetPrintErrorValue value) =>
         value switch
@@ -119,4 +133,16 @@ internal static class XlsxWorksheetPageSetupMapper
         if (!string.IsNullOrEmpty(value.Right))
             target.Right.AddText(ToHeaderFooterText(value.Right), occurrence);
     }
+
+    private static string ReplaceHeaderFooterTokens(
+        string text,
+        IReadOnlyList<HeaderFooterTokenMapping> mappings,
+        StringComparison comparison)
+    {
+        foreach (var mapping in mappings)
+            text = text.Replace(mapping.Source, mapping.Target, comparison);
+        return text;
+    }
+
+    private readonly record struct HeaderFooterTokenMapping(string Source, string Target);
 }

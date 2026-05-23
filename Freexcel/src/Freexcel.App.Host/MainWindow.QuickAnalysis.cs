@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -25,6 +27,7 @@ public partial class MainWindow
             PlacementTarget = SheetGrid,
             Placement = PlacementMode.MousePoint
         };
+        menu.Closed += (_, _) => SheetGrid.QuickAnalysisPreviewRange = null;
 
         string? currentGroup = null;
         foreach (var option in options)
@@ -160,20 +163,29 @@ public partial class MainWindow
             case QuickAnalysisCommand.StockChart:
                 ChartStockMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.MoreCharts:
+                InsertChartPickerBtn_Click(sender, e);
+                break;
             case QuickAnalysisCommand.Sum:
-                AutoSumSumMenuItem_Click(sender, e);
+                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "SUM"), "Quick Analysis Sum");
                 break;
             case QuickAnalysisCommand.Average:
-                AutoSumAvgMenuItem_Click(sender, e);
+                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "AVERAGE"), "Quick Analysis Average");
                 break;
             case QuickAnalysisCommand.Count:
-                AutoSumCountMenuItem_Click(sender, e);
+                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "COUNT"), "Quick Analysis Count");
+                break;
+            case QuickAnalysisCommand.PercentTotal:
+                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildPercentTotalEdits, "Quick Analysis % Total");
+                break;
+            case QuickAnalysisCommand.RunningTotal:
+                InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildRunningTotalEdits, "Quick Analysis Running Total");
                 break;
             case QuickAnalysisCommand.Max:
-                AutoSumMaxMenuItem_Click(sender, e);
+                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "MAX"), "Quick Analysis Max");
                 break;
             case QuickAnalysisCommand.Min:
-                AutoSumMinMenuItem_Click(sender, e);
+                InsertQuickAnalysisTotalFormulas(range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, "MIN"), "Quick Analysis Min");
                 break;
             case QuickAnalysisCommand.FormatAsTable:
                 TableBtn_Click(sender, e);
@@ -193,6 +205,28 @@ public partial class MainWindow
         }
     }
 
+    private void InsertQuickAnalysisTotalFormulas(
+        Func<GridRange, IReadOnlyList<(CellAddress Address, Cell NewCell)>> buildEdits,
+        string title)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var edits = buildEdits(range);
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => new EditCellsCommand(_currentSheetId, edits));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, title);
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(edit => edit.Address).ToList());
+        SetActiveCell(edits[^1].Address);
+        UpdateViewport();
+    }
+
     private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)
     {
         if (sender is not MenuItem { Tag: QuickAnalysisOption option } ||
@@ -200,11 +234,13 @@ public partial class MainWindow
             return;
 
         var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+        SheetGrid.QuickAnalysisPreviewRange = preview.Range;
         StatusReadyText.Text = preview.StatusText;
     }
 
     private void QuickAnalysisMenuItem_MouseLeave(object sender, MouseEventArgs e)
     {
+        SheetGrid.QuickAnalysisPreviewRange = null;
         StatusReadyText.Text = "Ready";
     }
 }

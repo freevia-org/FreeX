@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -8,14 +9,15 @@ public partial class MainWindow
 {
     // ── Context menu + Insert/Delete ─────────────────────────────────────────
 
-    private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point screenPos)
+    private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point gridPos)
     {
         var actualAddr = new CellAddress(_currentSheetId, clickedCell.Row, clickedCell.Col);
         if (SheetGrid.SelectedRange is null)
             SetActiveCell(actualAddr);
 
+        var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
         var menu = new ContextMenu();
-        foreach (var command in WorksheetContextMenuPlanner.BuildCommands())
+        foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind))
         {
             if (command.IsSeparator)
             {
@@ -30,6 +32,7 @@ public partial class MainWindow
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
+        PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
     }
 
@@ -48,6 +51,9 @@ public partial class MainWindow
                 break;
             case WorksheetContextMenuAction.PasteSpecial:
                 PasteSpecialBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.InsertCopiedCells:
+                ExecuteInsertCopiedCells();
                 break;
             case WorksheetContextMenuAction.InsertCells:
                 InsertCellsMenuItem_Click(this, new RoutedEventArgs());
@@ -142,6 +148,12 @@ public partial class MainWindow
             case WorksheetContextMenuAction.NewComment:
                 ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.EditComment:
+                ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.DeleteComment:
+                ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
@@ -175,12 +187,86 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
                 break;
+            case WorksheetContextMenuAction.FormatPicture:
+                PictureSizeBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.CropPicture:
+                PictureCropBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ResetPictureCrop:
+                PictureResetCropMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.FormatDrawingObject:
+            case WorksheetContextMenuAction.ResizeDrawingObject:
+                ObjectSizeBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.RotateDrawingObject:
+                ObjectRotateBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShapeFill:
+                ObjectFillBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShapeOutline:
+                ObjectOutlineBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.BringForward:
+                BringForwardBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.SendBackward:
+                SendBackwardBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.EditAltText:
+                SetAltTextBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.SelectionPane:
+                SelectionPaneBtn_Click(this, new RoutedEventArgs());
+                break;
         }
     }
 
     private void OpenKeyboardContextMenu()
     {
         var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        OnGridContextMenuRequested(address, default);
+        OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
+    }
+
+    private System.Windows.Point GetKeyboardContextMenuGridPoint(CellAddress address)
+    {
+        return TryGetCellOverlayRect(address) is { } rect
+            ? new System.Windows.Point(rect.Left, rect.Bottom)
+            : new System.Windows.Point();
+    }
+
+    private void PositionWorksheetContextMenu(ContextMenu menu, System.Windows.Point gridPos)
+    {
+        var screenPoint = SheetGrid.PointToScreen(gridPos);
+        if (PresentationSource.FromVisual(this)?.CompositionTarget is { } target)
+            screenPoint = target.TransformFromDevice.Transform(screenPoint);
+
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint;
+        menu.HorizontalOffset = screenPoint.X;
+        menu.VerticalOffset = screenPoint.Y;
+    }
+
+    private WorksheetContextMenuTargetKind GetWorksheetContextMenuTargetKind(CellAddress address)
+    {
+        if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            if (SelectionRangeService.IsWholeRowSelection(selectedRange))
+                return WorksheetContextMenuTargetKind.RowSelection;
+            if (SelectionRangeService.IsWholeColumnSelection(selectedRange))
+                return WorksheetContextMenuTargetKind.ColumnSelection;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (DrawingTargetResolver.GetTargetPicture(sheet, address) is not null)
+            return WorksheetContextMenuTargetKind.Picture;
+
+        return DrawingTargetResolver.GetTargetDrawingObject(sheet, address)?.Kind switch
+        {
+            DrawingObjectTargetKind.Shape => WorksheetContextMenuTargetKind.Shape,
+            DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
+            _ => WorksheetContextMenuTargetKind.Worksheet
+        };
     }
 }

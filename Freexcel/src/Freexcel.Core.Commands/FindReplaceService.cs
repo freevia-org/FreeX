@@ -6,6 +6,32 @@ namespace Freexcel.Core.Commands;
 /// <summary>Represents a cell that matched a search.</summary>
 public sealed record FindResult(CellAddress Address, string MatchedText);
 
+public enum FindWithin
+{
+    Workbook,
+    Sheet
+}
+
+public enum FindSearchOrder
+{
+    ByRows,
+    ByColumns
+}
+
+public enum FindLookIn
+{
+    Formulas,
+    Values,
+    Notes,
+    Comments
+}
+
+public sealed record FindOptions(
+    FindWithin Within = FindWithin.Workbook,
+    SheetId? CurrentSheetId = null,
+    FindSearchOrder SearchOrder = FindSearchOrder.ByRows,
+    FindLookIn LookIn = FindLookIn.Values);
+
 /// <summary>Search and replace service. Replace goes through ICommandBus for undo support.</summary>
 public static class FindReplaceService
 {
@@ -19,30 +45,29 @@ public static class FindReplaceService
         bool matchCase = false,
         bool matchEntireCell = false,
         bool searchFormulas = false)
+        => Find(
+            workbook,
+            searchText,
+            new FindOptions(LookIn: searchFormulas ? FindLookIn.Formulas : FindLookIn.Values),
+            matchCase,
+            matchEntireCell);
+
+    public static IReadOnlyList<FindResult> Find(
+        Workbook workbook,
+        string searchText,
+        FindOptions options,
+        bool matchCase = false,
+        bool matchEntireCell = false)
     {
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         var results = new List<FindResult>();
 
-        foreach (var sheet in workbook.Sheets)
+        foreach (var sheet in SheetsForScope(workbook, options))
         {
             var sheetResults = new List<FindResult>();
 
-            foreach (var (addr, cell) in sheet.EnumerateCells())
+            foreach (var (addr, text) in EnumerateSearchTexts(sheet, options.LookIn))
             {
-                string? text;
-
-                if (searchFormulas && cell.HasFormula)
-                {
-                    text = cell.FormulaText;
-                    if (text is null) continue;
-                }
-                else
-                {
-                    text = GetDisplayText(cell.Value);
-                    if (text is null)
-                        continue;
-                }
-
                 bool isMatch = matchEntireCell
                     ? text.Equals(searchText, comparison)
                     : text.Contains(searchText, comparison);
@@ -53,6 +78,12 @@ public static class FindReplaceService
 
             sheetResults.Sort((a, b) =>
             {
+                if (options.SearchOrder == FindSearchOrder.ByColumns)
+                {
+                    var colCmp = a.Address.Col.CompareTo(b.Address.Col);
+                    return colCmp != 0 ? colCmp : a.Address.Row.CompareTo(b.Address.Row);
+                }
+
                 var rowCmp = a.Address.Row.CompareTo(b.Address.Row);
                 return rowCmp != 0 ? rowCmp : a.Address.Col.CompareTo(b.Address.Col);
             });
@@ -74,8 +105,28 @@ public static class FindReplaceService
         string replaceText,
         bool matchCase = false,
         bool matchEntireCell = false)
+        => ReplaceAll(
+            workbook,
+            commandBus,
+            searchText,
+            replaceText,
+            new FindOptions(LookIn: FindLookIn.Values),
+            matchCase,
+            matchEntireCell);
+
+    public static int ReplaceAll(
+        Workbook workbook,
+        ICommandBus commandBus,
+        string searchText,
+        string replaceText,
+        FindOptions options,
+        bool matchCase = false,
+        bool matchEntireCell = false)
     {
-        var matches = Find(workbook, searchText, matchCase, matchEntireCell, searchFormulas: false);
+        if (options.LookIn is not FindLookIn.Values)
+            return 0;
+
+        var matches = Find(workbook, searchText, options, matchCase, matchEntireCell);
         if (matches.Count == 0)
             return 0;
 
@@ -117,6 +168,47 @@ public static class FindReplaceService
         }
 
         return editsBySheet.Values.Sum(list => list.Count);
+    }
+
+    private static IEnumerable<Sheet> SheetsForScope(Workbook workbook, FindOptions options)
+    {
+        if (options.Within == FindWithin.Sheet && options.CurrentSheetId is { } sheetId)
+        {
+            var sheet = workbook.GetSheet(sheetId);
+            if (sheet is not null)
+                yield return sheet;
+            yield break;
+        }
+
+        foreach (var sheet in workbook.Sheets)
+            yield return sheet;
+    }
+
+    private static IEnumerable<(CellAddress Address, string Text)> EnumerateSearchTexts(Sheet sheet, FindLookIn lookIn)
+    {
+        if (lookIn == FindLookIn.Notes)
+        {
+            foreach (var (address, text) in sheet.Comments)
+                yield return (address, text);
+            yield break;
+        }
+
+        if (lookIn == FindLookIn.Comments)
+        {
+            foreach (var (address, comment) in sheet.ThreadedComments)
+                yield return (address, comment.Text);
+            yield break;
+        }
+
+        foreach (var (addr, cell) in sheet.EnumerateCells())
+        {
+            string? text = lookIn == FindLookIn.Formulas && cell.HasFormula
+                ? cell.FormulaText
+                : GetDisplayText(cell.Value);
+
+            if (text is not null)
+                yield return (addr, text);
+        }
     }
 
     private static string? GetDisplayText(ScalarValue value) => value switch

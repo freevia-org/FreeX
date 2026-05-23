@@ -198,6 +198,76 @@ public class NumberFormatterTests
     [InlineData("[$\u00A5-804]#,##0.00", 1234.5, "\u00A51,234.50")]
     [InlineData("[$NT$-404]#,##0.00", 1234.5, "NT$1,234.50")]
     [InlineData("[$HK$-C04]#,##0.00", 1234.5, "HK$1,234.50")]
+    [InlineData("[$\u20AC-40A]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("[$MX$-80A]#,##0.00", 1234.5, "MX$1,234.50")]
+    [InlineData("[$$-2C0A]#,##0.00", 1234.5, "$1.234,50")]
+    [InlineData("[$$-340A]#,##0.00", 1234.5, "$1.234,50")]
+    [InlineData("[$$-240A]#,##0.00", 1234.5, "$1.234,50")]
+    [InlineData("[$S/-280A]#,##0.00", 1234.5, "S/1,234.50")]
+    [InlineData("[$Bs-200A]#,##0.00", 1234.5, "Bs1.234,50")]
+    [InlineData("[$$U-380A]#,##0.00", 1234.5, "$U1.234,50")]
+    [InlineData("[$Bs-400A]#,##0.00", 1234.5, "Bs1.234,50")]
+    [InlineData("[$Q-100A]#,##0.00", 1234.5, "Q1,234.50")]
+    [InlineData("[$$-300A]#,##0.00", 1234.5, "$1.234,50")]
+    [InlineData("[$\u20A1-140A]#,##0.00", 1234.5, "\u20A11\u00A0234,50")]
+    [InlineData("[$RD$-1C0A]#,##0.00", 1234.5, "RD$1,234.50")]
+    [InlineData("[$B/.-180A]#,##0.00", 1234.5, "B/.1,234.50")]
+    [InlineData("[$Gs-3C0A]#,##0.00", 1234.5, "Gs1.234,50")]
+    [InlineData("[$$-440A]#,##0.00", 1234.5, "$1,234.50")]
+    [InlineData("[$$-500A]#,##0.00", 1234.5, "$1,234.50")]
+    [InlineData("[$\u20B9-4009]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$\u20B9-439]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$\u20B9-445]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$\u20B9-449]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$\u20B9-44A]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$\u20B9-44E]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
+    [InlineData("[$$-C0C]#,##0.00", 1234.5, "$1\u00A0234,50")]
+    [InlineData("[$R-1C09]#,##0.00", 1234.5, "R1\u00A0234,50")]
+    [InlineData("[$\u20AB-42A]#,##0.00", 1234.5, "\u20AB1.234,50")]
+    [InlineData("[$Rp-421]#,##0.00", 1234.5, "Rp1.234,50")]
+    [InlineData("[$RM-43E]#,##0.00", 1234.5, "RM1,234.50")]
+    [InlineData("[$\u20AA-40D]#,##0.00", 1234.5, "\u20AA1,234.50")]
+    [InlineData("[$\u0E3F-41E]#,##0.00", 1234.5, "\u0E3F1,234.50")]
+    [InlineData("[$\u20AC-408]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("[$lei-418]#,##0.00", 1234.5, "lei1.234,50")]
+    [InlineData("[$\u043B\u0432.-402]#,##0.00", 1234.5, "\u043B\u0432.1\u00A0234,50")]
+    [InlineData("[$\u20AC-41A]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("[$\u20AC-41B]#,##0.00", 1234.5, "\u20AC1\u00A0234,50")]
+    [InlineData("[$\u20AC-424]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("[$RSD-241A]#,##0.00", 1234.5, "RSD1.234,50")]
+    [InlineData("[$\u20AC-427]#,##0.00", 1234.5, "\u20AC1\u00A0234,50")]
+    [InlineData("[$\u20AC-426]#,##0.00", 1234.5, "\u20AC1\u00A0234,50")]
+    [InlineData("[$\u20AC-425]#,##0.00", 1234.5, "\u20AC1\u00A0234,50")]
+    [InlineData("[$SAR-401]#,##0.00", 1234.5, "SAR1,234.50")]
+    [InlineData("[$EGP-C01]#,##0.00", 1234.5, "EGP1,234.50")]
+    [InlineData("[$AED-3801]#,##0.00", 1234.5, "AED1,234.50")]
+    [InlineData("[$MAD-1801]#,##0.00", 1234.5, "MAD1,234.50")]
+    [InlineData("[$IRR-429]#,##0.00", 1234.5, "IRR1,234/50")]
+    [InlineData("[$Rs-420]#,##0.00", 1234.5, "Rs1,234.50")]
+    [InlineData("[$\u060B-463]#,##0.00", 1234.5, "\u060B1.234,50")]
+    [InlineData("[$IQD-492]#,##0.00", 1234.5, "IQD1,234.50")]
+    [InlineData("[$R-436]#,##0.00", 1234.5, "R1\u00A0234,50")]
+    [InlineData("[$R-435]#,##0.00", 1234.5, "R1,234.50")]
+    [InlineData("[$R-434]#,##0.00", 1234.5, "R1\u00A0234.50")]
+    [InlineData("[$Ksh-441]#,##0.00", 1234.5, "Ksh1,234.50")]
+    [InlineData("[$ETB-45E]#,##0.00", 1234.5, "ETB1,234.50")]
+    [InlineData("[$\u20A6-468]#,##0.00", 1234.5, "\u20A61,234.50")]
+    [InlineData("[$\u20A6-46A]#,##0.00", 1234.5, "\u20A61,234.50")]
+    [InlineData("[$\u20A6-470]#,##0.00", 1234.5, "\u20A61,234.50")]
+    [InlineData("[$DH-380C]#,##0.00", 1234.5, "DH1.234,50")]
+    [InlineData("[$CFA-280C]#,##0.00", 1234.5, "CFA1\u202F234,50")]
+    [InlineData("[$\u20B8-43F]#,##0.00", 1234.5, "\u20B81\u00A0234,50")]
+    [InlineData("[$KGS-440]#,##0.00", 1234.5, "KGS1\u00A0234,50")]
+    [InlineData("[$UZS-443]#,##0.00", 1234.5, "UZS1\u00A0234,50")]
+    [InlineData("[$\u20BC-42C]#,##0.00", 1234.5, "\u20BC1.234,50")]
+    [InlineData("[$\u20BE-437]#,##0.00", 1234.5, "\u20BE1\u00A0234,50")]
+    [InlineData("[$\u058F-42B]#,##0.00", 1234.5, "\u058F1,234.50")]
+    [InlineData("[$\u20AE-450]#,##0.00", 1234.5, "\u20AE1,234.50")]
+    [InlineData("[$NPR-461]#,##0.00", 1234.5, "NPR1,234.50")]
+    [InlineData("[$LKR-45B]#,##0.00", 1234.5, "LKR1,234.50")]
+    [InlineData("[$\u20AD-454]#,##0.00", 1234.5, "\u20AD1.234,50")]
+    [InlineData("[$KHR-453]#,##0.00", 1234.5, "KHR1,234.50")]
+    [InlineData("[$MMK-455]#,##0.00", 1234.5, "MMK1,234.50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
     [InlineData("[$XYZ-999]#,##0.00", 1234.5, "XYZ1,234.50")]
     public void CustomNumberSubset_UsesKnownLcidDecimalAndGroupSeparators(
@@ -219,6 +289,60 @@ public class NumberFormatterTests
     [InlineData("[$-411]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-804]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-1009]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-80A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-340A]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-2C0A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-140A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-500A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-C0C]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-439]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-445]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-44A]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-42A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-421]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-43E]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-40D]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-41E]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-408]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-418]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-402]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-41A]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-41B]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-424]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-241A]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-427]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-426]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-425]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-401]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-C01]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-3801]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-1801]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-429]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-420]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-463]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-492]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-436]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-435]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-434]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-441]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-45E]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-468]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-46A]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-470]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-380C]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-280C]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-43F]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-440]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-443]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-42C]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-437]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-42B]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-450]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-461]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-45B]dd/mm/yyyy", "01-01-2024")]
+    [InlineData("[$-454]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-453]dd/mm/yyyy", "01/01/2024")]
+    [InlineData("[$-455]dd/mm/yyyy", "01/01/2024")]
     [InlineData("[$-409]m/d/yyyy", "1/1/2024")]
     [InlineData("[$-999]dd/mm/yyyy", "01/01/2024")]
     public void CustomNumberSubset_UsesKnownLcidDateSeparatorsForDateValues(
@@ -425,6 +549,20 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("@ \"units\"", "A1", "A1 units")]
+    [InlineData("\"SKU \"@", "A1", "SKU A1")]
+    [InlineData("\\@@", "A1", "@A1")]
+    public void CustomNumberSubset_AppliesSingleTextSectionWhenItContainsPlaceholder(
+        string format,
+        string value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new TextValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void Format_BlankValue_ReturnsEmpty()
     {
@@ -435,5 +573,21 @@ public class NumberFormatterTests
     public void Format_ErrorValue_ReturnsCode()
     {
         Assert.Equal("#DIV/0!", NumberFormatter.Format(new ErrorValue("#DIV/0!"), "General"));
+    }
+
+    [Fact]
+    public void Format_LcidToken_FallsBackToDotNetCultureSeparatorsForUncatalogedLocale()
+    {
+        var result = NumberFormatter.Format(new NumberValue(1234.5), "[$-0C07]#,##0.00");
+
+        Assert.Equal("1\u00A0234,50", result);
+    }
+
+    [Fact]
+    public void Format_LcidCurrencyToken_PreservesSymbolWhenUsingCultureFallback()
+    {
+        var result = NumberFormatter.Format(new NumberValue(1234.5), "[$€-0C07]#,##0.00");
+
+        Assert.Equal("€1\u00A0234,50", result);
     }
 }

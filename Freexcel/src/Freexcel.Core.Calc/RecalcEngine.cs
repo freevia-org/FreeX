@@ -79,7 +79,7 @@ public sealed class RecalcEngine
                     cell.CachedAst = cachedAst;
                     RegisterFormulaDependencies(addr, cachedAst, addr.Sheet, workbook);
                 }
-                var result = _evaluator.Evaluate(cachedAst, sheet, workbook);
+                var result = _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
 
                 if (result is RangeValue rv)
                 {
@@ -132,7 +132,7 @@ public sealed class RecalcEngine
     public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId, Freexcel.Core.Model.Workbook? workbook = null)
     {
         var refs = new HashSet<CellAddress>();
-        CollectReferences(ast, sheetId, workbook, refs);
+        CollectReferences(ast, sheetId, formulaCell, workbook, refs);
         _graph.SetDependencies(formulaCell, refs);
 
         if (ContainsVolatileFunction(ast))
@@ -220,7 +220,12 @@ public sealed class RecalcEngine
         };
     }
 
-    private static void CollectReferences(FormulaNode node, SheetId defaultSheetId, Freexcel.Core.Model.Workbook? workbook, HashSet<CellAddress> refs)
+    private static void CollectReferences(
+        FormulaNode node,
+        SheetId defaultSheetId,
+        CellAddress formulaCell,
+        Freexcel.Core.Model.Workbook? workbook,
+        HashSet<CellAddress> refs)
     {
         switch (node)
         {
@@ -278,21 +283,54 @@ public sealed class RecalcEngine
                 break;
             }
 
+            case StructuredReferenceNode structured:
+            {
+                if (workbook is null)
+                    break;
+
+                var structuredRange = StructuredReferenceResolver.ResolveDataBodyColumn(
+                    workbook,
+                    workbook.GetSheet(defaultSheetId),
+                    structured.TableName,
+                    structured.ColumnName,
+                    formulaCell);
+                if (structuredRange is null)
+                    break;
+
+                foreach (var address in structuredRange.Value.AllCells())
+                    refs.Add(address);
+                break;
+            }
+
+            case StructuredCurrentRowReferenceNode currentRow:
+            {
+                var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
+                    workbook,
+                    workbook?.GetSheet(defaultSheetId),
+                    formulaCell,
+                    currentRow.TableName,
+                    currentRow.ColumnName);
+                if (address is not null)
+                    refs.Add(address.Value);
+                break;
+            }
+
             case BinaryOpNode binary:
-                CollectReferences(binary.Left, defaultSheetId, workbook, refs);
-                CollectReferences(binary.Right, defaultSheetId, workbook, refs);
+                CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs);
+                CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs);
                 break;
 
             case UnaryOpNode unary:
-                CollectReferences(unary.Operand, defaultSheetId, workbook, refs);
+                CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs);
                 break;
 
             case FunctionCallNode func:
                 foreach (var arg in func.Arguments)
-                    CollectReferences(arg, defaultSheetId, workbook, refs);
+                    CollectReferences(arg, defaultSheetId, formulaCell, workbook, refs);
                 break;
         }
     }
+
 }
 
 /// <summary>Report of a recalculation pass.</summary>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#242424;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .r{fill:none;stroke:#242424;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .g{fill:#107c41}
+      .g2{fill:#dff6dd}
+      .b{fill:#0078d4}
+      .o{fill:#f7630c}
+      .y{fill:#ffb900}
+      .rd{fill:#d32f2f}
+      .p{fill:#8b5cf6}
+      .w{fill:#ffffff}
+      .k{fill:#242424}
+      .f{fill:#f3f2f1}
+      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
+</style>
+  </defs>
+  <rect class="f s" x="4.8" y="4.8" width="22.4" height="22.4" stroke-width="1.6"/>
+  <path class="s" d="M10.4 4.8 L10.4 27.2" stroke-width="1.12"/>
+  <path class="s" d="M16 4.8 L16 27.2" stroke-width="1.12"/>
+  <path class="s" d="M21.6 4.8 L21.6 27.2" stroke-width="1.12"/>
+  <path class="s" d="M4.8 10.4 L27.2 10.4" stroke-width="1.12"/>
+  <path class="s" d="M4.8 16 L27.2 16" stroke-width="1.12"/>
+  <path class="s" d="M4.8 21.6 L27.2 21.6" stroke-width="1.12"/>
+</svg>

@@ -11,22 +11,30 @@ public sealed class FormulaEvaluator
     /// <summary>
     /// Parse and evaluate a formula string against a sheet.
     /// </summary>
-    public ScalarValue Evaluate(string formulaText, Sheet sheet, Freexcel.Core.Model.Workbook? workbook = null)
+    public ScalarValue Evaluate(
+        string formulaText,
+        Sheet sheet,
+        Freexcel.Core.Model.Workbook? workbook = null,
+        Freexcel.Core.Model.CellAddress? currentCell = null)
     {
         var lexer = new Lexer(formulaText);
         var tokens = lexer.Tokenize();
         var parser = new Parser(tokens);
         var ast = parser.Parse();
-        var context = new SheetEvalContext(sheet, workbook, this);
+        var context = new SheetEvalContext(sheet, workbook, this, currentCell);
         return EvaluateNode(ast, context);
     }
 
     /// <summary>
     /// Evaluate a pre-parsed AST against a sheet.
     /// </summary>
-    public ScalarValue Evaluate(FormulaNode ast, Sheet sheet, Freexcel.Core.Model.Workbook? workbook = null)
+    public ScalarValue Evaluate(
+        FormulaNode ast,
+        Sheet sheet,
+        Freexcel.Core.Model.Workbook? workbook = null,
+        Freexcel.Core.Model.CellAddress? currentCell = null)
     {
-        var context = new SheetEvalContext(sheet, workbook, this);
+        var context = new SheetEvalContext(sheet, workbook, this, currentCell);
         return EvaluateNode(ast, context);
     }
 
@@ -49,6 +57,8 @@ public sealed class FormulaEvaluator
             FullColumnRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
             FullRowRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
             NamedRangeNode named => EvaluateNamedRange(named, context),
+            StructuredReferenceNode structured => EvaluateStructuredReference(structured, context),
+            StructuredCurrentRowReferenceNode currentRow => EvaluateCurrentRowReference(currentRow, context),
             BinaryOpNode binary => EvaluateBinaryOp(binary, context),
             UnaryOpNode unary => EvaluateUnaryOp(unary, context),
             FunctionCallNode func => EvaluateFunction(func, context),
@@ -129,8 +139,40 @@ public sealed class FormulaEvaluator
                 : BuildRangeValue(resolvedRange.Value, context);
         }
 
+        if (node is StructuredReferenceNode structured)
+        {
+            var resolvedRange = TryResolveStructuredReferenceRange(structured, context);
+            return resolvedRange is null
+                ? ErrorValue.Name
+                : BuildRangeValue(resolvedRange.Value, context);
+        }
+
+        if (node is StructuredCurrentRowReferenceNode currentRow)
+            return EvaluateCurrentRowReference(currentRow, context);
+
         var value = EvaluateNode(node, context);
         return value;
+    }
+
+    private static ScalarValue EvaluateStructuredReference(StructuredReferenceNode node, IEvalContext context)
+    {
+        var range = TryResolveStructuredReferenceRange(node, context);
+        return range is null
+            ? ErrorValue.Name
+            : BuildRangeValue(range.Value, context);
+    }
+
+    private static ScalarValue EvaluateCurrentRowReference(StructuredCurrentRowReferenceNode node, IEvalContext context)
+    {
+        var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
+            context.CurrentWorkbook,
+            context.CurrentSheet,
+            context.CurrentCellAddress,
+            node.TableName,
+            node.ColumnName);
+        return address is null
+            ? ErrorValue.Name
+            : context.GetCellValue(address.Value.Row, address.Value.Col);
     }
 
     private static ScalarValue PowerOp(ScalarValue left, ScalarValue right)
@@ -572,6 +614,16 @@ public sealed class FormulaEvaluator
         return BuildRangeValue(new RangeRefNode(start, end, sheetName), context);
     }
 
+    private static Freexcel.Core.Model.GridRange? TryResolveStructuredReferenceRange(
+        StructuredReferenceNode node,
+        IEvalContext context)
+        => StructuredReferenceResolver.ResolveDataBodyColumn(
+            context.CurrentWorkbook,
+            context.CurrentSheet,
+            node.TableName,
+            node.ColumnName,
+            context.CurrentCellAddress);
+
     private static bool TryAsRangeRef(FormulaNode node, out RangeRefNode range)
     {
         range = node switch
@@ -991,6 +1043,7 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
+        ErrorValue e => e,
         NumberValue => v,
         BlankValue => new NumberValue(0),
         BoolValue b => new NumberValue(b.Value ? 1 : 0),
@@ -1073,12 +1126,18 @@ public sealed class FormulaEvaluator
         private readonly Sheet _sheet;
         private readonly Freexcel.Core.Model.Workbook? _workbook;
         private readonly FormulaEvaluator _evaluator;
+        private readonly Freexcel.Core.Model.CellAddress? _currentCellAddress;
 
-        public SheetEvalContext(Sheet sheet, Freexcel.Core.Model.Workbook? workbook, FormulaEvaluator evaluator)
+        public SheetEvalContext(
+            Sheet sheet,
+            Freexcel.Core.Model.Workbook? workbook,
+            FormulaEvaluator evaluator,
+            Freexcel.Core.Model.CellAddress? currentCellAddress)
         {
             _sheet = sheet;
             _workbook = workbook;
             _evaluator = evaluator;
+            _currentCellAddress = currentCellAddress;
         }
 
         public ScalarValue GetCellValue(uint row, uint col) => _sheet.GetValue(row, col);
@@ -1133,6 +1192,8 @@ public sealed class FormulaEvaluator
 
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _workbook;
 
+        public Freexcel.Core.Model.CellAddress? CurrentCellAddress => _currentCellAddress;
+
         public Freexcel.Core.Model.Cell? TryGetCell(uint row, uint col) => _sheet.GetCell(row, col);
 
         public Freexcel.Core.Model.Cell? TryGetCell(string sheetName, uint row, uint col)
@@ -1176,6 +1237,7 @@ public sealed class FormulaEvaluator
         public bool IsRowHidden(uint row) => _inner.IsRowHidden(row);
         public Freexcel.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
+        public Freexcel.Core.Model.CellAddress? CurrentCellAddress => _inner.CurrentCellAddress;
         public Freexcel.Core.Model.Cell? TryGetCell(uint row, uint col) => _inner.TryGetCell(row, col);
         public Freexcel.Core.Model.Cell? TryGetCell(string sn, uint row, uint col) => _inner.TryGetCell(sn, row, col);
 

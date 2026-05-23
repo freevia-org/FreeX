@@ -31,7 +31,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.Chart,
                 chart.Id,
-                $"Chart {index + 1}",
+                DisplayName(chart.Name, $"Chart {index + 1}"),
                 chart.IsVisible,
                 index < sheet.Charts.Count - 1,
                 index > 0));
@@ -46,7 +46,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.Shape,
                 shape.Id,
-                $"{ShapeName(shape.Kind)} {index + 1}",
+                DisplayName(shape.Name, $"{ShapeName(shape.Kind)} {index + 1}"),
                 shape.IsVisible,
                 index < sheet.DrawingShapes.Count - 1,
                 index > 0));
@@ -61,7 +61,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.Picture,
                 picture.Id,
-                $"Picture {index + 1}",
+                DisplayName(picture.Name, $"Picture {index + 1}"),
                 picture.IsVisible,
                 index < sheet.Pictures.Count - 1,
                 index > 0));
@@ -76,7 +76,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.TextBox,
                 textBox.Id,
-                $"Text Box {index + 1}",
+                DisplayName(textBox.Name, $"Text Box {index + 1}"),
                 textBox.IsVisible,
                 index < sheet.TextBoxes.Count - 1,
                 index > 0));
@@ -90,4 +90,7 @@ public static class SelectionPanePlanner
             DrawingShapeKind.Line => "Line",
             _ => "Rectangle"
         };
+
+    private static string DisplayName(string? name, string fallback) =>
+        string.IsNullOrWhiteSpace(name) ? fallback : name.Trim();
 }

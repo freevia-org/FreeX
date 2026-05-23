@@ -8,6 +8,8 @@ using PdfSharp.Pdf;
 
 namespace Freexcel.App.Host;
 
+internal sealed record PdfBookmark(string Title, int PageIndex);
+
 internal static class PdfDocumentExporter
 {
     private const double StandardDpi = 96.0;
@@ -26,7 +28,8 @@ internal static class PdfDocumentExporter
         string path,
         PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
-        ExportQuality quality = ExportQuality.Standard)
+        ExportQuality quality = ExportQuality.Standard,
+        IReadOnlyList<PdfBookmark>? bookmarks = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -36,7 +39,7 @@ internal static class PdfDocumentExporter
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
         var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
-        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality));
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks);
     }
 
     internal static double ResolveRasterDpi(ExportQuality quality) =>
@@ -50,7 +53,8 @@ internal static class PdfDocumentExporter
         PdfDocumentProperties? properties,
         int firstPageIndex,
         int lastPageIndexInclusive,
-        double dpi = StandardDpi)
+        double dpi = StandardDpi,
+        IReadOnlyList<PdfBookmark>? bookmarks = null)
     {
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
@@ -81,7 +85,37 @@ internal static class PdfDocumentExporter
             gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
         }
 
+        AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
         pdf.Save(path);
+    }
+
+    private static void AddBookmarks(
+        PdfDocument pdf,
+        IReadOnlyList<PdfBookmark>? bookmarks,
+        int firstPageIndex,
+        int lastPageIndexInclusive)
+    {
+        if (bookmarks is null || bookmarks.Count == 0)
+            return;
+
+        foreach (var bookmark in bookmarks)
+        {
+            if (string.IsNullOrWhiteSpace(bookmark.Title) ||
+                bookmark.PageIndex < firstPageIndex ||
+                bookmark.PageIndex > lastPageIndexInclusive)
+            {
+                continue;
+            }
+
+            var exportedPageIndex = bookmark.PageIndex - firstPageIndex;
+            if (exportedPageIndex < 0 || exportedPageIndex >= pdf.Pages.Count)
+                continue;
+
+            pdf.Outlines.Add(bookmark.Title.Trim(), pdf.Pages[exportedPageIndex], opened: false);
+        }
+
+        if (pdf.Outlines.Count > 0)
+            pdf.PageMode = PdfPageMode.UseOutlines;
     }
 
     private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)

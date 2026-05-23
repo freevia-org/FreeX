@@ -68,31 +68,34 @@
             </TabItem>
             <TabItem Header="_Label Filters">
                 <StackPanel Margin="10">
-                    <TextBlock Text="Show items for which the label"
-                               Margin="0,0,0,6"/>
-                    <ComboBox IsEnabled="False"
-                              SelectedIndex="0"
-                              AutomationProperties.Name="Label filter operator preview">
-                        <ComboBoxItem Content="Equals"/>
-                    </ComboBox>
-                    <TextBox IsEnabled="False"
-                             Margin="0,8,0,0"
-                             AutomationProperties.Name="Label filter value preview"/>
+                    <TextBlock Text="Open the full label filter dialog to filter PivotTable items by their captions."
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                    <Button x:Name="LabelFilterButton"
+                            Content="_Label Filter..."
+                            Width="120"
+                            HorizontalAlignment="Left"
+                            Click="LabelFilterButton_Click"
+                            AutomationProperties.Name="Open PivotTable label filter dialog"/>
                 </StackPanel>
             </TabItem>
-            <TabItem Header="_Value Filters">
+            <TabItem x:Name="ValueFiltersTab"
+                     Header="_Value Filters">
                 <StackPanel Margin="10">
-                    <TextBlock Text="Show items for which the value"
-                               Margin="0,0,0,6"/>
-                    <ComboBox IsEnabled="False"
-                              SelectedIndex="0"
-                              AutomationProperties.Name="Value filter operator preview">
-                        <ComboBoxItem Content="Greater Than"/>
-                    </ComboBox>
-                    <TextBox IsEnabled="False"
-                             Text="0"
-                             Margin="0,8,0,0"
-                             AutomationProperties.Name="Value filter preview"/>
+                    <TextBlock Text="Open the full value filter dialog to filter PivotTable items by summarized values."
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
+                    <TextBlock x:Name="ValueFilterUnavailableText"
+                               Text="Add at least one PivotTable value field to use value filters."
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,12"
+                               Visibility="Collapsed"/>
+                    <Button x:Name="ValueFilterButton"
+                            Content="_Value Filter..."
+                            Width="120"
+                            HorizontalAlignment="Left"
+                            Click="ValueFilterButton_Click"
+                            AutomationProperties.Name="Open PivotTable value filter dialog"/>
                 </StackPanel>
             </TabItem>
         </TabControl>

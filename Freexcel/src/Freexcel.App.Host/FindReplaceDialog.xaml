@@ -62,7 +62,13 @@
             </TabItem>
         </TabControl>
 
-        <Expander x:Name="OptionsExpander" Grid.Row="1" Header="_Options &gt;&gt;" IsExpanded="True" Margin="0,0,0,10">
+        <Expander x:Name="OptionsExpander"
+                  Grid.Row="1"
+                  Header="_Options &gt;&gt;"
+                  IsExpanded="False"
+                  Expanded="OptionsExpander_Expanded"
+                  Collapsed="OptionsExpander_Collapsed"
+                  Margin="0,0,0,10">
             <Grid Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="88"/>
@@ -78,8 +84,8 @@
 
                 <Label Content="_Within:" Target="{Binding ElementName=WithinCombo}" VerticalAlignment="Center"/>
                 <ComboBox x:Name="WithinCombo" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
-                    <ComboBoxItem Content="Sheet"/>
                     <ComboBoxItem Content="Workbook"/>
+                    <ComboBoxItem Content="Sheet"/>
                 </ComboBox>
 
                 <Label Content="_Search:" Target="{Binding ElementName=SearchCombo}" Grid.Column="2" VerticalAlignment="Center"/>
@@ -92,6 +98,7 @@
                 <ComboBox x:Name="LookInCombo" Grid.Row="1" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
                     <ComboBoxItem Content="Formulas"/>
                     <ComboBoxItem Content="Values"/>
+                    <ComboBoxItem Content="Notes"/>
                     <ComboBoxItem Content="Comments"/>
                 </ComboBox>
 
@@ -120,6 +127,7 @@
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="FindAllBtn" Content="Find _All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
             <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
+            <Button x:Name="ReplaceBtn" Content="_Replace" Width="76" Margin="0,0,8,0" Click="Replace_Click"/>
             <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
             <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
         </StackPanel>

@@ -16,7 +16,7 @@ public sealed class GoToSpecialDialog : Window
     {
         Title = "Go To Special";
         Width = 430;
-        Height = 300;
+        Height = 390;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -54,14 +54,6 @@ public sealed class GoToSpecialDialog : Window
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
 
-        content.Children.Add(new TextBlock
-        {
-            Text = "The selectable options match the Go To Special commands Freexcel can apply to the current selection.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
@@ -75,6 +67,14 @@ public sealed class GoToSpecialDialog : Window
             new(GoToSpecialKind.Constants, "_Constants"),
             new(GoToSpecialKind.Formulas, "_Formulas"),
             new(GoToSpecialKind.Comments, "Co_mments"),
+            new(GoToSpecialKind.CurrentRegion, "Current _region"),
+            new(GoToSpecialKind.RowDifferences, "Row _differences"),
+            new(GoToSpecialKind.ColumnDifferences, "Column dif_ferences"),
+            new(GoToSpecialKind.LastCell, "_Last cell"),
+            new(GoToSpecialKind.ConditionalFormats, "Conditional _formats"),
+            new(GoToSpecialKind.Objects, "_Objects"),
+            new(GoToSpecialKind.Precedents, "_Precedents"),
+            new(GoToSpecialKind.Dependents, "_Dependents"),
             new(GoToSpecialKind.DataValidation, "_Data validation"),
             new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
         ];

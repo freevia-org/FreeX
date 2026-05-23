@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -158,8 +159,18 @@ public sealed class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(new CellStyle());
             try
             {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
                 var combo = GetControl<ComboBox>(dialog, "NumberFormatCombo");
-                combo.Items.Cast<string>().Should().Contain(new[]
+                var labels = new HashSet<string>();
+
+                foreach (var category in new[] { "General", "Number", "Currency", "Accounting", "Percentage", "Fraction", "Scientific", "Text" })
+                {
+                    categories.SelectedItem = category;
+                    foreach (var label in combo.Items.Cast<string>())
+                        labels.Add(label);
+                }
+
+                labels.Should().Contain(new[]
                 {
                     "General",
                     "Number (#,##0.00)",
@@ -175,6 +186,61 @@ public sealed class FormatCellsDialogXamlTests
                     .Should().Be("$#,##0.00");
                 FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
                     .Should().Be("# ?/?");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_SwitchesTypeListForEachFormatCategory()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var types = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Number";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "0",
+                    "0.00",
+                    "#,##0",
+                    "#,##0.00"
+                });
+
+                categories.SelectedItem = "Currency";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "$#,##0",
+                    "$#,##0.00",
+                    "$#,##0;[Red]($#,##0)",
+                    "$#,##0.00;[Red]($#,##0.00)"
+                });
+
+                categories.SelectedItem = "Date";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "m/d/yyyy",
+                    "mmmm d, yyyy",
+                    "d-mmm-yy"
+                });
+
+                categories.SelectedItem = "Custom";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "General",
+                    "#,##0.00",
+                    "$#,##0.00",
+                    "0.00%",
+                    "m/d/yyyy",
+                    "h:mm AM/PM"
+                });
             }
             finally
             {
@@ -210,6 +276,24 @@ public sealed class FormatCellsDialogXamlTests
             "Content=\"_Negative numbers:\" Target=\"{Binding ElementName=NumberNegativeNumbersList}\""
         })
             xaml.Should().Contain(content);
+    }
+
+    [Theory]
+    [InlineData("Number", "#,##0.00", "0", "None", 0, "#,##0")]
+    [InlineData("Currency", "$#,##0.00", "3", "EUR", 2, "EUR#,##0.000;(EUR#,##0.000)")]
+    [InlineData("Accounting", "$#,##0.00", "2", "GBP", 0, "_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)")]
+    [InlineData("Percentage", "0.00%", "1", "None", 0, "0.0%")]
+    public void FormatCellsDialog_NumberTab_ComposesFormatFromCategoryControls(
+        string category,
+        string selectedFormat,
+        string decimalPlaces,
+        string symbol,
+        int negativeIndex,
+        string expected)
+    {
+        FormatCellsDialog.ResolveNumberFormat(selectedFormat, 0, category, decimalPlaces, symbol, negativeIndex)
+            .Should()
+            .Be(expected);
     }
 
     [Fact]
@@ -305,9 +389,10 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
-    public void FormatCellsDialog_FillTab_ExposesBackgroundPatternColorAndSamplePreview()
+    public void FormatCellsDialog_FillTab_ExposesBackgroundPatternControlsAndSamplePreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
 
         foreach (var text in new[]
         {
@@ -321,12 +406,15 @@ public sealed class FormatCellsDialogXamlTests
         foreach (var controlName in new[]
         {
             "DlgFillBackgroundPreview",
-            "DlgFillPatternColorBox",
-            "DlgFillPatternStyleBox",
             "DlgFillSamplePreview",
-            "DlgFillPalettePanel"
+            "DlgFillPalettePanel",
+            "DlgFillPatternColorBox",
+            "DlgFillPatternStyleBox"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+
+        source.Should().Contain("FillPatternOptions");
+        source.Should().Contain("FillPatternStyle:");
     }
 
     [Fact]
@@ -428,6 +516,30 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_PopulatesInstalledFontsAndKeepsCustomCurrentFont()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const string customFont = "Freexcel Test Font Not Installed";
+            var dialog = ShowDialogForTest(new CellStyle { FontName = customFont });
+            try
+            {
+                var fontBox = GetControl<ComboBox>(dialog, "DlgFontNameBox");
+                var availableFonts = fontBox.Items.Cast<string>().ToArray();
+
+                availableFonts.Should().Contain(customFont);
+                fontBox.SelectedItem.Should().Be(customFont);
+                availableFonts.Should().Contain(Fonts.SystemFontFamilies.Select(f => f.Source));
+                availableFonts.Should().HaveCountGreaterThan(6);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_DoesNotEmitUnsupportedTextRotation()
     {
         StaTestRunner.Run(() =>
@@ -495,7 +607,11 @@ public sealed class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(new CellStyle());
             try
             {
-                GetControl<ComboBox>(dialog, "NumberFormatCombo").SelectedIndex = 2;
+                GetControl<ListBox>(dialog, "NumberCategoryList").SelectedItem = "Currency";
+                GetControl<ComboBox>(dialog, "NumberFormatCombo").SelectedItem = "Currency ($#,##0.00)";
+                GetControl<TextBox>(dialog, "NumberDecimalPlacesBox").Text = "3";
+                GetControl<ComboBox>(dialog, "NumberSymbolCombo").SelectedItem = "EUR";
+                GetControl<ListBox>(dialog, "NumberNegativeNumbersList").SelectedIndex = 2;
                 GetControl<ComboBox>(dialog, "DlgHAlignBox").SelectedItem = nameof(CellHAlign.Right);
                 GetControl<ComboBox>(dialog, "DlgVAlignBox").SelectedItem = nameof(CellVAlign.Center);
                 GetControl<CheckBox>(dialog, "DlgWrapTextCheck").IsChecked = true;
@@ -506,13 +622,152 @@ public sealed class FormatCellsDialogXamlTests
                 ClickOkForTest(dialog);
 
                 dialog.ResultDiff.Should().NotBeNull();
-                dialog.ResultDiff!.NumberFormat.Should().Be("$#,##0.00");
+                dialog.ResultDiff!.NumberFormat.Should().Be("EUR#,##0.000;(EUR#,##0.000)");
                 dialog.ResultDiff.HAlign.Should().Be(CellHAlign.Right);
                 dialog.ResultDiff.VAlign.Should().Be(CellVAlign.Center);
                 dialog.ResultDiff.WrapText.Should().BeTrue();
                 dialog.ResultDiff.ShrinkToFit.Should().BeTrue();
                 dialog.ResultDiff.IndentLevel.Should().Be(7);
                 dialog.ResultDiff.TextRotation.Should().Be(-45);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_AppliesDecimalSymbolAndNegativeControlsToNumberFormats()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var negatives = GetControl<ListBox>(dialog, "NumberNegativeNumbersList");
+
+                categories.SelectedItem = "Number";
+                decimals.Text = "3";
+                negatives.SelectedIndex = 2;
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("#,##0.000;(#,##0.000)");
+
+                categories.SelectedItem = "Currency";
+                decimals.Text = "1";
+                symbols.SelectedItem = "€";
+                negatives.SelectedIndex = 3;
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("€#,##0.0;[Red](€#,##0.0)");
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "0";
+                symbols.SelectedItem = "£";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("_(£* #,##0_);_(£* (#,##0);_(£* \"-\"_);_(@_)");
+
+                categories.SelectedItem = "Percentage";
+                decimals.Text = "4";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("0.0000%");
+
+                categories.SelectedItem = "Scientific";
+                decimals.Text = "1";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("0.0E+00");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_UpdatesSamplePreviewFromResolvedNumberFormat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var preview = GetControl<TextBlock>(dialog, "NumberPreview");
+                var type = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Currency";
+                decimals.Text = "3";
+                symbols.SelectedItem = "EUR";
+                preview.Text.Should().Be("EUR1,234.560");
+
+                categories.SelectedItem = "Percentage";
+                decimals.Text = "1";
+                preview.Text.Should().Be("123456.0%");
+
+                categories.SelectedItem = "Custom";
+                type.Text = "m/d/yyyy";
+                preview.Text.Should().Be("5/21/2026");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_EnablesOnlyControlsThatAffectSelectedCategory()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var negatives = GetControl<ListBox>(dialog, "NumberNegativeNumbersList");
+
+                categories.SelectedItem = "General";
+                decimals.IsEnabled.Should().BeFalse();
+                symbols.IsEnabled.Should().BeFalse();
+                negatives.IsEnabled.Should().BeFalse();
+
+                categories.SelectedItem = "Number";
+                decimals.IsEnabled.Should().BeTrue();
+                symbols.IsEnabled.Should().BeFalse();
+                negatives.IsEnabled.Should().BeTrue();
+
+                categories.SelectedItem = "Currency";
+                decimals.IsEnabled.Should().BeTrue();
+                symbols.IsEnabled.Should().BeTrue();
+                negatives.IsEnabled.Should().BeTrue();
+
+                categories.SelectedItem = "Accounting";
+                decimals.IsEnabled.Should().BeTrue();
+                symbols.IsEnabled.Should().BeTrue();
+                negatives.IsEnabled.Should().BeFalse();
+
+                foreach (var category in new[] { "Date", "Time", "Fraction", "Text", "Special", "Custom" })
+                {
+                    categories.SelectedItem = category;
+                    decimals.IsEnabled.Should().BeFalse();
+                    symbols.IsEnabled.Should().BeFalse();
+                    negatives.IsEnabled.Should().BeFalse();
+                }
+
+                foreach (var category in new[] { "Percentage", "Scientific" })
+                {
+                    categories.SelectedItem = category;
+                    decimals.IsEnabled.Should().BeTrue();
+                    symbols.IsEnabled.Should().BeFalse();
+                    negatives.IsEnabled.Should().BeFalse();
+                }
             }
             finally
             {
@@ -530,6 +785,8 @@ public sealed class FormatCellsDialogXamlTests
             try
             {
                 GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "12,34,56";
+                GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "90,80,70";
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
                 GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thick);
                 GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "1,2,3";
                 GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
@@ -544,6 +801,8 @@ public sealed class FormatCellsDialogXamlTests
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.FillColor.Should().Be(new CellColor(12, 34, 56));
+                dialog.ResultDiff.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
                 dialog.ResultDiff.ClearFill.Should().BeNull();
                 dialog.ResultDiff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)));
                 dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(4, 5, 6)));
@@ -563,7 +822,12 @@ public sealed class FormatCellsDialogXamlTests
     {
         StaTestRunner.Run(() =>
         {
-            var current = new CellStyle { FillColor = new CellColor(12, 34, 56) };
+            var current = new CellStyle
+            {
+                FillColor = new CellColor(12, 34, 56),
+                FillPatternStyle = CellFillPatternStyle.DarkGrid,
+                FillPatternColor = new CellColor(90, 80, 70)
+            };
             var dialog = ShowDialogForTest(current);
             try
             {
@@ -573,6 +837,8 @@ public sealed class FormatCellsDialogXamlTests
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.FillColor.Should().BeNull();
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.None);
+                dialog.ResultDiff.FillPatternColor.Should().BeNull();
                 dialog.ResultDiff.ClearFill.Should().BeTrue();
             }
             finally

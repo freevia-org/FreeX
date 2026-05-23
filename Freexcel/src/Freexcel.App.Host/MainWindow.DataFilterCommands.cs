@@ -35,7 +35,8 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new SortDialog(
             columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true),
-            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false))
+            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false),
+            rowChoices: SortDialog.BuildRowChoices(range))
         {
             Owner = this
         };
@@ -43,11 +44,18 @@ public partial class MainWindow
             return;
 
         var keys = dialog.ResultSortKeys;
+        var options = new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders), keys)))
+                currentRange => new SortCommand(
+                    _currentSheetId,
+                    dialog.ResultOptions.LeftToRight
+                        ? currentRange
+                        : SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders),
+                    keys,
+                    options)))
             return;
         UpdateViewport();
     }
@@ -63,7 +71,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = sheet is null
             ? new AutoFilterDialog(Array.Empty<AutoFilterChecklistItem>())
-            : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
+            : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
         dialog.Owner = this;
         dialog.Title = "Filter";
         if (dialog.ShowDialog() != true) return;
@@ -87,6 +95,31 @@ public partial class MainWindow
 
         var value = result.CriteriaText;
         var filterText = value.TrimStart();
+        if (result.ColorFilter is { } colorFilter)
+        {
+            var label = colorFilter.Kind switch
+            {
+                AutoFilterColorFilterKind.FontColor => "Filter by Font Color",
+                AutoFilterColorFilterKind.NoFill => "Filter by No Fill",
+                _ => "Filter by Cell Color"
+            };
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    label,
+                    range,
+                    currentRange => colorFilter.Kind switch
+                    {
+                        AutoFilterColorFilterKind.FontColor when colorFilter.Color is { } fontColor =>
+                            new CellFontColorFilterCommand(_currentSheetId, currentRange, filterColOffset, fontColor),
+                        AutoFilterColorFilterKind.NoFill =>
+                            new CellNoFillColorFilterCommand(_currentSheetId, currentRange, filterColOffset),
+                        AutoFilterColorFilterKind.CellFillColor when colorFilter.Color is { } fillColor =>
+                            new CellFillColorFilterCommand(_currentSheetId, currentRange, filterColOffset, fillColor),
+                        _ => new FilterCommand(_currentSheetId, currentRange, filterColOffset, [])
+                    }))
+                return false;
+            return true;
+        }
+
         if (!string.IsNullOrWhiteSpace(filterText) &&
             (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
@@ -135,6 +168,8 @@ public partial class MainWindow
              filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
              filterText.StartsWith('>') ||
              filterText.StartsWith('<') ||
@@ -212,7 +247,10 @@ public partial class MainWindow
         }
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dlg = new DataValidationDialog
+        var existingRule = sheet is null
+            ? null
+            : DataValidationService.GetApplicable(sheet, range.Start).FirstOrDefault();
+        var dlg = new DataValidationDialog(existingRule)
         {
             Owner = this,
             SelectionSource = DataValidationService.FormatListSourceRange(range, sheet?.Name, sheet?.Name)
@@ -241,11 +279,77 @@ public partial class MainWindow
                 {
                     var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
                     rule.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
-                    return new SetDataValidationCommand(sheetId, rule);
+                    return CreateDataValidationCommand(
+                        sheetId,
+                        rule,
+                        existingRule,
+                        dlg.ApplyToSameSettings);
                 }))
             return;
         UpdateViewport();
     }
+
+    private IWorkbookCommand CreateDataValidationCommand(
+        SheetId sheetId,
+        DataValidation rule,
+        DataValidation? existingRule,
+        bool applyToSameSettings)
+    {
+        if (!applyToSameSettings || existingRule is null || _workbook.GetSheet(sheetId) is not { } sheet)
+            return new SetDataValidationCommand(sheetId, rule);
+
+        var commands = sheet.DataValidations
+            .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
+            .Select(candidate => new SetDataValidationCommand(
+                sheetId,
+                CloneDataValidationForRange(rule, candidate.AppliesTo, candidate.Id)))
+            .Cast<IWorkbookCommand>()
+            .ToList();
+
+        if (commands.Count == 0)
+            commands.Add(new SetDataValidationCommand(sheetId, rule));
+
+        return new CompositeWorkbookCommand("Data Validation", commands);
+    }
+
+    private static bool HasSameDataValidationSettings(DataValidation left, DataValidation right) =>
+        left.Type == right.Type &&
+        left.Operator == right.Operator &&
+        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
+        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
+        left.AllowBlank == right.AllowBlank &&
+        left.ShowDropdown == right.ShowDropdown &&
+        left.AlertStyle == right.AlertStyle &&
+        left.ShowInputMessage == right.ShowInputMessage &&
+        left.ShowErrorMessage == right.ShowErrorMessage &&
+        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
+        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
+        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
+        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal);
+
+    private static DataValidation CloneDataValidationForRange(DataValidation source, GridRange range, Guid id) =>
+        new()
+        {
+            Id = id,
+            AppliesTo = range,
+            Type = source.Type,
+            Operator = source.Operator,
+            Formula1 = source.Formula1,
+            Formula2 = source.Formula2,
+            AllowBlank = source.AllowBlank,
+            ShowDropdown = source.ShowDropdown,
+            AlertStyle = source.AlertStyle,
+            ShowInputMessage = source.ShowInputMessage,
+            ShowErrorMessage = source.ShowErrorMessage,
+            ErrorTitle = source.ErrorTitle,
+            ErrorMessage = source.ErrorMessage,
+            PromptTitle = source.PromptTitle,
+            PromptMessage = source.PromptMessage,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
+        };
 
     private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
     {

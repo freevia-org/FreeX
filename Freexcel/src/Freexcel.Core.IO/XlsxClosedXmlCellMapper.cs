@@ -74,9 +74,13 @@ internal static class XlsxClosedXmlCellMapper
             Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
             Strikethrough = xlStyle.Font.Strikethrough,
             FontColor = MapColor(xlStyle.Font.FontColor, theme),
-            FillColor = xlStyle.Fill.PatternType == XLFillPatternValues.Solid
+            FillColor = xlStyle.Fill.PatternType != XLFillPatternValues.None
                 ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme)
                 : null,
+            FillPatternStyle = MapFillPatternStyle(xlStyle.Fill.PatternType),
+            FillPatternColor = xlStyle.Fill.PatternType is XLFillPatternValues.None or XLFillPatternValues.Solid
+                ? null
+                : MapColor(xlStyle.Fill.PatternColor, theme),
             BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor, theme),
             BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme),
             BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme),
@@ -126,7 +130,15 @@ internal static class XlsxClosedXmlCellMapper
         if (style.FontColor != def.FontColor)
             xlCell.Style.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
 
-        if (style.FillColor.HasValue)
+        if (style.FillPatternStyle != CellFillPatternStyle.None)
+        {
+            xlCell.Style.Fill.PatternType = MapFillPatternStyleInverse(style.FillPatternStyle);
+            if (style.FillColor.HasValue)
+                xlCell.Style.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
+            if (style.FillPatternColor.HasValue)
+                xlCell.Style.Fill.PatternColor = XLColor.FromArgb(255, style.FillPatternColor.Value.R, style.FillPatternColor.Value.G, style.FillPatternColor.Value.B);
+        }
+        else if (style.FillColor.HasValue)
         {
             xlCell.Style.Fill.PatternType = XLFillPatternValues.Solid;
             xlCell.Style.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
@@ -289,6 +301,52 @@ internal static class XlsxClosedXmlCellMapper
         BorderStyle.Dotted => XLBorderStyleValues.Dotted,
         BorderStyle.Double => XLBorderStyleValues.Double,
         _ => XLBorderStyleValues.None,
+    };
+
+    private static CellFillPatternStyle MapFillPatternStyle(XLFillPatternValues pattern) => pattern switch
+    {
+        XLFillPatternValues.Solid => CellFillPatternStyle.Solid,
+        XLFillPatternValues.Gray0625 => CellFillPatternStyle.Gray0625,
+        XLFillPatternValues.Gray125 => CellFillPatternStyle.Gray125,
+        XLFillPatternValues.LightGray => CellFillPatternStyle.LightGray,
+        XLFillPatternValues.MediumGray => CellFillPatternStyle.MediumGray,
+        XLFillPatternValues.DarkGray => CellFillPatternStyle.DarkGray,
+        XLFillPatternValues.LightHorizontal => CellFillPatternStyle.LightHorizontal,
+        XLFillPatternValues.LightVertical => CellFillPatternStyle.LightVertical,
+        XLFillPatternValues.LightDown => CellFillPatternStyle.LightDown,
+        XLFillPatternValues.LightUp => CellFillPatternStyle.LightUp,
+        XLFillPatternValues.LightGrid => CellFillPatternStyle.LightGrid,
+        XLFillPatternValues.LightTrellis => CellFillPatternStyle.LightTrellis,
+        XLFillPatternValues.DarkHorizontal => CellFillPatternStyle.DarkHorizontal,
+        XLFillPatternValues.DarkVertical => CellFillPatternStyle.DarkVertical,
+        XLFillPatternValues.DarkDown => CellFillPatternStyle.DarkDown,
+        XLFillPatternValues.DarkUp => CellFillPatternStyle.DarkUp,
+        XLFillPatternValues.DarkGrid => CellFillPatternStyle.DarkGrid,
+        XLFillPatternValues.DarkTrellis => CellFillPatternStyle.DarkTrellis,
+        _ => CellFillPatternStyle.None,
+    };
+
+    private static XLFillPatternValues MapFillPatternStyleInverse(CellFillPatternStyle pattern) => pattern switch
+    {
+        CellFillPatternStyle.Solid => XLFillPatternValues.Solid,
+        CellFillPatternStyle.Gray0625 => XLFillPatternValues.Gray0625,
+        CellFillPatternStyle.Gray125 => XLFillPatternValues.Gray125,
+        CellFillPatternStyle.LightGray => XLFillPatternValues.LightGray,
+        CellFillPatternStyle.MediumGray => XLFillPatternValues.MediumGray,
+        CellFillPatternStyle.DarkGray => XLFillPatternValues.DarkGray,
+        CellFillPatternStyle.LightHorizontal => XLFillPatternValues.LightHorizontal,
+        CellFillPatternStyle.LightVertical => XLFillPatternValues.LightVertical,
+        CellFillPatternStyle.LightDown => XLFillPatternValues.LightDown,
+        CellFillPatternStyle.LightUp => XLFillPatternValues.LightUp,
+        CellFillPatternStyle.LightGrid => XLFillPatternValues.LightGrid,
+        CellFillPatternStyle.LightTrellis => XLFillPatternValues.LightTrellis,
+        CellFillPatternStyle.DarkHorizontal => XLFillPatternValues.DarkHorizontal,
+        CellFillPatternStyle.DarkVertical => XLFillPatternValues.DarkVertical,
+        CellFillPatternStyle.DarkDown => XLFillPatternValues.DarkDown,
+        CellFillPatternStyle.DarkUp => XLFillPatternValues.DarkUp,
+        CellFillPatternStyle.DarkGrid => XLFillPatternValues.DarkGrid,
+        CellFillPatternStyle.DarkTrellis => XLFillPatternValues.DarkTrellis,
+        _ => XLFillPatternValues.None,
     };
 
     private static bool IsSupportedTextRotation(int rotation) =>

@@ -28,5 +28,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         source.Should().Contain("Step _Out");
         source.Should().Contain("_Restart");
         source.Should().Contain("_Help on this formula");
+        source.Should().Contain("ShowFormulaHelp");
+        source.Should().NotContain("SystemSounds.Asterisk.Play");
     }
 }

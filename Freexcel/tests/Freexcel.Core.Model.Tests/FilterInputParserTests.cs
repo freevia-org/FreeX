@@ -142,6 +142,16 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseCriterion_AcceptsMenuTextEqualsAlias()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("equals: Red Apple", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<TextEqualsFilterCriterion>()
+            .Which.Matches(new TextValue("red apple")).Should().BeTrue();
+    }
+
+    [Fact]
     public void TryParseCriterion_AcceptsTextNotEqualsSyntax()
     {
         var parsed = FilterInputParser.TryParseCriterion("text<> Red Apple", out var criterion, out var error);
@@ -242,6 +252,29 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseCriterion_AcceptsAndCompositeSyntax()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("and:>10|<20", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<CompositeFilterCriterion>()
+            .Which.Matches(new NumberValue(15)).Should().BeTrue();
+        criterion!.Matches(new NumberValue(25)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryParseCriterion_AcceptsOrCompositeSyntax()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("or:begins:Red|ends:Apple", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<CompositeFilterCriterion>()
+            .Which.Matches(new TextValue("Red Pear")).Should().BeTrue();
+        criterion!.Matches(new TextValue("Green Apple")).Should().BeTrue();
+        criterion.Matches(new TextValue("Green Pear")).Should().BeFalse();
+    }
+
+    [Fact]
     public void TryParseTopBottom_AcceptsTopSyntax()
     {
         var parsed = FilterInputParser.TryParseTopBottom("top:10", out var count, out var top, out var error);
@@ -293,9 +326,27 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseAverage_AcceptsMenuAboveAverageSyntax()
+    {
+        var parsed = FilterInputParser.TryParseAverage("above average", out var above);
+
+        parsed.Should().BeTrue();
+        above.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryParseAverage_AcceptsBelowAverageSyntax()
     {
         var parsed = FilterInputParser.TryParseAverage("belowaverage", out var above);
+
+        parsed.Should().BeTrue();
+        above.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryParseAverage_AcceptsMenuBelowAverageSyntax()
+    {
+        var parsed = FilterInputParser.TryParseAverage("below average", out var above);
 
         parsed.Should().BeTrue();
         above.Should().BeFalse();

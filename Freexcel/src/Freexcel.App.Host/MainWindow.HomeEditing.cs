@@ -190,7 +190,7 @@ public partial class MainWindow
     private void FindGoToMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var defaultAddress = SheetGrid.SelectedRange?.Start.ToA1() ?? "A1";
-        var dialog = new GoToDialog(_currentSheetId, defaultAddress) { Owner = this };
+        var dialog = new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (dialog.SelectedSpecialKind is { } specialKind)
@@ -226,7 +226,7 @@ public partial class MainWindow
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage, Sheet sheet, GridRange range)
     {
-        var matches = GoToSpecialService.Find(sheet, range, kind);
+        var matches = GoToSpecialService.Find(_workbook, sheet, range, kind, range.Start);
         if (matches.Count == 0)
         {
             if (showEmptyMessage)

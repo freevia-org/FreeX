@@ -28,7 +28,7 @@ public static class RibbonIconFactory
         double size,
         Brush glyphBrush)
     {
-        if (TryLoadCommandIcon(commandName, glyphBrush) is { } source)
+        if (TryLoadCommandIcon(commandName, glyphBrush, size) is { } source)
         {
             var image = new Image
             {
@@ -312,7 +312,7 @@ public static class RibbonIconFactory
         };
     }
 
-    private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush)
+    private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush, double size)
     {
         var slug = ToCommandIconSlug(commandName);
         if (slug.Length == 0)
@@ -321,66 +321,175 @@ public static class RibbonIconFactory
         foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
         {
             var monochromeBrush = IsWhiteBrush(glyphBrush) ? glyphBrush : null;
-            var cacheKey = monochromeBrush is null
-                ? candidateSlug
-                : candidateSlug + "|mono|" + BrushCacheKey(monochromeBrush);
-            lock (CommandIconCacheGate)
+            var sizeKey = size <= 22 ? "s" : "l";
+            foreach (var fileSlug in GetSizeSpecificSlugCandidates(candidateSlug, size, monochromeBrush is not null))
             {
-                if (CommandIconCache.TryGetValue(cacheKey, out var cached))
-                    return cached;
-                if (MissingCommandIcons.Contains(cacheKey))
+                var cacheKey = monochromeBrush is null
+                    ? $"{fileSlug}|{sizeKey}"
+                    : $"{fileSlug}|{sizeKey}|mono|{BrushCacheKey(monochromeBrush)}";
+                lock (CommandIconCacheGate)
+                {
+                    if (CommandIconCache.TryGetValue(cacheKey, out var cached))
+                        return cached;
+                    if (MissingCommandIcons.Contains(cacheKey))
+                        continue;
+                }
+
+                var filePath = System.IO.Path.Combine(
+                    AppContext.BaseDirectory,
+                    "Resources",
+                    "CommandIconsSvg",
+                    fileSlug + ".svg");
+                if (!File.Exists(filePath))
+                {
+                    lock (CommandIconCacheGate)
+                        MissingCommandIcons.Add(cacheKey);
                     continue;
-            }
+                }
 
-            var filePath = System.IO.Path.Combine(
-                AppContext.BaseDirectory,
-                "Resources",
-                "CommandIconsSvg",
-                candidateSlug + ".svg");
-            if (!File.Exists(filePath))
-            {
+                using var reader = new FileSvgReader(SvgDrawingSettings);
+                var drawing = reader.Read(filePath);
+                if (drawing is null)
+                {
+                    lock (CommandIconCacheGate)
+                        MissingCommandIcons.Add(cacheKey);
+                    continue;
+                }
+
+                if (monochromeBrush is not null)
+                    RecolorDrawing(drawing, monochromeBrush);
+
+                var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath, size));
+                vectorImage.Freeze();
+
                 lock (CommandIconCacheGate)
-                    MissingCommandIcons.Add(cacheKey);
-                continue;
+                    CommandIconCache[cacheKey] = vectorImage;
+                return vectorImage;
             }
-
-            using var reader = new FileSvgReader(SvgDrawingSettings);
-            var drawing = reader.Read(filePath);
-            if (drawing is null)
-            {
-                lock (CommandIconCacheGate)
-                    MissingCommandIcons.Add(cacheKey);
-                continue;
-            }
-
-            if (monochromeBrush is not null)
-                RecolorDrawing(drawing, monochromeBrush);
-
-            var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath));
-            vectorImage.Freeze();
-
-            lock (CommandIconCacheGate)
-                CommandIconCache[cacheKey] = vectorImage;
-            return vectorImage;
         }
 
         return null;
     }
 
-    private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath)
+    private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
+    {
+        if (UseBaseHomeIconArtwork(slug))
+        {
+            yield return slug;
+            yield break;
+        }
+
+        if (!monochrome)
+            yield return size <= 22 ? slug + "-small" : slug + "-large";
+        yield return slug;
+    }
+
+    private static bool UseBaseHomeIconArtwork(string slug) => slug switch
+    {
+        "paste" or
+        "cut" or
+        "copy" or
+        "format-painter" or
+        "bold" or
+        "italic" or
+        "underline" or
+        "double-underline" or
+        "strikethrough" or
+        "borders" or
+        "border-presets" or
+        "grow-font" or
+        "shrink-font" or
+        "increase-font-size" or
+        "decrease-font-size" or
+        "font-color" or
+        "fill-color" or
+        "theme-colors" or
+        "top-align" or
+        "middle-align" or
+        "bottom-align" or
+        "align-left" or
+        "center" or
+        "align-right" or
+        "orientation" or
+        "decrease-indent" or
+        "increase-indent" or
+        "wrap-text" or
+        "merge-center" or
+        "accounting-currency" or
+        "percent-style" or
+        "comma-style" or
+        "increase-decimal" or
+        "decrease-decimal" or
+        "conditional-formatting" or
+        "format-as-table" or
+        "cell-styles" or
+        "styles" or
+        "cells" or
+        "insert" or
+        "delete" or
+        "format" or
+        "editing" or
+        "sort" or
+        "find" or
+        "clear" or
+        "fill" => true,
+        _ => false
+    };
+
+    private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath, double targetSize)
     {
         var bounds = TryReadSvgViewBox(filePath) ?? drawing.Bounds;
         if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
             return drawing;
 
-        var group = new DrawingGroup();
-        group.Children.Add(new GeometryDrawing(
+        // For 32×32 SVGs at small (≤22px) slots: scale content to 20×20 and compensate stroke widths
+        // so visual weight matches the natively-20px crisp icons.
+        var is32x32 = Math.Abs(bounds.Width - 32) < 0.5 && Math.Abs(bounds.Height - 32) < 0.5;
+        if (is32x32 && targetSize <= 22)
+        {
+            const double scale = 20.0 / 32.0; // 0.625
+            var mutableDrawing = drawing.IsFrozen ? (Drawing)drawing.Clone() : drawing;
+            ScalePenThicknesses(mutableDrawing, 1.0 / scale); // ×1.6: compensates for scale shrink
+            var scaledGroup = new DrawingGroup();
+            scaledGroup.Transform = new System.Windows.Media.ScaleTransform(scale, scale);
+            scaledGroup.Children.Add(mutableDrawing);
+            var group = new DrawingGroup();
+            group.Children.Add(new GeometryDrawing(Brushes.Transparent, null,
+                new RectangleGeometry(new Rect(0, 0, 20, 20))));
+            group.Children.Add(scaledGroup);
+            group.Freeze();
+            return group;
+        }
+
+        var normalGroup = new DrawingGroup();
+        normalGroup.Children.Add(new GeometryDrawing(
             Brushes.Transparent,
             null,
             new RectangleGeometry(bounds)));
-        group.Children.Add(drawing);
-        group.Freeze();
-        return group;
+        normalGroup.Children.Add(drawing);
+        normalGroup.Freeze();
+        return normalGroup;
+    }
+
+    private static void ScalePenThicknesses(Drawing drawing, double factor)
+    {
+        if (drawing is DrawingGroup group)
+        {
+            foreach (var child in group.Children)
+                ScalePenThicknesses(child, factor);
+        }
+        else if (drawing is GeometryDrawing geometry && geometry.Pen is { } pen)
+        {
+            geometry.Pen = new Pen(pen.Brush, pen.Thickness * factor)
+            {
+                DashCap = pen.DashCap,
+                EndLineCap = pen.EndLineCap,
+                LineJoin = pen.LineJoin,
+                MiterLimit = pen.MiterLimit,
+                StartLineCap = pen.StartLineCap,
+                DashStyle = pen.DashStyle
+            };
+        }
     }
 
     private static Rect? TryReadSvgViewBox(string filePath)
@@ -476,6 +585,25 @@ public static class RibbonIconFactory
             "sort-and-filter" => "sort",
             "find-and-select" => "find",
             "percent-style" => "percent-style",
+            "object-fill" => "fill",
+            "object-outline" => "outline-color",
+            "object-size" => "size",
+            "object-rotate" => "rotate",
+            "shape-gradient" => "gradient",
+            "object-effects" => "effects",
+            "math" => "math-trig",
+            "date" => "date-time",
+            "lookup" => "lookup-reference",
+            "formula-auditing" => "evaluate-formula",
+            "calculation" => "calculate-now",
+            "workbook-stats" => "statistics",
+            "workbook-statistics" => "statistics",
+            "accessibility" => "accessibility-checker",
+            "refresh-pivot" => "refresh-all",
+            "show-details" => "show-detail",
+            "links-and-objects" => "hyperlink",
+            "help-online" => "help",
+            "about-freexcel" => "about",
             _ => ""
         };
 

@@ -72,6 +72,73 @@ public sealed class ExcelParityCoercionEdgeTests
         _eval.Evaluate("=SWITCH(2,1,1/0,2,42)", sheet).Should().Be(new NumberValue(42));
     }
 
+    [Fact]
+    public void DynamicArrayArithmetic_PreservesCellLevelErrorPrecedence()
+    {
+        var sheet = Sheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, ErrorValue.NA),
+            (2, 1, ErrorValue.DivByZero),
+            (2, 2, new NumberValue(4)));
+
+        var result = _eval.Evaluate("=A1:B2+10", sheet)
+            .Should().BeOfType<RangeValue>()
+            .Subject;
+
+        result.At(1, 1).Should().Be(new NumberValue(11));
+        result.At(1, 2).Should().Be(ErrorValue.NA);
+        result.At(2, 1).Should().Be(ErrorValue.DivByZero);
+        result.At(2, 2).Should().Be(new NumberValue(14));
+    }
+
+    [Theory]
+    [InlineData("=XLOOKUP(\"B\",A1:A2,B1:B2)")]
+    [InlineData("=XMATCH(\"B\",A1:A2)")]
+    public void ModernLookupFunctions_PropagateLookupArrayErrorsBeforeLaterMatches(string formula)
+    {
+        var sheet = Sheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(10)),
+            (2, 2, new NumberValue(20)));
+
+        _eval.Evaluate(formula, sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Theory]
+    [InlineData("=XLOOKUP(5,A1:A3,B1:B3,\"\",-1)")]
+    [InlineData("=XMATCH(5,A1:A3,-1)")]
+    public void ModernApproximateLookupFunctions_PropagateLookupArrayErrorsBeforeFallbackMatches(string formula)
+    {
+        var sheet = Sheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, new NumberValue(4)),
+            (3, 1, new NumberValue(6)),
+            (1, 2, new TextValue("error row")),
+            (2, 2, new TextValue("smaller")),
+            (3, 2, new TextValue("larger")));
+
+        _eval.Evaluate(formula, sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
+    public void VolatileDynamicArrays_ReturnBoundedValuesOnEachEvaluation()
+    {
+        var sheet = Sheet();
+
+        for (var i = 0; i < 10; i++)
+        {
+            var result = _eval.Evaluate("=RANDARRAY(2,2,5,7)", sheet)
+                .Should().BeOfType<RangeValue>()
+                .Subject;
+
+            result.RowCount.Should().Be(2);
+            result.ColCount.Should().Be(2);
+            foreach (var value in result.Flatten())
+                value.Should().BeOfType<NumberValue>().Subject.Value.Should().BeInRange(5, 7);
+        }
+    }
+
     private static Sheet Sheet(params (int Row, int Col, ScalarValue Value)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");

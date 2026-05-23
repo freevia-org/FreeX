@@ -1,6 +1,9 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -125,6 +128,10 @@ public sealed class PivotFilterDialogXamlTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .NotContain(["Number format _ID:", "Custom format _code:"]);
+        document.Descendants(presentation + "TextBlock")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Should()
+            .NotContain("Choose how values appear in the PivotTable.");
 
         document.Descendants(presentation + "TextBox")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "NumberFormatBox")
@@ -137,23 +144,72 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Be("Collapsed");
         source.Should().Contain("NumberFormatButton_Click");
+        source.Should().Contain("new FormatCellsDialog(style, FormatCellsDialogTab.Number)");
+        source.Should().Contain("NumberFormatCodeBox.Text = numberFormat");
+        source.Should().Contain("DefaultCustomNumberFormatId");
     }
 
     [Fact]
-    public void PivotFieldFilterDialog_UsesExcelLikeFilterTabs()
+    public void PivotValueFieldSettingsDialog_PresetSelectionClearsStaleCustomFormatCode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var field = new PivotDataFieldModel(
+                SourceFieldIndex: 0,
+                Name: "Sum of Sales",
+                SummaryFunction: "sum",
+                NumberFormatId: 164,
+                NumberFormatCode: "#,##0.0 \"kg\"");
+            var dialog = new PivotValueFieldSettingsDialog(field);
+
+            GetControl<ComboBox>(dialog, "NumberFormatPresetBox").SelectedItem = "Currency";
+            GetControl<TextBox>(dialog, "NumberFormatBox").Text.Should().Be("7");
+            GetControl<TextBox>(dialog, "NumberFormatCodeBox").Text.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public void PivotFieldFilterDialog_ExposesItemLabelAndValueFilterTabsWithActions()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml.cs"));
 
         document.Descendants(presentation + "TabItem")
             .Select(element => element.Attribute("Header")?.Value)
             .Should()
-            .Contain(["Select _Items", "_Label Filters", "_Value Filters"]);
+            .Equal("Select _Items", "_Label Filters", "_Value Filters");
 
         document.Descendants(presentation + "TextBlock")
             .Select(element => element.Attribute("Text")?.Value)
             .Should()
-            .Contain(["Choose items to show:", "Show items for which the label", "Show items for which the value"]);
+            .Contain([
+                "Choose items to show:",
+                "Open the full label filter dialog to filter PivotTable items by their captions.",
+                "Open the full value filter dialog to filter PivotTable items by summarized values."
+            ]);
+
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "LabelFilterButton")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("LabelFilterButton_Click");
+
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "ValueFilterButton")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("ValueFilterButton_Click");
+
+        document.Descendants(presentation + "ComboBox")
+            .Any(element => element.Attribute("IsEnabled")?.Value == "False")
+            .Should()
+            .BeFalse("the field checklist should not show disabled label/value filter previews");
+
+        source.Should().Contain("public PivotFieldFilterDialogAction RequestedAction");
+        source.Should().Contain("LabelFilterButton_Click");
+        source.Should().Contain("ValueFilterButton_Click");
     }
 
     [Theory]
@@ -184,4 +240,14 @@ public sealed class PivotFilterDialogXamlTests
 
         label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
     }
+
+    private static T GetControl<T>(PivotValueFieldSettingsDialog dialog, string name)
+    {
+        var field = typeof(PivotValueFieldSettingsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull($"control {name} should exist");
+        var value = field!.GetValue(dialog);
+        value.Should().BeOfType<T>();
+        return (T)value!;
+    }
+
 }

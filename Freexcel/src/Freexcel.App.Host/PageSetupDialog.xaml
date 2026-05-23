@@ -56,11 +56,11 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="_Adjust to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="_Adjust to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
                             <TextBox x:Name="ScalePercentBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="% normal size" VerticalAlignment="Center" Margin="0,0,0,8"/>
 
-                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="_Fit to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="_Fit to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
                             <TextBox x:Name="FitPagesWideBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="page(s) wide by" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBox x:Name="FitPagesTallBox" Grid.Row="1" Grid.Column="3" Margin="0,0,6,0"/>
@@ -192,14 +192,27 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="150"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
                     <Label Grid.Row="0" Grid.Column="0" Content="Print _area:" Target="{Binding ElementName=PrintAreaBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <TextBox x:Name="PrintAreaBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
+                    <TextBox x:Name="PrintAreaBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
+                    <Button x:Name="PrintAreaPickerButton" Grid.Row="0" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
+                            Tag="PrintAreaBox" Click="RangePickerButton_Click"
+                            ToolTip="Inserts the current worksheet selection as the print area."
+                            AutomationProperties.Name="Insert current selection as print area"/>
                     <Label Grid.Row="1" Grid.Column="0" Content="_Rows to repeat at top:" Target="{Binding ElementName=RowsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <TextBox x:Name="RowsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
+                    <TextBox x:Name="RowsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,8"/>
+                    <Button x:Name="RowsRepeatPickerButton" Grid.Row="1" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
+                            Tag="RowsRepeatBox" Click="RangePickerButton_Click"
+                            ToolTip="Inserts the current selection rows."
+                            AutomationProperties.Name="Insert current selection rows"/>
                     <Label Grid.Row="2" Grid.Column="0" Content="_Columns to repeat at left:" Target="{Binding ElementName=ColumnsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <TextBox x:Name="ColumnsRepeatBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+                    <TextBox x:Name="ColumnsRepeatBox" Grid.Row="2" Grid.Column="1" Margin="0,0,6,8"/>
+                    <Button x:Name="ColumnsRepeatPickerButton" Grid.Row="2" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
+                            Tag="ColumnsRepeatBox" Click="RangePickerButton_Click"
+                            ToolTip="Inserts the current selection columns."
+                            AutomationProperties.Name="Insert current selection columns"/>
                     <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="_Print gridlines" Margin="0,0,0,8"/>
                     <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="Print row and column _headings" Margin="0,0,0,8"/>
                     <Label Grid.Row="5" Grid.Column="0" Content="Pa_ge order:" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -226,9 +239,16 @@
             </TabItem>
         </TabControl>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="_Cancel" Width="72" IsCancel="True"/>
-        </StackPanel>
+        <DockPanel Grid.Row="1" Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="_Print..." Width="86" Margin="0,0,8,0" Click="PrintButton_Click"/>
+                <Button Content="Print Pre_view" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"/>
+                <Button Content="_Options..." Width="86" Click="OptionsButton_Click"/>
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
+                <Button Content="_Cancel" Width="72" IsCancel="True"/>
+            </StackPanel>
+        </DockPanel>
     </Grid>
 </Window>

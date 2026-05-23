@@ -26,6 +26,7 @@ public sealed class SelectionPanePlannerTests
         {
             Anchor = new CellAddress(sheet.Id, 3, 3),
             Text = "Notes",
+            Name = "Executive Notes",
             IsVisible = true
         };
         sheet.Charts.Add(chart);
@@ -34,7 +35,7 @@ public sealed class SelectionPanePlannerTests
 
         var items = SelectionPanePlanner.BuildItems(sheet);
 
-        items.Select(item => item.Name).Should().Equal("Text Box 1", "Rectangle 1", "Chart 1");
+        items.Select(item => item.Name).Should().Equal("Executive Notes", "Rectangle 1", "Chart 1");
         items.Select(item => item.Kind).Should().Equal(
             SelectionPaneObjectKind.TextBox,
             SelectionPaneObjectKind.Shape,
@@ -77,7 +78,7 @@ public sealed class SelectionPanePlannerTests
             SelectionPaneDialogAction.MoveUp,
             item,
             [item],
-            [(item.Id, false)]);
+            [(item.Id, false, "Picture 1")]);
 
         result.Action.Should().Be(SelectionPaneDialogAction.MoveUp);
         result.Target.Should().Be(item);
@@ -85,6 +86,31 @@ public sealed class SelectionPanePlannerTests
             SelectionPaneObjectKind.Picture,
             item.Id,
             IsVisible: false));
+        result.RenameChanges.Should().BeEmpty();
+        result.MoveChanges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_CreateResult_CapturesRenameChanges()
+    {
+        var item = new SelectionPaneItem(
+            SelectionPaneObjectKind.Shape,
+            Guid.NewGuid(),
+            "Rectangle 1",
+            IsVisible: true,
+            CanMoveUp: false,
+            CanMoveDown: false);
+
+        var result = SelectionPaneDialog.CreateResult(
+            SelectionPaneDialogAction.ApplyVisibility,
+            null,
+            [item],
+            [(item.Id, true, "  Process Box  ")]);
+
+        result.RenameChanges.Should().Equal(new SelectionPaneRenameChange(
+            SelectionPaneObjectKind.Shape,
+            item.Id,
+            "Process Box"));
     }
 
     [Fact]
@@ -119,11 +145,43 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("_searchBox");
         source.Should().Contain("_filterBox");
         source.Should().Contain("_renameBox");
+        source.Should().Contain("Content = \"_Name:\"");
         source.Should().Contain("_renameButton");
         source.Should().Contain("_toggleVisibilityButton");
+        source.Should().Contain("CreateEyeIcon()");
+        source.Should().NotContain("Content = \"Eye\"");
         source.Should().Contain("ApplySearchAndFilter");
         source.Should().Contain("RenameSelectedItem");
         source.Should().Contain("ToggleSelectedVisibility");
         source.Should().Contain("ToolTip = \"Toggle visibility\"");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_AllowsInlineRenameInObjectList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("new FrameworkElementFactory(typeof(TextBox))");
+        source.Should().Contain("TextBox.TextProperty");
+        source.Should().Contain("UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged");
+        source.Should().Contain("ToolTipProperty, \"Rename object\"");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+        var hostSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
+
+        source.Should().Contain("private readonly List<SelectionPaneMoveChange> _moveChanges = [];");
+        source.Should().Contain("_moveChanges.Add(new SelectionPaneMoveChange");
+        source.Should().Contain("ApplySearchAndFilter(selected.Source.Id)");
+        var acceptMoveBody = source.Substring(
+            source.IndexOf("private void AcceptMove", StringComparison.Ordinal),
+            source.IndexOf("private IReadOnlyList<SelectionPaneVisibilityChange>", StringComparison.Ordinal) -
+            source.IndexOf("private void AcceptMove", StringComparison.Ordinal));
+        acceptMoveBody.Should().NotContain("DialogResult = true");
+        hostSource.Should().Contain("result.MoveChanges.Select");
+        hostSource.Should().NotContain("SelectionPaneDialogAction.MoveUp when dialog.Result.Target");
     }
 }

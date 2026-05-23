@@ -82,10 +82,23 @@ public partial class MainWindow
                     _currentSheetId,
                     currentRange.Start,
                     dialog.Result.Target,
-                    dialog.Result.DisplayText)))
+                    dialog.Result.DisplayText,
+                    new HyperlinkMetadata(
+                        ToCoreHyperlinkTargetKind(dialog.Result.LinkType),
+                        dialog.Result.ScreenTip,
+                        dialog.Result.Bookmark))))
             return;
         UpdateViewport();
     }
+
+    private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>
+        linkType switch
+        {
+            HyperlinkLinkType.CreateNewDocument => HyperlinkTargetKind.CreateNewDocument,
+            HyperlinkLinkType.PlaceInThisDocument => HyperlinkTargetKind.PlaceInThisDocument,
+            HyperlinkLinkType.EmailAddress => HyperlinkTargetKind.EmailAddress,
+            _ => HyperlinkTargetKind.ExistingFileOrWebPage
+        };
 
     private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);
 
@@ -111,7 +124,13 @@ public partial class MainWindow
                     dialog.DifferentFirstPage,
                     dialog.DifferentOddEvenPages,
                     dialog.ScaleWithDocument,
-                    dialog.AlignWithMargins)))
+                    dialog.AlignWithMargins,
+                    dialog.HeaderPictures,
+                    dialog.FooterPictures,
+                    dialog.FirstPageHeaderPictures,
+                    dialog.FirstPageFooterPictures,
+                    dialog.EvenPageHeaderPictures,
+                    dialog.EvenPageFooterPictures)))
             return;
 
         UpdateViewport();

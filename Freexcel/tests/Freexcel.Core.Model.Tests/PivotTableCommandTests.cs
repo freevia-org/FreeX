@@ -611,7 +611,9 @@ public sealed class PivotTableCommandTests
             ShowRowHeaders = true,
             ShowColumnHeaders = true,
             ShowRowStripes = false,
-            ShowColumnStripes = false
+            ShowColumnStripes = false,
+            AltTextTitle = "Old title",
+            AltTextDescription = "Old description"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -633,7 +635,11 @@ public sealed class PivotTableCommandTests
             showRowHeaders: false,
             showColumnHeaders: false,
             showRowStripes: true,
-            showColumnStripes: true);
+            showColumnStripes: true,
+            printTitles: true,
+            printExpandCollapseButtons: true,
+            altTextTitle: "Sales pivot",
+            altTextDescription: "Quarterly sales summary");
 
         command.Apply(ctx).Success.Should().BeTrue();
 
@@ -649,6 +655,10 @@ public sealed class PivotTableCommandTests
         pivot.ShowColumnHeaders.Should().BeFalse();
         pivot.ShowRowStripes.Should().BeTrue();
         pivot.ShowColumnStripes.Should().BeTrue();
+        pivot.PrintTitles.Should().BeTrue();
+        pivot.PrintExpandCollapseButtons.Should().BeTrue();
+        pivot.AltTextTitle.Should().Be("Sales pivot");
+        pivot.AltTextDescription.Should().Be("Quarterly sales summary");
         sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("A Total"));
 
         command.Revert(ctx);
@@ -664,8 +674,179 @@ public sealed class PivotTableCommandTests
         pivot.ShowColumnHeaders.Should().BeTrue();
         pivot.ShowRowStripes.Should().BeFalse();
         pivot.ShowColumnStripes.Should().BeFalse();
+        pivot.PrintTitles.Should().BeFalse();
+        pivot.PrintExpandCollapseButtons.Should().BeFalse();
+        pivot.AltTextTitle.Should().Be("Old title");
+        pivot.AltTextDescription.Should().Be("Old description");
         sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("A"));
         sheet.GetCell(Addr(sheet, "E6"))!.Value.Should().Be(new TextValue("Grand Total"));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesEmptyValueTextRefreshesAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotEmptyValueOptionsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(25));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "I7"),
+            StyleName = "PivotStyleLight16"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Tabular,
+            emptyValueText: "N/A",
+            updateEmptyValueText: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.EmptyValueText.Should().Be("N/A");
+        sheet.GetCell(Addr(sheet, "G3"))!.Value.Should().Be(new TextValue("N/A"));
+        sheet.GetCell(Addr(sheet, "F4"))!.Value.Should().Be(new TextValue("N/A"));
+
+        command.Revert(ctx);
+
+        pivot.EmptyValueText.Should().BeNull();
+        sheet.GetCell(Addr(sheet, "G3"))!.Value.Should().Be(new NumberValue(0));
+        sheet.GetCell(Addr(sheet, "F4"))!.Value.Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_PreservesEmptyValueTextWhenCallerOmitsIt()
+    {
+        var workbook = new Workbook("PivotEmptyValueOptionsCompatibilityTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(25));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "I7"),
+            StyleName = "PivotStyleLight16",
+            EmptyValueText = "-"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: false,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.EmptyValueText.Should().Be("-");
+        sheet.GetCell(Addr(sheet, "G3"))!.Value.Should().Be(new TextValue("-"));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesPivotCacheDataOptionsAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotCacheOptionsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var cache = new PivotCacheModel
+        {
+            CacheId = 7,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2",
+            RefreshOnLoad = false,
+            SaveData = true,
+            EnableRefresh = true
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Region"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount"));
+        workbook.PivotCaches.Add(cache);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 7,
+            SourceRange = Range(sheet, "A1", "B2"),
+            TargetRange = Range(sheet, "D2", "F5"),
+            StyleName = "PivotStyleLight16"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            refreshOnOpen: true,
+            saveSourceData: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        cache.RefreshOnLoad.Should().BeTrue();
+        cache.SaveData.Should().BeFalse();
+        cache.EnableRefresh.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        cache.RefreshOnLoad.Should().BeFalse();
+        cache.SaveData.Should().BeTrue();
+        cache.EnableRefresh.Should().BeTrue();
     }
 
     [Fact]

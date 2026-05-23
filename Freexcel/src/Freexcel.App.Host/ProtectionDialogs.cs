@@ -10,7 +10,10 @@ public enum ProtectionDialogMode
     Unprotect
 }
 
-public sealed record ProtectionDialogResult(ProtectionDialogMode Mode, string? Password);
+public sealed record ProtectionDialogResult(
+    ProtectionDialogMode Mode,
+    string? Password,
+    IReadOnlyList<string> SelectedSheetPermissions);
 
 public static class ProtectionDialogPlanner
 {
@@ -33,22 +36,36 @@ public static class ProtectionDialogPlanner
         "Edit scenarios"
     ];
 
+    private static readonly string[] DefaultSelectedSheetPermissions =
+    [
+        "Select locked cells",
+        "Select unlocked cells"
+    ];
+
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password) =>
+        CreateSheetResult(sheet, password, DefaultSelectedSheetPermissions);
+
+    public static ProtectionDialogResult CreateSheetResult(
+        Sheet sheet,
+        string? password,
+        IReadOnlyList<string> selectedSheetPermissions) =>
         sheet.IsProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null)
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password);
+            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
+            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, selectedSheetPermissions);
 
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password, string? confirmation) =>
         sheet.IsProtected || PasswordsMatch(password, confirmation)
             ? CreateSheetResult(sheet, password)
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, null);
+            : new ProtectionDialogResult(ProtectionDialogMode.Protect, null, DefaultSelectedSheetPermissions);
 
     public static ProtectionDialogResult CreateWorkbookResult(Workbook workbook, string? password) =>
         workbook.IsStructureProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null)
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password);
+            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
+            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, []);
 
     public static IReadOnlyList<string> GetDefaultSheetPermissions() => DefaultSheetPermissions;
+
+    public static IReadOnlyList<string> GetDefaultSelectedSheetPermissions() => DefaultSelectedSheetPermissions;
 
     public static bool PasswordsMatch(string? password, string? confirmation) =>
         string.Equals(password ?? "", confirmation ?? "", StringComparison.Ordinal);
@@ -60,10 +77,12 @@ public static class ProtectionDialogPlanner
 public sealed class PasswordProtectionDialog : Window
 {
     private readonly PasswordBox _passwordBox = new();
-    private readonly PasswordBox _confirmationBox = new();
+    private readonly List<CheckBox> _sheetPermissionBoxes = [];
     private readonly bool _requiresConfirmation;
 
     public string? Password { get; private set; }
+    public IReadOnlyList<string> SelectedSheetPermissions { get; private set; } =
+        ProtectionDialogPlanner.GetDefaultSelectedSheetPermissions();
 
     public PasswordProtectionDialog(string title, string prompt)
     {
@@ -89,11 +108,6 @@ public sealed class PasswordProtectionDialog : Window
         var passwordPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         passwordPanel.Children.Add(new Label { Content = prompt, Target = _passwordBox, Margin = new Thickness(0, 0, 0, 4) });
         passwordPanel.Children.Add(_passwordBox);
-        if (_requiresConfirmation)
-        {
-            passwordPanel.Children.Add(new Label { Content = "_Confirm password:", Target = _confirmationBox, Margin = new Thickness(0, 8, 0, 4) });
-            passwordPanel.Children.Add(_confirmationBox);
-        }
         passwordPanel.Children.Add(new TextBlock
         {
             Text = "Caution: lost or forgotten passwords cannot be recovered.",
@@ -112,7 +126,7 @@ public sealed class PasswordProtectionDialog : Window
         Content = root;
     }
 
-    private static void AddSheetPermissionChecklist(Panel root)
+    private void AddSheetPermissionChecklist(Panel root)
     {
         var checklist = new StackPanel();
         var scroll = new ScrollViewer
@@ -125,30 +139,79 @@ public sealed class PasswordProtectionDialog : Window
         {
             Header = "Allow all users of this worksheet to:",
             Content = scroll,
+            ToolTip = "These selections are returned with the Protect Sheet result; current enforcement is limited to locked cells and allowed edit ranges.",
             Margin = new Thickness(0, 0, 0, 0)
         };
         root.Children.Add(group);
 
         foreach (var permission in ProtectionDialogPlanner.GetDefaultSheetPermissions())
         {
-            checklist.Children.Add(new CheckBox
+            var box = new CheckBox
             {
                 Content = permission,
                 IsChecked = permission is "Select locked cells" or "Select unlocked cells",
                 Margin = new Thickness(0, 0, 0, 4)
-            });
+            };
+            _sheetPermissionBoxes.Add(box);
+            checklist.Children.Add(box);
         }
     }
 
     private void Accept()
     {
-        if (_requiresConfirmation && !ProtectionDialogPlanner.PasswordsMatch(_passwordBox.Password, _confirmationBox.Password))
+        if (_requiresConfirmation && !string.IsNullOrEmpty(_passwordBox.Password))
+        {
+            var confirmationDialog = new ConfirmPasswordDialog(_passwordBox.Password) { Owner = this };
+            if (confirmationDialog.ShowDialog() != true)
+                return;
+        }
+
+        Password = _passwordBox.Password;
+        SelectedSheetPermissions = _sheetPermissionBoxes
+            .Where(box => box.IsChecked == true)
+            .Select(box => box.Content?.ToString() ?? "")
+            .Where(permission => !string.IsNullOrWhiteSpace(permission))
+            .ToList();
+        DialogResult = true;
+    }
+}
+
+public sealed class ConfirmPasswordDialog : Window
+{
+    private readonly string _password;
+    private readonly PasswordBox _confirmationBox = new();
+
+    public ConfirmPasswordDialog(string password)
+    {
+        _password = password;
+        Title = "Confirm Password";
+        Width = 360;
+        Height = 170;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        var root = new StackPanel { Margin = new Thickness(12) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Reenter password to proceed.",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        root.Children.Add(new Label { Content = "_Password:", Target = _confirmationBox, Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(_confirmationBox);
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
+        Content = root;
+    }
+
+    private void Accept()
+    {
+        if (!ProtectionDialogPlanner.PasswordsMatch(_password, _confirmationBox.Password))
         {
             MessageBox.Show(this, "The confirmation password does not match.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        Password = _passwordBox.Password;
         DialogResult = true;
     }
 }

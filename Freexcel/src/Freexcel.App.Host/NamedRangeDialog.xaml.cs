@@ -28,7 +28,6 @@ public sealed partial class NamedRangeDialog : Window
         _workbook = workbook;
         _commandBus = commandBus;
         InitializeComponent();
-        NamesList.ItemsSource = _items;
         RefreshList();
 
         _initialRefersTo = initialRange.HasValue ? FormatRange(initialRange.Value, workbook) : "";
@@ -41,13 +40,18 @@ public sealed partial class NamedRangeDialog : Window
         _items.Clear();
         foreach (var (name, range) in _workbook.NamedRanges)
         {
+            var metadata = _workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+                ? savedMetadata
+                : NamedRangeMetadata.WorkbookScope;
             _items.Add(new NamedRangeViewModel(
                 name,
                 FormatValue(range, _workbook),
                 FormatRange(range, _workbook),
-                "Workbook",
-                ""));
+                metadata.Scope,
+                metadata.Comment));
         }
+
+        ApplyFilter();
     }
 
     private static string FormatRange(GridRange range, Workbook wb)
@@ -72,9 +76,27 @@ public sealed partial class NamedRangeDialog : Window
         }
     }
 
+    private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        var selected = FilterBox.SelectedIndex switch
+        {
+            1 => NamedRangeFilterOption.Workbook,
+            2 => NamedRangeFilterOption.Worksheet,
+            _ => NamedRangeFilterOption.All
+        };
+
+        NamesList.ItemsSource = NamedRangeDialogPlanner.FilterItems(_items, selected).ToList();
+        if (NamesList.SelectedItem is not NamedRangeViewModel)
+            RefersToBox.Clear();
+    }
+
     private void NewButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new NameDefinitionDialog(_workbook, new NameDefinitionDialogResult("", "Workbook", _initialRefersTo, "")) { Owner = this };
+        var dialog = new NameDefinitionDialog(
+            new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
+            GetScopeOptions()) { Owner = this };
         if (dialog.ShowDialog() == true)
             DefineOrUpdateName(dialog.Result);
     }
@@ -88,8 +110,8 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         var dialog = new NameDefinitionDialog(
-            _workbook,
-            new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.RefersTo, vm.Comment))
+            new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
+            GetScopeOptions())
         {
             Owner = this
         };
@@ -117,7 +139,10 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        var cmd = new DefineNamedRangeCommand(name, range);
+        var cmd = new DefineNamedRangeCommand(
+            name,
+            range,
+            new NamedRangeMetadata(definition.Scope.Trim(), definition.Comment.Trim()));
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
@@ -129,6 +154,7 @@ public sealed partial class NamedRangeDialog : Window
         RefreshList();
         if (_items.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)) is { } updated)
         {
+            ApplyFilter();
             NamesList.SelectedItem = updated;
             RefersToBox.Text = updated.RefersTo;
         }
@@ -152,9 +178,38 @@ public sealed partial class NamedRangeDialog : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
+    private IReadOnlyList<string> GetScopeOptions() =>
+        new[] { "Workbook" }
+            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 }
 
-internal sealed record NameDefinitionDialogResult(string Name, string Scope, string RefersTo, string Comment);
+public enum NamedRangeFilterOption
+{
+    All,
+    Workbook,
+    Worksheet
+}
+
+public static class NamedRangeDialogPlanner
+{
+    public static IReadOnlyList<NamedRangeViewModel> FilterItems(
+        IEnumerable<NamedRangeViewModel> items,
+        NamedRangeFilterOption filter) =>
+        filter switch
+        {
+            NamedRangeFilterOption.Workbook => items
+                .Where(item => string.Equals(item.Scope, "Workbook", StringComparison.OrdinalIgnoreCase))
+                .ToList(),
+            NamedRangeFilterOption.Worksheet => items
+                .Where(item => !string.Equals(item.Scope, "Workbook", StringComparison.OrdinalIgnoreCase))
+                .ToList(),
+            _ => items.ToList()
+        };
+}
+
+public sealed record NameDefinitionDialogResult(string Name, string Scope, string Comment, string RefersTo);
 
 internal sealed class NameDefinitionDialog : Window
 {
@@ -163,15 +218,14 @@ internal sealed class NameDefinitionDialog : Window
     private readonly TextBox _commentBox = new();
     private readonly TextBox _refersToBox = new();
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
-
-    public static IReadOnlyList<string> ScopeOptions(Workbook workbook) =>
-        new[] { "Workbook" }.Concat(workbook.Sheets.Select(sheet => sheet.Name)).ToList();
+    private readonly IReadOnlyList<string> _scopeOptions;
 
     public NameDefinitionDialogResult Result { get; private set; }
 
-    public NameDefinitionDialog(Workbook workbook, NameDefinitionDialogResult initial)
+    public NameDefinitionDialog(NameDefinitionDialogResult initial, IReadOnlyList<string> scopeOptions)
     {
         Result = initial;
+        _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
         Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
         Width = 460;
         Height = 300;
@@ -180,10 +234,10 @@ internal sealed class NameDefinitionDialog : Window
         ShowInTaskbar = false;
 
         _nameBox.Text = initial.Name;
-        _scopeBox.ItemsSource = ScopeOptions(workbook);
-        _scopeBox.SelectedItem = string.IsNullOrWhiteSpace(initial.Scope) ? "Workbook" : initial.Scope;
-        if (_scopeBox.SelectedIndex < 0)
-            _scopeBox.SelectedIndex = 0;
+        foreach (var scope in _scopeOptions)
+            _scopeBox.Items.Add(scope);
+        _scopeBox.SelectedItem = _scopeOptions.FirstOrDefault(scope =>
+            string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
         _commentBox.Text = initial.Comment;
         _refersToBox.Text = initial.RefersTo;
         _rangePickerButton.ToolTip = "Select the referenced range from the worksheet";
@@ -261,15 +315,15 @@ internal sealed class NameDefinitionDialog : Window
     {
         Result = new NameDefinitionDialogResult(
             _nameBox.Text.Trim(),
-            (_scopeBox.SelectedItem as string ?? "Workbook").Trim(),
-            _refersToBox.Text.Trim(),
-            _commentBox.Text.Trim());
+            (_scopeBox.SelectedItem as string)?.Trim() ?? "Workbook",
+            _commentBox.Text.Trim(),
+            _refersToBox.Text.Trim());
         DialogResult = true;
     }
 }
 
 /// <summary>View model for a row in the named ranges list.</summary>
-internal sealed class NamedRangeViewModel(string name, string value, string refersTo, string scope, string comment)
+public sealed class NamedRangeViewModel(string name, string value, string refersTo, string scope, string comment)
 {
     public string Name { get; } = name;
     public string Value { get; } = value;

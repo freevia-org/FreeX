@@ -8,37 +8,37 @@ namespace Freexcel.App.Host;
 public sealed class GoToDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly IReadOnlyDictionary<string, GridRange> _definedNames;
     private readonly TextBox _addressBox = new();
     private readonly ListBox _historyList = new();
 
     public CellAddress SelectedAddress { get; private set; }
     public GoToSpecialKind? SelectedSpecialKind { get; private set; }
 
-    public GoToDialog(SheetId sheetId, string defaultAddress = "A1")
+    public GoToDialog(
+        SheetId sheetId,
+        string defaultAddress = "A1",
+        IReadOnlyDictionary<string, GridRange>? definedNames = null,
+        IEnumerable<string>? recentReferences = null)
     {
         _sheetId = sheetId;
+        _definedNames = definedNames is null
+            ? new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, GridRange>(definedNames, StringComparer.OrdinalIgnoreCase);
+
         Title = "Go To";
         Width = 420;
-        Height = 340;
+        Height = 320;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new Grid { Margin = new Thickness(12) };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        root.Children.Add(new TextBlock
-        {
-            Text = "Select a named or recently used reference, or type a cell reference.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
 
         var historyLabel = new Label
         {
@@ -52,10 +52,12 @@ public sealed class GoToDialog : Window
         Grid.SetColumnSpan(historyLabel, 2);
         root.Children.Add(historyLabel);
 
-        _historyList.Items.Add(defaultAddress);
-        _historyList.ToolTip = "Selection history";
+        foreach (var reference in BuildReferenceChoices(defaultAddress, recentReferences, _definedNames.Keys))
+            _historyList.Items.Add(reference);
+
+        _historyList.ToolTip = "Recent references and defined names";
         _historyList.MinHeight = 130;
-        _historyList.Margin = new Thickness(0, 22, 0, 0);
+        _historyList.Margin = new Thickness(0, 24, 0, 0);
         _historyList.SelectionChanged += (_, _) =>
         {
             if (_historyList.SelectedItem is string reference)
@@ -135,14 +137,60 @@ public sealed class GoToDialog : Window
 
     private void Accept()
     {
-        if (!TryParseAddress(_addressBox.Text, _sheetId, out var address))
+        if (!TryParseReference(_addressBox.Text, _sheetId, _definedNames, out var address))
         {
-            MessageBox.Show(this, "Enter a valid cell reference, for example B5.", "Go To", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "Reference is not valid.", "Go To", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         SelectedAddress = address;
         SelectedSpecialKind = null;
         DialogResult = true;
+    }
+
+    public static IReadOnlyList<string> BuildReferenceChoices(
+        string defaultAddress,
+        IEnumerable<string>? recentReferences,
+        IEnumerable<string>? definedNames)
+    {
+        var choices = new List<string>();
+        Add(defaultAddress);
+        foreach (var reference in recentReferences ?? [])
+            Add(reference);
+        foreach (var name in (definedNames ?? []).OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+            Add(name);
+
+        return choices.Count == 0 ? ["A1"] : choices;
+
+        void Add(string? reference)
+        {
+            var trimmed = reference?.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+                return;
+
+            if (choices.Any(existing => string.Equals(existing, trimmed, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            choices.Add(trimmed);
+        }
+    }
+
+    public static bool TryParseReference(
+        string text,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, GridRange>? definedNames,
+        out CellAddress address)
+    {
+        if (TryParseAddress(text, sheetId, out address))
+            return true;
+
+        if (definedNames is not null &&
+            definedNames.TryGetValue(text.Trim(), out var namedRange))
+        {
+            address = namedRange.Start;
+            return true;
+        }
+
+        return false;
     }
 }
