@@ -94,6 +94,8 @@ public sealed class PivotTableModel
     public bool ShowPropertiesInTooltips { get; set; } = true;
     public bool ShowClassicLayout { get; set; }
     public bool MergeAndCenterLabels { get; set; }
+    public bool ShowItemsWithNoDataOnRows { get; set; }
+    public bool ShowItemsWithNoDataOnColumns { get; set; }
     public bool PageOverThenDown { get; set; }
     public int PageWrap { get; set; }
     public string? EmptyValueText { get; set; }
