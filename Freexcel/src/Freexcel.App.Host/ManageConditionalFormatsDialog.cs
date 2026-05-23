@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Freexcel.Core.Model;
@@ -242,9 +243,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         // ── Initial load ───────────────────────────────────────────────────────
         PopulateRules();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     // ── Scope selector ─────────────────────────────────────────────────────────
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _scopeBox.Focus();
+        Keyboard.Focus(_scopeBox);
+    }
 
     private void ScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
