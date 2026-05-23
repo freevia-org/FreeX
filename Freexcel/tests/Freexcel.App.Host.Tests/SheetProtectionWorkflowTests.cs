@@ -33,6 +33,10 @@ public sealed class SheetProtectionWorkflowTests
 
         action.Title.Should().Be("Protect Sheet");
         action.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
+        action.Command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
+        sheet.ProtectionPermissions.Should().Equal(
+            SheetProtectionPermission.SelectUnlockedCells,
+            SheetProtectionPermission.Sort);
     }
 
     [Fact]
@@ -75,5 +79,11 @@ public sealed class SheetProtectionWorkflowTests
         uiText.ButtonContent.Should().Be("Unprotect Sheet");
         uiText.TooltipTitle.Should().Be("Unprotect Sheet");
         uiText.TooltipDescription.Should().Contain("Remove");
+    }
+
+    private sealed class SimpleCtx(Workbook wb) : ICommandContext
+    {
+        public Workbook Workbook { get; } = wb;
+        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
