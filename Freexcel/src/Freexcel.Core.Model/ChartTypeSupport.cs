@@ -10,6 +10,7 @@ public static class ChartTypeSupport
             or ChartType.PercentStackedColumn
             or ChartType.Line
             or ChartType.Pie
+            or ChartType.ThreeDPie
             or ChartType.Doughnut
             or ChartType.Bar
             or ChartType.StackedBar
@@ -19,7 +20,8 @@ public static class ChartTypeSupport
             or ChartType.Area
             or ChartType.Radar
             or ChartType.Stock
-            or ChartType.ThreeDColumn;
+            or ChartType.ThreeDColumn
+            or ChartType.ThreeDBar;
 
     public static bool SupportsTrendlines(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
@@ -28,7 +30,7 @@ public static class ChartTypeSupport
         type is ChartType.Column or ChartType.Line or ChartType.Area or ChartType.Scatter;
 
     public static bool SupportsAxes(ChartType type) =>
-        type is not ChartType.Pie and not ChartType.Doughnut;
+        type is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
 
     public static bool SupportsComboLineOverlay(ChartType type) =>
         type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area;
@@ -37,7 +39,7 @@ public static class ChartTypeSupport
         SupportsComboLineOverlay(chart.Type) && GetDataSeriesCount(chart) >= 2;
 
     public static bool SupportsXAxisLogScale(ChartType type) =>
-        type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.Scatter or ChartType.Bubble;
+        type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar or ChartType.Scatter or ChartType.Bubble;
 
     public static bool SupportsYAxisLogScale(ChartType type) =>
         type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
@@ -50,13 +52,13 @@ public static class ChartTypeSupport
         type is ChartType.Line or ChartType.Scatter;
 
     public static bool SupportsPercentageDataLabels(ChartType type) =>
-        type is ChartType.Pie or ChartType.Doughnut or ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
+        type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut or ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
 
     public static bool SupportsFirstSliceAngle(ChartType type) =>
-        type is ChartType.Pie or ChartType.Doughnut;
+        type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut;
 
     public static bool SupportsExplodedSlices(ChartType type) =>
-        type is ChartType.Pie or ChartType.Doughnut;
+        type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut;
 
     public static bool SupportsDoughnutHoleSize(ChartType type) =>
         type is ChartType.Doughnut;
@@ -96,7 +98,7 @@ public static class ChartTypeSupport
         if (chart.Type is ChartType.Scatter or ChartType.Bubble)
             return [chart.DataRange.Start.Col];
 
-        if (chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar)
+        if (chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar)
             return GetSeriesValueColumns(chart);
 
         return [];

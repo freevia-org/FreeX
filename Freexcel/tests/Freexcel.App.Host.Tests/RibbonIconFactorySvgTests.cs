@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -46,6 +47,24 @@ public sealed class RibbonIconFactorySvgTests
             image.Width.Should().Be(13);
             image.Height.Should().Be(13);
         });
+    }
+
+    [Fact]
+    public void CreateCommandIcon_PrefersNativeSvgVariantForRequestedRibbonSlot()
+    {
+        var method = typeof(RibbonIconFactory).GetMethod(
+            "GetSizeSpecificSlugCandidates",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+
+        var smallCandidates = ((IEnumerable<string>)method!.Invoke(null, ["paste", 20d, false])!).ToList();
+        var largeCandidates = ((IEnumerable<string>)method.Invoke(null, ["paste", 32d, false])!).ToList();
+
+        smallCandidates.Should().StartWith("paste-small");
+        smallCandidates.Should().ContainInOrder("paste-small", "paste");
+        largeCandidates.Should().StartWith("paste-large");
+        largeCandidates.Should().ContainInOrder("paste-large", "paste");
     }
 
     [Fact]

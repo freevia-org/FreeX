@@ -6709,10 +6709,14 @@ public partial class FileAdapterSmokeTests
     }
 
     [Theory]
-    [InlineData(ChartType.Radar, "radarChart")]
-    [InlineData(ChartType.Stock, "stockChart")]
-    [InlineData(ChartType.ThreeDColumn, "bar3DChart")]
-    public void XlsxAdapter_Save_WritesEmbeddedRadarStockAnd3DColumnChartPackagePart(ChartType chartType, string expectedElementName)
+    [InlineData(ChartType.Radar, "radarChart", null)]
+    [InlineData(ChartType.Stock, "stockChart", null)]
+    [InlineData(ChartType.ThreeDColumn, "bar3DChart", "col")]
+    [InlineData(ChartType.ThreeDBar, "bar3DChart", "bar")]
+    public void XlsxAdapter_Save_WritesEmbeddedRadarStockAnd3DChartPackagePart(
+        ChartType chartType,
+        string expectedElementName,
+        string? expectedBarDirection)
     {
         var workbook = new Workbook("RadarStockChartPackageSave");
         var sheet = workbook.AddSheet("Sheet1");
@@ -6746,7 +6750,9 @@ public partial class FileAdapterSmokeTests
         {
             var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-            chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle();
+            var plotChart = chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle().Subject;
+            if (expectedBarDirection is not null)
+                plotChart.Element(chartNs + "barDir")?.Attribute("val")?.Value.Should().Be(expectedBarDirection);
             chartXml.Descendants(chartNs + "ser").Should().HaveCount(2);
         }
 
@@ -6816,9 +6822,10 @@ public partial class FileAdapterSmokeTests
     }
 
     [Theory]
-    [InlineData(ChartType.Pie)]
-    [InlineData(ChartType.Doughnut)]
-    public void XlsxAdapter_Save_WritesEmbeddedPieFamilyChartPackagePart(ChartType chartType)
+    [InlineData(ChartType.Pie, "pieChart")]
+    [InlineData(ChartType.ThreeDPie, "pie3DChart")]
+    [InlineData(ChartType.Doughnut, "doughnutChart")]
+    public void XlsxAdapter_Save_WritesEmbeddedPieFamilyChartPackagePart(ChartType chartType, string expectedElementName)
     {
         var workbook = new Workbook("PieChartPackageSave");
         var sheet = workbook.AddSheet("Sheet1");
@@ -6856,7 +6863,9 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
             archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
-            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle();
         }
 
         saved.Position = 0;

@@ -602,15 +602,21 @@ public partial class MainWindow
                 textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+        var contentTag = (button.Content as FrameworkElement)?.Tag?.ToString() ?? "";
+        bool isSmallOrMedium = contentTag is "RibbonCommandContent:S" or "RibbonCommandContent:M";
 
-        if (button.Content is FrameworkElement content)
-            content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-
-        foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
+        if (!isSmallOrMedium)
         {
-            if (stack.Orientation == Orientation.Horizontal)
-                stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+
+            if (button.Content is FrameworkElement content)
+                content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+
+            foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
+            {
+                if (stack.Orientation == Orientation.Horizontal)
+                    stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            }
         }
 
         if (button.Content is StackPanel largeStack &&

@@ -24,13 +24,16 @@ public static partial class XlsxChartPartReader
         var radarCharts = plotArea?.Elements(ChartNs + "radarChart").ToList() ?? [];
         var stockCharts = plotArea?.Elements(ChartNs + "stockChart").ToList() ?? [];
         var deferredAdvancedChart = HasDirectSupportedChart(plotArea) ? null : FindDeferredAdvancedChart(plotArea);
-        var threeDColumnChart = plotArea?.Element(ChartNs + "bar3DChart");
+        var threeDBarChart = plotArea?.Element(ChartNs + "bar3DChart");
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
+        var threeDPieChart = plotArea?.Element(ChartNs + "pie3DChart");
         var pieChart = plotArea?.Element(ChartNs + "pieChart");
         var doughnutChart = plotArea?.Element(ChartNs + "doughnutChart");
         bool read;
         if (doughnutChart is not null)
             read = TryReadPieFamilyChart(chartXml, doughnutChart, sheetId, ChartType.Doughnut, out chart);
+        else if (threeDPieChart is not null)
+            read = TryReadPieFamilyChart(chartXml, threeDPieChart, sheetId, ChartType.ThreeDPie, out chart);
         else if (pieChart is not null)
             read = TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, out chart);
         else if (bubbleChart is not null)
@@ -51,8 +54,8 @@ public static partial class XlsxChartPartReader
             read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
         else if (stockCharts.Count > 0)
             read = TryReadStockChart(chartXml, plotArea, stockCharts, barCharts, sheetId, out chart);
-        else if (threeDColumnChart is not null)
-            read = TryReadDeferredAdvancedChart(chartXml, threeDColumnChart, sheetId, ChartType.ThreeDColumn, out chart);
+        else if (threeDBarChart is not null)
+            read = TryReadThreeDBarChart(chartXml, threeDBarChart, sheetId, out chart);
         else if (deferredAdvancedChart is { } advanced)
             read = TryReadDeferredAdvancedChart(chartXml, advanced.Element, sheetId, advanced.Type, out chart);
         else if (barChart is not null)

@@ -54,7 +54,7 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static bool ShouldWriteChartAxes(ChartType chartType) =>
-        chartType is not ChartType.Pie and not ChartType.Doughnut;
+        chartType is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
 
     private static IEnumerable<XElement> ToPlotChartXml(
         ChartModel chart,
@@ -157,14 +157,17 @@ internal static partial class XlsxChartXmlWriter
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
-            ChartType.ThreeDColumn => WithBarChartSpacing(new XElement(chartNs + "bar3DChart",
-                new XElement(chartNs + "barDir", new XAttribute("val", "col")),
+            ChartType.ThreeDColumn or ChartType.ThreeDBar => WithBarChartSpacing(new XElement(chartNs + "bar3DChart",
+                new XElement(chartNs + "barDir", new XAttribute("val", chart.Type == ChartType.ThreeDBar ? "bar" : "col")),
                 new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs),
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
                 BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs)),
             ChartType.Pie => new XElement(chartNs + "pieChart",
+                ToFirstSliceAngleXml(chart, chartNs),
+                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
+            ChartType.ThreeDPie => new XElement(chartNs + "pie3DChart",
                 ToFirstSliceAngleXml(chart, chartNs),
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
             ChartType.Doughnut => new XElement(chartNs + "doughnutChart",
@@ -575,10 +578,12 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Area
                 or ChartType.Bubble
                 or ChartType.Pie
+                or ChartType.ThreeDPie
                 or ChartType.Doughnut
                 or ChartType.Radar
                 or ChartType.Stock
-                or ChartType.ThreeDColumn);
+                or ChartType.ThreeDColumn
+                or ChartType.ThreeDBar);
 
     private static string ToXlsxBarDirection(ChartType chartType) =>
         chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar

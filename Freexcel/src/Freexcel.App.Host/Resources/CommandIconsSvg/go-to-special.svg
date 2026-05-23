@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Go To Special">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><circle class="s" cx="27" cy="27" r="16.2"/><circle class="s" cx="27" cy="27" r="7.02"/><path fill="#f6d14a" stroke="#202124" stroke-width="1.3" d="M38.88 8.64l2.16 4.86l5.4 0.54l-3.78 3.78l1.08 5.4l-4.86-2.7l-4.86 2.7l1.08-5.4l-3.78-3.78l5.4-0.54z"/>  </g>
+  <g><circle cx="27" cy="27" r="16.2" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><circle cx="27" cy="27" r="7.02" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path fill="#f6d14a" stroke="#202124" stroke-width="1.3" d="M38.88 8.64l2.16 4.86l5.4 0.54l-3.78 3.78l1.08 5.4l-4.86-2.7l-4.86 2.7l1.08-5.4l-3.78-3.78l5.4-0.54z"/>  </g>
 </svg>
 

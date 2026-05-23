@@ -7,6 +7,7 @@ public enum ChartType
     PercentStackedColumn,
     Line,
     Pie,
+    ThreeDPie,
     Doughnut,
     Bar,
     StackedBar,
@@ -25,7 +26,8 @@ public enum ChartType
     Waterfall,
     Funnel,
     Map,
-    ThreeDColumn
+    ThreeDColumn,
+    ThreeDBar
 }
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
