@@ -652,6 +652,14 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void AmorFunctions_InvalidBasis_ReturnNumError()
+    {
+        CalcError("AMORDEGRC(2400,43831,44197,300,1,0.2,5)").Should().Be("#NUM!");
+        CalcError("AMORLINC(2400,43831,44197,300,1,0.3,-1)").Should().Be("#NUM!");
+        CalcError("AMORLINC(2400,43831,44197,300,1,0.3,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Accrint_SettlementAfterIssue_ReturnsAccruedInterest()
     {
         double result = Calc("ACCRINT(43831,43831,44197,0.05,1000,2)");
