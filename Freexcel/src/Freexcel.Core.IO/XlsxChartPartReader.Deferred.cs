@@ -87,4 +87,22 @@ public static partial class XlsxChartPartReader
         chart = result;
         return true;
     }
+
+    private static bool TryReadThreeDBarChart(
+        XDocument chartXml,
+        XElement plotChart,
+        SheetId sheetId,
+        out ChartModel chart)
+    {
+        var barDirection = plotChart
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "barDir")?
+            .Attribute("val")?
+            .Value;
+        var chartType = string.Equals(barDirection, "bar", StringComparison.OrdinalIgnoreCase)
+            ? ChartType.ThreeDBar
+            : ChartType.ThreeDColumn;
+
+        return TryReadDeferredAdvancedChart(chartXml, plotChart, sheetId, chartType, out chart);
+    }
 }
