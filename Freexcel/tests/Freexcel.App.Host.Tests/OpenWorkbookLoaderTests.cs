@@ -65,7 +65,7 @@ public sealed class OpenWorkbookLoaderTests
                 workbook.AddSheet("Sheet1");
                 return workbook;
             });
-            var loader = new OpenWorkbookLoader(_ => { });
+            var loader = new OpenWorkbookLoader(_ => { }, _ => new XlsxFeatureReport([]));
 
             var result = await loader.LoadAsync(
                 tempPath,
@@ -75,6 +75,53 @@ public sealed class OpenWorkbookLoaderTests
                 new Progress<OpenProgressUpdate>());
 
             result.OpenedAsTemplate.Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(".xlsx")]
+    [InlineData(".xlsm")]
+    [InlineData(".xltx")]
+    [InlineData(".xltm")]
+    public async Task LoadAsync_InspectsOpenXmlExcelPackageFormats(string extension)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var adapter = new FakeAdapter(_ =>
+            {
+                var workbook = new Workbook("Loaded");
+                workbook.AddSheet("Sheet1");
+                return workbook;
+            });
+            var inspectCalled = false;
+            var expectedReport = new XlsxFeatureReport([
+                new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin")
+            ]);
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                stream =>
+                {
+                    inspectCalled = true;
+                    using var reader = new StreamReader(stream);
+                    reader.ReadToEnd().Should().Be("payload");
+                    return expectedReport;
+                });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                extension,
+                new FileFormatDescriptor(extension, "Excel Package", CanOpen: true, CanSave: extension == ".xlsx"),
+                new Progress<OpenProgressUpdate>());
+
+            inspectCalled.Should().BeTrue();
+            result.FeatureReport.Should().BeSameAs(expectedReport);
         }
         finally
         {

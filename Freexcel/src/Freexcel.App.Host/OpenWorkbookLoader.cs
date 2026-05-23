@@ -28,7 +28,7 @@ public sealed class OpenWorkbookLoader
         var bytes = await ReadFileBytesWithProgressAsync(path, progress);
 
         XlsxFeatureReport? featureReport = null;
-        if (extension == ".xlsx")
+        if (IsOpenXmlExcelPackageExtension(extension))
         {
             featureReport = await RunStageAsync(
                 progress,
@@ -177,6 +177,12 @@ public sealed class OpenWorkbookLoader
         extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
         extension.Equals(".tsv", StringComparison.OrdinalIgnoreCase) ||
         extension.Equals(".tab", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsOpenXmlExcelPackageExtension(string extension) =>
+        extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ||
+        extension.Equals(".xlsm", StringComparison.OrdinalIgnoreCase) ||
+        extension.Equals(".xltx", StringComparison.OrdinalIgnoreCase) ||
+        extension.Equals(".xltm", StringComparison.OrdinalIgnoreCase);
 
     private static string CreateExcelCompatibleSheetName(string displayName)
     {
