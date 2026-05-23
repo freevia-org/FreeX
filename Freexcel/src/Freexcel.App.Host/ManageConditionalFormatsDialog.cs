@@ -175,10 +175,18 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
         rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select Applies To range text");
         rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
+        rangePickerFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1)
+        });
         rangePickerFactory.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(RangePickerButton_Click));
         var appliesToFactory = new FrameworkElementFactory(typeof(TextBox));
         appliesToFactory.SetValue(Control.PaddingProperty, new Thickness(2, 0, 2, 0));
         appliesToFactory.SetValue(Control.VerticalContentAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        appliesToFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1)
+        });
         appliesToFactory.SetBinding(TextBox.TextProperty, new Binding(nameof(ConditionalFormat.AppliesTo))
         {
             Converter = new AppliesToRangeConverter(_sheet.Id),
