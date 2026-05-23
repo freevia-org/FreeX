@@ -654,6 +654,15 @@ public class XlsxCorpusRunnerTests
             sheet.MergedRegions.Count,
             sheet.DataValidations.Select(CaptureDataValidationSummary).ToArray(),
             sheet.DataValidations.Count,
+            sheet.ConditionalFormats
+                .OrderBy(format => format.AppliesTo.Start.Row)
+                .ThenBy(format => format.AppliesTo.Start.Col)
+                .ThenBy(format => format.AppliesTo.End.Row)
+                .ThenBy(format => format.AppliesTo.End.Col)
+                .ThenBy(format => format.Priority)
+                .ThenBy(format => format.RuleType)
+                .Select(CaptureConditionalFormatSummary)
+                .ToArray(),
             sheet.ConditionalFormats.Count,
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
@@ -878,6 +887,66 @@ public class XlsxCorpusRunnerTests
             picture.IsVisible,
             picture.ContentType ?? "",
             picture.ImageBytes?.Length ?? 0);
+
+    private static ConditionalFormatSummary CaptureConditionalFormatSummary(ConditionalFormat format) =>
+        new(
+            format.RuleType,
+            format.Priority,
+            format.Operator,
+            format.Value1 ?? "",
+            format.Value2 ?? "",
+            CaptureStyleSummary(format.FormatIfTrue),
+            format.MinColor,
+            format.MidColor,
+            format.MaxColor,
+            format.UseThreeColorScale,
+            format.MinThresholdType,
+            format.MinThresholdValue ?? "",
+            format.MidThresholdType,
+            format.MidThresholdValue ?? "",
+            format.MaxThresholdType,
+            format.MaxThresholdValue ?? "",
+            format.DataBarColor,
+            format.DataBarMinThresholdType,
+            format.DataBarMinThresholdValue ?? "",
+            format.DataBarMaxThresholdType,
+            format.DataBarMaxThresholdValue ?? "",
+            format.DataBarShowValue,
+            format.DataBarMinLength,
+            format.DataBarMaxLength,
+            format.AboveAverage,
+            format.FormulaText ?? "",
+            format.IconSetStyle ?? "",
+            format.IconSetShowValue,
+            format.IconSetReverse,
+            format.IconSetThresholds.Select(threshold => new ConditionalFormatThresholdSummary(threshold.Type, threshold.Value ?? "")).ToArray(),
+            format.TopBottomRank,
+            format.TopBottomPercent,
+            format.TextRuleText ?? "",
+            format.DateOccurringPeriod ?? "",
+            format.StopIfTrue,
+            ToRangeSummary(format.AppliesTo));
+
+    private static CellStyleSummary? CaptureStyleSummary(CellStyle? style) =>
+        style is null
+            ? null
+            : new(
+                style.FontName,
+                style.FontSize,
+                style.Bold,
+                style.Italic,
+                style.Underline,
+                style.Strikethrough,
+                style.FontColor,
+                style.FillColor,
+                NormalizeFillPatternStyle(style),
+                style.FillPatternColor,
+                style.NumberFormat);
+
+    private static CellFillPatternStyle NormalizeFillPatternStyle(CellStyle style) =>
+        style.FillColor.HasValue && style.FillPatternStyle == CellFillPatternStyle.None
+            ? CellFillPatternStyle.Solid
+            : style.FillPatternStyle;
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(
@@ -1128,6 +1197,7 @@ public class XlsxCorpusRunnerTests
         int MergedRegionCount,
         IReadOnlyList<DataValidationSummary> DataValidations,
         int DataValidationCount,
+        IReadOnlyList<ConditionalFormatSummary> ConditionalFormats,
         int ConditionalFormatCount,
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
@@ -1356,6 +1426,59 @@ public class XlsxCorpusRunnerTests
         string PromptTitle,
         string PromptMessage,
         ChartRangeSummary AppliesTo);
+
+    private sealed record ConditionalFormatSummary(
+        CfRuleType RuleType,
+        int Priority,
+        CfOperator Operator,
+        string Value1,
+        string Value2,
+        CellStyleSummary? FormatIfTrue,
+        RgbColor MinColor,
+        RgbColor MidColor,
+        RgbColor MaxColor,
+        bool UseThreeColorScale,
+        CfThresholdType MinThresholdType,
+        string MinThresholdValue,
+        CfThresholdType MidThresholdType,
+        string MidThresholdValue,
+        CfThresholdType MaxThresholdType,
+        string MaxThresholdValue,
+        RgbColor DataBarColor,
+        CfThresholdType DataBarMinThresholdType,
+        string DataBarMinThresholdValue,
+        CfThresholdType DataBarMaxThresholdType,
+        string DataBarMaxThresholdValue,
+        bool DataBarShowValue,
+        int? DataBarMinLength,
+        int? DataBarMaxLength,
+        bool AboveAverage,
+        string FormulaText,
+        string IconSetStyle,
+        bool IconSetShowValue,
+        bool IconSetReverse,
+        IReadOnlyList<ConditionalFormatThresholdSummary> IconSetThresholds,
+        int TopBottomRank,
+        bool TopBottomPercent,
+        string TextRuleText,
+        string DateOccurringPeriod,
+        bool StopIfTrue,
+        ChartRangeSummary AppliesTo);
+
+    private sealed record ConditionalFormatThresholdSummary(CfThresholdType Type, string Value);
+
+    private sealed record CellStyleSummary(
+        string FontName,
+        double FontSize,
+        bool Bold,
+        bool Italic,
+        bool Underline,
+        bool Strikethrough,
+        CellColor FontColor,
+        CellColor? FillColor,
+        CellFillPatternStyle FillPatternStyle,
+        CellColor? FillPatternColor,
+        string NumberFormat);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
