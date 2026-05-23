@@ -5,7 +5,22 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
+    private enum ResizeTarget { None, Row, Column }
+
     private Dictionary<(uint Row, uint Col), GridRange> _mergeLookup = [];
+    private ResizeTarget _resizeTarget = ResizeTarget.None;
+    private uint _resizeIndex;
+    private double _resizeDragStart;
+    private double _resizeSizeStart;
+    private double _resizeLinePos;
+    private bool _autofillDragging;
+    private GridRange? _autofillSourceRange;
+    private CellAddress? _autofillTarget;
+    private WorksheetPageMarginEdge? _marginDragEdge;
+    private SplitDividerHandle _splitDividerDragHandle = SplitDividerHandle.None;
+    private bool _splitPaneScrollbarDragging;
+    private SplitPaneScrollbar? _splitPaneScrollbarDragSource;
+    private double _splitPaneScrollbarDragPointerOffset;
 
     private void RebuildMergeLookup()
     {
