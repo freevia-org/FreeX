@@ -36,7 +36,7 @@ public sealed class CsvFileAdapter : IFileAdapter
             {
                 usedCells.TryGetValue((r, c), out var cell);
                 var raw = cell is null ? "" : FormatValue(cell.Value);
-                parts[c - startCol] = EscapeCsvField(raw);
+                parts[c - startCol] = EscapeCsvField(raw, cell?.Value is TextValue);
             }
             writer.Write(string.Join(',', parts));
             writer.Write("\r\n");
@@ -47,13 +47,17 @@ public sealed class CsvFileAdapter : IFileAdapter
         row is >= 1 and <= CellAddress.MaxRow &&
         col is >= 1 and <= CellAddress.MaxCol;
 
-    private static string EscapeCsvField(string value)
+    private static string EscapeCsvField(string value, bool isTextValue)
     {
         if (value.Length == 0) return value;
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r') ||
+            (isTextValue && IsFormulaLikeText(value)))
             return $"\"{value.Replace("\"", "\"\"")}\"";
         return value;
     }
+
+    private static bool IsFormulaLikeText(string value) =>
+        value[0] is '=' or '+' or '-' or '@';
 
     private static string FormatValue(ScalarValue value) => value switch
     {
