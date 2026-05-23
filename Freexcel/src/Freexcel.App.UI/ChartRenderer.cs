@@ -488,10 +488,21 @@ public static partial class ChartRenderer
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
         var valueColumnCount = endCol >= dataStartCol ? endCol - dataStartCol + 1 : 0;
-        var hasOpenColumn = valueColumnCount >= 4;
-        var highCol = hasOpenColumn ? dataStartCol + 1 : dataStartCol;
-        var lowCol = hasOpenColumn ? dataStartCol + 2 : dataStartCol + 1;
-        var closeCol = hasOpenColumn ? dataStartCol + 3 : dataStartCol + 2;
+        var hasVolumeColumn = chart.StockSubtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose;
+        var hasOpenColumn = chart.StockSubtype is StockChartSubtype.OpenHighLowClose or StockChartSubtype.VolumeOpenHighLowClose ||
+                            (!hasVolumeColumn && valueColumnCount >= 4);
+        var volumeOffset = hasVolumeColumn ? 1u : 0u;
+        var requiredValueColumns = volumeOffset + (hasOpenColumn ? 4u : 3u);
+        if (valueColumnCount < requiredValueColumns)
+            return model;
+
+        if (hasVolumeColumn)
+            AddStockVolumeSeries(model, cellLookup, dataStartRow, endRow, dataStartCol);
+
+        var openCol = hasOpenColumn ? dataStartCol + volumeOffset : (uint?)null;
+        var highCol = dataStartCol + volumeOffset + (hasOpenColumn ? 1u : 0u);
+        var lowCol = highCol + 1;
+        var closeCol = highCol + 2;
         if (valueColumnCount < 3 || closeCol > endCol)
             return model;
 
@@ -510,7 +521,7 @@ public static partial class ChartRenderer
                 !TryGetNumericCell(cellLookup, row, closeCol, out var close))
                 continue;
 
-            var open = hasOpenColumn && TryGetNumericCell(cellLookup, row, dataStartCol, out var parsedOpen)
+            var open = openCol is { } parsedOpenCol && TryGetNumericCell(cellLookup, row, parsedOpenCol, out var parsedOpen)
                 ? parsedOpen
                 : close;
             series.Items.Add(new HighLowItem(index, high, low, open, close));
@@ -518,6 +529,31 @@ public static partial class ChartRenderer
 
         model.Series.Add(series);
         return model;
+    }
+
+    private static void AddStockVolumeSeries(
+        PlotModel model,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        uint dataStartRow,
+        uint endRow,
+        uint volumeCol)
+    {
+        var series = new RectangleBarSeries
+        {
+            Title = "Volume",
+            FillColor = OxyColor.FromArgb(90, 91, 155, 213),
+            StrokeColor = OxyColor.FromArgb(140, 91, 155, 213),
+            StrokeThickness = 0.5
+        };
+
+        var i = 0;
+        for (uint row = dataStartRow; row <= endRow; row++, i++)
+        {
+            if (TryGetNumericCell(cellLookup, row, volumeCol, out var volume))
+                series.Items.Add(new RectangleBarItem(i - 0.35, 0, i + 0.35, volume));
+        }
+
+        model.Series.Add(series);
     }
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)
