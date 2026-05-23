@@ -1935,6 +1935,7 @@ public partial class FileAdapterSmokeTests
             ContentType = "image/png",
             Width = 90,
             Height = 60,
+            LockAspectRatio = false,
             RotationDegrees = 30,
             CropLeft = 0.1,
             CropTop = 0.2,
@@ -1956,6 +1957,7 @@ public partial class FileAdapterSmokeTests
         picture.ContentType.Should().Be("image/png");
         picture.Width.Should().Be(90);
         picture.Height.Should().Be(60);
+        picture.LockAspectRatio.Should().BeFalse();
         picture.RotationDegrees.Should().Be(30);
         picture.CropLeft.Should().Be(0.1);
         picture.CropTop.Should().Be(0.2);
