@@ -98,6 +98,8 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("ZoomPresets");
+        source.Should().Contain("[400, 200, 100, 75, 50, 25]");
+        source.Should().Contain("400");
         source.Should().Contain("200");
         source.Should().Contain("100");
         source.Should().Contain("75");
@@ -278,6 +280,18 @@ public sealed class RemainingDialogTests
         source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
         source.Should().Contain("new Label { Content = \"_Location:\", Target = _locationBox");
         source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
+    }
+
+    [Fact]
+    public void SparklineDialog_UsesExcelWinLossLabel()
+    {
+        SparklineDialog.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
+        SparklineDialog.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
+        SparklineDialog.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
+
+        var source = ReadRemainingDialogSources();
+        source.Should().Contain("GetKindLabel(choice)");
+        source.Should().Contain("Tag = choice");
     }
 
     [Fact]
