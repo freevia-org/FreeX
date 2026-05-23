@@ -249,6 +249,8 @@ public sealed class ObjectDialogTests
         source.Should().Contain("E-mail Address");
         source.Should().Contain("_screenTipButton");
         source.Should().Contain("_bookmarkButton");
+        source.Should().Contain("Content = \"_ScreenTip...\"");
+        source.Should().Contain("Content = \"_Bookmark...\"");
         source.Should().Contain("ScreenTipDialog");
         source.Should().Contain("BookmarkDialog");
         source.Should().Contain("_screenTipButton.Click +=");

@@ -24,8 +24,8 @@ public sealed class HyperlinkDialog : Window
 {
     private readonly TextBox _targetBox = new();
     private readonly TextBox _displayBox = new();
-    private readonly Button _screenTipButton = new() { Content = "ScreenTip..." };
-    private readonly Button _bookmarkButton = new() { Content = "Bookmark..." };
+    private readonly Button _screenTipButton = new() { Content = "_ScreenTip..." };
+    private readonly Button _bookmarkButton = new() { Content = "_Bookmark..." };
     private readonly ListBox _linkTypes = new();
     private string _screenTip = "";
     private string _bookmark = "";
