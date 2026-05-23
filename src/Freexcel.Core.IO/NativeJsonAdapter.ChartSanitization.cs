@@ -88,6 +88,11 @@ public sealed partial class NativeJsonAdapter
         chart.TrendlineOrder = Math.Clamp(chart.TrendlineOrder, 2, 6);
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
         chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
+        chart.ErrorBarKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarKind, ChartErrorBarKind.StandardError);
+        chart.ErrorBarDirection = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarDirection, ChartErrorBarDirection.Both);
+        chart.ErrorBarValue = Math.Clamp(chart.ErrorBarValue, 0, 1000);
+        chart.ErrorBarThickness = Math.Clamp(chart.ErrorBarThickness, 0.5, 10);
+        chart.ErrorBarDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarDashStyle, ChartLineDashStyle.Solid);
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;
