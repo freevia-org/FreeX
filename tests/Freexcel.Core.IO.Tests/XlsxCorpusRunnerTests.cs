@@ -1043,16 +1043,28 @@ public class XlsxCorpusRunnerTests
             chart.YAxisTitle ?? "",
             chart.ShowLegend,
             chart.IsPivotChart,
+            chart.Uses1904DateSystem,
+            chart.Language ?? "",
             chart.ChartStyleId,
             chart.RoundedCorners,
             chart.BlankDisplayMode,
+            chart.ShowDataLabelsOverMaximum,
+            chart.AutoTitleDeleted,
             chart.ShowDataInHiddenRowsAndColumns,
+            CaptureChartColorMapSummary(chart.ColorMapOverride),
+            CaptureChartExternalDataSummary(chart.ExternalData),
+            CaptureChartManualLayoutSummary(chart.PlotAreaLayout),
+            CaptureChartManualLayoutSummary(chart.LegendLayout),
             chart.LegendPosition,
             chart.LegendOverlay,
             chart.ShowDataLabels,
             chart.ShowDataLabelCategoryName,
             chart.ShowDataLabelSeriesName,
             chart.ShowDataLabelPercentage,
+            chart.DataLabelPosition,
+            chart.DataLabelSeparator,
+            chart.DataLabelNumberFormat,
+            chart.ShowDataLabelCallouts,
             chart.BarGapWidth,
             chart.BarOverlap,
             chart.VaryColorsByPoint,
@@ -1075,6 +1087,40 @@ public class XlsxCorpusRunnerTests
                 dataTable.ShowVerticalBorder,
                 dataTable.ShowOutline,
                 dataTable.ShowLegendKeys);
+
+    private static ChartColorMapSummary? CaptureChartColorMapSummary(ChartColorMapOverrideModel? colorMap) =>
+        colorMap is null
+            ? null
+            : new ChartColorMapSummary(
+                colorMap.UseMasterColorMapping,
+                colorMap.OverrideMappings
+                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                    .Select(pair => new ChartColorMapEntrySummary(pair.Key, pair.Value))
+                    .ToArray());
+
+    private static ChartExternalDataSummary? CaptureChartExternalDataSummary(ChartExternalDataModel? externalData) =>
+        externalData is null
+            ? null
+            : new ChartExternalDataSummary(
+                externalData.RelationshipId ?? "",
+                externalData.RelationshipType ?? "",
+                externalData.Target ?? "",
+                externalData.TargetMode ?? "",
+                externalData.AutoUpdate);
+
+    private static ChartManualLayoutSummary? CaptureChartManualLayoutSummary(ChartManualLayoutModel? layout) =>
+        layout is null
+            ? null
+            : new ChartManualLayoutSummary(
+                layout.LayoutTarget ?? "",
+                layout.XMode ?? "",
+                layout.YMode ?? "",
+                layout.WidthMode ?? "",
+                layout.HeightMode ?? "",
+                layout.X,
+                layout.Y,
+                layout.Width,
+                layout.Height);
 
     private static Chart3DViewSummary? CaptureChart3DViewSummary(Chart3DViewModel? view) =>
         view is null
@@ -1933,16 +1979,28 @@ public class XlsxCorpusRunnerTests
         string YAxisTitle,
         bool ShowLegend,
         bool IsPivotChart,
+        bool Uses1904DateSystem,
+        string Language,
         int? ChartStyleId,
         bool RoundedCorners,
         ChartBlankDisplayMode BlankDisplayMode,
+        bool ShowDataLabelsOverMaximum,
+        bool AutoTitleDeleted,
         bool ShowDataInHiddenRowsAndColumns,
+        ChartColorMapSummary? ColorMapOverride,
+        ChartExternalDataSummary? ExternalData,
+        ChartManualLayoutSummary? PlotAreaLayout,
+        ChartManualLayoutSummary? LegendLayout,
         ChartLegendPosition LegendPosition,
         bool LegendOverlay,
         bool ShowDataLabels,
         bool ShowDataLabelCategoryName,
         bool ShowDataLabelSeriesName,
         bool ShowDataLabelPercentage,
+        ChartDataLabelPosition DataLabelPosition,
+        ChartDataLabelSeparator DataLabelSeparator,
+        ChartDataLabelNumberFormat DataLabelNumberFormat,
+        bool ShowDataLabelCallouts,
         int? BarGapWidth,
         int? BarOverlap,
         bool? VaryColorsByPoint,
@@ -1952,6 +2010,30 @@ public class XlsxCorpusRunnerTests
         ChartDataTableSummary? DataTable,
         Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
+
+    private sealed record ChartColorMapSummary(
+        bool UseMasterColorMapping,
+        IReadOnlyList<ChartColorMapEntrySummary> OverrideMappings);
+
+    private sealed record ChartColorMapEntrySummary(string Key, string Value);
+
+    private sealed record ChartExternalDataSummary(
+        string RelationshipId,
+        string RelationshipType,
+        string Target,
+        string TargetMode,
+        bool? AutoUpdate);
+
+    private sealed record ChartManualLayoutSummary(
+        string LayoutTarget,
+        string XMode,
+        string YMode,
+        string WidthMode,
+        string HeightMode,
+        double? X,
+        double? Y,
+        double? Width,
+        double? Height);
 
     private sealed record ChartDataTableSummary(
         bool? ShowHorizontalBorder,
