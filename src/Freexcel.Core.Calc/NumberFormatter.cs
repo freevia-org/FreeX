@@ -221,7 +221,7 @@ public static partial class NumberFormatter
 
     private static bool TryParseCondition(string token, out FormatCondition? condition)
     {
-        var match = Regex.Match(token, @"^(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)$");
+        var match = Regex.Match(token, @"^\s*(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)\s*$");
         if (match.Success &&
             double.TryParse(match.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
         {
