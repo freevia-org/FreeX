@@ -1075,7 +1075,8 @@ public sealed record PivotTableOptionsDialogResult(
     int CompactRowLabelIndent = 1,
     bool ShowExpandCollapseButtons = true,
     bool AutofitColumnsOnUpdate = true,
-    bool PreserveFormattingOnUpdate = true);
+    bool PreserveFormattingOnUpdate = true,
+    bool ShowFieldHeaders = true);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -1097,6 +1098,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly ComboBox _styleBox = new();
     private readonly CheckBox _rowHeadersBox = new() { Content = "Row _headers" };
     private readonly CheckBox _columnHeadersBox = new() { Content = "Column hea_ders" };
+    private readonly CheckBox _fieldHeadersBox = new() { Content = "Display field _captions and filter drop-downs", IsChecked = true };
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
@@ -1153,7 +1155,8 @@ public sealed class PivotTableOptionsDialog : Window
             compactRowLabelIndent: pivotTable.CompactRowLabelIndent,
             showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons,
             autofitColumnsOnUpdate: pivotTable.AutofitColumnsOnUpdate,
-            preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate);
+            preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate,
+            showFieldHeaders: pivotTable.ShowFieldHeaders);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1180,7 +1183,8 @@ public sealed class PivotTableOptionsDialog : Window
         int compactRowLabelIndent = 1,
         bool showExpandCollapseButtons = true,
         bool autofitColumnsOnUpdate = true,
-        bool preserveFormattingOnUpdate = true) =>
+        bool preserveFormattingOnUpdate = true,
+        bool showFieldHeaders = true) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1206,7 +1210,8 @@ public sealed class PivotTableOptionsDialog : Window
             NormalizeCompactRowLabelIndent(compactRowLabelIndent),
             showExpandCollapseButtons,
             autofitColumnsOnUpdate,
-            preserveFormattingOnUpdate);
+            preserveFormattingOnUpdate,
+            showFieldHeaders);
 
     private DockPanel CreateContent()
     {
@@ -1266,6 +1271,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddLabeledControl(stylePanel, "PivotTable _style", _styleBox, StyleNames);
         AddCheckBox(stylePanel, _rowHeadersBox);
         AddCheckBox(stylePanel, _columnHeadersBox);
+        AddCheckBox(stylePanel, _fieldHeadersBox);
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         AddCheckBox(stylePanel, _showExpandCollapseBox);
@@ -1359,6 +1365,7 @@ public sealed class PivotTableOptionsDialog : Window
             string.Equals(styleName, result.StyleName, StringComparison.OrdinalIgnoreCase)) ?? StyleNames[0];
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
+        _fieldHeadersBox.IsChecked = result.ShowFieldHeaders;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
@@ -1406,7 +1413,8 @@ public sealed class PivotTableOptionsDialog : Window
             ParseCompactRowLabelIndent(_compactIndentBox.Text),
             _showExpandCollapseBox.IsChecked == true,
             _autofitColumnsBox.IsChecked == true,
-            _preserveFormattingBox.IsChecked == true);
+            _preserveFormattingBox.IsChecked == true,
+            _fieldHeadersBox.IsChecked == true);
         DialogResult = true;
     }
 
