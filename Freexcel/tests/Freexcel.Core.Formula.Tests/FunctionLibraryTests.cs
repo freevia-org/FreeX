@@ -1511,6 +1511,13 @@ public class FunctionLibraryTests
     // ── EDATE ─────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Weekday_SerialOutsideExcelDateRange_ReturnsNumError()
+    {
+        _eval.Evaluate("=WEEKDAY(2958466)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WEEKDAY(10000000000)", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void Weekday_ReturnTypeError_PropagatesError()
     {
         var sheet = MakeSheet();
