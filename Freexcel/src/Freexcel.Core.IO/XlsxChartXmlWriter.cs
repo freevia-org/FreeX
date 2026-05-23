@@ -215,7 +215,7 @@ internal static partial class XlsxChartXmlWriter
 
         return new XElement(chartNs + "stockChart",
             BuildChartSeries(chart, sheet, chartNs, drawingNs, stockSeries, forceLineShapeProperties: true),
-            ToChartGuideLineXml(chart, chartNs));
+            ToChartGuideLineXml(chart, chartNs, drawingNs));
     }
 
     private static bool IsVolumeStockSubtype(StockChartSubtype subtype) =>
@@ -243,7 +243,7 @@ internal static partial class XlsxChartXmlWriter
         Func<int, bool> includeSeries) =>
         new(chartNs + "lineChart",
             BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
-            ToChartGuideLineXml(chart, chartNs));
+            ToChartGuideLineXml(chart, chartNs, drawingNs));
 
     private static XElement Create3DLinePlotChart(
         ChartModel chart,
@@ -253,7 +253,7 @@ internal static partial class XlsxChartXmlWriter
         Func<int, bool> includeSeries) =>
         new(chartNs + "line3DChart",
             BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
-            ToChartGuideLineXml(chart, chartNs));
+            ToChartGuideLineXml(chart, chartNs, drawingNs));
 
     private static XElement CreateScatterPlotChart(
         ChartModel chart,
@@ -265,14 +265,47 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "scatterStyle", new XAttribute("val", "lineMarker")),
             BuildScatterChartSeries(chart, sheet, chartNs, drawingNs, includeSeries));
 
-    private static IEnumerable<XElement> ToChartGuideLineXml(ChartModel chart, XNamespace chartNs)
+    private static IEnumerable<XElement> ToChartGuideLineXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
         if (chart.ShowDropLines)
-            yield return new XElement(chartNs + "dropLines");
+            yield return new XElement(chartNs + "dropLines",
+                ToChartGuideLineShapeProperties(
+                    chart.DropLineThemeColor,
+                    chart.DropLineColor,
+                    chart.DropLineThickness,
+                    chart.DropLineDashStyle,
+                    chartNs,
+                    drawingNs));
         if (chart.ShowHighLowLines)
-            yield return new XElement(chartNs + "hiLowLines");
+            yield return new XElement(chartNs + "hiLowLines",
+                ToChartGuideLineShapeProperties(
+                    chart.HighLowLineThemeColor,
+                    chart.HighLowLineColor,
+                    chart.HighLowLineThickness,
+                    chart.HighLowLineDashStyle,
+                    chartNs,
+                    drawingNs));
         if (chart.ShowUpDownBars)
             yield return new XElement(chartNs + "upDownBars");
+    }
+
+    private static XElement? ToChartGuideLineShapeProperties(
+        WorkbookThemeColorReference? themeColor,
+        CellColor? color,
+        double thickness,
+        ChartLineDashStyle dashStyle,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var fill = ToSolidFill(themeColor, color, drawingNs);
+        if (fill is null && thickness == 1 && dashStyle == ChartLineDashStyle.Solid)
+            return null;
+
+        return new XElement(chartNs + "spPr",
+            new XElement(drawingNs + "ln",
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(thickness, 0.5, 10) * 12700))),
+                fill,
+                ToPresetDash(dashStyle, drawingNs)));
     }
 
     private static void AddPlotChartCommonElements(

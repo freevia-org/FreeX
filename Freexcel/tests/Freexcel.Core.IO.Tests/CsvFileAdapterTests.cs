@@ -166,6 +166,19 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForWeekdayMonthNameDateTimes()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"Sunday, May 17, 2026 9:30\",\"Sun, May 17, 2026 9:30 PM\"\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 30, 0)));
+    }
+
+    [Fact]
     public void Save_WritesDateTimeValuesAsInvariantText()
     {
         var workbook = new Workbook("Book1");
