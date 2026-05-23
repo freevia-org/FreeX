@@ -107,14 +107,20 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
-        source.Should().Contain("Step 2 of 3");
+        source.Should().Contain("Step {_wizardStep} of 3");
         source.Should().Contain("CreateWizardButtonRow");
         source.Should().Contain("Content = \"< _Back\"");
         source.Should().Contain("Content = \"_Next >\"");
         source.Should().Contain("Content = \"_Finish\"");
+        source.Should().Contain("MoveWizardStep");
+        source.Should().Contain("UpdateWizardStep");
+        source.Should().Contain("_backButton.IsEnabled = _wizardStep > 1");
+        source.Should().Contain("_nextButton.IsEnabled = _wizardStep < 3");
+        source.Should().Contain("Choose the file type that best describes your data.");
         source.Should().Contain("IsDefault = true");
         source.Should().Contain("Accept()");
         source.Should().NotContain("Additional wizard steps are not supported yet.");
+        source.Should().NotContain("This dialog opens on the split-options step.");
     }
 
     [Fact]
