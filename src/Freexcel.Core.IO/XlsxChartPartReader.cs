@@ -50,7 +50,7 @@ public static partial class XlsxChartPartReader
         else if (radarCharts.Count > 0)
             read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
         else if (stockCharts.Count > 0)
-            read = TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart);
+            read = TryReadStockChart(chartXml, plotArea, stockCharts, barCharts, sheetId, out chart);
         else if (threeDColumnChart is not null)
             read = TryReadDeferredAdvancedChart(chartXml, threeDColumnChart, sheetId, ChartType.ThreeDColumn, out chart);
         else if (deferredAdvancedChart is { } advanced)
@@ -68,6 +68,46 @@ public static partial class XlsxChartPartReader
         }
 
         return read;
+    }
+
+    private static bool TryReadStockChart(
+        XDocument chartXml,
+        XElement? plotArea,
+        IReadOnlyList<XElement> stockCharts,
+        IReadOnlyList<XElement> barCharts,
+        SheetId sheetId,
+        out ChartModel chart)
+    {
+        if (!TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart))
+            return false;
+
+        var stockSeriesCount = stockCharts.Sum(plotChart => plotChart.Elements(ChartNs + "ser").Count());
+        var volumeRanges = new List<GridRange>();
+        foreach (var series in barCharts.SelectMany(plotChart => plotChart.Elements(ChartNs + "ser")))
+        {
+            foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
+            {
+                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    volumeRanges.Add(range);
+            }
+        }
+
+        if (volumeRanges.Count > 0)
+        {
+            var ranges = new List<GridRange> { chart.DataRange };
+            ranges.AddRange(volumeRanges);
+            chart.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
+        }
+
+        chart.StockSubtype = (volumeRanges.Count > 0, stockSeriesCount >= 4) switch
+        {
+            (true, true) => StockChartSubtype.VolumeOpenHighLowClose,
+            (true, false) => StockChartSubtype.VolumeHighLowClose,
+            (false, true) => StockChartSubtype.OpenHighLowClose,
+            _ => StockChartSubtype.HighLowClose
+        };
+
+        return true;
     }
 
     private static bool TryReadLineLikeChart(

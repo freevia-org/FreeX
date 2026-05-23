@@ -1076,15 +1076,55 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "A1", new TextValue("Month"));
         Set(sheet, "B1", new TextValue("Sales"));
         Set(sheet, "C1", new TextValue("Margin"));
+        Set(sheet, "D1", new TextValue("Open"));
+        Set(sheet, "E1", new TextValue("High"));
+        Set(sheet, "F1", new TextValue("Low"));
+        Set(sheet, "G1", new TextValue("Close"));
+        Set(sheet, "I1", new TextValue("Date"));
+        Set(sheet, "J1", new TextValue("Volume"));
+        Set(sheet, "K1", new TextValue("Open"));
+        Set(sheet, "L1", new TextValue("High"));
+        Set(sheet, "M1", new TextValue("Low"));
+        Set(sheet, "N1", new TextValue("Close"));
         Set(sheet, "A2", new TextValue("Jan"));
         Set(sheet, "A3", new TextValue("Feb"));
         Set(sheet, "A4", new TextValue("Mar"));
+        Set(sheet, "I2", new TextValue("Jan"));
+        Set(sheet, "I3", new TextValue("Feb"));
+        Set(sheet, "I4", new TextValue("Mar"));
         Set(sheet, "B2", new NumberValue(100));
         Set(sheet, "B3", new NumberValue(120));
         Set(sheet, "B4", new NumberValue(140));
         Set(sheet, "C2", new NumberValue(0.2));
         Set(sheet, "C3", new NumberValue(0.25));
         Set(sheet, "C4", new NumberValue(0.3));
+        Set(sheet, "D2", new NumberValue(101));
+        Set(sheet, "D3", new NumberValue(121));
+        Set(sheet, "D4", new NumberValue(139));
+        Set(sheet, "E2", new NumberValue(108));
+        Set(sheet, "E3", new NumberValue(128));
+        Set(sheet, "E4", new NumberValue(145));
+        Set(sheet, "F2", new NumberValue(98));
+        Set(sheet, "F3", new NumberValue(118));
+        Set(sheet, "F4", new NumberValue(135));
+        Set(sheet, "G2", new NumberValue(106));
+        Set(sheet, "G3", new NumberValue(126));
+        Set(sheet, "G4", new NumberValue(142));
+        Set(sheet, "J2", new NumberValue(1000));
+        Set(sheet, "J3", new NumberValue(1200));
+        Set(sheet, "J4", new NumberValue(1400));
+        Set(sheet, "K2", new NumberValue(101));
+        Set(sheet, "K3", new NumberValue(121));
+        Set(sheet, "K4", new NumberValue(139));
+        Set(sheet, "L2", new NumberValue(108));
+        Set(sheet, "L3", new NumberValue(128));
+        Set(sheet, "L4", new NumberValue(145));
+        Set(sheet, "M2", new NumberValue(98));
+        Set(sheet, "M3", new NumberValue(118));
+        Set(sheet, "M4", new NumberValue(135));
+        Set(sheet, "N2", new NumberValue(106));
+        Set(sheet, "N3", new NumberValue(126));
+        Set(sheet, "N4", new NumberValue(142));
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Column,
@@ -1107,9 +1147,12 @@ internal static class XlsxCorpusFixtureFactory
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Stock,
-            DataRange = Range(sheet, "A1", "C4"),
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            DataRange = Range(sheet, "I1", "N4"),
             Title = "Stock View",
-            ShowLegend = true
+            ShowLegend = true,
+            ShowHighLowLines = true,
+            ShowUpDownBars = true
         });
         return workbook;
     }

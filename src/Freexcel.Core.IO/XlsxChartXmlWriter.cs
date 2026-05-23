@@ -80,6 +80,13 @@ internal static partial class XlsxChartXmlWriter
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, seriesCount);
         var comboLineIndexes = GetComboLineSeriesIndexes(chart, seriesCount);
+        if (chart.Type == ChartType.Stock && IsVolumeStockSubtype(chart.StockSubtype))
+        {
+            yield return (CreateStockVolumeBarChart(chart, sheet, chartNs, drawingNs), false);
+            yield return (CreateStockPlotChart(chart, sheet, chartNs, drawingNs), false);
+            yield break;
+        }
+
         if (secondaryIndexes.Count > 0 && chart.Type == ChartType.Scatter)
         {
             var primaryScatter = Enumerable.Range(0, seriesCount)
@@ -146,9 +153,7 @@ internal static partial class XlsxChartXmlWriter
             ChartType.Radar => new XElement(chartNs + "radarChart",
                 new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
-            ChartType.Stock => new XElement(chartNs + "stockChart",
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
-                ToChartGuideLineXml(chart, chartNs)),
+            ChartType.Stock => CreateStockPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
@@ -168,6 +173,35 @@ internal static partial class XlsxChartXmlWriter
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs)
         };
+
+    private static XElement CreateStockVolumeBarChart(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        WithBarChartSpacing(new XElement(chartNs + "barChart",
+            new XElement(chartNs + "barDir", new XAttribute("val", "col")),
+            new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
+            BuildChartSeries(chart, sheet, chartNs, drawingNs, index => index == 0)), chart, chartNs);
+
+    private static XElement CreateStockPlotChart(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool>? includeSeries = null)
+    {
+        var stockSeries = IsVolumeStockSubtype(chart.StockSubtype)
+            ? new Func<int, bool>(index => index > 0 && (includeSeries?.Invoke(index) ?? true))
+            : includeSeries;
+
+        return new XElement(chartNs + "stockChart",
+            BuildChartSeries(chart, sheet, chartNs, drawingNs, stockSeries, forceLineShapeProperties: true),
+            ToChartGuideLineXml(chart, chartNs));
+    }
+
+    private static bool IsVolumeStockSubtype(StockChartSubtype subtype) =>
+        subtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose;
 
     private static XElement WithBarChartSpacing(XElement barChart, ChartModel chart, XNamespace chartNs)
     {
