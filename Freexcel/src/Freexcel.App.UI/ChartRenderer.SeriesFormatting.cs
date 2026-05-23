@@ -241,6 +241,7 @@ public static partial class ChartRenderer
 
     private static void AddLinePoints(
         LineSeries series,
+        ChartModel chart,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
         uint dataStartRow,
         uint endRow,
@@ -257,6 +258,19 @@ public static partial class ChartRenderer
                 var point = new DataPoint(i, v);
                 series.Points.Add(point);
                 trendPoints?.Add(point);
+            }
+            else if (cellLookup.TryGetValue((r, col), out cell) && string.IsNullOrWhiteSpace(cell.DisplayText))
+            {
+                if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+                {
+                    var point = new DataPoint(i, 0);
+                    series.Points.Add(point);
+                    trendPoints?.Add(point);
+                }
+                else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
+                {
+                    series.Points.Add(new DataPoint(i, double.NaN));
+                }
             }
         }
 
