@@ -2,18 +2,38 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
 
+public enum ConsolidateFunction
+{
+    Sum,
+    Count,
+    Average,
+    Max,
+    Min,
+    Product,
+    CountNumbers,
+    StdDev,
+    StdDevp,
+    Var,
+    Varp
+}
+
 public sealed class ConsolidateCommand : IWorkbookCommand
 {
     private readonly IReadOnlyList<GridRange> _sourceRanges;
     private readonly CellAddress _destination;
+    private readonly ConsolidateFunction _function;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
 
     public string Label => "Consolidate";
 
-    public ConsolidateCommand(IReadOnlyList<GridRange> sourceRanges, CellAddress destination)
+    public ConsolidateCommand(
+        IReadOnlyList<GridRange> sourceRanges,
+        CellAddress destination,
+        ConsolidateFunction function = ConsolidateFunction.Sum)
     {
         _sourceRanges = sourceRanges;
         _destination = destination;
+        _function = function;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -47,12 +67,16 @@ public sealed class ConsolidateCommand : IWorkbookCommand
         {
             for (uint colOffset = 0; colOffset < colCount; colOffset++)
             {
-                var total = 0.0;
+                var values = new List<double>();
+                var nonEmptyCount = 0;
                 foreach (var range in _sourceRanges)
                 {
                     var sourceSheet = ctx.GetSheet(range.Start.Sheet);
-                    if (sourceSheet.GetValue(range.Start.Row + rowOffset, range.Start.Col + colOffset) is NumberValue number)
-                        total += number.Value;
+                    var value = sourceSheet.GetValue(range.Start.Row + rowOffset, range.Start.Col + colOffset);
+                    if (value is not BlankValue)
+                        nonEmptyCount++;
+                    if (value is NumberValue number)
+                        values.Add(number.Value);
                 }
 
                 var destinationAddress = new CellAddress(
@@ -61,7 +85,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
                     _destination.Col + colOffset);
                 _snapshot.Add((destinationAddress, destinationSheet.GetCell(destinationAddress)?.Clone()));
 
-                var newCell = Cell.FromValue(new NumberValue(total));
+                var newCell = Cell.FromValue(new NumberValue(Aggregate(values, nonEmptyCount, _function)));
                 if (destinationSheet.GetCell(destinationAddress) is { } oldCell)
                     newCell.StyleId = oldCell.StyleId;
                 destinationSheet.SetCell(destinationAddress, newCell);
@@ -70,6 +94,35 @@ public sealed class ConsolidateCommand : IWorkbookCommand
         }
 
         return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    private static double Aggregate(IReadOnlyList<double> values, int nonEmptyCount, ConsolidateFunction function) =>
+        function switch
+        {
+            ConsolidateFunction.Count => nonEmptyCount,
+            ConsolidateFunction.Average => values.Count == 0 ? 0 : values.Average(),
+            ConsolidateFunction.Max => values.Count == 0 ? 0 : values.Max(),
+            ConsolidateFunction.Min => values.Count == 0 ? 0 : values.Min(),
+            ConsolidateFunction.Product => values.Count == 0 ? 0 : values.Aggregate(1.0, (product, value) => product * value),
+            ConsolidateFunction.CountNumbers => values.Count,
+            ConsolidateFunction.StdDev => StandardDeviation(values, sample: true),
+            ConsolidateFunction.StdDevp => StandardDeviation(values, sample: false),
+            ConsolidateFunction.Var => Variance(values, sample: true),
+            ConsolidateFunction.Varp => Variance(values, sample: false),
+            _ => values.Sum()
+        };
+
+    private static double StandardDeviation(IReadOnlyList<double> values, bool sample) =>
+        Math.Sqrt(Variance(values, sample));
+
+    private static double Variance(IReadOnlyList<double> values, bool sample)
+    {
+        var denominator = sample ? values.Count - 1 : values.Count;
+        if (denominator <= 0)
+            return 0;
+
+        var average = values.Average();
+        return values.Sum(value => Math.Pow(value - average, 2)) / denominator;
     }
 
     public void Revert(ICommandContext ctx)
