@@ -975,13 +975,14 @@ public sealed class PivotTableCommandTests
             blankLineAfterItems: false,
             styleName: "PivotStyleLight16",
             refreshOnOpen: true,
-            saveSourceData: false);
+            saveSourceData: false,
+            enableRefresh: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         cache.RefreshOnLoad.Should().BeTrue();
         cache.SaveData.Should().BeFalse();
-        cache.EnableRefresh.Should().BeTrue();
+        cache.EnableRefresh.Should().BeFalse();
 
         command.Revert(ctx);
 
