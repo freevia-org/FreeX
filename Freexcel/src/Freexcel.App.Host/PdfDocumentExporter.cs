@@ -116,7 +116,10 @@ internal static class PdfDocumentExporter
         }
 
         if (pdf.Outlines.Count > 0)
+        {
             pdf.PageMode = PdfPageMode.UseOutlines;
+            pdf.Internals.Catalog.Elements.SetName("/NonFullScreenPageMode", "/UseOutlines");
+        }
     }
 
     private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
