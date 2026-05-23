@@ -14,7 +14,7 @@ public static class NamedRangeInputParser
         return WorkbookRangeTextCodec.TryParse(
             defaultSheet.Id,
             input,
-            sheetName => workbook.GetSheet(sheetName)?.Id ?? defaultSheet.Id,
+            sheetName => workbook.GetSheet(sheetName)?.Id,
             out range);
     }
 }
