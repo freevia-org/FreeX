@@ -390,6 +390,7 @@ public class ExportPlannerTests
                 pdf.Info.Keywords.Should().Be("Freexcel, spreadsheet");
                 pdf.Info.Creator.Should().Be("Freexcel");
                 ReadDisplayDocTitle(pdf).Should().BeTrue();
+                ReadPrintScaling(pdf).Should().Be("/None");
             }
             finally
             {
@@ -418,6 +419,28 @@ public class ExportPlannerTests
                 using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
                 pdf.Info.Title.Should().BeEmpty();
                 ReadDisplayDocTitle(pdf).Should().BeFalse();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_DisablesViewerPrintScalingByDefault()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadPrintScaling(pdf).Should().Be("/None");
             }
             finally
             {
@@ -812,4 +835,9 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetBoolean("/DisplayDocTitle", false) == true;
+
+    private static string? ReadPrintScaling(PdfDocument pdf) =>
+        pdf.Internals.Catalog.Elements
+            .GetDictionary("/ViewerPreferences")
+            ?.Elements.GetName("/PrintScaling");
 }

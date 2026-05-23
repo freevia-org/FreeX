@@ -65,6 +65,7 @@ internal static class PdfDocumentExporter
 
         using var pdf = new PdfDocument();
         pdf.Info.Creator = "Freexcel";
+        ApplyDefaultViewerPreferences(pdf);
         ApplyProperties(pdf, properties);
 
         for (int i = firstPageIndex; i <= lastPageIndexInclusive; i++)
@@ -141,8 +142,22 @@ internal static class PdfDocumentExporter
 
     private static void SetDisplayDocumentTitlePreference(PdfDocument pdf)
     {
-        const string viewerPreferencesKey = "/ViewerPreferences";
         const string displayDocTitleKey = "/DisplayDocTitle";
+
+        GetOrCreateViewerPreferences(pdf).Elements.SetBoolean(displayDocTitleKey, true);
+    }
+
+    private static void ApplyDefaultViewerPreferences(PdfDocument pdf)
+    {
+        const string printScalingKey = "/PrintScaling";
+        const string noPrintScalingName = "/None";
+
+        GetOrCreateViewerPreferences(pdf).Elements.SetName(printScalingKey, noPrintScalingName);
+    }
+
+    private static PdfDictionary GetOrCreateViewerPreferences(PdfDocument pdf)
+    {
+        const string viewerPreferencesKey = "/ViewerPreferences";
 
         var viewerPreferences = pdf.Internals.Catalog.Elements.GetDictionary(viewerPreferencesKey);
         if (viewerPreferences is null)
@@ -151,7 +166,7 @@ internal static class PdfDocumentExporter
             pdf.Internals.Catalog.Elements[viewerPreferencesKey] = viewerPreferences;
         }
 
-        viewerPreferences.Elements.SetBoolean(displayDocTitleKey, true);
+        return viewerPreferences;
     }
 
     private static FixedPage GetFixedPage(PageContent pageContent)
