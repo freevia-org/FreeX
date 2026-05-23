@@ -360,7 +360,7 @@ public static partial class ChartRenderer
                     firstSeriesPoints = trendPoints;
                 model.Series.Add(series);
             }
-            else // Line
+            else // Line / 3D Line
             {
                 if (!model.Axes.Any())
                 {

@@ -105,6 +105,7 @@ public static class ChartOptionCycler
         return normalized switch
         {
             "line" => ChartType.Line,
+            "3d line" or "three d line" or "three-dimensional line" => ChartType.ThreeDLine,
             "pie" => ChartType.Pie,
             "3d pie" or "three d pie" or "three-dimensional pie" => ChartType.ThreeDPie,
             "doughnut" or "donut" => ChartType.Doughnut,
