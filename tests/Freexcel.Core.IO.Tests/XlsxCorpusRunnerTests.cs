@@ -792,7 +792,7 @@ public class XlsxCorpusRunnerTests
             sheet.Hyperlinks
                 .OrderBy(pair => pair.Key.Row)
                 .ThenBy(pair => pair.Key.Col)
-                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .Select(pair => CaptureHyperlinkSummary(sheet, pair))
                 .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
@@ -940,6 +940,19 @@ public class XlsxCorpusRunnerTests
                 background.ContentType,
                 background.FileName ?? "",
                 background.ImageBytes.Length);
+
+    private static HyperlinkSummary CaptureHyperlinkSummary(Sheet sheet, KeyValuePair<CellAddress, string> pair)
+    {
+        sheet.HyperlinkMetadata.TryGetValue(pair.Key, out var metadata);
+        metadata ??= new HyperlinkMetadata();
+        return new HyperlinkSummary(
+            pair.Key.Row,
+            pair.Key.Col,
+            pair.Value,
+            metadata.LinkType,
+            metadata.ScreenTip,
+            metadata.Bookmark);
+    }
 
     private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
     {
@@ -1809,7 +1822,13 @@ public class XlsxCorpusRunnerTests
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
 
-    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
+    private sealed record HyperlinkSummary(
+        uint Row,
+        uint Column,
+        string Target,
+        HyperlinkTargetKind LinkType,
+        string ScreenTip,
+        string Bookmark);
 
     private sealed record OutlineLevelSummary(uint Index, int Level);
 
