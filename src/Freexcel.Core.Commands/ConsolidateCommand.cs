@@ -24,6 +24,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
     private readonly ConsolidateFunction _function;
     private readonly bool _useTopRowLabels;
     private readonly bool _useLeftColumnLabels;
+    private readonly bool _createLinksToSourceData;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
 
     public string Label => "Consolidate";
@@ -33,13 +34,15 @@ public sealed class ConsolidateCommand : IWorkbookCommand
         CellAddress destination,
         ConsolidateFunction function = ConsolidateFunction.Sum,
         bool useTopRowLabels = false,
-        bool useLeftColumnLabels = false)
+        bool useLeftColumnLabels = false,
+        bool createLinksToSourceData = false)
     {
         _sourceRanges = sourceRanges;
         _destination = destination;
         _function = function;
         _useTopRowLabels = useTopRowLabels;
         _useLeftColumnLabels = useLeftColumnLabels;
+        _createLinksToSourceData = createLinksToSourceData;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -83,10 +86,16 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             {
                 var values = new List<double>();
                 var nonEmptyCount = 0;
+                var sourceAddresses = new List<CellAddress>();
                 foreach (var range in _sourceRanges)
                 {
                     var sourceSheet = ctx.GetSheet(range.Start.Sheet);
-                    var value = sourceSheet.GetValue(range.Start.Row + rowOffset, range.Start.Col + colOffset);
+                    var sourceAddress = new CellAddress(
+                        range.Start.Sheet,
+                        range.Start.Row + rowOffset,
+                        range.Start.Col + colOffset);
+                    sourceAddresses.Add(sourceAddress);
+                    var value = sourceSheet.GetValue(sourceAddress.Row, sourceAddress.Col);
                     if (value is not BlankValue)
                         nonEmptyCount++;
                     if (value is NumberValue number)
@@ -100,6 +109,8 @@ public sealed class ConsolidateCommand : IWorkbookCommand
                 _snapshot.Add((destinationAddress, destinationSheet.GetCell(destinationAddress)?.Clone()));
 
                 var newCell = Cell.FromValue(new NumberValue(Aggregate(values, nonEmptyCount, _function)));
+                if (_createLinksToSourceData)
+                    newCell.FormulaText = CreateSourceLinkFormula(ctx.Workbook, sourceAddresses, _destination.Sheet, _function);
                 if (destinationSheet.GetCell(destinationAddress) is { } oldCell)
                     newCell.StyleId = oldCell.StyleId;
                 destinationSheet.SetCell(destinationAddress, newCell);
@@ -119,7 +130,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
 
         var rows = new List<string>();
         var cols = new List<string>();
-        var buckets = new Dictionary<(string Row, string Col), (List<double> Values, int NonEmptyCount)>();
+        var buckets = new Dictionary<(string Row, string Col), (List<double> Values, int NonEmptyCount, List<CellAddress> SourceAddresses)>();
 
         foreach (var range in _sourceRanges)
         {
@@ -141,36 +152,38 @@ public sealed class ConsolidateCommand : IWorkbookCommand
                     var key = (rowLabel, colLabel);
                     if (!buckets.TryGetValue(key, out var bucket))
                     {
-                        bucket = ([], 0);
+                        bucket = ([], 0, []);
                         buckets[key] = bucket;
                     }
 
-                    var value = sourceSheet.GetValue(range.Start.Row + rowOffset, range.Start.Col + colOffset);
+                    var sourceAddress = new CellAddress(range.Start.Sheet, range.Start.Row + rowOffset, range.Start.Col + colOffset);
+                    var value = sourceSheet.GetValue(sourceAddress.Row, sourceAddress.Col);
                     if (value is not BlankValue)
                         bucket.NonEmptyCount++;
                     if (value is NumberValue number)
                         bucket.Values.Add(number.Value);
+                    bucket.SourceAddresses.Add(sourceAddress);
                     buckets[key] = bucket;
                 }
             }
         }
 
-        var writes = new List<(CellAddress Address, ScalarValue Value)>();
+        var writes = new List<(CellAddress Address, ScalarValue Value, string? FormulaText)>();
         var rowLabelColumnOffset = _useLeftColumnLabels ? 1u : 0u;
         var columnLabelRowOffset = _useTopRowLabels ? 1u : 0u;
         if (_useTopRowLabels && _useLeftColumnLabels)
-            writes.Add((_destination, BlankValue.Instance));
+            writes.Add((_destination, BlankValue.Instance, null));
 
         if (_useTopRowLabels)
         {
             for (var index = 0; index < cols.Count; index++)
-                writes.Add((new CellAddress(_destination.Sheet, _destination.Row, _destination.Col + rowLabelColumnOffset + (uint)index), new TextValue(cols[index])));
+                writes.Add((new CellAddress(_destination.Sheet, _destination.Row, _destination.Col + rowLabelColumnOffset + (uint)index), new TextValue(cols[index]), null));
         }
 
         if (_useLeftColumnLabels)
         {
             for (var index = 0; index < rows.Count; index++)
-                writes.Add((new CellAddress(_destination.Sheet, _destination.Row + columnLabelRowOffset + (uint)index, _destination.Col), new TextValue(rows[index])));
+                writes.Add((new CellAddress(_destination.Sheet, _destination.Row + columnLabelRowOffset + (uint)index, _destination.Col), new TextValue(rows[index]), null));
         }
 
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
@@ -179,25 +192,28 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             {
                 var bucket = buckets.TryGetValue((rows[rowIndex], cols[colIndex]), out var found)
                     ? found
-                    : ([], 0);
+                    : ([], 0, []);
                 writes.Add((
                     new CellAddress(
                         _destination.Sheet,
                         _destination.Row + columnLabelRowOffset + (uint)rowIndex,
                         _destination.Col + rowLabelColumnOffset + (uint)colIndex),
-                    new NumberValue(Aggregate(bucket.Values, bucket.NonEmptyCount, _function))));
+                    new NumberValue(Aggregate(bucket.Values, bucket.NonEmptyCount, _function)),
+                    _createLinksToSourceData
+                        ? CreateSourceLinkFormula(ctx.Workbook, bucket.SourceAddresses, _destination.Sheet, _function)
+                        : null));
             }
         }
 
         return WriteCells(ctx, writes);
     }
 
-    private CommandOutcome WriteCells(ICommandContext ctx, IReadOnlyList<(CellAddress Address, ScalarValue Value)> writes)
+    private CommandOutcome WriteCells(ICommandContext ctx, IReadOnlyList<(CellAddress Address, ScalarValue Value, string? FormulaText)> writes)
     {
         var destinationSheet = ctx.GetSheet(_destination.Sheet);
         if (destinationSheet.IsProtected)
         {
-            foreach (var (address, _) in writes)
+            foreach (var (address, _, _) in writes)
             {
                 if (!CommandGuards.CanEditCell(ctx.Workbook, destinationSheet, address))
                     return new CommandOutcome(false, "The sheet is protected.");
@@ -206,10 +222,12 @@ public sealed class ConsolidateCommand : IWorkbookCommand
 
         _snapshot = [];
         var affected = new List<CellAddress>();
-        foreach (var (address, value) in writes)
+        foreach (var (address, value, formulaText) in writes)
         {
             _snapshot.Add((address, destinationSheet.GetCell(address)?.Clone()));
             var newCell = Cell.FromValue(value);
+            if (!string.IsNullOrWhiteSpace(formulaText))
+                newCell.FormulaText = formulaText;
             if (destinationSheet.GetCell(address) is { } oldCell)
                 newCell.StyleId = oldCell.StyleId;
             destinationSheet.SetCell(address, newCell);
@@ -255,6 +273,46 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             ConsolidateFunction.Varp => Variance(values, sample: false),
             _ => values.Sum()
         };
+
+    private static string CreateSourceLinkFormula(
+        Workbook workbook,
+        IReadOnlyList<CellAddress> sourceAddresses,
+        SheetId destinationSheetId,
+        ConsolidateFunction function)
+    {
+        var functionName = function switch
+        {
+            ConsolidateFunction.Count => "COUNTA",
+            ConsolidateFunction.CountNumbers => "COUNT",
+            ConsolidateFunction.StdDev => "STDEV",
+            ConsolidateFunction.StdDevp => "STDEVP",
+            ConsolidateFunction.Var => "VAR",
+            ConsolidateFunction.Varp => "VARP",
+            _ => function.ToString().ToUpperInvariant()
+        };
+
+        var arguments = sourceAddresses
+            .Select(address => FormatFormulaReference(workbook, address, destinationSheetId));
+        return $"{functionName}({string.Join(",", arguments)})";
+    }
+
+    private static string FormatFormulaReference(Workbook workbook, CellAddress address, SheetId destinationSheetId)
+    {
+        var reference = CellAddress.NumberToColumnName(address.Col) + address.Row;
+        if (address.Sheet == destinationSheetId)
+            return reference;
+
+        var sheetName = workbook.GetSheet(address.Sheet)?.Name ?? "Sheet";
+        return $"{QuoteSheetName(sheetName)}!{reference}";
+    }
+
+    private static string QuoteSheetName(string sheetName)
+    {
+        var escaped = sheetName.Replace("'", "''", StringComparison.Ordinal);
+        return sheetName.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_')
+            ? $"'{escaped}'"
+            : escaped;
+    }
 
     private static double StandardDeviation(IReadOnlyList<double> values, bool sample) =>
         Math.Sqrt(Variance(values, sample));
