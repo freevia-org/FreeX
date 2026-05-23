@@ -84,6 +84,16 @@ public partial class MainWindow
 
     private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
     {
+        if (result.Action == AutoFilterDialogAction.ClearFilter)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Clear Filter",
+                    range,
+                    currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: [])))
+                return false;
+            return true;
+        }
+
         if (result.SortDirection != AutoFilterSortDirection.None)
         {
             if (!TryExecuteRepeatableCurrentRangeCommand(
