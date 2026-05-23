@@ -36,6 +36,7 @@ public sealed partial class NativeJsonAdapter
                 ShowDataInHiddenRowsAndColumns = chartDto.ShowDataInHiddenRowsAndColumns,
                 Protection = chartDto.Protection,
                 PrintSettings = chartDto.PrintSettings,
+                ThreeDView = chartDto.ThreeDView,
                 ShowPivotChartFieldButtons = chartDto.ShowPivotChartFieldButtons,
                 ShowPivotChartReportFilterButtons = chartDto.ShowPivotChartReportFilterButtons,
                 ShowPivotChartAxisFieldButtons = chartDto.ShowPivotChartAxisFieldButtons,
@@ -194,6 +195,7 @@ public sealed partial class NativeJsonAdapter
         ShowDataInHiddenRowsAndColumns = chart.ShowDataInHiddenRowsAndColumns,
         Protection = chart.Protection,
         PrintSettings = chart.PrintSettings,
+        ThreeDView = chart.ThreeDView,
         ShowPivotChartFieldButtons = chart.ShowPivotChartFieldButtons,
         ShowPivotChartReportFilterButtons = chart.ShowPivotChartReportFilterButtons,
         ShowPivotChartAxisFieldButtons = chart.ShowPivotChartAxisFieldButtons,
@@ -375,6 +377,23 @@ public sealed partial class NativeJsonAdapter
         chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
         if (chart.Type != ChartType.Stock)
             chart.StockSubtype = StockChartSubtype.HighLowClose;
+        if (chart.ThreeDView is { } threeDView)
+        {
+            threeDView.RotationX = ClampNullableInt(threeDView.RotationX, -90, 90);
+            threeDView.HeightPercent = ClampNullableInt(threeDView.HeightPercent, 5, 500);
+            threeDView.RotationY = ClampNullableInt(threeDView.RotationY, 0, 360);
+            threeDView.DepthPercent = ClampNullableInt(threeDView.DepthPercent, 20, 2000);
+            threeDView.Perspective = ClampNullableInt(threeDView.Perspective, 0, 240);
+            if (threeDView.RotationX is null
+                && threeDView.HeightPercent is null
+                && threeDView.RotationY is null
+                && threeDView.DepthPercent is null
+                && threeDView.RightAngleAxes is null
+                && threeDView.Perspective is null)
+            {
+                chart.ThreeDView = null;
+            }
+        }
         chart.DataLabelBorderThickness = Math.Clamp(chart.DataLabelBorderThickness, 0, 10);
         chart.DataLabelFontSize = Math.Clamp(chart.DataLabelFontSize, 6, 72);
         chart.DataLabelAngle = Math.Clamp(chart.DataLabelAngle, -90, 90);
@@ -448,6 +467,9 @@ public sealed partial class NativeJsonAdapter
 
     private static double? ClampPositiveAxisUnit(double? value) =>
         value is null ? null : Math.Max(double.Epsilon, value.Value);
+
+    private static int? ClampNullableInt(int? value, int min, int max) =>
+        value is { } intValue ? Math.Clamp(intValue, min, max) : null;
 
     private static double NormalizeChartAngle(double value)
     {

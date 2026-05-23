@@ -626,6 +626,15 @@ public partial class FileAdapterSmokeTests
             },
             PlotAreaLayout = new ChartManualLayoutModel { LayoutTarget = "inner", XMode = "factor", X = 0.1, Y = 0.2, Width = 0.8, Height = 0.6 },
             LegendLayout = new ChartManualLayoutModel { LayoutTarget = "inner", X = 0.76, Height = 0.7 },
+            ThreeDView = new Chart3DViewModel
+            {
+                RotationX = 20,
+                HeightPercent = 150,
+                RotationY = 30,
+                DepthPercent = 200,
+                RightAngleAxes = false,
+                Perspective = 45
+            },
             Protection = new ChartProtectionModel { ChartObject = true, Data = true, Formatting = false, Selection = true, UserInterface = true },
             PrintSettings = new ChartPrintSettingsModel
             {
@@ -653,6 +662,7 @@ public partial class FileAdapterSmokeTests
         loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
         loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
         loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
+        loadedChart.ThreeDView.Should().BeEquivalentTo(chart.ThreeDView);
         loadedChart.Protection.Should().BeEquivalentTo(chart.Protection);
         loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
     }
@@ -12491,6 +12501,15 @@ public partial class FileAdapterSmokeTests
                 Width = 0.2,
                 Height = 0.7
             },
+            ThreeDView = new Chart3DViewModel
+            {
+                RotationX = 20,
+                HeightPercent = 150,
+                RotationY = 30,
+                DepthPercent = 200,
+                RightAngleAxes = false,
+                Perspective = 45
+            },
             PrintSettings = new ChartPrintSettingsModel
             {
                 PageMargins = new ChartPageMarginsModel
@@ -12577,6 +12596,13 @@ public partial class FileAdapterSmokeTests
             legendManualLayout.Element(chartNs + "layoutTarget")!.Attribute("val")!.Value.Should().Be("inner");
             legendManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.76");
             legendManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.7");
+            var view3D = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "view3D")!;
+            view3D.Element(chartNs + "rotX")!.Attribute("val")!.Value.Should().Be("20");
+            view3D.Element(chartNs + "hPercent")!.Attribute("val")!.Value.Should().Be("150");
+            view3D.Element(chartNs + "rotY")!.Attribute("val")!.Value.Should().Be("30");
+            view3D.Element(chartNs + "depthPercent")!.Attribute("val")!.Value.Should().Be("200");
+            view3D.Element(chartNs + "rAngAx")!.Attribute("val")!.Value.Should().Be("0");
+            view3D.Element(chartNs + "perspective")!.Attribute("val")!.Value.Should().Be("45");
             var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
             var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
             pageMargins.Attribute("l")!.Value.Should().Be("0.7");
@@ -12620,6 +12646,7 @@ public partial class FileAdapterSmokeTests
         loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
         loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
         loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
+        loadedChart.ThreeDView.Should().BeEquivalentTo(chart.ThreeDView);
         loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
         loadedChart.RoundedCorners.Should().BeTrue();
         loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
