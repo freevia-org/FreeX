@@ -264,6 +264,26 @@ internal static class XlsxCorpusFixtureFactory
 
     private static void ApplyPackageFixups(string id, ZipArchive archive)
     {
+        if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySlicerTimelineFloatingDrawingFixup(
+                archive,
+                "Slicer Region",
+                "../slicers/slicer1.xml",
+                "http://schemas.microsoft.com/office/2007/relationships/slicer");
+            return;
+        }
+
+        if (string.Equals(id, "generated-timelines-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySlicerTimelineFloatingDrawingFixup(
+                archive,
+                "Timeline Date",
+                "../timelines/timeline1.xml",
+                "http://schemas.microsoft.com/office/2011/relationships/timeline");
+            return;
+        }
+
         if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -323,6 +343,155 @@ internal static class XlsxCorpusFixtureFactory
         var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
         using var relOutput = workbookRelsReplacement.Open();
         workbookRelsXml.Save(relOutput);
+    }
+
+    private static void ApplySlicerTimelineFloatingDrawingFixup(
+        ZipArchive archive,
+        string objectName,
+        string nativePartTarget,
+        string nativeRelationshipType)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        if (contentTypesEntry is null || worksheetEntry is null)
+            return;
+
+        XDocument contentTypes;
+        using (var stream = contentTypesEntry.Open())
+            contentTypes = XDocument.Load(stream);
+        if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
+                string.Equals(element.Attribute("PartName")?.Value, "/xl/drawings/drawing1.xml", StringComparison.OrdinalIgnoreCase)) != true)
+        {
+            contentTypes.Root?.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/drawings/drawing1.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.drawing+xml")));
+        }
+        EnsureContentTypeOverride(
+            contentTypes,
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "/xl/slicers/slicer1.xml"
+                : "/xl/timelines/timeline1.xml",
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.ms-excel.slicer+xml"
+                : "application/vnd.ms-excel.timeline+xml");
+        EnsureContentTypeOverride(
+            contentTypes,
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "/xl/slicerCaches/slicerCache1.xml"
+                : "/xl/timelineCaches/timelineCache1.xml",
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.ms-excel.slicerCache+xml"
+                : "application/vnd.ms-excel.timelineCache+xml");
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+
+        var drawingRelId = "rIdFreexcelFloatingDrawing1";
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry.Open())
+            worksheetXml = XDocument.Load(stream);
+        var root = worksheetXml.Root;
+        if (root is not null && root.Element(worksheetNs + "drawing") is null)
+            root.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            drawingRelId,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            "../drawings/drawing1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        ReplacePackageXml(archive, "xl/drawings/drawing1.xml", new XDocument(
+            new XElement(
+                spreadsheetDrawingNs + "wsDr",
+                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XElement(
+                    spreadsheetDrawingNs + "twoCellAnchor",
+                    new XElement(
+                        spreadsheetDrawingNs + "from",
+                        new XElement(spreadsheetDrawingNs + "col", "4"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                        new XElement(spreadsheetDrawingNs + "row", "2"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                    new XElement(
+                        spreadsheetDrawingNs + "to",
+                        new XElement(spreadsheetDrawingNs + "col", "8"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                        new XElement(spreadsheetDrawingNs + "row", "10"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                    new XElement(
+                        spreadsheetDrawingNs + "sp",
+                        new XElement(
+                            spreadsheetDrawingNs + "nvSpPr",
+                            new XElement(
+                                spreadsheetDrawingNs + "cNvPr",
+                                new XAttribute("id", "2"),
+                                new XAttribute("name", objectName)),
+                            new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+                        new XElement(
+                            spreadsheetDrawingNs + "spPr",
+                            new XElement(drawingNs + "prstGeom",
+                                new XAttribute("prst", "rect"),
+                                new XElement(drawingNs + "avLst")))),
+                    new XElement(spreadsheetDrawingNs + "clientData")))));
+
+        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(drawingRelsXml, "rIdFreexcelNativeControl1", nativeRelationshipType, nativePartTarget);
+        ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+    }
+
+    private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relationshipsXml.Root?.Elements(packageRelNs + "Relationship")
+            .Where(element => string.Equals(element.Attribute("Id")?.Value, id, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        relationshipsXml.Root?.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", id),
+            new XAttribute("Type", type),
+            new XAttribute("Target", target)));
+    }
+
+    private static void EnsureContentTypeOverride(XDocument contentTypes, string partName, string contentType)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
+                string.Equals(element.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase)) == true)
+        {
+            return;
+        }
+
+        contentTypes.Root?.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        document.Save(stream);
     }
 
     private static Workbook CreateGridBasic()
