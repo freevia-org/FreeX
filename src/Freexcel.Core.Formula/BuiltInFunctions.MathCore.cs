@@ -125,7 +125,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         var n    = ToNumber(args[0]);
-        var base_ = args.Count > 1 ? ToNumber(args[1]) : 10.0;
+        var base_ = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 10.0;
         if (!double.IsFinite(n) || !double.IsFinite(base_)) return ErrorValue.Num;
         if (n <= 0 || base_ <= 0 || base_ == 1) return ErrorValue.Num;
         return NumberResult(Math.Log(n) / Math.Log(base_));

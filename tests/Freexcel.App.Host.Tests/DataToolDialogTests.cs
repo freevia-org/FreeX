@@ -822,6 +822,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
         source.Should().Contain("Content = \"...\"");
+        source.Should().Contain("DockPanel.SetDock(pickerButton, Dock.Right)");
+        source.Should().Contain("Margin = new Thickness(6, 0, 0, 0)");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");

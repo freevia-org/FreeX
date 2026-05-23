@@ -327,6 +327,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ProtectionWorkflows_AreNotRegisteredAsF4RepeatableActions()
+    {
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        ExtractMethodBody(reviewSource, "ProtectSheetBtn_Click").Should().NotContain("ExecuteRepeatable");
+        ExtractMethodBody(reviewSource, "ProtectSheetBtn_Click").Should().NotContain("TryExecuteRepeatable");
+        ExtractMethodBody(reviewSource, "ProtectWorkbookBtn_Click").Should().NotContain("ExecuteRepeatable");
+        ExtractMethodBody(reviewSource, "ProtectWorkbookBtn_Click").Should().NotContain("TryExecuteRepeatable");
+    }
+
+    [Fact]
     public void FormulaCommands_LiveOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -480,7 +491,7 @@ public sealed class MainWindowSourceHygieneTests
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
-        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
 
@@ -1209,12 +1220,30 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenu_AppliesTargetSpecificEnabledState()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorksheetContextMenuPlanner.cs"));
+
+        source.Should().Contain("GetWorksheetContextMenuState(actualAddr)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
+        source.Should().Contain("IsEnabled = command.IsEnabled");
+        source.Should().Contain("sheet.ThreadedComments.ContainsKey(address)");
+        source.Should().Contain("sheet.Comments.ContainsKey(address)");
+        source.Should().Contain("sheet.Hyperlinks.ContainsKey(address)");
+        plannerSource.Should().Contain("WorksheetContextMenuState");
+        plannerSource.Should().Contain("IsEnabled: state.HasThreadedComment");
+        plannerSource.Should().Contain("IsEnabled: state.HasNote");
+        plannerSource.Should().Contain("IsEnabled: state.HasHyperlink");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
-        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
         source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
         source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
@@ -1649,5 +1678,28 @@ public sealed class MainWindowSourceHygieneTests
 
         gridStatusSource.Should().Contain("private sealed record ColumnResizeSnapshot(");
         gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
+    }
+
+    private static string ExtractMethodBody(string source, string methodName)
+    {
+        var methodIndex = source.IndexOf(methodName, StringComparison.Ordinal);
+        methodIndex.Should().BeGreaterThanOrEqualTo(0, $"method {methodName} should exist");
+
+        var openBraceIndex = source.IndexOf('{', methodIndex);
+        openBraceIndex.Should().BeGreaterThanOrEqualTo(0, $"method {methodName} should have a body");
+
+        var depth = 0;
+        for (var i = openBraceIndex; i < source.Length; i++)
+        {
+            if (source[i] == '{')
+                depth++;
+            else if (source[i] == '}')
+                depth--;
+
+            if (depth == 0)
+                return source.Substring(openBraceIndex, i - openBraceIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not extract method body for {methodName}.");
     }
 }

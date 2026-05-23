@@ -806,6 +806,8 @@ public sealed class PivotTableCommandTests
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             ShowExpandCollapseButtons = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             AltTextTitle = "Existing title",
@@ -834,6 +836,8 @@ public sealed class PivotTableCommandTests
         pivot.PrintTitles.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
+        pivot.ShowContextualTooltips.Should().BeFalse();
+        pivot.ShowPropertiesInTooltips.Should().BeFalse();
         pivot.AutofitColumnsOnUpdate.Should().BeFalse();
         pivot.PreserveFormattingOnUpdate.Should().BeFalse();
         pivot.AltTextTitle.Should().Be("Existing title");
@@ -856,6 +860,8 @@ public sealed class PivotTableCommandTests
             TargetRange = Range(sheet, "D3", "F8"),
             ShowFieldHeaders = true,
             ShowExpandCollapseButtons = true,
+            ShowContextualTooltips = true,
+            ShowPropertiesInTooltips = true,
             PrintExpandCollapseButtons = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -873,18 +879,24 @@ public sealed class PivotTableCommandTests
             blankLineAfterItems: false,
             styleName: "PivotStyleLight16",
             showExpandCollapseButtons: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
             printExpandCollapseButtons: false,
             showFieldHeaders: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
+        pivot.ShowContextualTooltips.Should().BeFalse();
+        pivot.ShowPropertiesInTooltips.Should().BeFalse();
         pivot.PrintExpandCollapseButtons.Should().BeFalse();
         pivot.ShowFieldHeaders.Should().BeFalse();
 
         command.Revert(ctx);
 
         pivot.ShowExpandCollapseButtons.Should().BeTrue();
+        pivot.ShowContextualTooltips.Should().BeTrue();
+        pivot.ShowPropertiesInTooltips.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowFieldHeaders.Should().BeTrue();
     }

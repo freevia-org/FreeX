@@ -117,6 +117,9 @@ public partial class DataValidationDialog : Window
                             (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag is "Between" or "NotBetween";
         Formula2Label.Visibility = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
         Formula2Box.Visibility   = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
+        SourcePicker2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         UseSelection2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -225,6 +228,15 @@ public partial class DataValidationDialog : Window
 
         Formula1Box.Focus();
         Formula1Box.SelectAll();
+    }
+
+    private void SourcePicker2Button_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(SelectionSource))
+            Formula2Box.Text = SelectionSource;
+
+        Formula2Box.Focus();
+        Formula2Box.SelectAll();
     }
 
     private void UseSelection2Button_Click(object sender, RoutedEventArgs e)

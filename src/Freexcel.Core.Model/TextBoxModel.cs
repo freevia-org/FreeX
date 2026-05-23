@@ -15,6 +15,7 @@ public sealed class TextBoxModel
     public CellColor? OutlineColor { get; set; }
     public WorkbookThemeColorReference? FillThemeColor { get; set; }
     public WorkbookThemeColorReference? OutlineThemeColor { get; set; }
+    public bool IsSourceLoaded { get; set; }
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
         FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;

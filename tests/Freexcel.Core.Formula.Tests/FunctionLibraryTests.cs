@@ -865,6 +865,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LeftAndRight_OmittedNumChars_DefaultsToOne()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEFT(\"abc\",)", sheet).Should().Be(new TextValue("a"));
+        _eval.Evaluate("=RIGHT(\"abc\",)", sheet).Should().Be(new TextValue("c"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -1016,6 +1025,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Substitute_OmittedInstanceNum_ReplacesAll()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SUBSTITUTE(\"aababc\",\"ab\",\"X\",)", sheet).Should().Be(new TextValue("aXXc"));
+    }
+
+    [Fact]
     public void Substitute_ReplacesSpecificInstance()
     {
         var sheet = MakeSheet();
@@ -1077,6 +1093,15 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=FIND(\"lo\",\"hello\")", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void FindAndSearch_OmittedStartNum_DefaultsToOne()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"h\",\"hello\",)", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"H\",\"hello\",)", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]
@@ -1470,6 +1495,16 @@ public class FunctionLibraryTests
         var serial = new DateTime(2024, 1, 7).ToOADate();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
         _eval.Evaluate("=WEEKDAY(A1,1)", sheet).Should().Be(new NumberValue(1)); // Sunday=1
+    }
+
+    [Fact]
+    public void Weekday_OmittedReturnType_DefaultsToType1()
+    {
+        var sheet = MakeSheet();
+        var serial = new DateTime(2024, 1, 7).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
+
+        _eval.Evaluate("=WEEKDAY(A1,)", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]
@@ -1972,6 +2007,15 @@ public class FunctionLibraryTests
     }
 
     // ── LN ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Log_OmittedBase_DefaultsTo10()
+    {
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=LOG(1000,)", sheet);
+        result.Should().BeOfType<NumberValue>();
+        ((NumberValue)result).Value.Should().BeApproximately(3, 1e-10);
+    }
 
     [Fact]
     public void Log_NonFiniteInput_ReturnsNumError()
@@ -2614,6 +2658,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_OmittedSearchMode_DefaultsFirstToLast()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,\"\",0,)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
     public void Xmatch_ExactMatch_ReturnsPosition()
     {
         var sheet = MakeSheet(
@@ -2712,6 +2766,23 @@ public class FunctionLibraryTests
         rv.ColCount.Should().Be(2);
         rv.Cells[0, 0].Should().Be(new NumberValue(2));
         rv.Cells[0, 1].Should().Be(new TextValue("two"));
+    }
+
+    [Fact]
+    public void Xlookup_HorizontalLookup_ReturnsMatchingReturnColumn()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new TextValue("B")), (1, 3, new TextValue("C")),
+            (2, 1, new NumberValue(1)), (2, 2, new NumberValue(2)), (2, 3, new NumberValue(3)),
+            (3, 1, new NumberValue(10)), (3, 2, new NumberValue(20)), (3, 3, new NumberValue(30)));
+
+        var result = _eval.Evaluate("=XLOOKUP(\"B\",A1:C1,A2:C3)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new NumberValue(2));
+        rv.Cells[1, 0].Should().Be(new NumberValue(20));
     }
 
     [Fact]
@@ -4481,6 +4552,9 @@ public class FunctionLibraryTests
     [Fact] public void Address_R1C1RelativeRef_ReturnsString() =>
         _eval.Evaluate("=ADDRESS(2,3,4,FALSE)", MakeSheet()).Should().Be(new TextValue("R[2]C[3]"));
 
+    [Fact] public void Address_SheetTextEscapesApostrophes() =>
+        _eval.Evaluate("=ADDRESS(2,3,1,TRUE,\"O'Brien\")", MakeSheet()).Should().Be(new TextValue("'O''Brien'!$C$2"));
+
     [Fact] public void Address_InvalidAbsNum_ReturnsValueError() =>
         _eval.Evaluate("=ADDRESS(2,3,5)", MakeSheet()).Should().Be(ErrorValue.Value);
 
@@ -4999,6 +5073,22 @@ public class FunctionLibraryTests
         var rv = (RangeValue)result;
         rv.RowCount.Should().Be(3);
         rv.ColCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new TextValue("B"));
+        rv.Cells[1, 0].Should().Be(new TextValue("C"));
+        rv.Cells[2, 0].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
+    public void Sortby_OmittedSortOrder_DefaultsAscending()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(3)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(2)));
+
+        var result = _eval.Evaluate("=SORTBY(A1:A3,B1:B3,)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
         rv.Cells[0, 0].Should().Be(new TextValue("B"));
         rv.Cells[1, 0].Should().Be(new TextValue("C"));
         rv.Cells[2, 0].Should().Be(new TextValue("A"));
@@ -5534,6 +5624,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_OmittedPadWith_DefaultsToNA()
+    {
+        var rowSheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)));
+        var rows = _eval.Evaluate("=WRAPROWS(A1:C1,2,)", rowSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        rows.Cells[1, 1].Should().Be(ErrorValue.NA);
+
+        var colSheet = MakeSheet(
+            (1,1,new NumberValue(1)), (2,1,new NumberValue(2)), (3,1,new NumberValue(3)));
+        var cols = _eval.Evaluate("=WRAPCOLS(A1:A3,2,)", colSheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        cols.Cells[1, 1].Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Wrapcols_WrapsColumnVectorByColumns()
     {
         var sheet = MakeSheet(
@@ -5631,6 +5739,18 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new NumberValue(1));
         rv.Cells[0, 1].Should().Be(new TextValue("x"));
         rv.Cells[1, 0].Should().Be(new TextValue("x"));
+    }
+
+    [Fact]
+    public void Expand_OmittedPadWith_DefaultsToNA()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 1].Should().Be(ErrorValue.NA);
+        rv.Cells[1, 0].Should().Be(ErrorValue.NA);
     }
 
     [Fact]

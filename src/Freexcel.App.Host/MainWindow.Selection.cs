@@ -237,6 +237,9 @@ public partial class MainWindow
 
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (TryHandleShellFocusCyclePreview(e))
+            return;
+
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
@@ -501,6 +504,23 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private bool TryHandleShellFocusCyclePreview(System.Windows.Input.KeyEventArgs e)
+    {
+        if (!KeyboardShortcutMatcher.TryGetCommandShortcut(
+                e.Key,
+                e.SystemKey,
+                Keyboard.Modifiers,
+                out var commandShortcut) ||
+            commandShortcut != KeyboardCommandShortcut.CycleShellFocus)
+        {
+            return false;
+        }
+
+        ExecuteCommandShortcut(commandShortcut, this, e);
+        e.Handled = true;
+        return true;
+    }
+
     private bool TryHandleFocusedRibbonKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
     {
         if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
@@ -547,6 +567,88 @@ public partial class MainWindow
         }
 
         return LogicalTreeHelper.GetParent(element);
+    }
+
+    private void CycleShellFocus(bool reverse)
+    {
+        var current = GetCurrentShellFocusTarget();
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            current = ShellFocusCyclePlanner.GetNext(current, reverse);
+            if (FocusShellRegion(current))
+                return;
+        }
+    }
+
+    private ShellFocusTarget GetCurrentShellFocusTarget()
+    {
+        if (Keyboard.FocusedElement is DependencyObject focusedElement)
+        {
+            if (IsInsideRibbonSurface(focusedElement))
+                return ShellFocusTarget.Ribbon;
+
+            if (ReferenceEquals(focusedElement, FormulaBar) ||
+                ReferenceEquals(focusedElement, CellAddressBox) ||
+                ReferenceEquals(focusedElement, FormulaBarExpandBtn) ||
+                IsDescendantOf(focusedElement, FormulaBarBorder))
+            {
+                return ShellFocusTarget.FormulaBar;
+            }
+
+            if (ReferenceEquals(focusedElement, SheetNavLeftBtn) ||
+                ReferenceEquals(focusedElement, SheetNavRightBtn) ||
+                ReferenceEquals(focusedElement, AddSheetButton) ||
+                ReferenceEquals(focusedElement, HorizontalScroll) ||
+                IsDescendantOf(focusedElement, SheetTabsScroller))
+            {
+                return ShellFocusTarget.SheetTabs;
+            }
+
+            if (IsDescendantOf(focusedElement, StatusBarGrid))
+                return ShellFocusTarget.StatusBar;
+        }
+
+        return ShellFocusTarget.Worksheet;
+    }
+
+    private bool FocusShellRegion(ShellFocusTarget target)
+    {
+        switch (target)
+        {
+            case ShellFocusTarget.Ribbon:
+                if (RibbonTabs?.SelectedItem is TabItem selectedTab && selectedTab.Focus())
+                    return true;
+                return RibbonTabs?.Focus() == true;
+
+            case ShellFocusTarget.FormulaBar:
+                if (FormulaBarBorder?.Visibility != Visibility.Visible)
+                    return false;
+                return FormulaBar.Focus();
+
+            case ShellFocusTarget.SheetTabs:
+                return AddSheetButton.Focus();
+
+            case ShellFocusTarget.StatusBar:
+                return ZoomSlider.Focus();
+
+            default:
+                FocusSheetGridIfNeeded();
+                return true;
+        }
+    }
+
+    private static bool IsDescendantOf(DependencyObject element, DependencyObject? ancestor)
+    {
+        if (ancestor is null)
+            return false;
+
+        for (DependencyObject? current = element; current is not null; current = GetTreeParentForKeyboardFocus(current))
+        {
+            if (ReferenceEquals(current, ancestor))
+                return true;
+        }
+
+        return false;
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)

@@ -33,7 +33,9 @@ public static partial class BuiltInFunctions
             {
                 for (int k = 0; k < arrays.Count; k++)
                     invokeArgs[k] = arrays[k].At(r + 1, c + 1);
-                result[r, c] = ctx.InvokeLambda(lambda, invokeArgs);
+                var value = ctx.InvokeLambda(lambda, invokeArgs);
+                if (value is RangeValue) return ErrorValue.Calc;
+                result[r, c] = value;
             }
         return new RangeValue(result);
     }
@@ -50,7 +52,10 @@ public static partial class BuiltInFunctions
         ScalarValue acc = args[0];
         var flat = rv.Flatten();
         foreach (var val in flat)
+        {
             acc = ctx.InvokeLambda(lambda, [acc, val]);
+            if (acc is RangeValue) return ErrorValue.Calc;
+        }
         return acc;
     }
 
@@ -70,6 +75,7 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < cols; c++)
             {
                 acc = ctx.InvokeLambda(lambda, [acc, rv.At(r + 1, c + 1)]);
+                if (acc is RangeValue) return ErrorValue.Calc;
                 result[r, c] = acc;
             }
         return new RangeValue(result);
@@ -90,7 +96,9 @@ public static partial class BuiltInFunctions
         {
             var rowCells = new ScalarValue[1, cols];
             for (int c = 0; c < cols; c++) rowCells[0, c] = rv.At(r + 1, c + 1);
-            result[r, 0] = ctx.InvokeLambda(lambda, [new RangeValue(rowCells)]);
+            var value = ctx.InvokeLambda(lambda, [new RangeValue(rowCells)]);
+            if (value is RangeValue) return ErrorValue.Calc;
+            result[r, 0] = value;
         }
         return new RangeValue(result);
     }
@@ -110,7 +118,9 @@ public static partial class BuiltInFunctions
         {
             var colCells = new ScalarValue[rows, 1];
             for (int r = 0; r < rows; r++) colCells[r, 0] = rv.At(r + 1, c + 1);
-            result[0, c] = ctx.InvokeLambda(lambda, [new RangeValue(colCells)]);
+            var value = ctx.InvokeLambda(lambda, [new RangeValue(colCells)]);
+            if (value is RangeValue) return ErrorValue.Calc;
+            result[0, c] = value;
         }
         return new RangeValue(result);
     }
@@ -142,7 +152,11 @@ public static partial class BuiltInFunctions
         var result = new ScalarValue[rows, cols];
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
-                result[r, c] = ctx.InvokeLambda(lambda, [new NumberValue(r + 1), new NumberValue(c + 1)]);
+            {
+                var value = ctx.InvokeLambda(lambda, [new NumberValue(r + 1), new NumberValue(c + 1)]);
+                if (value is RangeValue) return ErrorValue.Calc;
+                result[r, c] = value;
+            }
         return new RangeValue(result);
     }
 }

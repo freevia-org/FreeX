@@ -31,18 +31,23 @@ public class ConditionalFormatDialog : Window
     private ComboBox _colorScaleMinTypeBox;
     private TextBox _colorScaleMinValueBox;
     private TextBox _colorScaleMinColorBox;
+    private Button _colorScaleMinColorButton;
     private CheckBox _colorScaleUseThreeColorBox;
     private ComboBox _colorScaleMidTypeBox;
     private TextBox _colorScaleMidValueBox;
     private TextBox _colorScaleMidColorBox;
+    private Button _colorScaleMidColorButton;
     private ComboBox _colorScaleMaxTypeBox;
     private TextBox _colorScaleMaxValueBox;
     private TextBox _colorScaleMaxColorBox;
+    private Button _colorScaleMaxColorButton;
     private ComboBox _dateOccurringPeriodBox;
     private ComboBox _duplicateValuesKindBox;
     private StackPanel? _descriptionHost;
     private CellStyle? _customFormatStyle;
     private ConditionalFormat? _existingRule;
+    private StackPanel _iconSetThresholdPanel = new();
+    private List<(ComboBox TypeBox, TextBox ValueBox)> _iconSetThresholdRows = [];
 
     private static readonly (string Label, Color FillColor, Color? FontColor, bool Bold)[] ColorOptions =
     [
@@ -124,15 +129,18 @@ public class ConditionalFormatDialog : Window
         _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
         _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
+        _colorScaleMinColorButton = CreateColorScaleColorButton(_colorScaleMinColorBox, "Choose minimum color");
         _colorScaleUseThreeColorBox = new CheckBox { Content = "Use _three-color scale", Margin = new Thickness(0, 0, 0, 8) };
         _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
         _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
         _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
+        _colorScaleMidColorButton = CreateColorScaleColorButton(_colorScaleMidColorBox, "Choose midpoint color");
         _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
         _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
         _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
         _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
+        _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, "Choose maximum color");
         _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
         foreach (var (label, _) in DateOccurringPeriods) _dateOccurringPeriodBox.Items.Add(label);
         _dateOccurringPeriodBox.SelectedItem = "Today";
@@ -180,21 +188,21 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(_colorScaleMinTypeBox);
             inner.Children.Add(CreateAccessLabel("Minimum _value:", _colorScaleMinValueBox));
             inner.Children.Add(_colorScaleMinValueBox);
-            inner.Children.Add(CreateAccessLabel("_Minimum color (R,G,B):", _colorScaleMinColorBox));
-            inner.Children.Add(_colorScaleMinColorBox);
+            inner.Children.Add(CreateAccessLabel("_Minimum color:", _colorScaleMinColorBox));
+            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMinColorBox, _colorScaleMinColorButton));
             inner.Children.Add(_colorScaleUseThreeColorBox);
             inner.Children.Add(CreateAccessLabel("_Midpoint type:", _colorScaleMidTypeBox));
             inner.Children.Add(_colorScaleMidTypeBox);
             inner.Children.Add(CreateAccessLabel("Midpoint _value:", _colorScaleMidValueBox));
             inner.Children.Add(_colorScaleMidValueBox);
-            inner.Children.Add(CreateAccessLabel("Midpoint _color (R,G,B):", _colorScaleMidColorBox));
-            inner.Children.Add(_colorScaleMidColorBox);
+            inner.Children.Add(CreateAccessLabel("Midpoint _color:", _colorScaleMidColorBox));
+            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMidColorBox, _colorScaleMidColorButton));
             inner.Children.Add(CreateAccessLabel("Ma_ximum type:", _colorScaleMaxTypeBox));
             inner.Children.Add(_colorScaleMaxTypeBox);
             inner.Children.Add(CreateAccessLabel("Maximum _value:", _colorScaleMaxValueBox));
             inner.Children.Add(_colorScaleMaxValueBox);
-            inner.Children.Add(CreateAccessLabel("Ma_ximum color (R,G,B):", _colorScaleMaxColorBox));
-            inner.Children.Add(_colorScaleMaxColorBox);
+            inner.Children.Add(CreateAccessLabel("Ma_ximum color:", _colorScaleMaxColorBox));
+            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
 
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
@@ -202,11 +210,16 @@ public class ConditionalFormatDialog : Window
         }
         else if (isIconSet)
         {
-            Height = 230;
+            _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
+            _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
+
             inner.Children.Add(CreateAccessLabel("_Icon set:", _iconSetStyleBox));
             inner.Children.Add(_iconSetStyleBox);
             inner.Children.Add(_iconSetShowValueBox);
             inner.Children.Add(_iconSetReverseBox);
+            inner.Children.Add(new TextBlock { Text = "Thresholds:", Margin = new Thickness(0, 4, 0, 2) });
+            inner.Children.Add(_iconSetThresholdPanel);
 
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
@@ -327,6 +340,8 @@ public class ConditionalFormatDialog : Window
                 _iconSetStyleBox.SelectedItem = style;
                 _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
                 _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
+                var thresholds = existingRule.IconSetThresholds.Count > 0 ? existingRule.IconSetThresholds : null;
+                BuildIconSetThresholdPanel(style, thresholds);
             }
             else if (existingRule.RuleType == CfRuleType.DataBar)
             {
@@ -465,7 +480,18 @@ public class ConditionalFormatDialog : Window
                 cf.IconSetShowValue = _iconSetShowValueBox.IsChecked == true;
                 cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
                 cf.IconSetThresholds.Clear();
-                cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
+                if (_iconSetThresholdRows.Count > 0)
+                {
+                    foreach (var (typeBox, valueBox) in _iconSetThresholdRows)
+                    {
+                        var type = typeBox.SelectedItem is CfThresholdType t ? t : CfThresholdType.Percent;
+                        cf.IconSetThresholds.Add(new CfThresholdModel(type, BlankToNull(valueBox.Text)));
+                    }
+                }
+                else
+                {
+                    cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
+                }
             }
             else if (cf.RuleType == CfRuleType.DataBar)
             {
@@ -548,6 +574,42 @@ public class ConditionalFormatDialog : Window
     private static Label CreateAccessLabel(string content, Control target) =>
         new() { Content = content, Target = target, Padding = new Thickness(0) };
 
+    private static Button CreateColorScaleColorButton(TextBox colorBox, string tooltip)
+    {
+        var button = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(6, 4, 0, 8),
+            ToolTip = tooltip,
+            Tag = colorBox
+        };
+        button.Click += ColorScaleColorButton_Click;
+        return button;
+    }
+
+    private static DockPanel CreateColorScaleColorEditor(TextBox colorBox, Button pickerButton)
+    {
+        var panel = new DockPanel();
+        DockPanel.SetDock(pickerButton, Dock.Right);
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(colorBox);
+        return panel;
+    }
+
+    private static void ColorScaleColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox colorBox })
+            return;
+
+        CellColor? initialColor = ColorInputParser.TryParseRgbColorText(colorBox.Text, out var parsed)
+            ? parsed
+            : null;
+        var dialog = new ColorPickerDialog(initialColor) { Owner = Window.GetWindow(colorBox) };
+        if (dialog.ShowDialog() == true && dialog.SelectedColor is { } selected)
+            colorBox.Text = FormatRgb(new RgbColor(selected.R, selected.G, selected.B));
+    }
+
     private static string? BlankToNull(string text) =>
         string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
@@ -570,6 +632,7 @@ public class ConditionalFormatDialog : Window
         _colorScaleMidTypeBox.IsEnabled = enabled;
         _colorScaleMidValueBox.IsEnabled = enabled;
         _colorScaleMidColorBox.IsEnabled = enabled;
+        _colorScaleMidColorButton.IsEnabled = enabled;
     }
 
     private static string FormatRgb(RgbColor color) =>
@@ -707,34 +770,37 @@ public class ConditionalFormatDialog : Window
             _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
             _colorScaleMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _colorScaleMinColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(99, 190, 123)) };
+            _colorScaleMinColorButton = CreateColorScaleColorButton(_colorScaleMinColorBox, "Choose minimum color");
             _colorScaleUseThreeColorBox = new CheckBox { Content = "Use _three-color scale", Margin = new Thickness(0, 0, 0, 8) };
             _colorScaleUseThreeColorBox.Checked += (_, _) => UpdateColorScaleMidpointState();
             _colorScaleUseThreeColorBox.Unchecked += (_, _) => UpdateColorScaleMidpointState();
             _colorScaleMidTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Percentile };
             _colorScaleMidValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "50" };
             _colorScaleMidColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = FormatRgb(new RgbColor(255, 235, 132)) };
+            _colorScaleMidColorButton = CreateColorScaleColorButton(_colorScaleMidColorBox, "Choose midpoint color");
             _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
             _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
+            _colorScaleMaxColorButton = CreateColorScaleColorButton(_colorScaleMaxColorBox, "Choose maximum color");
             inner.Children.Add(CreateAccessLabel("_Minimum type:", _colorScaleMinTypeBox));
             inner.Children.Add(_colorScaleMinTypeBox);
             inner.Children.Add(CreateAccessLabel("Minimum _value:", _colorScaleMinValueBox));
             inner.Children.Add(_colorScaleMinValueBox);
-            inner.Children.Add(CreateAccessLabel("_Minimum color (R,G,B):", _colorScaleMinColorBox));
-            inner.Children.Add(_colorScaleMinColorBox);
+            inner.Children.Add(CreateAccessLabel("_Minimum color:", _colorScaleMinColorBox));
+            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMinColorBox, _colorScaleMinColorButton));
             inner.Children.Add(_colorScaleUseThreeColorBox);
             inner.Children.Add(CreateAccessLabel("_Midpoint type:", _colorScaleMidTypeBox));
             inner.Children.Add(_colorScaleMidTypeBox);
             inner.Children.Add(CreateAccessLabel("Midpoint _value:", _colorScaleMidValueBox));
             inner.Children.Add(_colorScaleMidValueBox);
-            inner.Children.Add(CreateAccessLabel("Midpoint _color (R,G,B):", _colorScaleMidColorBox));
-            inner.Children.Add(_colorScaleMidColorBox);
+            inner.Children.Add(CreateAccessLabel("Midpoint _color:", _colorScaleMidColorBox));
+            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMidColorBox, _colorScaleMidColorButton));
             inner.Children.Add(CreateAccessLabel("Ma_ximum type:", _colorScaleMaxTypeBox));
             inner.Children.Add(_colorScaleMaxTypeBox);
             inner.Children.Add(CreateAccessLabel("Maximum _value:", _colorScaleMaxValueBox));
             inner.Children.Add(_colorScaleMaxValueBox);
-            inner.Children.Add(CreateAccessLabel("Ma_ximum color (R,G,B):", _colorScaleMaxColorBox));
-            inner.Children.Add(_colorScaleMaxColorBox);
+            inner.Children.Add(CreateAccessLabel("Ma_ximum color:", _colorScaleMaxColorBox));
+            inner.Children.Add(CreateColorScaleColorEditor(_colorScaleMaxColorBox, _colorScaleMaxColorButton));
             _value1Box = new TextBox();
             _value2Box = new TextBox();
             _value2Label = new Label();
@@ -742,16 +808,20 @@ public class ConditionalFormatDialog : Window
         }
         else if (isIconSet)
         {
-            Height = 230;
             _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
             foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
             _iconSetStyleBox.SelectedIndex = 0;
+            _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
             _iconSetShowValueBox = new CheckBox { Content = "_Show value", Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
             _iconSetReverseBox = new CheckBox { Content = "_Reverse icon order", Margin = new Thickness(0, 0, 0, 12) };
+            _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
             inner.Children.Add(CreateAccessLabel("_Icon set:", _iconSetStyleBox));
             inner.Children.Add(_iconSetStyleBox);
             inner.Children.Add(_iconSetShowValueBox);
             inner.Children.Add(_iconSetReverseBox);
+            inner.Children.Add(new TextBlock { Text = "Thresholds:", Margin = new Thickness(0, 4, 0, 2) });
+            inner.Children.Add(_iconSetThresholdPanel);
             _value1Box = new TextBox();
             _value2Box = new TextBox();
             _value2Label = new Label();
@@ -877,6 +947,50 @@ public class ConditionalFormatDialog : Window
         "Formula" or "Use a Formula" => ExcelRuleShellTypes[5],
         _ => ExcelRuleShellTypes[1]
     };
+
+    private void BuildIconSetThresholdPanel(string? style, IReadOnlyList<CfThresholdModel>? existing = null)
+    {
+        _iconSetThresholdPanel.Children.Clear();
+        _iconSetThresholdRows.Clear();
+
+        var count = ConditionalFormatIconSetPlanner.GetIconCount(style);
+        var defaults = ConditionalFormatIconSetPlanner.CreateThresholds(style);
+
+        for (var i = 0; i < count; i++)
+        {
+            var threshold = existing is not null && i < existing.Count ? existing[i] : defaults[i];
+
+            var typeBox = new ComboBox
+            {
+                Width = 100,
+                Margin = new Thickness(6, 0, 6, 0),
+                ItemsSource = Enum.GetValues<CfThresholdType>(),
+                SelectedItem = threshold.Type
+            };
+            if (typeBox.SelectedIndex < 0) typeBox.SelectedIndex = 0;
+
+            var valueBox = new TextBox
+            {
+                Width = 80,
+                Text = threshold.Value ?? "",
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Padding = new Thickness(2)
+            };
+
+            _iconSetThresholdPanel.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 2, 0, 2),
+                Children =
+                {
+                    new TextBlock { Text = $"Icon {i + 1}  when  ≥", Width = 110, VerticalAlignment = System.Windows.VerticalAlignment.Center },
+                    typeBox,
+                    valueBox
+                }
+            });
+            _iconSetThresholdRows.Add((typeBox, valueBox));
+        }
+    }
 
     private static void AddVisualPreview(Panel panel, string ruleType)
     {

@@ -248,6 +248,8 @@ internal static class XlsxPivotTableWriter
             new XAttribute("repeatItemLabels", pivot.RepeatItemLabels ? "1" : "0"),
             new XAttribute("blankLineAfterItems", pivot.BlankLineAfterItems ? "1" : "0"),
             new XAttribute("showHeaders", pivot.ShowFieldHeaders ? "1" : "0"),
+            new XAttribute("showDataTips", pivot.ShowContextualTooltips ? "1" : "0"),
+            new XAttribute("showMemberPropertyTips", pivot.ShowPropertiesInTooltips ? "1" : "0"),
             new XAttribute("showDrill", pivot.ShowExpandCollapseButtons ? "1" : "0"),
             new XAttribute("itemPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),
