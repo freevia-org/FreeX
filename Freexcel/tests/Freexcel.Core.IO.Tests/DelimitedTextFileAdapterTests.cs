@@ -38,6 +38,49 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForBooleansAndQuotedNumbers()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("TRUE\tfalse\t\"0042\"\t\"text\"\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new BoolValue(true));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new BoolValue(false));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(42));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(new TextValue("text"));
+    }
+
+    [Fact]
+    public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("A\tB\rC\tD\r"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("A"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("B"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("C"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new TextValue("D"));
+    }
+
+    [Fact]
+    public void Load_KeepsQuotesInsideUnquotedFieldsAsLiteralText()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("ab\"cd\t\"quoted\"\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("ab\"cd"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("quoted"));
+    }
+
+    [Fact]
     public void Save_IsNotSupported()
     {
         var adapter = new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t');
