@@ -109,6 +109,15 @@ public static partial class NumberFormatter
         if (string.IsNullOrEmpty(format) || format == "General")
             return FormatNumberGeneral(value);
 
+        if (TryResolveSpecialDateTimeLocaleToken(format, out var specialDateTimeFormat))
+        {
+            try
+            {
+                var dt = DateTime.FromOADate(value);
+                return FormatDateTimeValue(dt, specialDateTimeFormat, CultureInfo.InvariantCulture.DateTimeFormat);
+            }
+            catch { return value.ToString(CultureInfo.InvariantCulture); }
+        }
         format = PreserveLocaleCurrencyTokens(format, out var numberFormat, out var dateTimeFormat);
 
         // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds

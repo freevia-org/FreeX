@@ -417,6 +417,30 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[$-F800]", "Monday, January 1, 2024")]
+    [InlineData("[$-F400]", "12:00:00 AM")]
+    public void CustomNumberSubset_FormatsSpecialExcelDateTimeLocaleTokensForDateValues(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[$-F800]", "Monday, January 1, 2024")]
+    [InlineData("[$-F400]", "12:00:00 AM")]
+    public void CustomNumberSubset_FormatsSpecialExcelDateTimeLocaleTokensForDateSerials(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("m/d/yyyy_)", "1/1/2024")]
     [InlineData("m/d/yyyy*-", "1/1/2024")]
     [InlineData("\\D: m/d/yyyy", "D: 1/1/2024")]
