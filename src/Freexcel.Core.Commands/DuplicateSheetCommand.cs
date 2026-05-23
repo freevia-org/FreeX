@@ -80,6 +80,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 ContentType = picture.ContentType,
                 Width = picture.Width,
                 Height = picture.Height,
+                LockAspectRatio = picture.LockAspectRatio,
                 RotationDegrees = picture.RotationDegrees,
                 IsVisible = picture.IsVisible,
                 AltText = picture.AltText
