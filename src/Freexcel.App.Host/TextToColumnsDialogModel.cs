@@ -26,12 +26,15 @@ public enum TextToColumnsTextQualifier
 
 public enum TextToColumnsColumnFormat
 {
-    General,
-    Text,
-    DateMDY,
-    DateDMY,
-    DateYMD,
-    Skip
+    General = 0,
+    Text = 1,
+    DateMDY = 2,
+    DateDMY = 3,
+    DateYMD = 4,
+    Skip = 5,
+    DateMYD = 6,
+    DateDYM = 7,
+    DateYDM = 8
 }
 
 public sealed record TextToColumnsAdvancedOptions(
