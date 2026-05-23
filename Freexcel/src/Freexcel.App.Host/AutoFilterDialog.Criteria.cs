@@ -56,9 +56,11 @@ public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
         IEnumerable<AutoFilterDialogItem> items,
         string? searchText,
         string? criteriaText,
-        AutoFilterColorFilter? colorFilter = null)
+        AutoFilterColorFilter? colorFilter = null,
+        bool addCurrentSelectionToFilter = false)
     {
-        var selectedValues = items
+        var resultItems = GetResultItemsForSearchMode(items, searchText, addCurrentSelectionToFilter);
+        var selectedValues = resultItems
             .Where(item => item.IsSelected)
             .Select(item => item.Value)
             .ToList();
@@ -72,6 +74,17 @@ public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
             searchText?.Trim() ?? string.Empty,
             normalizedCriteria,
             colorFilter);
+    }
+
+    public static IReadOnlyList<AutoFilterDialogItem> GetResultItemsForSearchMode(
+        IEnumerable<AutoFilterDialogItem> items,
+        string? searchText,
+        bool addCurrentSelectionToFilter)
+    {
+        var allItems = items.ToList();
+        return string.IsNullOrWhiteSpace(searchText) || addCurrentSelectionToFilter
+            ? allItems
+            : FilterItems(allItems, searchText);
     }
 
     public static IReadOnlyList<string> GetCriteriaSuggestions(AutoFilterMenuPlan menuPlan) =>
