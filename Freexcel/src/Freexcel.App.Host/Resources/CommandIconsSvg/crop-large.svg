@@ -1,19 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <defs>
     <style>
-      .s{fill:none;stroke:#242424;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .r{fill:none;stroke:#242424;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g{fill:#107c41}
-      .g2{fill:#dff6dd}
-      .b{fill:#0078d4}
-      .o{fill:#f7630c}
-      .y{fill:#ffb900}
-      .rd{fill:#d32f2f}
-      .p{fill:#8b5cf6}
-      .w{fill:#ffffff}
-      .k{fill:#242424}
-      .f{fill:#f3f2f1}
-      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
+      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .g,.green{fill:#107c41}
+      .g2,.palegreen,.green2{fill:#dff6dd}
+      .b,.blue{fill:#0078d4}
+      .o,.orange{fill:#f7630c}
+      .y,.yellow,.paleyellow{fill:#ffb900}
+      .rd,.red{fill:#d32f2f}
+      .p,.purple{fill:#8b5cf6}
+      .w,.paper,.bg{fill:#ffffff}
+      .k,.gray{fill:#242424}
+      .f,.soft{fill:#f3f2f1}
+      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
+      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
+      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
+      .paleblue{fill:#dcecff}
+      .palered{fill:#ffd7d7}
+      .none{fill:none}
 </style>
   </defs>
   <rect class="f s" x="8" y="8" width="16" height="16" stroke-width="1.28"/>

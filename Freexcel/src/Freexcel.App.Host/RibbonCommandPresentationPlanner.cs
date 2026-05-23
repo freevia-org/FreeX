@@ -371,6 +371,9 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("arrange all") ||
         name.Contains("freeze panes") ||
         name.Contains("switch windows") ||
+        name.Contains("view side by side") ||
+        name.Contains("synchronous scrolling") ||
+        name.Contains("reset window position") ||
         name.Contains("help online") ||
         name.Contains("about") ||
         name.Contains("feedback");
