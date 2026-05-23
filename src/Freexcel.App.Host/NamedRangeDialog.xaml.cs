@@ -294,7 +294,7 @@ internal sealed class NameDefinitionDialog : Window
         AddTextRow(grid, 2, "_Comment:", _commentBox);
         AddRefersToRow(grid, 3);
 
-        var buttons = InsertChartDialog.CreateButtonRow(Accept);
+        var buttons = DialogButtonRowFactory.Create(Accept, 72);
         buttons.Margin = new Thickness(0, 8, 0, 0);
         grid.Children.Add(buttons);
         Grid.SetRow(buttons, 4);
