@@ -226,7 +226,7 @@ public static partial class ChartRenderer
                     firstSeriesPoints = trendPoints;
                 model.Series.Add(series);
             }
-            else if (chart.Type == ChartType.Bar)
+            else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
             {
                 var catAxis = new CategoryAxis { Position = AxisPosition.Left };
                 catAxis.Labels.AddRange(categories);
