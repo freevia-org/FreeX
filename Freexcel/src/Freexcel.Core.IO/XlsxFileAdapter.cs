@@ -347,7 +347,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         foreach (var customView in xlsxCustomViews)
         {
             if (customViewStatesById.TryGetValue(customView.Id, out var states) && states.Count > 0)
-                workbook.CustomViews.Add(new WorkbookCustomView(customView.Name, states, customView.Id));
+                workbook.CustomViews.Add(new WorkbookCustomView(
+                    customView.Name,
+                    states,
+                    customView.Id,
+                    customView.IncludePrintSettings,
+                    customView.IncludeHiddenRowsColumnsAndFilterSettings));
         }
 
         return workbook;

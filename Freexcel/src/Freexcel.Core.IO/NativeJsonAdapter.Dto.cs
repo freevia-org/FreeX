@@ -76,6 +76,8 @@ public sealed partial class NativeJsonAdapter
     {
         public string Name { get; set; } = "";
         public string? Id { get; set; }
+        public bool? IncludePrintSettings { get; set; }
+        public bool? IncludeHiddenRowsColumnsAndFilterSettings { get; set; }
         public List<CustomViewSheetDto> Sheets { get; set; } = [];
     }
 
