@@ -1826,6 +1826,53 @@ public sealed class ChartRendererTests
         stockSeries.Items[0].Close.Should().Be(13);
     }
 
+    [Fact]
+    public void StockRenderer_UsesDateTimeAxisForDateCategories()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 6))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Volume"),
+                Cell(1, 3, "Open"),
+                Cell(1, 4, "High"),
+                Cell(1, 5, "Low"),
+                Cell(1, 6, "Close"),
+                Cell(2, 1, "2026-01-02"),
+                Cell(2, 2, "1000"),
+                Cell(2, 3, "10"),
+                Cell(2, 4, "15"),
+                Cell(2, 5, "9"),
+                Cell(2, 6, "13"),
+                Cell(3, 1, "2026-01-05"),
+                Cell(3, 2, "1200"),
+                Cell(3, 3, "13"),
+                Cell(3, 4, "18"),
+                Cell(3, 5, "12"),
+                Cell(3, 6, "16")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Bottom).Which;
+        axis.Should().BeOfType<DateTimeAxis>();
+
+        var stockSeries = model.Series[1].Should().BeOfType<HighLowSeries>().Subject;
+        stockSeries.Items[0].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 2)), 0.0001);
+        stockSeries.Items[1].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 5)), 0.0001);
+
+        var volumeSeries = model.Series[0].Should().BeOfType<RectangleBarSeries>().Subject;
+        var firstVolume = volumeSeries.Items[0];
+        ((firstVolume.X0 + firstVolume.X1) / 2).Should().BeApproximately(stockSeries.Items[0].X, 0.0001);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
         var method = typeof(ChartRenderer).GetMethod(
