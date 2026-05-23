@@ -22,11 +22,18 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _showFieldHeaders;
     private readonly bool? _showContextualTooltips;
     private readonly bool? _showPropertiesInTooltips;
+    private readonly bool? _showClassicLayout;
+    private readonly bool? _mergeAndCenterLabels;
+    private readonly bool? _showItemsWithNoDataOnRows;
+    private readonly bool? _showItemsWithNoDataOnColumns;
+    private readonly bool? _pageOverThenDown;
+    private readonly int? _pageWrap;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
     private readonly bool? _enableRefresh;
+    private readonly bool? _preserveSourceSortFilter;
     private readonly int? _missingItemsLimit;
     private readonly bool _updateMissingItemsLimit;
     private readonly bool? _printTitles;
@@ -60,6 +67,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
         bool? enableRefresh = null,
+        bool? preserveSourceSortFilter = null,
         int? missingItemsLimit = null,
         bool updateMissingItemsLimit = false,
         bool? printTitles = null,
@@ -73,7 +81,13 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? preserveFormattingOnUpdate = null,
         bool? showFieldHeaders = null,
         bool? showContextualTooltips = null,
-        bool? showPropertiesInTooltips = null)
+        bool? showPropertiesInTooltips = null,
+        bool? showClassicLayout = null,
+        bool? mergeAndCenterLabels = null,
+        bool? showItemsWithNoDataOnRows = null,
+        bool? showItemsWithNoDataOnColumns = null,
+        bool? pageOverThenDown = null,
+        int? pageWrap = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -95,11 +109,18 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showFieldHeaders = showFieldHeaders;
         _showContextualTooltips = showContextualTooltips;
         _showPropertiesInTooltips = showPropertiesInTooltips;
+        _showClassicLayout = showClassicLayout;
+        _mergeAndCenterLabels = mergeAndCenterLabels;
+        _showItemsWithNoDataOnRows = showItemsWithNoDataOnRows;
+        _showItemsWithNoDataOnColumns = showItemsWithNoDataOnColumns;
+        _pageOverThenDown = pageOverThenDown;
+        _pageWrap = pageWrap is { } wrap ? NormalizePageWrap(wrap) : null;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
         _enableRefresh = enableRefresh;
+        _preserveSourceSortFilter = preserveSourceSortFilter;
         _missingItemsLimit = NormalizeMissingItemsLimit(missingItemsLimit);
         _updateMissingItemsLimit = updateMissingItemsLimit;
         _printTitles = printTitles;
@@ -146,6 +167,18 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowContextualTooltips = showContextualTooltips;
         if (_showPropertiesInTooltips is { } showPropertiesInTooltips)
             pivotTable.ShowPropertiesInTooltips = showPropertiesInTooltips;
+        if (_showClassicLayout is { } showClassicLayout)
+            pivotTable.ShowClassicLayout = showClassicLayout;
+        if (_mergeAndCenterLabels is { } mergeAndCenterLabels)
+            pivotTable.MergeAndCenterLabels = mergeAndCenterLabels;
+        if (_showItemsWithNoDataOnRows is { } showItemsWithNoDataOnRows)
+            pivotTable.ShowItemsWithNoDataOnRows = showItemsWithNoDataOnRows;
+        if (_showItemsWithNoDataOnColumns is { } showItemsWithNoDataOnColumns)
+            pivotTable.ShowItemsWithNoDataOnColumns = showItemsWithNoDataOnColumns;
+        if (_pageOverThenDown is { } pageOverThenDown)
+            pivotTable.PageOverThenDown = pageOverThenDown;
+        if (_pageWrap is { } pageWrap)
+            pivotTable.PageWrap = pageWrap;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
         if (_printTitles is { } printTitles)
@@ -171,6 +204,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache.SaveData = saveSourceData;
             if (_enableRefresh is { } enableRefresh)
                 cache.EnableRefresh = enableRefresh;
+            if (_preserveSourceSortFilter is { } preserveSourceSortFilter)
+                cache.PreserveSourceSortFilter = preserveSourceSortFilter;
             if (_updateMissingItemsLimit)
                 cache.MissingItemsLimit = _missingItemsLimit;
         }
@@ -211,10 +246,17 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowFieldHeaders,
         bool ShowContextualTooltips,
         bool ShowPropertiesInTooltips,
+        bool ShowClassicLayout,
+        bool MergeAndCenterLabels,
+        bool ShowItemsWithNoDataOnRows,
+        bool ShowItemsWithNoDataOnColumns,
+        bool PageOverThenDown,
+        int PageWrap,
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
         bool? EnableRefresh,
+        bool? PreserveSourceSortFilter,
         int? MissingItemsLimit,
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
@@ -242,10 +284,17 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowFieldHeaders,
                 pivotTable.ShowContextualTooltips,
                 pivotTable.ShowPropertiesInTooltips,
+                pivotTable.ShowClassicLayout,
+                pivotTable.MergeAndCenterLabels,
+                pivotTable.ShowItemsWithNoDataOnRows,
+                pivotTable.ShowItemsWithNoDataOnColumns,
+                pivotTable.PageOverThenDown,
+                pivotTable.PageWrap,
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
                 cache?.EnableRefresh,
+                cache?.PreserveSourceSortFilter,
                 cache?.MissingItemsLimit,
                 pivotTable.PrintTitles,
                 pivotTable.PrintExpandCollapseButtons,
@@ -273,6 +322,12 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowFieldHeaders = ShowFieldHeaders;
             pivotTable.ShowContextualTooltips = ShowContextualTooltips;
             pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
+            pivotTable.ShowClassicLayout = ShowClassicLayout;
+            pivotTable.MergeAndCenterLabels = MergeAndCenterLabels;
+            pivotTable.ShowItemsWithNoDataOnRows = ShowItemsWithNoDataOnRows;
+            pivotTable.ShowItemsWithNoDataOnColumns = ShowItemsWithNoDataOnColumns;
+            pivotTable.PageOverThenDown = PageOverThenDown;
+            pivotTable.PageWrap = PageWrap;
             pivotTable.EmptyValueText = EmptyValueText;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
@@ -289,6 +344,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                     cache.SaveData = saveData;
                 if (EnableRefresh is { } enableRefresh)
                     cache.EnableRefresh = enableRefresh;
+                if (PreserveSourceSortFilter is { } preserveSourceSortFilter)
+                    cache.PreserveSourceSortFilter = preserveSourceSortFilter;
                 cache.MissingItemsLimit = MissingItemsLimit;
             }
         }
@@ -303,6 +360,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     }
 
     private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+
+    private static int NormalizePageWrap(int pageWrap) => Math.Clamp(pageWrap, 0, 255);
 
     private static int? NormalizeMissingItemsLimit(int? value) =>
         value switch

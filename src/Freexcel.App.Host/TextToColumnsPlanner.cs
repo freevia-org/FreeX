@@ -14,14 +14,15 @@ public static class TextToColumnsPlanner
         GridRange range,
         CellAddress destination,
         char delimiter,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        return BuildEdits(sheet, range, destination, delimiter.ToString(), columnFormats);
+        return BuildEdits(sheet, range, destination, delimiter.ToString(), columnFormats, advancedOptions);
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildEdits(Sheet sheet, GridRange range, string delimiters)
     {
-        return BuildEdits(sheet, range, range.Start, null, text => SplitText(text, delimiters));
+        return BuildEdits(sheet, range, range.Start, null, null, text => SplitText(text, delimiters));
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildEdits(
@@ -29,9 +30,10 @@ public static class TextToColumnsPlanner
         GridRange range,
         CellAddress destination,
         string delimiters,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        return BuildEdits(sheet, range, destination, columnFormats, text => SplitText(text, delimiters));
+        return BuildEdits(sheet, range, destination, columnFormats, advancedOptions, text => SplitText(text, delimiters));
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildEdits(
@@ -46,6 +48,7 @@ public static class TextToColumnsPlanner
             range,
             range.Start,
             null,
+            null,
             text => SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne));
     }
 
@@ -56,13 +59,15 @@ public static class TextToColumnsPlanner
         string delimiters,
         char? textQualifier,
         bool treatConsecutiveDelimitersAsOne,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
         return BuildEdits(
             sheet,
             range,
             destination,
             columnFormats,
+            advancedOptions,
             text => SplitText(text, delimiters, textQualifier, treatConsecutiveDelimitersAsOne));
     }
 
@@ -71,7 +76,7 @@ public static class TextToColumnsPlanner
         GridRange range,
         IReadOnlyList<int> breakPositions)
     {
-        return BuildEdits(sheet, range, range.Start, null, text => SplitFixedWidthText(text, breakPositions));
+        return BuildEdits(sheet, range, range.Start, null, null, text => SplitFixedWidthText(text, breakPositions));
     }
 
     public static List<(CellAddress Address, Cell NewCell)> BuildFixedWidthEdits(
@@ -79,9 +84,10 @@ public static class TextToColumnsPlanner
         GridRange range,
         CellAddress destination,
         IReadOnlyList<int> breakPositions,
-        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null)
+        IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
+        TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        return BuildEdits(sheet, range, destination, columnFormats, text => SplitFixedWidthText(text, breakPositions));
+        return BuildEdits(sheet, range, destination, columnFormats, advancedOptions, text => SplitFixedWidthText(text, breakPositions));
     }
 
     private static List<(CellAddress Address, Cell NewCell)> BuildEdits(
@@ -89,6 +95,7 @@ public static class TextToColumnsPlanner
         GridRange range,
         CellAddress destination,
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats,
+        TextToColumnsAdvancedOptions? advancedOptions,
         Func<string, string[]> split)
     {
         var edits = new List<(CellAddress, Cell)>();
@@ -112,11 +119,7 @@ public static class TextToColumnsPlanner
 
                 var trimmed = parts[index].Trim();
                 var address = new CellAddress(sheet.Id, targetRow, targetCol);
-                ScalarValue value = columnFormat == TextToColumnsColumnFormat.Text
-                    ? new TextValue(trimmed)
-                    : double.TryParse(trimmed, out var number)
-                    ? new NumberValue(number)
-                    : new TextValue(trimmed);
+                ScalarValue value = ConvertValue(trimmed, columnFormat, advancedOptions);
                 edits.Add((address, Cell.FromValue(value)));
                 outputIndex++;
             }
@@ -131,6 +134,69 @@ public static class TextToColumnsPlanner
         columnFormats is not null && index >= 0 && index < columnFormats.Count
             ? columnFormats[index]
             : TextToColumnsColumnFormat.General;
+
+    private static bool TryParseNumber(string text, TextToColumnsAdvancedOptions? advancedOptions, out double number)
+    {
+        if (advancedOptions is null)
+            return double.TryParse(text, out number);
+
+        var normalized = text.Trim();
+        if (advancedOptions.TrailingMinusNumbers && normalized.EndsWith("-", StringComparison.Ordinal))
+            normalized = "-" + normalized[..^1];
+
+        if (!string.IsNullOrEmpty(advancedOptions.ThousandsSeparator))
+            normalized = normalized.Replace(advancedOptions.ThousandsSeparator, string.Empty, StringComparison.Ordinal);
+
+        if (!string.IsNullOrEmpty(advancedOptions.DecimalSeparator) && advancedOptions.DecimalSeparator != ".")
+            normalized = normalized.Replace(advancedOptions.DecimalSeparator, ".", StringComparison.Ordinal);
+
+        return double.TryParse(
+            normalized,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out number);
+    }
+
+    private static ScalarValue ConvertValue(
+        string text,
+        TextToColumnsColumnFormat columnFormat,
+        TextToColumnsAdvancedOptions? advancedOptions) =>
+        columnFormat switch
+        {
+            TextToColumnsColumnFormat.Text => new TextValue(text),
+            TextToColumnsColumnFormat.DateMDY when TryParseDate(text, [0, 1, 2], out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateDMY when TryParseDate(text, [1, 0, 2], out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateYMD when TryParseDate(text, [1, 2, 0], out var date) => new DateTimeValue(date.ToOADate()),
+            _ when TryParseNumber(text, advancedOptions, out var number) => new NumberValue(number),
+            _ => new TextValue(text)
+        };
+
+    private static bool TryParseDate(string text, int[] monthDayYearOrder, out DateTime date)
+    {
+        date = default;
+        var parts = text
+            .Split(['/', '-', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 3 ||
+            !int.TryParse(parts[monthDayYearOrder[0]], out var month) ||
+            !int.TryParse(parts[monthDayYearOrder[1]], out var day) ||
+            !int.TryParse(parts[monthDayYearOrder[2]], out var year))
+        {
+            return false;
+        }
+
+        if (year is >= 0 and < 100)
+            year += year < 30 ? 2000 : 1900;
+
+        try
+        {
+            date = new DateTime(year, month, day);
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
+    }
 
     public static IReadOnlyList<CellAddress> FindOverwriteTargets(
         Sheet sheet,

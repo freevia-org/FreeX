@@ -211,6 +211,151 @@ public partial class MainWindow
         }
     }
 
+    private bool TryFocusCurrentSheetTab()
+    {
+        BringCurrentSheetTabIntoView();
+        var activeTab = _sheetTabs.FirstOrDefault(tab => tab.Id == _currentSheetId);
+        if (activeTab is null)
+            return false;
+
+        return FindSheetTabContextMenuTarget(activeTab)?.Focus() == true;
+    }
+
+    private bool TryOpenFocusedSheetTabContextMenu()
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            (!ReferenceEquals(focusedElement, SheetTabsScroller) && !IsDescendantOf(focusedElement, SheetTabsScroller)))
+        {
+            return false;
+        }
+
+        var target = FindSheetTabContextMenuTarget(focusedElement);
+        if (target?.ContextMenu is not { } contextMenu)
+            return false;
+
+        if (target.DataContext is SheetTabViewModel tab)
+        {
+            SelectSheetTabForKeyboardContextMenu(tab);
+            target = FindSheetTabContextMenuTarget(tab) ?? target;
+            contextMenu = target.ContextMenu;
+            if (contextMenu is null)
+                return false;
+        }
+
+        MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
+        contextMenu.PlacementTarget = target;
+        contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        contextMenu.IsOpen = true;
+        return true;
+    }
+
+    private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None ||
+            Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            (!ReferenceEquals(focusedElement, SheetTabsScroller) && !IsDescendantOf(focusedElement, SheetTabsScroller)))
+        {
+            return false;
+        }
+
+        var handled = e.Key switch
+        {
+            Key.Left => FocusAdjacentVisibleSheetTab(-1),
+            Key.Right => FocusAdjacentVisibleSheetTab(1),
+            Key.Home => FocusEdgeVisibleSheetTab(first: true),
+            Key.End => FocusEdgeVisibleSheetTab(first: false),
+            _ => false
+        };
+
+        e.Handled = handled;
+        return handled;
+    }
+
+    private bool FocusAdjacentVisibleSheetTab(int direction)
+    {
+        var visibleTabs = _sheetTabs.ToList();
+        if (visibleTabs.Count == 0)
+            return false;
+
+        var index = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
+        if (index < 0)
+            index = direction < 0 ? visibleTabs.Count : -1;
+
+        var nextIndex = Math.Clamp(index + direction, 0, visibleTabs.Count - 1);
+        FocusSheetTab(visibleTabs[nextIndex].Id);
+        return true;
+    }
+
+    private bool FocusEdgeVisibleSheetTab(bool first)
+    {
+        var tab = first ? _sheetTabs.FirstOrDefault() : _sheetTabs.LastOrDefault();
+        if (tab is null)
+            return false;
+
+        FocusSheetTab(tab.Id);
+        return true;
+    }
+
+    private void FocusSheetTab(SheetId sheetId)
+    {
+        _currentSheetId = sheetId;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(sheetId);
+        _sheetGroupAnchor = sheetId;
+        UpdateViewport();
+        RefreshSheetTabs();
+        Dispatcher.BeginInvoke(() => TryFocusCurrentSheetTab(), DispatcherPriority.Loaded);
+    }
+
+    private FrameworkElement? FindSheetTabContextMenuTarget(SheetTabViewModel tab)
+    {
+        if (SheetTabsControl.ItemContainerGenerator.ContainerFromItem(tab) is not DependencyObject container)
+            return null;
+
+        return FindVisualDescendant<FrameworkElement>(
+            container,
+            element => ReferenceEquals(element.DataContext, tab) && element.ContextMenu is not null);
+    }
+
+    private static FrameworkElement? FindSheetTabContextMenuTarget(DependencyObject source)
+    {
+        for (DependencyObject? current = source; current is not null; current = GetTreeParentForKeyboardFocus(current))
+        {
+            if (current is FrameworkElement { DataContext: SheetTabViewModel, ContextMenu: not null } element)
+                return element;
+        }
+
+        return null;
+    }
+
+    private void SelectSheetTabForKeyboardContextMenu(SheetTabViewModel tab)
+    {
+        _currentSheetId = tab.Id;
+        if (_groupedSheetIds.Count == 0)
+            _groupedSheetIds.Add(tab.Id);
+        _sheetGroupAnchor ??= tab.Id;
+        UpdateViewport();
+        RefreshSheetTabs();
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject source, Func<T, bool> predicate)
+        where T : DependencyObject
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(source);
+        for (var i = 0; i < childCount; i++)
+        {
+            var child = VisualTreeHelper.GetChild(source, i);
+            if (child is T match && predicate(match))
+                return match;
+
+            var descendant = FindVisualDescendant(child, predicate);
+            if (descendant is not null)
+                return descendant;
+        }
+
+        return null;
+    }
+
     private void SheetCtxRename_Click(object sender, RoutedEventArgs e)
     {
         var tab = GetContextMenuTab(sender);

@@ -97,8 +97,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         selectionSource.Should().Contain("if (FocusShellRegion(current))");
         selectionSource.Should().Contain("return FormulaBar.Focus();");
-        selectionSource.Should().Contain("return AddSheetButton.Focus();");
-        selectionSource.Should().Contain("return ZoomSlider.Focus();");
+        selectionSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
+        selectionSource.Should().Contain("return FocusStatusBar();");
     }
 
     [Fact]
@@ -1495,7 +1495,7 @@ public sealed class MainWindowXamlKeyTipTests
     {
         var source =
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+            ReadPivotCommandSource();
 
         source.Should().Contain("e.ClickCount == 2");
         source.Should().Contain("TryShowPivotTableDetails(showMessage: false)");
@@ -1600,7 +1600,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
 
         source.Should().Contain("RefreshPivotFieldListPane()");
         source.Should().Contain("ConfigurePivotTableLayoutCommand");
@@ -1640,7 +1640,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableValueFieldSettings_UsesExcelStyleDialog()
     {
-        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var mainWindowSource = ReadPivotCommandSource();
         var dialogXaml = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -1686,7 +1686,7 @@ public sealed class MainWindowXamlKeyTipTests
     public void PivotTableFieldListPane_SupportsDragDropReordering()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -1712,7 +1712,7 @@ public sealed class MainWindowXamlKeyTipTests
     public void PivotTableAvailableFields_ExposeExcelStyleCheckboxToggles()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -1735,7 +1735,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableSelectItems_UsesCheckboxFilterDialog()
     {
-        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var mainWindowSource = ReadPivotCommandSource();
         var dialogXaml = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -1759,7 +1759,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableRuleFilters_UseDialogChrome()
     {
-        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var mainWindowSource = ReadPivotCommandSource();
         var labelDialog = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml"));
         var valueDialog = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -1791,7 +1791,7 @@ public sealed class MainWindowXamlKeyTipTests
     {
         var source =
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+            ReadPivotCommandSource();
 
         source.Should().Contain("SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested");
         source.Should().Contain("OnPivotChartFieldButtonRequested");
@@ -1805,7 +1805,7 @@ public sealed class MainWindowXamlKeyTipTests
     public void SlicerTimelinePane_ExposesInteractivePivotFilters()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -1883,7 +1883,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableContextualLayoutCommands_RouteThroughUndoableOptionsCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
 
         source.Should().Contain("ApplyPivotOptions(");
         source.Should().Contain("new ConfigurePivotTableOptionsCommand");
@@ -1893,7 +1893,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableContextualLayoutCommands_PreserveCompactIndentWhenUsingOptionWrapper()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
 
         source.Should().Contain("int? compactRowLabelIndent = null");
         source.Should().Contain("bool? printTitles = null");
@@ -1906,7 +1906,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableChangeDataSource_RoutesThroughUndoableSourceCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
 
         source.Should().Contain("new ChangePivotTableSourceCommand");
         source.Should().Contain("TryParseWorkbookRange");
@@ -1916,4 +1916,14 @@ public sealed class MainWindowXamlKeyTipTests
     private static bool ContainsExcludedStatus(string? value) =>
         value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
 
+    private static string ReadPivotCommandSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "MainWindow.PivotCommands.cs",
+                "MainWindow.PivotSlicerTimeline.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
 }

@@ -78,6 +78,7 @@ public partial class HeaderFooterDialog : Window
         DifferentOddEvenBox.Unchecked += (_, _) => RefreshOptionalSectionState();
         RefreshOptionalSectionState();
         _activeTextBox = HeaderCenterBox;
+        UpdatePictureButtonState();
     }
 
     public static string InsertToken(string text, int caretIndex, string token)
@@ -89,7 +90,10 @@ public partial class HeaderFooterDialog : Window
     private void HeaderFooterBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (sender is TextBox textBox)
+        {
             _activeTextBox = textBox;
+            UpdatePictureButtonState();
+        }
     }
 
     private void InsertTokenButton_Click(object sender, RoutedEventArgs e)
@@ -121,6 +125,7 @@ public partial class HeaderFooterDialog : Window
         SetPictureForActiveBox(picture);
         if (!(_activeTextBox ?? HeaderCenterBox).Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
             InsertTokenIntoActiveBox(PictureToken);
+        UpdatePictureButtonState();
     }
 
     private void FormatPictureButton_Click(object sender, RoutedEventArgs e)
@@ -139,6 +144,7 @@ public partial class HeaderFooterDialog : Window
         SetPictureForActiveBox(dialog.Result);
         if (!(_activeTextBox ?? HeaderCenterBox).Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
             InsertTokenIntoActiveBox(PictureToken);
+        UpdatePictureButtonState();
     }
 
     private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -191,6 +197,7 @@ public partial class HeaderFooterDialog : Window
 
         if (_activeTextBox is not null && !_activeTextBox.IsEnabled)
             _activeTextBox = HeaderCenterBox;
+        UpdatePictureButtonState();
     }
 
     private static void SetControlsEnabled(bool isEnabled, params Control[] controls)
@@ -255,6 +262,27 @@ public partial class HeaderFooterDialog : Window
         if (ReferenceEquals(target, EvenFooterCenterBox)) return EvenPageFooterPictures.Center;
         if (ReferenceEquals(target, EvenFooterRightBox)) return EvenPageFooterPictures.Right;
         return null;
+    }
+
+    private void UpdatePictureButtonState()
+    {
+        var target = _activeTextBox ?? HeaderCenterBox;
+        var hasPicture = GetPictureForActiveBox() is not null;
+        FormatPictureButton.IsEnabled = hasPicture;
+        FormatPictureButton.ToolTip = hasPicture
+            ? $"Format picture in {ActiveBoxLabel(target)}"
+            : $"Insert a picture in {ActiveBoxLabel(target)} before formatting it.";
+        PictureTargetStatusText.Text = hasPicture
+            ? $"Target: {ActiveBoxLabel(target)} has a picture."
+            : $"Target: {ActiveBoxLabel(target)} has no picture.";
+    }
+
+    private static string ActiveBoxLabel(TextBox target)
+    {
+        if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return "left section";
+        if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return "center section";
+        if (target.Name.EndsWith("RightBox", StringComparison.Ordinal)) return "right section";
+        return "current section";
     }
 
     private void SetPictureForActiveBox(WorksheetHeaderFooterPicture picture)
@@ -342,7 +370,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         };
         resetButton.Click += (_, _) => ResetSize();
         stack.Children.Add(resetButton);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 

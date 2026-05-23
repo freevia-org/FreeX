@@ -14,8 +14,11 @@ public sealed partial class NamedRangeDialog : Window
 {
     private readonly Workbook _workbook;
     private readonly ICommandBus _commandBus;
+    private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly ObservableCollection<NamedRangeViewModel> _items = [];
     private readonly string _initialRefersTo;
+
+    public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     /// <param name="workbook">The active workbook.</param>
     /// <param name="commandBus">Command bus for dispatching define/delete commands.</param>
@@ -23,13 +26,18 @@ public sealed partial class NamedRangeDialog : Window
     ///   Optional initial range (e.g. the current selection). If provided, pre-fills
     ///   the Range text box in Sheet!A1:B10 notation.
     /// </param>
-    public NamedRangeDialog(Workbook workbook, ICommandBus commandBus, GridRange? initialRange = null)
+    public NamedRangeDialog(
+        Workbook workbook,
+        ICommandBus commandBus,
+        GridRange? initialRange = null,
+        Action<NamedRangeSelectionRequest>? requestRangeSelection = null)
     {
         _workbook = workbook;
         _commandBus = commandBus;
+        _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
         RefreshList();
-        RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+        UpdateSelectionCommands();
 
         _initialRefersTo = initialRange.HasValue ? FormatRange(initialRange.Value, workbook) : "";
     }
@@ -76,13 +84,16 @@ public sealed partial class NamedRangeDialog : Window
             RefersToBox.Text = vm.RefersTo;
         }
 
-        RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+        UpdateSelectionCommands();
     }
 
     private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
 
     private void ApplyFilter()
     {
+        if (NamesList is null)
+            return;
+
         var selected = FilterBox.SelectedIndex switch
         {
             1 => NamedRangeFilterOption.Workbook,
@@ -94,12 +105,24 @@ public sealed partial class NamedRangeDialog : Window
         if (NamesList.SelectedItem is not NamedRangeViewModel)
         {
             RefersToBox.Clear();
-            RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+            UpdateSelectionCommands();
         }
+    }
+
+    private void UpdateSelectionCommands()
+    {
+        var hasSelection = NamesList.SelectedItem is NamedRangeViewModel;
+        EditButton.IsEnabled = hasSelection;
+        DeleteButton.IsEnabled = hasSelection;
+        RefersToPickerButton.IsEnabled = hasSelection;
     }
 
     private void RefersToPickerButton_Click(object sender, RoutedEventArgs e)
     {
+        RangeSelectionRequest = CreateRangeSelectionRequest(
+            NamedRangeSelectionTarget.SelectedNameRefersTo,
+            RefersToBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
         RefersToBox.Focus();
         RefersToBox.SelectAll();
     }
@@ -108,7 +131,8 @@ public sealed partial class NamedRangeDialog : Window
     {
         var dialog = new NameDefinitionDialog(
             new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
-            GetScopeOptions()) { Owner = this };
+            GetScopeOptions(),
+            RequestRangeSelection) { Owner = this };
         if (dialog.ShowDialog() == true)
             DefineOrUpdateName(dialog.Result);
     }
@@ -123,7 +147,8 @@ public sealed partial class NamedRangeDialog : Window
 
         var dialog = new NameDefinitionDialog(
             new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
-            GetScopeOptions())
+            GetScopeOptions(),
+            RequestRangeSelection)
         {
             Owner = this
         };
@@ -180,6 +205,16 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
+        if (MessageBox.Show(
+                this,
+                $"Delete the name '{vm.Name}'?",
+                "Name Manager",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
         var cmd = new RemoveNamedRangeCommand(vm.Name);
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
@@ -195,7 +230,29 @@ public sealed partial class NamedRangeDialog : Window
             .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    public static NamedRangeSelectionRequest CreateRangeSelectionRequest(
+        NamedRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private void RequestRangeSelection(NamedRangeSelectionRequest request)
+    {
+        RangeSelectionRequest = request;
+        _requestRangeSelection?.Invoke(request);
+    }
 }
+
+public enum NamedRangeSelectionTarget
+{
+    SelectedNameRefersTo,
+    DefinitionRefersTo
+}
+
+public sealed record NamedRangeSelectionRequest(
+    NamedRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
 
 public enum NamedRangeFilterOption
 {
@@ -231,13 +288,19 @@ internal sealed class NameDefinitionDialog : Window
     private readonly TextBox _refersToBox = new();
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
     private readonly IReadOnlyList<string> _scopeOptions;
+    private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
 
     public NameDefinitionDialogResult Result { get; private set; }
+    public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public NameDefinitionDialog(NameDefinitionDialogResult initial, IReadOnlyList<string> scopeOptions)
+    public NameDefinitionDialog(
+        NameDefinitionDialogResult initial,
+        IReadOnlyList<string> scopeOptions,
+        Action<NamedRangeSelectionRequest>? requestRangeSelection = null)
     {
         Result = initial;
         _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
+        _requestRangeSelection = requestRangeSelection;
         Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
         Width = 460;
         Height = 300;
@@ -252,9 +315,13 @@ internal sealed class NameDefinitionDialog : Window
             string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
         _commentBox.Text = initial.Comment;
         _refersToBox.Text = initial.RefersTo;
-        _rangePickerButton.ToolTip = "Select the referenced range from the worksheet";
+        _rangePickerButton.ToolTip = "Collapse dialog and select the referenced range from the worksheet";
         _rangePickerButton.Click += (_, _) =>
         {
+            RangeSelectionRequest = NamedRangeDialog.CreateRangeSelectionRequest(
+                NamedRangeSelectionTarget.DefinitionRefersTo,
+                _refersToBox.Text);
+            _requestRangeSelection?.Invoke(RangeSelectionRequest);
             _refersToBox.Focus();
             _refersToBox.SelectAll();
         };
@@ -276,7 +343,7 @@ internal sealed class NameDefinitionDialog : Window
         AddTextRow(grid, 2, "_Comment:", _commentBox);
         AddRefersToRow(grid, 3);
 
-        var buttons = InsertChartDialog.CreateButtonRow(Accept);
+        var buttons = DialogButtonRowFactory.Create(Accept, 72);
         buttons.Margin = new Thickness(0, 8, 0, 0);
         grid.Children.Add(buttons);
         Grid.SetRow(buttons, 4);

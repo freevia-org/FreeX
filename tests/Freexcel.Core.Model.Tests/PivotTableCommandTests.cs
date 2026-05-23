@@ -803,11 +803,15 @@ public sealed class PivotTableCommandTests
             TargetRange = Range(sheet, "D3", "F8"),
             ReportLayout = PivotReportLayout.Compact,
             CompactRowLabelIndent = 5,
+            MergeAndCenterLabels = true,
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             ShowExpandCollapseButtons = false,
             ShowContextualTooltips = false,
             ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            PageOverThenDown = true,
+            PageWrap = 3,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             AltTextTitle = "Existing title",
@@ -833,11 +837,15 @@ public sealed class PivotTableCommandTests
         command.Apply(ctx).Success.Should().BeTrue();
 
         pivot.CompactRowLabelIndent.Should().Be(5);
+        pivot.MergeAndCenterLabels.Should().BeTrue();
         pivot.PrintTitles.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
+        pivot.ShowClassicLayout.Should().BeTrue();
+        pivot.PageOverThenDown.Should().BeTrue();
+        pivot.PageWrap.Should().Be(3);
         pivot.AutofitColumnsOnUpdate.Should().BeFalse();
         pivot.PreserveFormattingOnUpdate.Should().BeFalse();
         pivot.AltTextTitle.Should().Be("Existing title");
@@ -862,6 +870,10 @@ public sealed class PivotTableCommandTests
             ShowExpandCollapseButtons = true,
             ShowContextualTooltips = true,
             ShowPropertiesInTooltips = true,
+            ShowClassicLayout = false,
+            MergeAndCenterLabels = false,
+            PageOverThenDown = false,
+            PageWrap = 0,
             PrintExpandCollapseButtons = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -878,27 +890,83 @@ public sealed class PivotTableCommandTests
             repeatItemLabels: true,
             blankLineAfterItems: false,
             styleName: "PivotStyleLight16",
+            mergeAndCenterLabels: true,
             showExpandCollapseButtons: false,
             showContextualTooltips: false,
             showPropertiesInTooltips: false,
+            showClassicLayout: true,
+            pageOverThenDown: true,
+            pageWrap: 4,
             printExpandCollapseButtons: false,
             showFieldHeaders: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
+        pivot.MergeAndCenterLabels.Should().BeTrue();
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
+        pivot.ShowClassicLayout.Should().BeTrue();
+        pivot.PageOverThenDown.Should().BeTrue();
+        pivot.PageWrap.Should().Be(4);
         pivot.PrintExpandCollapseButtons.Should().BeFalse();
         pivot.ShowFieldHeaders.Should().BeFalse();
 
         command.Revert(ctx);
 
+        pivot.MergeAndCenterLabels.Should().BeFalse();
         pivot.ShowExpandCollapseButtons.Should().BeTrue();
         pivot.ShowContextualTooltips.Should().BeTrue();
         pivot.ShowPropertiesInTooltips.Should().BeTrue();
+        pivot.ShowClassicLayout.Should().BeFalse();
+        pivot.PageOverThenDown.Should().BeFalse();
+        pivot.PageWrap.Should().Be(0);
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowFieldHeaders.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesShowItemsWithNoDataAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotShowItemsWithNoDataCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            ShowItemsWithNoDataOnRows = false,
+            ShowItemsWithNoDataOnColumns = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        pivot.ShowItemsWithNoDataOnColumns.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        pivot.ShowItemsWithNoDataOnRows.Should().BeFalse();
+        pivot.ShowItemsWithNoDataOnColumns.Should().BeFalse();
     }
 
     [Fact]
@@ -964,6 +1032,7 @@ public sealed class PivotTableCommandTests
             RefreshOnLoad = false,
             SaveData = true,
             EnableRefresh = true,
+            PreserveSourceSortFilter = true,
             MissingItemsLimit = null
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region"));
@@ -994,6 +1063,7 @@ public sealed class PivotTableCommandTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            preserveSourceSortFilter: false,
             missingItemsLimit: 0,
             updateMissingItemsLimit: true);
 
@@ -1002,6 +1072,7 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeTrue();
         cache.SaveData.Should().BeFalse();
         cache.EnableRefresh.Should().BeFalse();
+        cache.PreserveSourceSortFilter.Should().BeFalse();
         cache.MissingItemsLimit.Should().Be(0);
 
         command.Revert(ctx);
@@ -1009,6 +1080,7 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeFalse();
         cache.SaveData.Should().BeTrue();
         cache.EnableRefresh.Should().BeTrue();
+        cache.PreserveSourceSortFilter.Should().BeTrue();
         cache.MissingItemsLimit.Should().BeNull();
     }
 

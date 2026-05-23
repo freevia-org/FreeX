@@ -19,8 +19,8 @@
         <DockPanel Grid.Row="0" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                 <Button Content="_New..." Width="72" Margin="0,0,8,0" Click="NewButton_Click"/>
-                <Button Content="_Edit..." Width="72" Margin="0,0,8,0" Click="EditButton_Click"/>
-                <Button Content="_Delete" Width="72" Click="DeleteButton_Click"/>
+                <Button x:Name="EditButton" Content="_Edit..." Width="72" Margin="0,0,8,0" IsEnabled="False" Click="EditButton_Click"/>
+                <Button x:Name="DeleteButton" Content="_Delete" Width="72" IsEnabled="False" Click="DeleteButton_Click"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Label Content="_Filter:" Target="{Binding ElementName=FilterBox}" VerticalAlignment="Center"/>
@@ -61,7 +61,10 @@
             <TextBox x:Name="RefersToBox" Grid.Column="1" IsReadOnly="True"
                      ToolTip="Selected name reference"/>
             <Button x:Name="RefersToPickerButton" Grid.Column="2" Content="..." Width="26" Margin="4,0,0,0"
-                    ToolTip="Select the referenced range text" Click="RefersToPickerButton_Click"/>
+                    ToolTip="Collapse dialog and select the referenced range"
+                    AutomationProperties.Name="Select referenced range"
+                    AutomationProperties.HelpText="Collapse dialog and select the referenced range from the worksheet."
+                    Click="RefersToPickerButton_Click"/>
         </Grid>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">

@@ -12,6 +12,11 @@ public sealed partial class AutoFilterDialog : Window
     private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
+    private readonly CheckBox _addCurrentSelectionToFilterBox = new()
+    {
+        Content = "_Add current selection to filter",
+        Margin = new Thickness(0, 0, 0, 8)
+    };
     private readonly TextBox _criteriaBox = new() { IsReadOnly = true };
     private readonly ComboBox _criteriaSuggestionBox = new()
     {
@@ -96,6 +101,7 @@ public sealed partial class AutoFilterDialog : Window
     {
         Title = $"AutoFilter - {menuPlan.HeaderText}";
         _clearFilterButton.Content = $"_Clear Filter From \"{menuPlan.HeaderText}\"";
+        SetSortLabels(menuPlan.FilterKind);
         ShowFilterFamilyButton(menuPlan.FilterKind);
         var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
         if (criteriaSuggestions.Count > 0)
@@ -162,6 +168,8 @@ public sealed partial class AutoFilterDialog : Window
             _searchBox.Clear();
             _sortNone.IsChecked = true;
             ReplaceAllItems(SelectAll(_allItems));
+            Result = CreateClearFilterResult();
+            DialogResult = true;
         };
         stack.Children.Add(_clearFilterButton);
         _filterByColorGroup.Content = _filterByColorPanel;
@@ -184,6 +192,7 @@ public sealed partial class AutoFilterDialog : Window
         _searchBox.ToolTip = "Search";
         _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
         stack.Children.Add(_searchBox);
+        stack.Children.Add(_addCurrentSelectionToFilterBox);
 
         var list = new ListBox
         {
@@ -267,7 +276,13 @@ public sealed partial class AutoFilterDialog : Window
         var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
-            Result = BuildResult(GetSortDirection(), _allItems, _searchBox.Text, _criteriaBox.Text, _selectedColorFilter);
+            Result = BuildResult(
+                GetSortDirection(),
+                _allItems,
+                _searchBox.Text,
+                _criteriaBox.Text,
+                _selectedColorFilter,
+                _addCurrentSelectionToFilterBox.IsChecked == true);
             DialogResult = true;
         };
         var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
@@ -294,6 +309,21 @@ public sealed partial class AutoFilterDialog : Window
         _dateFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Date
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => ("Sort _Smallest to Largest", "Sort _Largest to Smallest"),
+            AutoFilterMenuFilterKind.Date => ("Sort _Oldest to Newest", "Sort _Newest to Oldest"),
+            _ => ("Sort _A to Z", "Sort _Z to A")
+        };
+
+    private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
+    {
+        var labels = GetSortLabels(filterKind);
+        _sortAscending.Content = labels.Ascending;
+        _sortDescending.Content = labels.Descending;
     }
 
     private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>

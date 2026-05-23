@@ -375,6 +375,12 @@ public partial class MainWindow
         if (TryHandleFocusedRibbonKeyboardNavigation(e))
             return;
 
+        if (TryHandleFocusedSheetTabKeyboardNavigation(e))
+            return;
+
+        if (TryHandleFocusedStatusBarKeyboardNavigation(e))
+            return;
+
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
         {
             var button = fontToggleShortcut switch
@@ -537,13 +543,70 @@ public partial class MainWindow
             return true;
         }
 
-        if (e.Key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End)
+        if (e.Key == Key.Tab)
         {
+            MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift
+                ? FocusNavigationDirection.Previous
+                : FocusNavigationDirection.Next);
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            var direction = e.Key switch
+            {
+                Key.Left => FocusNavigationDirection.Left,
+                Key.Right => FocusNavigationDirection.Right,
+                Key.Up => FocusNavigationDirection.Up,
+                Key.Down => FocusNavigationDirection.Down,
+                _ => FocusNavigationDirection.Next
+            };
+            MoveFocusedRibbonElement(focusedElement, direction);
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key is Key.Home or Key.End)
+        {
+            var direction = e.Key switch
+            {
+                Key.Home => FocusNavigationDirection.First,
+                Key.End => FocusNavigationDirection.Last,
+                _ => FocusNavigationDirection.Next
+            };
+            MoveFocusedRibbonElement(focusedElement, direction);
             e.Handled = true;
             return true;
         }
 
         return false;
+    }
+
+    private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)
+    {
+        return focusedElement is UIElement focusedUiElement &&
+               focusedUiElement.MoveFocus(new TraversalRequest(direction));
+    }
+
+    private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is not UIElement focusedElement ||
+            !IsDescendantOf(focusedElement, StatusBarGrid) ||
+            Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
+        {
+            return false;
+        }
+
+        if (e.Key != Key.Tab)
+            return false;
+
+        var request = new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next);
+        focusedElement.MoveFocus(request);
+        e.Handled = true;
+        return true;
     }
 
     private bool IsInsideRibbonSurface(DependencyObject element)
@@ -626,10 +689,10 @@ public partial class MainWindow
                 return FormulaBar.Focus();
 
             case ShellFocusTarget.SheetTabs:
-                return AddSheetButton.Focus();
+                return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
 
             case ShellFocusTarget.StatusBar:
-                return ZoomSlider.Focus();
+                return FocusStatusBar();
 
             default:
                 FocusSheetGridIfNeeded();
@@ -649,6 +712,11 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    private bool FocusStatusBar()
+    {
+        return StatusZoomOutButton.Focus() || ZoomSlider.Focus();
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)

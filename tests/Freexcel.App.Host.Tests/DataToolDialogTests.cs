@@ -1,4 +1,8 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -71,7 +75,13 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Column data format");
         source.Should().Contain("Content = \"_General\"");
         source.Should().Contain("Content = \"_Text\"");
+        source.Should().Contain("Content = \"_Date:\"");
+        source.Should().Contain("_dateFormatBox");
         source.Should().Contain("Do not import column (_skip)");
+        source.Should().Contain("Header = \"Advanced\"");
+        source.Should().Contain("_Decimal separator:");
+        source.Should().Contain("_Thousands separator:");
+        source.Should().Contain("_Trailing minus for negative numbers");
     }
 
     [Fact]
@@ -99,7 +109,20 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_destinationBox");
         source.Should().Contain("_formatColumnBox");
         source.Should().Contain("BuildColumnFormats");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var modelSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogModel.cs"));
+
+        foreach (var dateOrder in new[] { "MDY", "DMY", "YMD", "MYD", "DYM", "YDM" })
+        {
+            dialogSource.Should().Contain($"\"{dateOrder}\"");
+            modelSource.Should().Contain($"Date{dateOrder}");
+        }
     }
 
     [Fact]
@@ -174,11 +197,12 @@ public sealed class DataToolDialogTests
         TextToColumnsDialog.NormalizeColumnFormats(
             [
                 TextToColumnsColumnFormat.Text,
+                TextToColumnsColumnFormat.DateMDY,
                 TextToColumnsColumnFormat.General,
                 TextToColumnsColumnFormat.General
             ])
             .Should()
-            .Equal(TextToColumnsColumnFormat.Text);
+            .Equal(TextToColumnsColumnFormat.Text, TextToColumnsColumnFormat.DateMDY);
 
         var result = TextToColumnsDialog.CreateResult(
             [TextToColumnsDelimiterKind.Comma],
@@ -426,6 +450,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsResult_CapturesAdvancedNumberOptions()
+    {
+        var advanced = new TextToColumnsAdvancedOptions(",", ".", TrailingMinusNumbers: true);
+
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Semicolon],
+            advancedOptions: advanced);
+
+        result.AdvancedOptions.Should().Be(advanced);
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_ParsesCopyToHeaderRange()
     {
         var sheetId = SheetId.New();
@@ -533,6 +569,7 @@ public sealed class DataToolDialogTests
     public void AdvancedFilterDialog_ExposesExcelStyleModesAndReferencePickers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+        var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
@@ -544,13 +581,13 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = automationName");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        pickerSource.Should().Contain("Collapse dialog and select range");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().NotContain("Text = \"E1:F2\"");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
     }
 
     [Fact]
@@ -636,6 +673,9 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Use _labels in:");
         source.Should().Contain("Content = \"_Add\"");
         source.Should().Contain("Content = \"_Delete\"");
+        source.Should().Contain("_deleteReferenceButton");
+        source.Should().Contain("UpdateReferenceButtons");
+        source.Should().Contain("_referencesList.SelectionChanged");
         source.Should().Contain("AddReferenceButton_Click");
         source.Should().Contain("DeleteReferenceButton_Click");
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
@@ -818,18 +858,66 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(grid, 1, \"_Column input cell:\", _columnInputBox");
         source.Should().NotContain("_formulaBox");
         source.Should().NotContain("_modeBox");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("DockPanel.SetDock(pickerButton, Dock.Right)");
-        source.Should().Contain("Margin = new Thickness(6, 0, 0, 0)");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
         source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
+    }
+
+    [Fact]
+    public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
+            .Should()
+            .Be(new DataTableRangeSelectionRequest(
+                DataTableRangeSelectionTarget.ColumnInputCell,
+                "$C$1",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select row input cell", DataTableRangeSelectionTarget.RowInputCell, "A1")]
+    [InlineData("Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell, "C1")]
+    public void DataTableDialogReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        DataTableRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var requests = new List<DataTableRangeSelectionRequest>();
+            var dialog = new DataTableDialog(sheetId, range, requests.Add);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                textBoxes[0].Text = " A1 ";
+                textBoxes[1].Text = " C1 ";
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new DataTableRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -841,7 +929,9 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_My table has headers\"");
         source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select table range");
     }
 
@@ -865,6 +955,67 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialog_RangePickerRaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<CreateTableRangeSelectionRequest>();
+            var dialog = new CreateTableDialog(
+                SheetId.New(),
+                " A1:C12 ",
+                "TableStyleMedium2",
+                requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Where(button => Equals(button.Content, "..."))
+                    .Single();
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void CreateTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        CreateTableDialog.CreateRangeSelectionRequest(" A1:C12 ")
+            .Should()
+            .Be(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void DialogReferencePicker_RaisesSelectionRequestAndMarksCollapseAffordance()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var box = new TextBox { Text = "A1:C10" };
+            DialogReferencePickerRequest? captured = null;
+
+            var request = DialogReferencePicker.RequestSelection(
+                box,
+                "Select table range",
+                next => captured = next);
+
+            request.Target.Should().BeSameAs(box);
+            request.AutomationName.Should().Be("Select table range");
+            request.CurrentText.Should().Be("A1:C10");
+            captured.Should().Be(request);
+
+            var button = DialogReferencePicker.CreateButton(box, "Select table range");
+            button.ToolTip.Should().Be("Collapse dialog and select range");
+        });
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
@@ -880,5 +1031,19 @@ public sealed class DataToolDialogTests
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 }

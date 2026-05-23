@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -9,17 +10,23 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public sealed record ConditionalFormatAppliesToRangeSelectionRequest(
+    Guid RuleId,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 /// <summary>
 /// "Manage Conditional Formatting Rules" dialog — lists all rules on a sheet,
 /// allows add / edit / delete / reorder, and returns the final ordered rule list.
 /// </summary>
-public sealed class ManageConditionalFormatsDialog : Window
+public sealed partial class ManageConditionalFormatsDialog : Window
 {
     /// <summary>Set after OK or Apply is clicked. Priorities are re-assigned 1…N in list order.</summary>
     public IReadOnlyList<ConditionalFormat>? ResultRules { get; private set; }
 
     private readonly Sheet _sheet;
     private readonly GridRange? _selection;
+    private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
 
     // Working copy — bound to the ListView
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
@@ -27,6 +34,7 @@ public sealed class ManageConditionalFormatsDialog : Window
     private readonly ComboBox _scopeBox;
     private readonly ListView _listView;
     private readonly Button _editBtn;
+    private readonly Button _duplicateBtn;
     private readonly Button _deleteBtn;
     private readonly Button _moveUpBtn;
     private readonly Button _moveDownBtn;
@@ -34,10 +42,16 @@ public sealed class ManageConditionalFormatsDialog : Window
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
 
-    public ManageConditionalFormatsDialog(Sheet sheet, GridRange? selection)
+    public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
+
+    public ManageConditionalFormatsDialog(
+        Sheet sheet,
+        GridRange? selection,
+        Action<ConditionalFormatAppliesToRangeSelectionRequest>? requestAppliesToRangeSelection = null)
     {
         _sheet     = sheet;
         _selection = selection;
+        _requestAppliesToRangeSelection = requestAppliesToRangeSelection;
 
         Title  = "Conditional Formatting Rules Manager";
         Width  = 560;
@@ -92,7 +106,7 @@ public sealed class ManageConditionalFormatsDialog : Window
         bottomRow.Children.Add(applyBtn);
         root.Children.Add(bottomRow);
 
-        // ── Middle toolbar: New / Edit / Delete / reorder ──────────────────────
+        // ── Middle toolbar: New / Edit / Duplicate / Delete / reorder ──────────
         var toolBar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -102,6 +116,7 @@ public sealed class ManageConditionalFormatsDialog : Window
 
         var newBtn   = new Button { Content = "_New Rule...", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
         _editBtn     = new Button { Content = "_Edit Rule",   Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        _duplicateBtn = new Button { Content = "D_uplicate Rule", Width = 118, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         _deleteBtn   = new Button { Content = "_Delete Rule", Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
         _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Move selected rule up", IsEnabled = false };
         _moveDownBtn = new Button { Content = "▼", Width = 32, ToolTip = "Move selected rule down", IsEnabled = false };
@@ -110,12 +125,14 @@ public sealed class ManageConditionalFormatsDialog : Window
 
         newBtn.Click       += NewRule_Click;
         _editBtn.Click     += EditRule_Click;
+        _duplicateBtn.Click += DuplicateRule_Click;
         _deleteBtn.Click   += DeleteRule_Click;
         _moveUpBtn.Click   += MoveUp_Click;
         _moveDownBtn.Click += MoveDown_Click;
 
         toolBar.Children.Add(newBtn);
         toolBar.Children.Add(_editBtn);
+        toolBar.Children.Add(_duplicateBtn);
         toolBar.Children.Add(_deleteBtn);
         toolBar.Children.Add(_moveUpBtn);
         toolBar.Children.Add(_moveDownBtn);
@@ -173,12 +190,22 @@ public sealed class ManageConditionalFormatsDialog : Window
         rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
         rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
         rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select Applies To range text");
+        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Collapse dialog and select Applies To range");
+        rangePickerFactory.SetValue(AutomationProperties.NameProperty, "Select Applies To range");
+        rangePickerFactory.SetValue(AutomationProperties.HelpTextProperty, "Collapse dialog and select a worksheet range for this conditional format rule.");
         rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
+        rangePickerFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1)
+        });
         rangePickerFactory.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(RangePickerButton_Click));
         var appliesToFactory = new FrameworkElementFactory(typeof(TextBox));
         appliesToFactory.SetValue(Control.PaddingProperty, new Thickness(2, 0, 2, 0));
         appliesToFactory.SetValue(Control.VerticalContentAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        appliesToFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
+        {
+            RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1)
+        });
         appliesToFactory.SetBinding(TextBox.TextProperty, new Binding(nameof(ConditionalFormat.AppliesTo))
         {
             Converter = new AppliesToRangeConverter(_sheet.Id),
@@ -285,6 +312,19 @@ public sealed class ManageConditionalFormatsDialog : Window
         ReassignPriorities();
     }
 
+    private void DuplicateRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+
+        var idx = _rules.IndexOf(selected);
+        if (idx < 0) return;
+
+        var duplicate = CloneWithPriority(selected, idx + 2, Guid.NewGuid());
+        _rules.Insert(idx + 1, duplicate);
+        _listView.SelectedItem = duplicate;
+        ReassignPriorities();
+    }
+
     private void MoveUp_Click(object sender, RoutedEventArgs e)
     {
         var idx = _rules.IndexOf(_listView.SelectedItem as ConditionalFormat ?? default!);
@@ -307,6 +347,7 @@ public sealed class ManageConditionalFormatsDialog : Window
     {
         bool hasSelection = _listView.SelectedItem is not null;
         _editBtn.IsEnabled   = hasSelection;
+        _duplicateBtn.IsEnabled = hasSelection;
         _deleteBtn.IsEnabled = hasSelection;
 
         var idx = _listView.SelectedIndex;
@@ -391,12 +432,12 @@ public sealed class ManageConditionalFormatsDialog : Window
     private static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
         rules.Select((rule, index) => CloneWithPriority(rule, index + 1)).ToList();
 
-    private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority)
+    private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority, Guid? id = null)
     {
         var cf = new ConditionalFormat
         {
             // preserve Id
-            Id            = src.Id,
+            Id            = id ?? src.Id,
             AppliesTo     = src.AppliesTo,
             Priority      = priority,
             RuleType      = src.RuleType,
@@ -422,6 +463,7 @@ public sealed class ManageConditionalFormatsDialog : Window
             DataBarShowValue = src.DataBarShowValue,
             DataBarMinLength = src.DataBarMinLength,
             DataBarMaxLength = src.DataBarMaxLength,
+            DataBarGradient  = src.DataBarGradient,
             AboveAverage  = src.AboveAverage,
             FormulaText   = src.FormulaText,
             IconSetStyle = src.IconSetStyle,
@@ -444,10 +486,16 @@ public sealed class ManageConditionalFormatsDialog : Window
             && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
     }
 
-    private static void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    public static ConditionalFormatAppliesToRangeSelectionRequest CreateAppliesToRangeSelectionRequest(
+        Guid ruleId,
+        string currentText) =>
+        new(ruleId, currentText.Trim(), CollapseDialog: true);
+
+    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not DependencyObject current)
             return;
+        var rule = (sender as FrameworkElement)?.DataContext as ConditionalFormat;
 
         while (current is not null)
         {
@@ -458,6 +506,11 @@ public sealed class ManageConditionalFormatsDialog : Window
                 {
                     rangeBox.Focus();
                     rangeBox.SelectAll();
+                    if (rule is not null)
+                    {
+                        AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest(rule.Id, rangeBox.Text);
+                        _requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest);
+                    }
                 }
                 return;
             }
@@ -466,191 +519,4 @@ public sealed class ManageConditionalFormatsDialog : Window
                 ?? LogicalTreeHelper.GetParent(current);
         }
     }
-
-    // ── Public static helpers (usable by value converters below) ───────────────
-
-    public static string DescribeRule(ConditionalFormat cf) => cf.RuleType switch
-    {
-        CfRuleType.Formula     => $"Formula: ={cf.FormulaText}",
-        CfRuleType.DataBar     => cf.DataBarShowValue ? "Data Bar" : "Data Bar (bar only)",
-        CfRuleType.ColorScale  => cf.UseThreeColorScale ? "3-Color Scale" : "2-Color Scale",
-        CfRuleType.IconSet     => BuildIconSetDescription(cf),
-        CfRuleType.ContainsText => $"Text contains \"{cf.TextRuleText}\"",
-        CfRuleType.NotContainsText => $"Text does not contain \"{cf.TextRuleText}\"",
-        CfRuleType.BeginsWith  => $"Text begins with \"{cf.TextRuleText}\"",
-        CfRuleType.EndsWith    => $"Text ends with \"{cf.TextRuleText}\"",
-        CfRuleType.DateOccurring => $"Date occurring: {DatePeriodLabel(cf.DateOccurringPeriod)}",
-        CfRuleType.DuplicateValues => "Duplicate Values",
-        CfRuleType.UniqueValues => "Unique Values",
-        CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
-        CfRuleType.Top10       => $"{(cf.AboveAverage ? "Top" : "Bottom")} {cf.TopBottomRank}{(cf.TopBottomPercent ? "%" : "")}",
-        CfRuleType.CellValue   => BuildCellValueDescription(cf),
-        _ => cf.RuleType.ToString()
-    };
-
-    private static string BuildIconSetDescription(ConditionalFormat cf)
-    {
-        var style = string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle;
-        var flags = new List<string>();
-        if (cf.IconSetReverse) flags.Add("reverse");
-        if (!cf.IconSetShowValue) flags.Add("icons only");
-        return flags.Count == 0
-            ? $"Icon Set: {style}"
-            : $"Icon Set: {style} ({string.Join(", ", flags)})";
-    }
-
-    private static string DatePeriodLabel(string? value) => value switch
-    {
-        "yesterday" => "Yesterday",
-        "today" => "Today",
-        "tomorrow" => "Tomorrow",
-        "last7Days" => "Last 7 Days",
-        "lastWeek" => "Last Week",
-        "thisWeek" => "This Week",
-        "nextWeek" => "Next Week",
-        "lastMonth" => "Last Month",
-        "thisMonth" => "This Month",
-        "nextMonth" => "Next Month",
-        _ => "Today"
-    };
-
-    private static string BuildCellValueDescription(ConditionalFormat cf)
-    {
-        var op = cf.Operator switch
-        {
-            CfOperator.GreaterThan        => ">",
-            CfOperator.LessThan           => "<",
-            CfOperator.Equal              => "=",
-            CfOperator.NotEqual           => "<>",
-            CfOperator.GreaterThanOrEqual => ">=",
-            CfOperator.LessThanOrEqual    => "<=",
-            CfOperator.Between            => "between",
-            CfOperator.NotBetween         => "not between",
-            _ => "?"
-        };
-
-        if (cf.Operator is CfOperator.Between or CfOperator.NotBetween)
-            return $"Cell Value {op} {cf.Value1} and {cf.Value2}";
-
-        return $"Cell Value {op} {cf.Value1}";
-    }
-
-    public static Brush PreviewBrush(ConditionalFormat cf)
-    {
-        if (cf.RuleType == CfRuleType.IconSet)
-            return Brushes.LightGray;
-        if (cf.RuleType == CfRuleType.DataBar)
-            return new SolidColorBrush(Color.FromRgb(cf.DataBarColor.R, cf.DataBarColor.G, cf.DataBarColor.B));
-        if (cf.RuleType == CfRuleType.ColorScale)
-        {
-            var stops = new GradientStopCollection
-            {
-                new(Color.FromRgb(cf.MinColor.R, cf.MinColor.G, cf.MinColor.B), 0),
-                new(Color.FromRgb(cf.MaxColor.R, cf.MaxColor.G, cf.MaxColor.B), 1)
-            };
-
-            if (cf.UseThreeColorScale)
-                stops.Insert(1, new GradientStop(Color.FromRgb(cf.MidColor.R, cf.MidColor.G, cf.MidColor.B), 0.5));
-
-            return new LinearGradientBrush(stops)
-            {
-                StartPoint = new Point(0, 0.5),
-                EndPoint = new Point(1, 0.5)
-            };
-        }
-        if (cf.FormatIfTrue?.FillColor is { } fc)
-            return new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
-        return Brushes.LightGray;
-    }
-
-    public static string AppliesToString(GridRange r)
-    {
-        var sc = CellAddress.NumberToColumnName(r.Start.Col);
-        var ec = CellAddress.NumberToColumnName(r.End.Col);
-        return $"${sc}${r.Start.Row}:${ec}${r.End.Row}";
-    }
-
-    public static GridRange TryParseAppliesToText(string text, SheetId sheetId, GridRange fallback)
-    {
-        return TryParseAppliesToText(text, sheetId, out var parsed)
-            ? parsed
-            : fallback;
-    }
-
-    public static bool TryParseAppliesToText(string text, SheetId sheetId, out GridRange range)
-    {
-        range = default;
-        var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
-        if (string.IsNullOrWhiteSpace(normalized))
-            return false;
-
-        if (!normalized.Contains(':', StringComparison.Ordinal))
-            normalized = $"{normalized}:{normalized}";
-
-        try
-        {
-            range = GridRange.Parse(normalized, sheetId);
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    public static string StopIfTrueText(ConditionalFormat cf) => cf.StopIfTrue ? "Yes" : "";
-}
-
-// ── Value converters used by the GridView cell templates ──────────────────────
-
-internal sealed class RuleDescriptionConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.DescribeRule(cf) : "";
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => Binding.DoNothing;
-}
-
-internal sealed class PreviewBrushConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewBrush(cf) : Brushes.LightGray;
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => Binding.DoNothing;
-}
-
-internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.AppliesToString(cf.AppliesTo) : "";
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => Binding.DoNothing;
-}
-
-internal sealed class AppliesToRangeConverter(SheetId sheetId) : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is GridRange range ? ManageConditionalFormatsDialog.AppliesToString(range) : "";
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-    {
-        if (value is not string text)
-            return Binding.DoNothing;
-
-        return ManageConditionalFormatsDialog.TryParseAppliesToText(text, sheetId, out var range)
-            ? range
-            : Binding.DoNothing;
-    }
-}
-
-internal sealed class StopIfTrueConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.StopIfTrueText(cf) : "";
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => Binding.DoNothing;
 }

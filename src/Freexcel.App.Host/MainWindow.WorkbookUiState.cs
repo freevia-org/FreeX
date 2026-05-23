@@ -73,6 +73,9 @@ public partial class MainWindow
 
     private void RefreshToolbar()
     {
+        UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);
+        RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);
+
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
@@ -110,7 +113,13 @@ public partial class MainWindow
 
     private void FindButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: false, () => _currentSheetId)
+        var dlg = new FindReplaceDialog(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode: false,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start)
         {
             Owner = this
         };
@@ -119,7 +128,13 @@ public partial class MainWindow
 
     private void ReplaceButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: true, () => _currentSheetId)
+        var dlg = new FindReplaceDialog(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode: true,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start)
         {
             Owner = this
         };

@@ -71,11 +71,11 @@ public sealed class HyperlinkDialog : Window
         Grid.SetRow(buttonRow, 2);
         Grid.SetColumn(buttonRow, 1);
 
-        grid.Children.Add(InsertChartDialog.CreateButtonRow(() =>
+        grid.Children.Add(DialogButtonRowFactory.Create(() =>
         {
             Result = CreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark);
             DialogResult = true;
-        }));
+        }, 72));
         Grid.SetRow(grid.Children[^1], 3);
         Grid.SetColumnSpan(grid.Children[^1], 2);
         root.Children.Add(grid);
@@ -293,7 +293,7 @@ public sealed class ObjectSizeDialog : Window
         AddLabeledTextBox(stack, "Height:", _heightBox);
         AddLabeledTextBox(stack, "Width:", _widthBox);
         stack.Children.Add(_lockAspectRatioBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
     }
 
@@ -310,7 +310,7 @@ public sealed class ObjectSizeDialog : Window
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(box);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
     }
 }
@@ -412,7 +412,7 @@ public sealed class PictureCropDialog : Window
         AddCropBox(stack, "Top:", _cropTopBox);
         AddCropBox(stack, "Right:", _cropRightBox);
         AddCropBox(stack, "Bottom:", _cropBottomBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
     }
 

@@ -26,10 +26,21 @@ public enum TextToColumnsTextQualifier
 
 public enum TextToColumnsColumnFormat
 {
-    General,
-    Text,
-    Skip
+    General = 0,
+    Text = 1,
+    DateMDY = 2,
+    DateDMY = 3,
+    DateYMD = 4,
+    Skip = 5,
+    DateMYD = 6,
+    DateDYM = 7,
+    DateYDM = 8
 }
+
+public sealed record TextToColumnsAdvancedOptions(
+    string DecimalSeparator = ".",
+    string ThousandsSeparator = ",",
+    bool TrailingMinusNumbers = false);
 
 public sealed record TextToColumnsDialogResult(
     TextToColumnsDelimiterKind DelimiterKind,
@@ -39,7 +50,8 @@ public sealed record TextToColumnsDialogResult(
     TextToColumnsTextQualifier TextQualifier = TextToColumnsTextQualifier.DoubleQuote,
     bool TreatConsecutiveDelimitersAsOne = false,
     CellAddress? Destination = null,
-    IReadOnlyList<TextToColumnsColumnFormat>? ColumnFormats = null)
+    IReadOnlyList<TextToColumnsColumnFormat>? ColumnFormats = null,
+    TextToColumnsAdvancedOptions? AdvancedOptions = null)
 {
     public string Delimiters => Delimiter;
     public char? TextQualifierChar => TextQualifier switch

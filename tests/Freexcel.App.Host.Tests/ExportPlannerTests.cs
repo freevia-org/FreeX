@@ -472,6 +472,30 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_SetsDefaultWindowViewerPreferences()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadViewerPreference(pdf, "/FitWindow").Should().BeTrue();
+                ReadViewerPreference(pdf, "/CenterWindow").Should().BeTrue();
+                ReadViewerPreference(pdf, "/PickTrayByPDFSize").Should().BeTrue();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesRequestedPageRange()
     {
         StaTestRunner.Run(() =>
@@ -862,6 +886,11 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetName("/PrintScaling");
+
+    private static bool ReadViewerPreference(PdfDocument pdf, string key) =>
+        pdf.Internals.Catalog.Elements
+            .GetDictionary("/ViewerPreferences")
+            ?.Elements.GetBoolean(key, false) == true;
 
     private static string? ReadPageLayout(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements.GetName("/PageLayout");

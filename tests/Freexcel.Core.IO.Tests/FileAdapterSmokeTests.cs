@@ -4127,6 +4127,7 @@ public partial class FileAdapterSmokeTests
             RuleType    = CfRuleType.CellValue,
             Operator    = CfOperator.GreaterThan,
             Value1      = "5",
+            StopIfTrue = true,
             FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
         };
         sheet.ConditionalFormats.Add(cf);
@@ -4141,6 +4142,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ConditionalFormats.Should().NotBeEmpty("CF rule must survive XLSX round-trip");
         var rule = loadedSheet.ConditionalFormats[0];
         rule.RuleType.Should().Be(CfRuleType.CellValue);
+        rule.StopIfTrue.Should().BeTrue();
     }
 
     [Fact]
@@ -9877,6 +9879,51 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RegeneratesHeaderFooterDrawingWhenPictureChanges()
+    {
+        var workbook = new Workbook("HeaderFooterDrawingChangeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("header image"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddHeaderFooterLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var originalPicture = loadedSheet.PageHeaderPictures.Left!;
+        loadedSheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            originalPicture with { Width = originalPicture.Width + 24 },
+            null,
+            null);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/drawings/freexcelHeaderFooter1.vml").Should().NotBeNull();
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var relId = worksheetXml.Root!
+            .Element(worksheetNs + "legacyDrawingHF")!
+            .Attribute(relNs + "id")!
+            .Value;
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var target = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .First(rel => string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.Ordinal))
+            .Attribute("Target")!
+            .Value;
+        target.Should().Be("../drawings/freexcelHeaderFooter1.vml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomSheetViews()
     {
         var workbook = new Workbook("CustomSheetViewsRetentionTest");
@@ -12774,6 +12821,10 @@ public partial class FileAdapterSmokeTests
             ShowExpandCollapseButtons = false,
             ShowContextualTooltips = false,
             ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 2,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             PrintTitles = true,
@@ -12807,6 +12858,10 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("showHeaders")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showDataTips")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showMemberPropertyTips")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("showDropZones")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("mergeItem")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("pageOverThenDown")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("pageWrap")!.Value.Should().Be("2");
             pivotXml.Root!.Attribute("applyWidthHeightFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("preserveFormatting")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
@@ -12826,6 +12881,10 @@ public partial class FileAdapterSmokeTests
         loadedPivot.ShowFieldHeaders.Should().BeFalse();
         loadedPivot.ShowContextualTooltips.Should().BeFalse();
         loadedPivot.ShowPropertiesInTooltips.Should().BeFalse();
+        loadedPivot.ShowClassicLayout.Should().BeTrue();
+        loadedPivot.MergeAndCenterLabels.Should().BeTrue();
+        loadedPivot.PageOverThenDown.Should().BeTrue();
+        loadedPivot.PageWrap.Should().Be(2);
         loadedPivot.AutofitColumnsOnUpdate.Should().BeFalse();
         loadedPivot.PreserveFormattingOnUpdate.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
@@ -13043,6 +13102,7 @@ public partial class FileAdapterSmokeTests
             RefreshOnLoad = false,
             SaveData = false,
             EnableRefresh = false,
+            PreserveSourceSortFilter = false,
             MissingItemsLimit = 0,
             RefreshedVersion = 7,
             RefreshedBy = "Freexcel Tests"
@@ -13072,6 +13132,7 @@ public partial class FileAdapterSmokeTests
             cacheXml.Should().Contain("refreshOnLoad=\"0\"");
             cacheXml.Should().Contain("saveData=\"0\"");
             cacheXml.Should().Contain("enableRefresh=\"0\"");
+            cacheXml.Should().Contain("preserveSourceSortFilter=\"0\"");
             cacheXml.Should().Contain("missingItemsLimit=\"0\"");
             cacheXml.Should().Contain("refreshedVersion=\"7\"");
             cacheXml.Should().Contain("refreshedBy=\"Freexcel Tests\"");
@@ -13083,6 +13144,7 @@ public partial class FileAdapterSmokeTests
         loadedCache.RefreshOnLoad.Should().BeFalse();
         loadedCache.SaveData.Should().BeFalse();
         loadedCache.EnableRefresh.Should().BeFalse();
+        loadedCache.PreserveSourceSortFilter.Should().BeFalse();
         loadedCache.MissingItemsLimit.Should().Be(0);
         loadedCache.RefreshedVersion.Should().Be(7);
         loadedCache.RefreshedBy.Should().Be("Freexcel Tests");

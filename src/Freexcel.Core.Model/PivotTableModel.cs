@@ -13,6 +13,7 @@ public sealed class PivotCacheModel
     public bool RefreshOnLoad { get; set; } = true;
     public bool SaveData { get; set; } = true;
     public bool EnableRefresh { get; set; } = true;
+    public bool PreserveSourceSortFilter { get; set; } = true;
     public int? MissingItemsLimit { get; set; }
     public int? RefreshedVersion { get; set; }
     public string? RefreshedBy { get; set; }
@@ -91,6 +92,12 @@ public sealed class PivotTableModel
     public bool ShowFieldHeaders { get; set; } = true;
     public bool ShowContextualTooltips { get; set; } = true;
     public bool ShowPropertiesInTooltips { get; set; } = true;
+    public bool ShowClassicLayout { get; set; }
+    public bool MergeAndCenterLabels { get; set; }
+    public bool ShowItemsWithNoDataOnRows { get; set; }
+    public bool ShowItemsWithNoDataOnColumns { get; set; }
+    public bool PageOverThenDown { get; set; }
+    public int PageWrap { get; set; }
     public string? EmptyValueText { get; set; }
     public bool AutofitColumnsOnUpdate { get; set; } = true;
     public bool PreserveFormattingOnUpdate { get; set; } = true;

@@ -1,6 +1,7 @@
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -208,6 +209,7 @@ public class XlsxCorpusRunnerTests
 
             source.Position = 0;
             var workbook = adapter.Load(source);
+            var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
             var sheet = workbook.GetSheetAt(0);
             sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freexcel-metadata-retention-edit"));
 
@@ -219,6 +221,13 @@ public class XlsxCorpusRunnerTests
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            CaptureWorkbookMetadataSummary(roundTripped).Should().BeEquivalentTo(
+                beforeMetadata,
+                options => options.WithStrictOrdering(),
+                row.Id);
         }
     }
 
@@ -394,7 +403,10 @@ public class XlsxCorpusRunnerTests
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
             CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
                 before,
-                options => options.WithStrictOrdering(),
+                options => options
+                    .Using<double>(ctx => ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.0001))
+                    .WhenTypeIs<double>()
+                    .WithStrictOrdering(),
                 row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
@@ -637,28 +649,201 @@ public class XlsxCorpusRunnerTests
     private static WorkbookSummary CaptureSummary(Workbook workbook) =>
         new(
             workbook.SheetCount,
+            workbook.NamedRanges
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => CaptureNamedRangeSummary(workbook, pair.Key, pair.Value))
+                .ToArray(),
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
+            ToLegacyPasswordHash(workbook.StructureProtectionPassword),
             workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
+            workbook.PivotTableStyles
+                .OrderBy(style => style.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CapturePivotTableStyleSummary)
+                .ToArray(),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
-            workbook.Sheets.Select(CaptureSheetSummary).ToArray());
+            CapturePivotNumberFormatCatalogSummary(workbook),
+            workbook.CustomViews
+                .OrderBy(view => view.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CaptureCustomViewSummary)
+                .ToArray(),
+            workbook.CustomViews.Count,
+            CaptureWorkbookMetadataSummary(workbook),
+            CaptureWorkbookCalculationSummary(workbook),
+            CaptureWorkbookThemeSummary(workbook.Theme),
+            workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
 
-    private static SheetSummary CaptureSheetSummary(Sheet sheet) =>
+    private static WorkbookMetadataSummary CaptureWorkbookMetadataSummary(Workbook workbook) =>
+        new(
+            workbook.Slicers
+                .OrderBy(slicer => slicer.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(slicer => new SlicerSummary(
+                    slicer.Name,
+                    slicer.Caption ?? "",
+                    slicer.CacheName,
+                    slicer.SourcePivotTableName ?? "",
+                    slicer.SourceFieldName ?? "",
+                    slicer.StyleName ?? "",
+                    slicer.SelectedItems.OrderBy(item => item, StringComparer.Ordinal).ToArray(),
+                    slicer.PackagePart))
+                .ToArray(),
+            workbook.Timelines
+                .OrderBy(timeline => timeline.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(timeline => new TimelineSummary(
+                    timeline.Name,
+                    timeline.Caption ?? "",
+                    timeline.CacheName,
+                    timeline.SourcePivotTableName ?? "",
+                    timeline.SourceFieldName ?? "",
+                    timeline.StyleName ?? "",
+                    timeline.StartDate ?? "",
+                    timeline.EndDate ?? "",
+                    timeline.SelectedStartDate ?? "",
+                    timeline.SelectedEndDate ?? "",
+                    timeline.PackagePart))
+                .ToArray(),
+            workbook.ExternalLinks
+                .OrderBy(link => link.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(link => new ExternalLinkSummary(
+                    link.PackagePart,
+                    link.TargetUri ?? "",
+                    link.TargetMode ?? ""))
+                .ToArray(),
+            workbook.WatchedCells
+                .Select(address => new WatchedCellSummary(
+                    workbook.GetSheet(address.Sheet)?.Name ?? "",
+                    address.Row,
+                    address.Col))
+                .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(cell => cell.Row)
+                .ThenBy(cell => cell.Column)
+                .ToArray(),
+            workbook.Scenarios
+                .OrderBy(scenario => scenario.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(scenario => new ScenarioSummary(
+                    scenario.Name,
+                    scenario.ChangingCells
+                        .Select(change => new ScenarioCellSummary(
+                            workbook.GetSheet(change.Address.Sheet)?.Name ?? "",
+                            change.Address.Row,
+                            change.Address.Col,
+                            CaptureScalarValueSummary(change.Value)))
+                        .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(cell => cell.Row)
+                        .ThenBy(cell => cell.Column)
+                        .ToArray()))
+                .ToArray());
+
+    private static WorkbookCalculationSummary CaptureWorkbookCalculationSummary(Workbook workbook) =>
+        new(
+            workbook.CalculationMode,
+            workbook.FullCalculationOnLoad,
+            workbook.ForceFullCalculation,
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange);
+
+    private static IReadOnlyList<NumberFormatCatalogSummary> CapturePivotNumberFormatCatalogSummary(Workbook workbook)
+    {
+        var referencedIds = workbook.PivotCaches
+            .SelectMany(cache => cache.Fields)
+            .Select(field => field.NumberFormatId)
+            .Concat(workbook.Sheets
+                .SelectMany(sheet => sheet.PivotTables)
+                .SelectMany(pivot => pivot.DataFields)
+                .Select(field => field.NumberFormatId))
+            .Where(id => id is >= 164)
+            .Select(id => id!.Value)
+            .ToHashSet();
+
+        return workbook.NumberFormatCatalog
+            .Where(pair => referencedIds.Contains(pair.Key))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => new NumberFormatCatalogSummary(pair.Key, pair.Value))
+            .ToArray();
+    }
+
+    private static WorkbookThemeSummary CaptureWorkbookThemeSummary(WorkbookTheme theme) =>
+        new(
+            theme.Name,
+            theme.MajorFontName,
+            theme.MinorFontName,
+            theme.EffectsName,
+            Enum.GetValues<WorkbookThemeColorSlot>()
+                .Select(slot => new ThemeColorSummary(slot, ToColorSummary(theme.GetColor(slot))))
+                .ToArray());
+
+    private static string ToColorSummary(CellColor color) =>
+        FormattableString.Invariant($"{color.R:X2}{color.G:X2}{color.B:X2}");
+
+    private static string ToLegacyPasswordHash(string? passwordOrHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordOrHash))
+            return "";
+        if (IsLegacyPasswordHash(passwordOrHash))
+            return passwordOrHash.ToUpperInvariant();
+
+        var hash = 0;
+        for (var i = 0; i < passwordOrHash.Length; i++)
+        {
+            var value = passwordOrHash[i] << (i + 1);
+            var rotatedBits = value >> 15;
+            value &= 0x7fff;
+            hash ^= value | rotatedBits;
+        }
+
+        hash ^= passwordOrHash.Length;
+        hash ^= 0xCE4B;
+        return hash.ToString("X4", CultureInfo.InvariantCulture);
+    }
+
+    private static bool IsLegacyPasswordHash(string value) =>
+        value.Length is > 0 and <= 4 &&
+        value.All(ch =>
+            ch is >= '0' and <= '9' ||
+            ch is >= 'A' and <= 'F' ||
+            ch is >= 'a' and <= 'f');
+
+    private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
             sheet.Name,
+            sheet.EnumerateCells()
+                .OrderBy(item => item.Address.Row)
+                .ThenBy(item => item.Address.Col)
+                .Select(item => CaptureCellSummary(workbook, item.Address, item.Cell))
+                .ToArray(),
             sheet.CellCount,
             sheet.EnumerateCells().Count(item => item.Cell.HasFormula),
             sheet.MergedRegions.Count,
             sheet.DataValidations.Select(CaptureDataValidationSummary).ToArray(),
             sheet.DataValidations.Count,
+            sheet.ConditionalFormats
+                .OrderBy(format => format.AppliesTo.Start.Row)
+                .ThenBy(format => format.AppliesTo.Start.Col)
+                .ThenBy(format => format.AppliesTo.End.Row)
+                .ThenBy(format => format.AppliesTo.End.Col)
+                .ThenBy(format => format.Priority)
+                .ThenBy(format => format.RuleType)
+                .Select(CaptureConditionalFormatSummary)
+                .ToArray(),
             sheet.ConditionalFormats.Count,
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
+            sheet.Comments
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new CommentSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Comments.Count,
+            sheet.Hyperlinks
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => CaptureHyperlinkSummary(sheet, pair))
+                .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
@@ -676,50 +861,307 @@ public class XlsxCorpusRunnerTests
             sheet.DrawingShapes.Count,
             sheet.Pictures.Select(CapturePictureSummary).ToArray(),
             sheet.Pictures.Count,
+            CaptureBackgroundImageSummary(sheet.BackgroundImage),
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
+            ToLegacyPasswordHash(sheet.ProtectionPassword),
+            sheet.AllowEditRanges
+                .OrderBy(range => range.Start.Row)
+                .ThenBy(range => range.Start.Col)
+                .ThenBy(range => range.End.Row)
+                .ThenBy(range => range.End.Col)
+                .Select(ToRangeSummary)
+                .ToArray(),
             sheet.AllowEditRanges.Count,
+            sheet.PrintArea.HasValue ? ToRangeSummary(sheet.PrintArea.Value) : null,
             sheet.PrintArea is not null,
+            sheet.PrintTitleRows.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleRows.Value) : null,
             sheet.PrintTitleRows is not null,
+            sheet.PrintTitleColumns.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleColumns.Value) : null,
             sheet.PrintTitleColumns is not null,
             sheet.PageOrientation,
             sheet.PaperSize,
             sheet.PageMargins,
+            sheet.HeaderMargin,
+            sheet.FooterMargin,
             sheet.ScaleToFit,
             sheet.PrintGridlines,
             sheet.PrintHeadings,
+            CaptureHeaderFooterSummary(sheet.PageHeader),
             !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
+            CaptureHeaderFooterSummary(sheet.PageFooter),
             !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
+            sheet.DifferentFirstPageHeaderFooter ? CaptureHeaderFooterSummary(sheet.FirstPageHeader) : HeaderFooterSummary.Empty,
+            sheet.DifferentFirstPageHeaderFooter ? CaptureHeaderFooterSummary(sheet.FirstPageFooter) : HeaderFooterSummary.Empty,
+            sheet.DifferentOddEvenHeaderFooter ? CaptureHeaderFooterSummary(sheet.EvenPageHeader) : HeaderFooterSummary.Empty,
+            sheet.DifferentOddEvenHeaderFooter ? CaptureHeaderFooterSummary(sheet.EvenPageFooter) : HeaderFooterSummary.Empty,
+            sheet.DifferentFirstPageHeaderFooter,
+            sheet.DifferentOddEvenHeaderFooter,
+            sheet.HeaderFooterScaleWithDocument,
+            sheet.HeaderFooterAlignWithMargins,
+            CaptureHeaderFooterPictureSetSummary(sheet.PageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.PageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageFooterPictures),
+            sheet.CenterHorizontallyOnPage,
+            sheet.CenterVerticallyOnPage,
+            sheet.PageOrder,
+            sheet.FirstPageNumber,
+            sheet.PrintBlackAndWhite,
+            sheet.PrintDraftQuality,
+            sheet.PrintQualityDpi,
+            sheet.PrintErrorValue,
+            sheet.PrintComments,
+            sheet.DefaultColumnWidth,
+            sheet.DefaultRowHeight,
+            sheet.ColumnWidths
+                .OrderBy(pair => pair.Key)
+                .Where(pair => Math.Abs(pair.Value - sheet.DefaultColumnWidth) >= 0.01)
+                .Select(pair => new DimensionSummary(pair.Key, Math.Round(pair.Value, 2)))
+                .ToArray(),
+            sheet.RowHeights
+                .OrderBy(pair => pair.Key)
+                .Where(pair => Math.Abs(pair.Value - sheet.DefaultRowHeight) >= 0.01)
+                .Select(pair => new DimensionSummary(pair.Key, Math.Round(pair.Value, 2)))
+                .ToArray(),
+            sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
+            sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
             sheet.ColumnPageBreaks.Count,
             sheet.FrozenRows,
             sheet.FrozenCols,
             sheet.SplitRow,
             sheet.SplitColumn,
+            sheet.ViewMode,
+            sheet.ViewTopRow,
+            sheet.ViewLeftCol,
+            sheet.ActiveRow,
+            sheet.ActiveCol,
             sheet.ShowGridlines,
             sheet.ShowHeadings,
             sheet.ShowRulers,
             sheet.ZoomPercent,
             sheet.ShowFormulas,
+            sheet.FullCalculationOnLoad,
+            CapturePhoneticSummary(sheet.PhoneticProperties),
+            sheet.IsHidden,
+            sheet.IsVeryHidden,
+            sheet.CodeName ?? "",
+            sheet.TabColor is null ? "" : ToColorSummary(sheet.TabColor.Value),
+            sheet.CustomProperties
+                .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(property => new WorksheetCustomPropertySummary(property.Name, property.Id))
+                .ToArray(),
+            sheet.HiddenRows.OrderBy(row => row).ToArray(),
             sheet.HiddenRows.Count,
+            sheet.HiddenCols.OrderBy(column => column).ToArray(),
             sheet.HiddenCols.Count,
+            sheet.RowOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
             sheet.RowOutlineLevels.Count,
+            sheet.ColOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
             sheet.ColOutlineLevels.Count,
+            sheet.GroupHiddenRows.OrderBy(row => row).ToArray(),
             sheet.GroupHiddenRows.Count,
+            sheet.GroupHiddenCols.OrderBy(column => column).ToArray(),
             sheet.GroupHiddenCols.Count,
+            sheet.GetStyleOnlyEntries()
+                .OrderBy(entry => entry.Key.Row)
+                .ThenBy(entry => entry.Key.Col)
+                .Select(entry => new StyleOnlyCellSummary(
+                    entry.Key.Row,
+                    entry.Key.Col,
+                    CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
+                .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
+
+    private static PhoneticSummary? CapturePhoneticSummary(WorksheetPhoneticProperties? properties) =>
+        properties is null
+            ? null
+            : new PhoneticSummary(
+                properties.FontId ?? "",
+                properties.Type ?? "",
+                properties.Alignment ?? "");
+
+    private static BackgroundImageSummary? CaptureBackgroundImageSummary(WorksheetBackgroundImage? background) =>
+        background is null
+            ? null
+            : new BackgroundImageSummary(
+                background.ContentType,
+                background.FileName ?? "",
+                background.ImageBytes.Length);
+
+    private static HyperlinkSummary CaptureHyperlinkSummary(Sheet sheet, KeyValuePair<CellAddress, string> pair)
+    {
+        sheet.HyperlinkMetadata.TryGetValue(pair.Key, out var metadata);
+        metadata ??= new HyperlinkMetadata();
+        return new HyperlinkSummary(
+            pair.Key.Row,
+            pair.Key.Col,
+            pair.Value,
+            metadata.LinkType,
+            metadata.ScreenTip,
+            metadata.Bookmark);
+    }
+
+    private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
+    {
+        var metadata = workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+            ? savedMetadata
+            : NamedRangeMetadata.WorkbookScope;
+
+        return new NamedRangeSummary(
+            name,
+            metadata.Scope,
+            metadata.Comment,
+            ToRangeSummary(range));
+    }
+
+    private static CellSummary CaptureCellSummary(Workbook workbook, CellAddress address, Cell cell) =>
+        new(
+            address.Row,
+            address.Col,
+            cell.HasFormula ? new ScalarValueSummary("FormulaCachedValue", "") : CaptureScalarValueSummary(cell.Value),
+            cell.FormulaText ?? "",
+            cell.IgnoreFormulaError);
+
+    private static ScalarValueSummary CaptureScalarValueSummary(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => new ScalarValueSummary("Blank", ""),
+            NumberValue number => new ScalarValueSummary("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            BoolValue boolean => new ScalarValueSummary("Boolean", boolean.Value ? "TRUE" : "FALSE"),
+            TextValue text => new ScalarValueSummary("Text", text.Value),
+            DateTimeValue dateTime => new ScalarValueSummary("DateTime", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
+            ErrorValue error => new ScalarValueSummary("Error", error.Code),
+            _ => new ScalarValueSummary(value.GetType().Name, value.ToString() ?? "")
+        };
+
+    private static CustomViewSummary CaptureCustomViewSummary(WorkbookCustomView view) =>
+        new(
+            view.Name,
+            view.IncludePrintSettings,
+            view.IncludeHiddenRowsColumnsAndFilterSettings,
+            view.Sheets
+                .OrderBy(sheet => sheet.SheetName, StringComparer.OrdinalIgnoreCase)
+                .Select(sheet => new CustomViewSheetSummary(
+                    sheet.SheetName,
+                    sheet.ViewMode,
+                    sheet.FrozenRows,
+                    sheet.FrozenCols,
+                    sheet.SplitRow,
+                    sheet.SplitColumn,
+                    sheet.ShowGridlines,
+                    sheet.ShowHeadings,
+                    sheet.ShowRulers,
+                    sheet.ZoomPercent,
+                    sheet.ShowFormulas))
+                .ToArray());
 
     private static ChartSummary CaptureChartSummary(ChartModel chart) =>
         new(
             chart.Type,
             chart.Title ?? "",
+            chart.XAxisTitle ?? "",
+            chart.YAxisTitle ?? "",
             chart.ShowLegend,
             chart.IsPivotChart,
+            chart.Uses1904DateSystem,
+            chart.Language ?? "",
+            chart.ChartStyleId,
+            chart.RoundedCorners,
+            chart.BlankDisplayMode,
+            chart.ShowDataLabelsOverMaximum,
+            chart.AutoTitleDeleted,
+            chart.ShowDataInHiddenRowsAndColumns,
+            CaptureChartColorMapSummary(chart.ColorMapOverride),
+            CaptureChartExternalDataSummary(chart.ExternalData),
+            CaptureChartManualLayoutSummary(chart.PlotAreaLayout),
+            CaptureChartManualLayoutSummary(chart.LegendLayout),
+            chart.LegendPosition,
+            chart.LegendOverlay,
+            chart.ShowDataLabels,
+            chart.ShowDataLabelCategoryName,
+            chart.ShowDataLabelSeriesName,
+            chart.ShowDataLabelPercentage,
+            chart.DataLabelPosition,
+            chart.DataLabelSeparator,
+            chart.DataLabelNumberFormat,
+            chart.ShowDataLabelCallouts,
+            chart.BarGapWidth,
+            chart.BarOverlap,
+            chart.VaryColorsByPoint,
+            chart.StockSubtype,
+            chart.ShowHighLowLines,
+            chart.ShowUpDownBars,
+            CaptureChartDataTableSummary(chart.DataTable),
+            CaptureChart3DViewSummary(chart.ThreeDView),
             new ChartRangeSummary(
                 chart.DataRange.Start.Row,
                 chart.DataRange.Start.Col,
                 chart.DataRange.End.Row,
                 chart.DataRange.End.Col));
+
+    private static ChartDataTableSummary? CaptureChartDataTableSummary(ChartDataTableModel? dataTable) =>
+        dataTable is null
+            ? null
+            : new ChartDataTableSummary(
+                dataTable.ShowHorizontalBorder,
+                dataTable.ShowVerticalBorder,
+                dataTable.ShowOutline,
+                dataTable.ShowLegendKeys);
+
+    private static ChartColorMapSummary? CaptureChartColorMapSummary(ChartColorMapOverrideModel? colorMap) =>
+        colorMap is null
+            ? null
+            : new ChartColorMapSummary(
+                colorMap.UseMasterColorMapping,
+                colorMap.OverrideMappings
+                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                    .Select(pair => new ChartColorMapEntrySummary(pair.Key, pair.Value))
+                    .ToArray());
+
+    private static ChartExternalDataSummary? CaptureChartExternalDataSummary(ChartExternalDataModel? externalData) =>
+        externalData is null
+            ? null
+            : new ChartExternalDataSummary(
+                externalData.RelationshipId ?? "",
+                externalData.RelationshipType ?? "",
+                externalData.Target ?? "",
+                externalData.TargetMode ?? "",
+                externalData.AutoUpdate);
+
+    private static ChartManualLayoutSummary? CaptureChartManualLayoutSummary(ChartManualLayoutModel? layout) =>
+        layout is null
+            ? null
+            : new ChartManualLayoutSummary(
+                layout.LayoutTarget ?? "",
+                layout.XMode ?? "",
+                layout.YMode ?? "",
+                layout.WidthMode ?? "",
+                layout.HeightMode ?? "",
+                layout.X,
+                layout.Y,
+                layout.Width,
+                layout.Height);
+
+    private static Chart3DViewSummary? CaptureChart3DViewSummary(Chart3DViewModel? view) =>
+        view is null
+            ? null
+            : new Chart3DViewSummary(
+                view.RotationX,
+                view.HeightPercent,
+                view.RotationY,
+                view.DepthPercent,
+                view.RightAngleAxes,
+                view.Perspective);
 
     private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
         new(
@@ -733,8 +1175,10 @@ public class XlsxCorpusRunnerTests
             cache.RefreshOnLoad,
             cache.SaveData,
             cache.EnableRefresh,
+            cache.PreserveSourceSortFilter,
             cache.MissingItemsLimit,
             cache.RefreshedVersion,
+            cache.RefreshedBy ?? "",
             cache.Fields
                 .Select(field => new PivotCacheFieldSummary(
                     field.Name,
@@ -780,6 +1224,28 @@ public class XlsxCorpusRunnerTests
                     column.TotalsRowFunction ?? "",
                     column.CalculatedColumnFormula ?? "",
                     column.TotalsRowFormula ?? ""))
+                .ToArray(),
+            table.FilterColumns
+                .OrderBy(filter => filter.ColumnId)
+                .Select(filter => new StructuredTableFilterColumnSummary(
+                    filter.ColumnId,
+                    filter.Values.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    filter.IncludeBlank))
+                .ToArray());
+
+    private static PivotTableStyleSummary CapturePivotTableStyleSummary(PivotTableStyleModel style) =>
+        new(
+            style.Name,
+            style.AppliesToPivotTables,
+            style.AppliesToTables,
+            style.Elements
+                .OrderBy(element => element.Type, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(element => element.DifferentialFormatId)
+                .ThenBy(element => element.Size)
+                .Select(element => new PivotTableStyleElementSummary(
+                    element.Type,
+                    element.DifferentialFormatId,
+                    element.Size))
                 .ToArray());
 
     private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
@@ -801,12 +1267,22 @@ public class XlsxCorpusRunnerTests
             pivot.ShowRowStripes,
             pivot.ShowColumnStripes,
             pivot.ShowFieldHeaders,
+            pivot.ShowContextualTooltips,
+            pivot.ShowPropertiesInTooltips,
+            pivot.ShowClassicLayout,
+            pivot.MergeAndCenterLabels,
+            pivot.ShowItemsWithNoDataOnRows,
+            pivot.ShowItemsWithNoDataOnColumns,
+            pivot.PageOverThenDown,
+            pivot.PageWrap,
             pivot.EmptyValueText ?? "",
             pivot.AutofitColumnsOnUpdate,
             pivot.PreserveFormattingOnUpdate,
             pivot.ShowExpandCollapseButtons,
             pivot.PrintTitles,
             pivot.PrintExpandCollapseButtons,
+            pivot.AltTextTitle ?? "",
+            pivot.AltTextDescription ?? "",
             pivot.RowFields.Select(CapturePivotFieldSummary).ToArray(),
             pivot.ColumnFields.Select(CapturePivotFieldSummary).ToArray(),
             pivot.PageFields.Select(CapturePivotFieldSummary).ToArray(),
@@ -841,6 +1317,41 @@ public class XlsxCorpusRunnerTests
             range.End.Row,
             range.End.Col);
 
+    private static RepeatRangeSummary ToRepeatRangeSummary(WorksheetRepeatRange range) =>
+        new(range.Start, range.End);
+
+    private static HeaderFooterSummary CaptureHeaderFooterSummary(WorksheetHeaderFooter value) =>
+        new(
+            NormalizeHeaderFooterText(value.Left),
+            NormalizeHeaderFooterText(value.Center),
+            NormalizeHeaderFooterText(value.Right));
+
+    private static HeaderFooterPictureSetSummary CaptureHeaderFooterPictureSetSummary(WorksheetHeaderFooterPictureSet value) =>
+        new(
+            CaptureHeaderFooterPictureSummary(value.Left),
+            CaptureHeaderFooterPictureSummary(value.Center),
+            CaptureHeaderFooterPictureSummary(value.Right));
+
+    private static HeaderFooterPictureSummary? CaptureHeaderFooterPictureSummary(WorksheetHeaderFooterPicture? picture) =>
+        picture is null
+            ? null
+            : new HeaderFooterPictureSummary(
+                picture.ContentType,
+                picture.FileName ?? "",
+                picture.ImageBytes.Length,
+                picture.Width,
+                picture.Height);
+
+    private static string NormalizeHeaderFooterText(string text) =>
+        text
+            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Date]", "&D", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Time]", "&T", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[File]", "&F", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Tab]", "&A", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Path]", "&Z", StringComparison.OrdinalIgnoreCase);
+
     private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
         new(
             textBox.Name ?? "",
@@ -851,7 +1362,11 @@ public class XlsxCorpusRunnerTests
             textBox.Width,
             textBox.Height,
             textBox.RotationDegrees,
-            textBox.IsVisible);
+            textBox.IsVisible,
+            textBox.FillColor,
+            textBox.OutlineColor,
+            textBox.FillThemeColor,
+            textBox.OutlineThemeColor);
 
     private static DrawingShapeSummary CaptureDrawingShapeSummary(DrawingShapeModel shape) =>
         new(
@@ -863,7 +1378,13 @@ public class XlsxCorpusRunnerTests
             shape.Width,
             shape.Height,
             shape.RotationDegrees,
-            shape.IsVisible);
+            shape.IsVisible,
+            shape.FillColor,
+            shape.OutlineColor,
+            shape.GradientFillEndColor,
+            shape.FillThemeColor,
+            shape.OutlineThemeColor,
+            shape.HasShadowEffect);
 
     private static PictureSummary CapturePictureSummary(PictureModel picture) =>
         new(
@@ -877,7 +1398,81 @@ public class XlsxCorpusRunnerTests
             picture.RotationDegrees,
             picture.IsVisible,
             picture.ContentType ?? "",
-            picture.ImageBytes?.Length ?? 0);
+            picture.ImageBytes?.Length ?? 0,
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom,
+            picture.IsLinkedToSourceRange,
+            picture.LinkedSourceRange is { } linkedSourceRange ? ToRangeSummary(linkedSourceRange) : null,
+            picture.LinkedSourceSheetName ?? "",
+            picture.SourceRowCount,
+            picture.SourceColumnCount,
+            picture.Cells
+                .OrderBy(cell => cell.RowOffset)
+                .ThenBy(cell => cell.ColumnOffset)
+                .Select(cell => new PictureCellSummary(cell.RowOffset, cell.ColumnOffset, cell.Text))
+                .ToArray());
+
+    private static ConditionalFormatSummary CaptureConditionalFormatSummary(ConditionalFormat format) =>
+        new(
+            format.RuleType,
+            format.Priority,
+            format.Operator,
+            format.Value1 ?? "",
+            format.Value2 ?? "",
+            CaptureStyleSummary(format.FormatIfTrue),
+            format.MinColor,
+            format.MidColor,
+            format.MaxColor,
+            format.UseThreeColorScale,
+            format.MinThresholdType,
+            format.MinThresholdValue ?? "",
+            format.MidThresholdType,
+            format.MidThresholdValue ?? "",
+            format.MaxThresholdType,
+            format.MaxThresholdValue ?? "",
+            format.DataBarColor,
+            format.DataBarMinThresholdType,
+            format.DataBarMinThresholdValue ?? "",
+            format.DataBarMaxThresholdType,
+            format.DataBarMaxThresholdValue ?? "",
+            format.DataBarShowValue,
+            format.DataBarMinLength,
+            format.DataBarMaxLength,
+            format.AboveAverage,
+            format.FormulaText ?? "",
+            format.IconSetStyle ?? "",
+            format.IconSetShowValue,
+            format.IconSetReverse,
+            format.IconSetThresholds.Select(threshold => new ConditionalFormatThresholdSummary(threshold.Type, threshold.Value ?? "")).ToArray(),
+            format.TopBottomRank,
+            format.TopBottomPercent,
+            format.TextRuleText ?? "",
+            format.DateOccurringPeriod ?? "",
+            format.StopIfTrue,
+            ToRangeSummary(format.AppliesTo));
+
+    private static CellStyleSummary? CaptureStyleSummary(CellStyle? style) =>
+        style is null
+            ? null
+            : new(
+                style.FontName,
+                style.FontSize,
+                style.Bold,
+                style.Italic,
+                style.Underline,
+                style.Strikethrough,
+                style.FontColor,
+                style.FillColor,
+                NormalizeFillPatternStyle(style),
+                style.FillPatternColor,
+                style.NumberFormat);
+
+    private static CellFillPatternStyle NormalizeFillPatternStyle(CellStyle style) =>
+        style.FillColor.HasValue && style.FillPatternStyle == CellFillPatternStyle.None
+            ? CellFillPatternStyle.Solid
+            : style.FillPatternStyle;
 
     private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
         new(
@@ -902,7 +1497,18 @@ public class XlsxCorpusRunnerTests
         return summary with
         {
             Sheets = summary.Sheets
-                .Select(sheet => sheet with { StyleOnlyCellCount = 0 })
+                .Select(sheet => sheet with
+                {
+                    Cells = [],
+                    HeaderFooterAlignWithMargins = true,
+                    HeaderFooterScaleWithDocument = true,
+                    DefaultColumnWidth = 0,
+                    DefaultRowHeight = 0,
+                    ColumnWidths = [],
+                    RowHeights = [],
+                    StyleOnlyCells = [],
+                    StyleOnlyCellCount = 0
+                })
                 .ToArray()
         };
     }
@@ -1112,27 +1718,115 @@ public class XlsxCorpusRunnerTests
 
     private sealed record WorkbookSummary(
         int SheetCount,
+        IReadOnlyList<NamedRangeSummary> NamedRanges,
         int NamedRangeCount,
         bool IsStructureProtected,
+        string StructureProtectionPassword,
         IReadOnlyList<PivotCacheSummary> PivotCaches,
         int PivotCacheCount,
         int PivotCacheFieldCount,
+        IReadOnlyList<PivotTableStyleSummary> PivotTableStyles,
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
+        IReadOnlyList<NumberFormatCatalogSummary> NumberFormatCatalog,
+        IReadOnlyList<CustomViewSummary> CustomViews,
+        int CustomViewCount,
+        WorkbookMetadataSummary Metadata,
+        WorkbookCalculationSummary Calculation,
+        WorkbookThemeSummary Theme,
         IReadOnlyList<SheetSummary> Sheets);
+
+    private sealed record WorkbookMetadataSummary(
+        IReadOnlyList<SlicerSummary> Slicers,
+        IReadOnlyList<TimelineSummary> Timelines,
+        IReadOnlyList<ExternalLinkSummary> ExternalLinks,
+        IReadOnlyList<WatchedCellSummary> WatchedCells,
+        IReadOnlyList<ScenarioSummary> Scenarios);
+
+    private sealed record SlicerSummary(
+        string Name,
+        string Caption,
+        string CacheName,
+        string SourcePivotTableName,
+        string SourceFieldName,
+        string StyleName,
+        IReadOnlyList<string> SelectedItems,
+        string PackagePart);
+
+    private sealed record TimelineSummary(
+        string Name,
+        string Caption,
+        string CacheName,
+        string SourcePivotTableName,
+        string SourceFieldName,
+        string StyleName,
+        string StartDate,
+        string EndDate,
+        string SelectedStartDate,
+        string SelectedEndDate,
+        string PackagePart);
+
+    private sealed record ExternalLinkSummary(
+        string PackagePart,
+        string TargetUri,
+        string TargetMode);
+
+    private sealed record WatchedCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column);
+
+    private sealed record ScenarioSummary(
+        string Name,
+        IReadOnlyList<ScenarioCellSummary> ChangingCells);
+
+    private sealed record ScenarioCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value);
+
+    private sealed record WorkbookCalculationSummary(
+        WorkbookCalculationMode Mode,
+        bool FullCalculationOnLoad,
+        bool ForceFullCalculation,
+        bool IterativeCalculation,
+        int? MaxIterations,
+        double? MaxChange);
+
+    private sealed record WorkbookThemeSummary(
+        string Name,
+        string MajorFontName,
+        string MinorFontName,
+        string EffectsName,
+        IReadOnlyList<ThemeColorSummary> Colors);
+
+    private sealed record ThemeColorSummary(
+        WorkbookThemeColorSlot Slot,
+        string Color);
+
+    private sealed record NamedRangeSummary(
+        string Name,
+        string Scope,
+        string Comment,
+        ChartRangeSummary Range);
 
     private sealed record SheetSummary(
         string Name,
+        IReadOnlyList<CellSummary> Cells,
         int CellCount,
         int FormulaCount,
         int MergedRegionCount,
         IReadOnlyList<DataValidationSummary> DataValidations,
         int DataValidationCount,
+        IReadOnlyList<ConditionalFormatSummary> ConditionalFormats,
         int ConditionalFormatCount,
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
         int IconSetConditionalFormatCount,
+        IReadOnlyList<CommentSummary> Comments,
         int CommentCount,
+        IReadOnlyList<HyperlinkSummary> Hyperlinks,
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
@@ -1150,22 +1844,115 @@ public class XlsxCorpusRunnerTests
         int DrawingShapeCount,
         IReadOnlyList<PictureSummary> Pictures,
         int PictureCount,
+        BackgroundImageSummary? BackgroundImage,
         bool HasBackgroundImage,
         bool IsProtected,
+        string ProtectionPassword,
+        IReadOnlyList<ChartRangeSummary> AllowEditRanges,
         int AllowEditRangeCount,
+        ChartRangeSummary? PrintArea,
         bool HasPrintArea,
+        RepeatRangeSummary? PrintTitleRows,
         bool HasPrintTitleRows,
+        RepeatRangeSummary? PrintTitleColumns,
         bool HasPrintTitleColumns,
         WorksheetPageOrientation PageOrientation,
         WorksheetPaperSize PaperSize,
         WorksheetPageMargins PageMargins,
+        double HeaderMargin,
+        double FooterMargin,
         WorksheetScaleToFit ScaleToFit,
         bool PrintGridlines,
         bool PrintHeadings,
+        HeaderFooterSummary PageHeader,
         bool HasPageHeader,
+        HeaderFooterSummary PageFooter,
         bool HasPageFooter,
+        HeaderFooterSummary FirstPageHeader,
+        HeaderFooterSummary FirstPageFooter,
+        HeaderFooterSummary EvenPageHeader,
+        HeaderFooterSummary EvenPageFooter,
+        bool DifferentFirstPageHeaderFooter,
+        bool DifferentOddEvenHeaderFooter,
+        bool HeaderFooterScaleWithDocument,
+        bool HeaderFooterAlignWithMargins,
+        HeaderFooterPictureSetSummary PageHeaderPictures,
+        HeaderFooterPictureSetSummary PageFooterPictures,
+        HeaderFooterPictureSetSummary FirstPageHeaderPictures,
+        HeaderFooterPictureSetSummary FirstPageFooterPictures,
+        HeaderFooterPictureSetSummary EvenPageHeaderPictures,
+        HeaderFooterPictureSetSummary EvenPageFooterPictures,
+        bool CenterHorizontallyOnPage,
+        bool CenterVerticallyOnPage,
+        WorksheetPageOrder PageOrder,
+        int? FirstPageNumber,
+        bool PrintBlackAndWhite,
+        bool PrintDraftQuality,
+        int? PrintQualityDpi,
+        WorksheetPrintErrorValue PrintErrorValue,
+        WorksheetPrintComments PrintComments,
+        double DefaultColumnWidth,
+        double DefaultRowHeight,
+        IReadOnlyList<DimensionSummary> ColumnWidths,
+        IReadOnlyList<DimensionSummary> RowHeights,
+        IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
+        IReadOnlyList<uint> ColumnPageBreaks,
         int ColumnPageBreakCount,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        WorksheetViewMode ViewMode,
+        uint? ViewTopRow,
+        uint? ViewLeftColumn,
+        uint? ActiveRow,
+        uint? ActiveColumn,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        int ZoomPercent,
+        bool ShowFormulas,
+        bool FullCalculationOnLoad,
+        PhoneticSummary? PhoneticProperties,
+        bool IsHidden,
+        bool IsVeryHidden,
+        string CodeName,
+        string TabColor,
+        IReadOnlyList<WorksheetCustomPropertySummary> CustomProperties,
+        IReadOnlyList<uint> HiddenRows,
+        int HiddenRowCount,
+        IReadOnlyList<uint> HiddenColumns,
+        int HiddenColumnCount,
+        IReadOnlyList<OutlineLevelSummary> RowOutlineLevels,
+        int RowOutlineLevelCount,
+        IReadOnlyList<OutlineLevelSummary> ColumnOutlineLevels,
+        int ColumnOutlineLevelCount,
+        IReadOnlyList<uint> GroupHiddenRows,
+        int GroupHiddenRowCount,
+        IReadOnlyList<uint> GroupHiddenColumns,
+        int GroupHiddenColumnCount,
+        IReadOnlyList<StyleOnlyCellSummary> StyleOnlyCells,
+        int StyleOnlyCellCount);
+
+    private sealed record CellSummary(
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value,
+        string FormulaText,
+        bool IgnoreFormulaError);
+
+    private sealed record ScalarValueSummary(string Kind, string Value);
+
+    private sealed record CustomViewSummary(
+        string Name,
+        bool IncludePrintSettings,
+        bool IncludeHiddenRowsColumnsAndFilterSettings,
+        IReadOnlyList<CustomViewSheetSummary> Sheets);
+
+    private sealed record CustomViewSheetSummary(
+        string SheetName,
+        WorksheetViewMode ViewMode,
         uint FrozenRows,
         uint FrozenCols,
         uint? SplitRow,
@@ -1174,21 +1961,125 @@ public class XlsxCorpusRunnerTests
         bool ShowHeadings,
         bool ShowRulers,
         int ZoomPercent,
-        bool ShowFormulas,
-        int HiddenRowCount,
-        int HiddenColumnCount,
-        int RowOutlineLevelCount,
-        int ColumnOutlineLevelCount,
-        int GroupHiddenRowCount,
-        int GroupHiddenColumnCount,
-        int StyleOnlyCellCount);
+        bool ShowFormulas);
+
+    private sealed record CommentSummary(uint Row, uint Column, string Text);
+
+    private sealed record HyperlinkSummary(
+        uint Row,
+        uint Column,
+        string Target,
+        HyperlinkTargetKind LinkType,
+        string ScreenTip,
+        string Bookmark);
+
+    private sealed record OutlineLevelSummary(uint Index, int Level);
+
+    private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
+
+    private sealed record DimensionSummary(uint Index, double Value);
+
+    private sealed record PhoneticSummary(string FontId, string Type, string Alignment);
+
+    private sealed record WorksheetCustomPropertySummary(string Name, int Id);
+
+    private sealed record RepeatRangeSummary(uint Start, uint End);
+
+    private sealed record BackgroundImageSummary(string ContentType, string FileName, int ImageByteCount);
+
+    private sealed record HeaderFooterSummary(string Left, string Center, string Right)
+    {
+        public static HeaderFooterSummary Empty { get; } = new("", "", "");
+    }
+
+    private sealed record HeaderFooterPictureSetSummary(
+        HeaderFooterPictureSummary? Left,
+        HeaderFooterPictureSummary? Center,
+        HeaderFooterPictureSummary? Right);
+
+    private sealed record HeaderFooterPictureSummary(
+        string ContentType,
+        string FileName,
+        int ByteLength,
+        double Width,
+        double Height);
 
     private sealed record ChartSummary(
         ChartType Type,
         string Title,
+        string XAxisTitle,
+        string YAxisTitle,
         bool ShowLegend,
         bool IsPivotChart,
+        bool Uses1904DateSystem,
+        string Language,
+        int? ChartStyleId,
+        bool RoundedCorners,
+        ChartBlankDisplayMode BlankDisplayMode,
+        bool ShowDataLabelsOverMaximum,
+        bool AutoTitleDeleted,
+        bool ShowDataInHiddenRowsAndColumns,
+        ChartColorMapSummary? ColorMapOverride,
+        ChartExternalDataSummary? ExternalData,
+        ChartManualLayoutSummary? PlotAreaLayout,
+        ChartManualLayoutSummary? LegendLayout,
+        ChartLegendPosition LegendPosition,
+        bool LegendOverlay,
+        bool ShowDataLabels,
+        bool ShowDataLabelCategoryName,
+        bool ShowDataLabelSeriesName,
+        bool ShowDataLabelPercentage,
+        ChartDataLabelPosition DataLabelPosition,
+        ChartDataLabelSeparator DataLabelSeparator,
+        ChartDataLabelNumberFormat DataLabelNumberFormat,
+        bool ShowDataLabelCallouts,
+        int? BarGapWidth,
+        int? BarOverlap,
+        bool? VaryColorsByPoint,
+        StockChartSubtype StockSubtype,
+        bool ShowHighLowLines,
+        bool ShowUpDownBars,
+        ChartDataTableSummary? DataTable,
+        Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
+
+    private sealed record ChartColorMapSummary(
+        bool UseMasterColorMapping,
+        IReadOnlyList<ChartColorMapEntrySummary> OverrideMappings);
+
+    private sealed record ChartColorMapEntrySummary(string Key, string Value);
+
+    private sealed record ChartExternalDataSummary(
+        string RelationshipId,
+        string RelationshipType,
+        string Target,
+        string TargetMode,
+        bool? AutoUpdate);
+
+    private sealed record ChartManualLayoutSummary(
+        string LayoutTarget,
+        string XMode,
+        string YMode,
+        string WidthMode,
+        string HeightMode,
+        double? X,
+        double? Y,
+        double? Width,
+        double? Height);
+
+    private sealed record ChartDataTableSummary(
+        bool? ShowHorizontalBorder,
+        bool? ShowVerticalBorder,
+        bool? ShowOutline,
+        bool? ShowLegendKeys);
+
+    private sealed record Chart3DViewSummary(
+        int? RotationX,
+        int? HeightPercent,
+        int? RotationY,
+        int? DepthPercent,
+        bool? RightAngleAxes,
+        int? Perspective);
 
     private sealed record ChartRangeSummary(
         uint StartRow,
@@ -1207,7 +2098,8 @@ public class XlsxCorpusRunnerTests
         bool ShowRowStripes,
         bool ShowColumnStripes,
         ChartRangeSummary Range,
-        IReadOnlyList<StructuredTableColumnSummary> Columns);
+        IReadOnlyList<StructuredTableColumnSummary> Columns,
+        IReadOnlyList<StructuredTableFilterColumnSummary> FilterColumns);
 
     private sealed record StructuredTableColumnSummary(
         int Id,
@@ -1216,6 +2108,11 @@ public class XlsxCorpusRunnerTests
         string TotalsRowFunction,
         string CalculatedColumnFormula,
         string TotalsRowFormula);
+
+    private sealed record StructuredTableFilterColumnSummary(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank);
 
     private sealed record PivotTableSummary(
         string Name,
@@ -1235,12 +2132,22 @@ public class XlsxCorpusRunnerTests
         bool ShowRowStripes,
         bool ShowColumnStripes,
         bool ShowFieldHeaders,
+        bool ShowContextualTooltips,
+        bool ShowPropertiesInTooltips,
+        bool ShowClassicLayout,
+        bool MergeAndCenterLabels,
+        bool ShowItemsWithNoDataOnRows,
+        bool ShowItemsWithNoDataOnColumns,
+        bool PageOverThenDown,
+        int PageWrap,
         string EmptyValueText,
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,
         bool ShowExpandCollapseButtons,
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
+        string AltTextTitle,
+        string AltTextDescription,
         IReadOnlyList<PivotFieldSummary> RowFields,
         IReadOnlyList<PivotFieldSummary> ColumnFields,
         IReadOnlyList<PivotFieldSummary> PageFields,
@@ -1257,8 +2164,10 @@ public class XlsxCorpusRunnerTests
         bool RefreshOnLoad,
         bool SaveData,
         bool EnableRefresh,
+        bool PreserveSourceSortFilter,
         int? MissingItemsLimit,
         int? RefreshedVersion,
+        string RefreshedBy,
         IReadOnlyList<PivotCacheFieldSummary> Fields);
 
     private sealed record PivotCacheFieldSummary(
@@ -1300,6 +2209,19 @@ public class XlsxCorpusRunnerTests
         string BaseItem,
         string NumberFormatCode);
 
+    private sealed record PivotTableStyleSummary(
+        string Name,
+        bool AppliesToPivotTables,
+        bool AppliesToTables,
+        IReadOnlyList<PivotTableStyleElementSummary> Elements);
+
+    private sealed record PivotTableStyleElementSummary(
+        string Type,
+        int? DifferentialFormatId,
+        int? Size);
+
+    private sealed record NumberFormatCatalogSummary(int Id, string FormatCode);
+
     private sealed record SparklineSummary(
         SparklineKind Kind,
         ChartRangeSummary DataRange,
@@ -1315,7 +2237,11 @@ public class XlsxCorpusRunnerTests
         double Width,
         double Height,
         double RotationDegrees,
-        bool IsVisible);
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor);
 
     private sealed record DrawingShapeSummary(
         string Name,
@@ -1326,7 +2252,13 @@ public class XlsxCorpusRunnerTests
         double Width,
         double Height,
         double RotationDegrees,
-        bool IsVisible);
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        CellColor? GradientFillEndColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor,
+        bool HasShadowEffect);
 
     private sealed record PictureSummary(
         string Name,
@@ -1339,7 +2271,19 @@ public class XlsxCorpusRunnerTests
         double RotationDegrees,
         bool IsVisible,
         string ContentType,
-        int ImageByteCount);
+        int ImageByteCount,
+        double CropLeft,
+        double CropTop,
+        double CropRight,
+        double CropBottom,
+        bool IsLinkedToSourceRange,
+        ChartRangeSummary? LinkedSourceRange,
+        string LinkedSourceSheetName,
+        uint SourceRowCount,
+        uint SourceColumnCount,
+        IReadOnlyList<PictureCellSummary> Cells);
+
+    private sealed record PictureCellSummary(uint RowOffset, uint ColumnOffset, string Text);
 
     private sealed record DataValidationSummary(
         DvType Type,
@@ -1356,6 +2300,59 @@ public class XlsxCorpusRunnerTests
         string PromptTitle,
         string PromptMessage,
         ChartRangeSummary AppliesTo);
+
+    private sealed record ConditionalFormatSummary(
+        CfRuleType RuleType,
+        int Priority,
+        CfOperator Operator,
+        string Value1,
+        string Value2,
+        CellStyleSummary? FormatIfTrue,
+        RgbColor MinColor,
+        RgbColor MidColor,
+        RgbColor MaxColor,
+        bool UseThreeColorScale,
+        CfThresholdType MinThresholdType,
+        string MinThresholdValue,
+        CfThresholdType MidThresholdType,
+        string MidThresholdValue,
+        CfThresholdType MaxThresholdType,
+        string MaxThresholdValue,
+        RgbColor DataBarColor,
+        CfThresholdType DataBarMinThresholdType,
+        string DataBarMinThresholdValue,
+        CfThresholdType DataBarMaxThresholdType,
+        string DataBarMaxThresholdValue,
+        bool DataBarShowValue,
+        int? DataBarMinLength,
+        int? DataBarMaxLength,
+        bool AboveAverage,
+        string FormulaText,
+        string IconSetStyle,
+        bool IconSetShowValue,
+        bool IconSetReverse,
+        IReadOnlyList<ConditionalFormatThresholdSummary> IconSetThresholds,
+        int TopBottomRank,
+        bool TopBottomPercent,
+        string TextRuleText,
+        string DateOccurringPeriod,
+        bool StopIfTrue,
+        ChartRangeSummary AppliesTo);
+
+    private sealed record ConditionalFormatThresholdSummary(CfThresholdType Type, string Value);
+
+    private sealed record CellStyleSummary(
+        string FontName,
+        double FontSize,
+        bool Bold,
+        bool Italic,
+        bool Underline,
+        bool Strikethrough,
+        CellColor FontColor,
+        CellColor? FillColor,
+        CellFillPatternStyle FillPatternStyle,
+        CellColor? FillPatternColor,
+        string NumberFormat);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,

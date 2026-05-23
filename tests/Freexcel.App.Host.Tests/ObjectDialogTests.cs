@@ -96,6 +96,21 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectDialogs_UseSharedButtonRowsOutsideChartDialogs()
+    {
+        var objectSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var formatPictureSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var namedRangeSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+        var shapeGradientSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
+
+        foreach (var source in new[] { objectSource, formatPictureSource, namedRangeSource, shapeGradientSource })
+        {
+            source.Should().Contain("DialogButtonRowFactory.Create");
+            source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+        }
+    }
+
+    [Fact]
     public void HyperlinkDialog_LabelsTextRowsWithAccessKeyTargets()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
@@ -210,6 +225,32 @@ public sealed class ObjectDialogTests
         drawingSource.Should().Contain("CreateFormatPictureCommand");
         drawingSource.Should().Contain("new SetPictureAltTextCommand");
         drawingSource.Should().Contain("new CompositeWorkbookCommand(\"Format Picture\", commands)");
+    }
+
+    [Fact]
+    public void FormatPictureDialog_ExposesQuickResetActionsForInitialSizeAndCrop()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("Content = \"Reset _Size\"");
+        source.Should().Contain("Content = \"Reset _Crop\"");
+        source.Should().Contain("ResetSizeToInitial");
+        source.Should().Contain("ResetCropToInitial");
+        source.Should().Contain("_resetCropButton.IsEnabled = false");
+    }
+
+    [Fact]
+    public void FormatPictureDialog_ResetActionsRestoreInitialFieldText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_cropLeftBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropLeft)");
+        source.Should().Contain("_cropTopBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropTop)");
+        source.Should().Contain("_cropRightBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropRight)");
+        source.Should().Contain("_cropBottomBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropBottom)");
     }
 
     [Fact]

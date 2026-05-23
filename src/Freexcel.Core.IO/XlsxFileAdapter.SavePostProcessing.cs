@@ -16,6 +16,12 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);
 
+        if (workbook.Sheets.Any(XlsxWorksheetDimensionDefaultsWriter.HasNonDefaultDimensions))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetDimensionDefaultsWriter.Save(packageStream, workbook);
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
         {
             packageStream.Position = 0;
@@ -56,6 +62,21 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(XlsxHeaderFooterPictureReaderWriter.HasPictures))
+        {
+            IReadOnlySet<string>? sheetsToPreserve = null;
+            if (SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            {
+                using var sourceStream = new MemoryStream(sourcePackage.Bytes, writable: false);
+                sheetsToPreserve = XlsxHeaderFooterPictureReaderWriter.FindSheetsWithUnchangedSourcePictures(
+                    sourceStream,
+                    workbook);
+            }
+
+            packageStream.Position = 0;
+            XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook, sheetsToPreserve);
         }
 
         if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))

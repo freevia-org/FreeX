@@ -144,6 +144,47 @@ public sealed class TextToColumnsPlannerTests
     }
 
     [Fact]
+    public void BuildEdits_UsesAdvancedNumberOptionsForGeneralColumns()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("1.234,50;42-"));
+
+        var edits = TextToColumnsPlanner.BuildEdits(
+            sheet,
+            range,
+            new CellAddress(sheet.Id, 2, 3),
+            ";",
+            advancedOptions: new TextToColumnsAdvancedOptions(",", ".", TrailingMinusNumbers: true));
+
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new NumberValue(1234.50),
+            new NumberValue(-42));
+    }
+
+    [Fact]
+    public void BuildEdits_UsesSelectedDateColumnFormat()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("31/12/2025,2026-01-15"));
+
+        var edits = TextToColumnsPlanner.BuildEdits(
+            sheet,
+            range,
+            new CellAddress(sheet.Id, 2, 3),
+            ",",
+            [
+                TextToColumnsColumnFormat.DateDMY,
+                TextToColumnsColumnFormat.DateYMD
+            ]);
+
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new DateTimeValue(new DateTime(2025, 12, 31).ToOADate()),
+            new DateTimeValue(new DateTime(2026, 1, 15).ToOADate()));
+    }
+
+    [Fact]
     public void BuildEdits_SplitsOnAnySelectedDelimiter()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

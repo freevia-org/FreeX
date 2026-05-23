@@ -36,8 +36,9 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]
+    [InlineData("# ??/??", 1.25, "1  1/4 ")]
+    [InlineData("# ??/16", 0.3125, " 5/16")]
     [InlineData("# ?/4", 0.5, "2/4")]
-    [InlineData("# ??/16", 0.3125, "5/16")]
     [InlineData("0.00E+00\" kg\"", 1200, "1.20E+03 kg")]
     [InlineData("0.00E+00", 1200, "1.20E+03")]
     [InlineData("0.00E-00", 1200, "1.20E03")]
@@ -87,6 +88,21 @@ public class NumberFormatterTests
         var result = NumberFormatter.Format(new NumberValue(value), format);
 
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[Blue] [>100]0;0", 50, "50", null)]
+    [InlineData("[Blue] [>100]0;0", 150, "150", "#0070C0")]
+    public void CustomNumberSubset_AllowsWhitespaceBetweenLeadingBracketDirectives(
+        string format,
+        double value,
+        string expectedText,
+        string? expectedColor)
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(value), format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
     }
 
     [Theory]
@@ -193,7 +209,9 @@ public class NumberFormatterTests
     [InlineData("-[$\u20AC-407]#,##0.00", 1234.5, "-\u20AC1.234,50")]
     [InlineData("([$\u20AC-407]#,##0.00)", 1234.5, "(\u20AC1.234,50)")]
     [InlineData("[$\u20AC-407]* #,##0.00", 1234.5, "\u20AC 1.234,50")]
+    [InlineData("[$CHF-807]* #,##0.00", 1234.5, "CHF 1'234.50")]
     [InlineData("[$\u20AC-407]* \"-\"??", 0, "\u20AC -")]
+    [InlineData("[$CHF-807]* \"-\"??", 0, "CHF -")]
     public void CustomNumberSubset_PreservesVisibleCurrencyFromLocaleTokens(
         string format,
         double value,
@@ -502,6 +520,20 @@ public class NumberFormatterTests
         var value = (TimeSpan.FromHours(36) + TimeSpan.FromMilliseconds(789)).TotalDays;
 
         var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[h]:mm:ss", "36:00:00")]
+    [InlineData("[m]:ss.00", "2160:00.79")]
+    public void CustomNumberSubset_FormatsElapsedTimeForDateTimeValues(
+        string format,
+        string expected)
+    {
+        var value = (TimeSpan.FromHours(36) + TimeSpan.FromMilliseconds(789)).TotalDays;
+
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
 
         Assert.Equal(expected, result);
     }

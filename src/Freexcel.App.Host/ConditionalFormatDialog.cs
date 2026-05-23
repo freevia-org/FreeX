@@ -5,7 +5,7 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public class ConditionalFormatDialog : Window
+public partial class ConditionalFormatDialog : Window
 {
     public ConditionalFormat? ResultRule { get; private set; }
 
@@ -26,6 +26,8 @@ public class ConditionalFormatDialog : Window
     private ComboBox _dataBarMaxTypeBox;
     private TextBox _dataBarMaxValueBox;
     private CheckBox _dataBarShowValueBox;
+    private CheckBox _dataBarGradientBox;
+    private Button _dataBarColorButton;
     private TextBox _dataBarMinLengthBox;
     private TextBox _dataBarMaxLengthBox;
     private ComboBox _colorScaleMinTypeBox;
@@ -124,6 +126,8 @@ public class ConditionalFormatDialog : Window
         _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
         _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
+        _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+        _dataBarColorButton = CreateDataBarColorButton();
         _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
         _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
@@ -172,6 +176,7 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Maximum _value:", _dataBarMaxValueBox));
             inner.Children.Add(_dataBarMaxValueBox);
             inner.Children.Add(_dataBarShowValueBox);
+            inner.Children.Add(_dataBarGradientBox);
             inner.Children.Add(CreateAccessLabel("_Minimum bar length (%):", _dataBarMinLengthBox));
             inner.Children.Add(_dataBarMinLengthBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
@@ -297,7 +302,7 @@ public class ConditionalFormatDialog : Window
         {
             colorLabel.Content = isDataBar ? "_Bar color:" : "_Format:";
             inner.Children.Add(colorLabel);
-            inner.Children.Add(_colorBox);
+            inner.Children.Add(isDataBar ? CreateDataBarColorEditor(_colorBox, _dataBarColorButton) : _colorBox);
             if (!isDataBar)
                 inner.Children.Add(formatButton);
         }
@@ -350,6 +355,7 @@ public class ConditionalFormatDialog : Window
                 _dataBarMaxTypeBox.SelectedItem = existingRule.DataBarMaxThresholdType;
                 _dataBarMaxValueBox.Text = existingRule.DataBarMaxThresholdValue ?? "";
                 _dataBarShowValueBox.IsChecked = !existingRule.DataBarShowValue;
+                _dataBarGradientBox.IsChecked = existingRule.DataBarGradient;
                 _dataBarMinLengthBox.Text = existingRule.DataBarMinLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
                 _dataBarMaxLengthBox.Text = existingRule.DataBarMaxLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
             }
@@ -407,8 +413,15 @@ public class ConditionalFormatDialog : Window
             if (ColorOptions[i].FillColor == wc)
             {
                 _colorBox.SelectedIndex = i;
+                _customFormatStyle = null;
                 break;
             }
+        }
+
+        if (_colorBox.SelectedIndex < 0 || ColorOptions[_colorBox.SelectedIndex].FillColor != wc)
+        {
+            _customFormatStyle = new CellStyle { FillColor = color };
+            _colorBox.SelectedItem = "Custom Format...";
         }
     }
 
@@ -495,12 +508,14 @@ public class ConditionalFormatDialog : Window
             }
             else if (cf.RuleType == CfRuleType.DataBar)
             {
-                cf.DataBarColor = new RgbColor(fillColor.R, fillColor.G, fillColor.B);
+                var barColor = SelectedDataBarColor(fillColor);
+                cf.DataBarColor = new RgbColor(barColor.R, barColor.G, barColor.B);
                 cf.DataBarMinThresholdType = SelectedThresholdType(_dataBarMinTypeBox, CfThresholdType.Min);
                 cf.DataBarMinThresholdValue = BlankToNull(_dataBarMinValueBox.Text);
                 cf.DataBarMaxThresholdType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max);
                 cf.DataBarMaxThresholdValue = BlankToNull(_dataBarMaxValueBox.Text);
                 cf.DataBarShowValue = _dataBarShowValueBox.IsChecked != true;
+                cf.DataBarGradient = _dataBarGradientBox.IsChecked == true;
                 cf.DataBarMinLength = ParseOptionalPercent(_dataBarMinLengthBox.Text);
                 cf.DataBarMaxLength = ParseOptionalPercent(_dataBarMaxLengthBox.Text);
             }
@@ -554,6 +569,11 @@ public class ConditionalFormatDialog : Window
         return ColorOptions[index];
     }
 
+    private CellColor SelectedDataBarColor(Color fallback) =>
+        _colorBox.SelectedItem as string == "Custom Format..." && _customFormatStyle?.FillColor is { } custom
+            ? custom
+            : new CellColor(fallback.R, fallback.G, fallback.B);
+
     private CellStyle BuildSelectedCellStyle()
     {
         if (_colorBox.SelectedItem as string == "Custom Format..." && _customFormatStyle is not null)
@@ -573,6 +593,28 @@ public class ConditionalFormatDialog : Window
 
     private static Label CreateAccessLabel(string content, Control target) =>
         new() { Content = content, Target = target, Padding = new Thickness(0) };
+
+    private Button CreateDataBarColorButton()
+    {
+        var button = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(6, 4, 0, 12),
+            ToolTip = "Choose data bar color"
+        };
+        button.Click += FormatButton_Click;
+        return button;
+    }
+
+    private static DockPanel CreateDataBarColorEditor(ComboBox colorBox, Button pickerButton)
+    {
+        var panel = new DockPanel();
+        DockPanel.SetDock(pickerButton, Dock.Right);
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(colorBox);
+        return panel;
+    }
 
     private static Button CreateColorScaleColorButton(TextBox colorBox, string tooltip)
     {
@@ -660,58 +702,6 @@ public class ConditionalFormatDialog : Window
                 ? period.Label
                 : "Today";
 
-    private Grid BuildExcelRuleShell(string ruleType, UIElement descriptionContent)
-    {
-        var root = new Grid { Margin = new Thickness(14) };
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var left = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-        left.Children.Add(new TextBlock
-        {
-            Text = "Select a Rule Type:",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6)
-        });
-
-        var ruleTypeList = new ListBox
-        {
-            MinHeight = 182,
-            ItemsSource = ExcelRuleShellTypes,
-            SelectedItem = RuleTypeShellLabel(ruleType)
-        };
-        ruleTypeList.SelectionChanged += RuleTypeList_SelectionChanged;
-        left.Children.Add(ruleTypeList);
-        Grid.SetColumn(left, 0);
-        root.Children.Add(left);
-
-        var right = new StackPanel();
-        _descriptionHost = right;
-        right.Children.Add(new TextBlock
-        {
-            Text = "Edit the Rule Description:",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6)
-        });
-        right.Children.Add(descriptionContent);
-        Grid.SetColumn(right, 1);
-        root.Children.Add(right);
-
-        return root;
-    }
-
-    private void RuleTypeList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (sender is not ListBox listBox || listBox.SelectedItem is not string shellLabel)
-            return;
-
-        var newRuleType = DefaultRuleTypeForShellLabel(shellLabel);
-        if (newRuleType == _ruleType || _descriptionHost is null)
-            return;
-
-        RefreshRuleDescription(newRuleType);
-    }
-
     private void RefreshRuleDescription(string ruleType)
     {
         _ruleType = ruleType;
@@ -745,6 +735,8 @@ public class ConditionalFormatDialog : Window
             _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
             _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
+            _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+            _dataBarColorButton = CreateDataBarColorButton();
             _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
             inner.Children.Add(CreateAccessLabel("_Minimum type:", _dataBarMinTypeBox));
@@ -756,6 +748,7 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Maximum _value:", _dataBarMaxValueBox));
             inner.Children.Add(_dataBarMaxValueBox);
             inner.Children.Add(_dataBarShowValueBox);
+            inner.Children.Add(_dataBarGradientBox);
             inner.Children.Add(CreateAccessLabel("_Minimum bar length (%):", _dataBarMinLengthBox));
             inner.Children.Add(_dataBarMinLengthBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
@@ -904,7 +897,7 @@ public class ConditionalFormatDialog : Window
         if (ruleType is not ("Icon Set" or "Color Scale"))
         {
             inner.Children.Add(new Label { Content = ruleType is "Data Bar" ? "_Bar color:" : "_Format with:", Target = _colorBox, Padding = new Thickness(0) });
-            inner.Children.Add(_colorBox);
+            inner.Children.Add(ruleType is "Data Bar" ? CreateDataBarColorEditor(_colorBox, _dataBarColorButton) : _colorBox);
             if (ruleType is not "Data Bar")
                 inner.Children.Add(formatButton);
         }
@@ -929,24 +922,6 @@ public class ConditionalFormatDialog : Window
         _descriptionHost.Children.RemoveRange(1, _descriptionHost.Children.Count - 1);
         _descriptionHost.Children.Add(inner);
     }
-
-    private static string DefaultRuleTypeForShellLabel(string shellLabel) =>
-        shellLabel == ExcelRuleShellTypes[0] ? "Data Bar" :
-        shellLabel == ExcelRuleShellTypes[2] ? "Top 10 Items" :
-        shellLabel == ExcelRuleShellTypes[3] ? "Above Average" :
-        shellLabel == ExcelRuleShellTypes[4] ? "Duplicate Values" :
-        shellLabel == ExcelRuleShellTypes[5] ? "Formula" :
-        "Greater Than";
-
-    private static string RuleTypeShellLabel(string ruleType) => ruleType switch
-    {
-        "Data Bar" or "Color Scale" or "Icon Set" => ExcelRuleShellTypes[0],
-        "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => ExcelRuleShellTypes[2],
-        "Above Average" or "Below Average" => ExcelRuleShellTypes[3],
-        "Duplicate Values" => ExcelRuleShellTypes[4],
-        "Formula" or "Use a Formula" => ExcelRuleShellTypes[5],
-        _ => ExcelRuleShellTypes[1]
-    };
 
     private void BuildIconSetThresholdPanel(string? style, IReadOnlyList<CfThresholdModel>? existing = null)
     {
@@ -991,156 +966,4 @@ public class ConditionalFormatDialog : Window
             _iconSetThresholdRows.Add((typeBox, valueBox));
         }
     }
-
-    private static void AddVisualPreview(Panel panel, string ruleType)
-    {
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Preview:",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 4, 0, 6)
-        });
-
-        panel.Children.Add(ruleType switch
-        {
-            "Color Scale" => BuildColorScalePreview(),
-            "Icon Set" => BuildIconSetPreview(),
-            _ => BuildDataBarPreview()
-        });
-    }
-
-    private static Border BuildDataBarPreview() =>
-        new()
-        {
-            Name = "DataBarPreview",
-            Height = 28,
-            Margin = new Thickness(0, 0, 0, 12),
-            BorderBrush = Brushes.DarkGray,
-            BorderThickness = new Thickness(1),
-            Child = new Grid
-            {
-                Children =
-                {
-                    new Border
-                    {
-                        Width = 150,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
-                        Background = new LinearGradientBrush(Color.FromRgb(91, 155, 213), Color.FromRgb(189, 215, 238), 0)
-                    },
-                    new TextBlock
-                    {
-                        Text = "123",
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-                        VerticalAlignment = System.Windows.VerticalAlignment.Center,
-                        Margin = new Thickness(0, 0, 8, 0)
-                    }
-                }
-            }
-        };
-
-    private static Border BuildColorScalePreview() =>
-        new()
-        {
-            Name = "ColorScalePreview",
-            Height = 28,
-            Margin = new Thickness(0, 0, 0, 12),
-            BorderBrush = Brushes.DarkGray,
-            BorderThickness = new Thickness(1),
-            Background = new LinearGradientBrush(
-                new GradientStopCollection
-                {
-                    new(Color.FromRgb(99, 190, 123), 0),
-                    new(Color.FromRgb(255, 235, 132), 0.5),
-                    new(Color.FromRgb(248, 105, 107), 1)
-                })
-            {
-                StartPoint = new Point(0, 0.5),
-                EndPoint = new Point(1, 0.5)
-            }
-        };
-
-    private static StackPanel BuildIconSetPreview() =>
-        new()
-        {
-            Name = "IconSetPreview",
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 12),
-            Children =
-            {
-                new TextBlock { Text = "\u25b2", Foreground = Brushes.Green, FontSize = 18, Margin = new Thickness(0, 0, 10, 0) },
-                new TextBlock { Text = "\u25b6", Foreground = Brushes.Goldenrod, FontSize = 18, Margin = new Thickness(0, 0, 10, 0) },
-                new TextBlock { Text = "\u25bc", Foreground = Brushes.Red, FontSize = 18 }
-            }
-        };
-}
-
-public sealed class HighlightCellsRuleDialog : ConditionalFormatDialog
-{
-    public HighlightCellsRuleDialog(string ruleType, GridRange range)
-        : base(ruleType, range)
-    {
-        Title = $"Highlight Cells Rule - {ruleType}";
-    }
-}
-
-public sealed class TopBottomRuleDialog : ConditionalFormatDialog
-{
-    public TopBottomRuleDialog(string ruleType, GridRange range)
-        : base(ruleType, range)
-    {
-        Title = $"Top/Bottom Rule - {ruleType}";
-    }
-}
-
-public sealed class DataBarRuleDialog : ConditionalFormatDialog
-{
-    public DataBarRuleDialog(GridRange range)
-        : base("Data Bar", range)
-    {
-        Title = "Data Bar Rule";
-    }
-}
-
-public sealed class ColorScaleRuleDialog : ConditionalFormatDialog
-{
-    public ColorScaleRuleDialog(GridRange range)
-        : base("Color Scale", range)
-    {
-        Title = "Color Scale Rule";
-    }
-}
-
-public sealed class IconSetRuleDialog : ConditionalFormatDialog
-{
-    public IconSetRuleDialog(GridRange range)
-        : base("Icon Set", range)
-    {
-        Title = "Icon Set Rule";
-    }
-}
-
-public sealed class NewConditionalFormatRuleDialog : ConditionalFormatDialog
-{
-    public NewConditionalFormatRuleDialog(string ruleType, GridRange range)
-        : base(ruleType, range)
-    {
-        Title = "New Formatting Rule";
-    }
-}
-
-public static class ConditionalFormatDialogFactory
-{
-    public static ConditionalFormatDialog Create(string ruleType, GridRange range) =>
-        ruleType switch
-        {
-            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" or "Date Occurring" or "Duplicate Values" or
-            "Blanks" or "No Blanks" or "Errors" or "No Errors" =>
-                new HighlightCellsRuleDialog(ruleType, range),
-            "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" or "Above Average" or "Below Average" =>
-                new TopBottomRuleDialog(ruleType, range),
-            "Data Bar" => new DataBarRuleDialog(range),
-            "Color Scale" => new ColorScaleRuleDialog(range),
-            "Icon Set" => new IconSetRuleDialog(range),
-            _ => new NewConditionalFormatRuleDialog(ruleType, range)
-        };
 }

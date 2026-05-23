@@ -132,8 +132,24 @@ public sealed class ManageConditionalFormatsDialogTests
         source.Should().Contain("typeof(Button)");
         source.Should().Contain("new Binding(nameof(ConditionalFormat.AppliesTo))");
         source.Should().Contain("new AppliesToRangeConverter(_sheet.Id)");
-        source.Should().Contain("ToolTipProperty, \"Select Applies To range text\"");
+        source.Should().Contain("ToolTipProperty, \"Collapse dialog and select Applies To range\"");
+        source.Should().Contain("AutomationProperties.NameProperty, \"Select Applies To range\"");
+        source.Should().Contain("AutomationProperties.HelpTextProperty");
         source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest");
+        source.Should().Contain("_requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest)");
+        source.Should().Contain("RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1");
+        source.Should().Contain("SetBinding(UIElement.IsEnabledProperty, new Binding(\"IsSelected\")");
+    }
+
+    [Fact]
+    public void CreateAppliesToRangeSelectionRequest_UsesExcelCollapseIntent()
+    {
+        var ruleId = Guid.NewGuid();
+
+        ManageConditionalFormatsDialog.CreateAppliesToRangeSelectionRequest(ruleId, " $A$1:$C$5 ")
+            .Should()
+            .Be(new ConditionalFormatAppliesToRangeSelectionRequest(ruleId, "$A$1:$C$5", CollapseDialog: true));
     }
 
     [Fact]
@@ -187,6 +203,7 @@ public sealed class ManageConditionalFormatsDialogTests
             "_Apply",
             "_New Rule...",
             "_Edit Rule",
+            "D_uplicate Rule",
             "_Delete Rule"
         })
         source.Should().Contain($"Content = \"{content}\"");
@@ -239,26 +256,62 @@ public sealed class ManageConditionalFormatsDialogTests
 
             var listView = GetControl<ListView>(dialog, "_listView");
             var editButton = GetControl<Button>(dialog, "_editBtn");
+            var duplicateButton = GetControl<Button>(dialog, "_duplicateBtn");
             var deleteButton = GetControl<Button>(dialog, "_deleteBtn");
             var moveUpButton = GetControl<Button>(dialog, "_moveUpBtn");
             var moveDownButton = GetControl<Button>(dialog, "_moveDownBtn");
 
             editButton.IsEnabled.Should().BeFalse();
+            duplicateButton.IsEnabled.Should().BeFalse();
             deleteButton.IsEnabled.Should().BeFalse();
             moveUpButton.IsEnabled.Should().BeFalse();
             moveDownButton.IsEnabled.Should().BeFalse();
 
             listView.SelectedIndex = 0;
             editButton.IsEnabled.Should().BeTrue();
+            duplicateButton.IsEnabled.Should().BeTrue();
             deleteButton.IsEnabled.Should().BeTrue();
             moveUpButton.IsEnabled.Should().BeFalse();
             moveDownButton.IsEnabled.Should().BeTrue();
 
             listView.SelectedIndex = 1;
             editButton.IsEnabled.Should().BeTrue();
+            duplicateButton.IsEnabled.Should().BeTrue();
             deleteButton.IsEnabled.Should().BeTrue();
             moveUpButton.IsEnabled.Should().BeTrue();
             moveDownButton.IsEnabled.Should().BeFalse();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DuplicateRuleCommand_InsertsCopyBelowSelectedRuleWithNewIdentity()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var first = CreateRule(sheet.Id, 1, 1, 1);
+            var second = CreateRule(sheet.Id, 2, 1, 2);
+            first.StopIfTrue = true;
+            sheet.ConditionalFormats.Add(first);
+            sheet.ConditionalFormats.Add(second);
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection: null);
+
+            var listView = GetControl<ListView>(dialog, "_listView");
+            var duplicateButton = GetControl<Button>(dialog, "_duplicateBtn");
+
+            listView.SelectedIndex = 0;
+            duplicateButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+
+            listView.Items.Count.Should().Be(3);
+            listView.SelectedIndex.Should().Be(1);
+
+            var copied = listView.SelectedItem.Should().BeOfType<ConditionalFormat>().Subject;
+            copied.Id.Should().NotBe(first.Id);
+            copied.AppliesTo.Should().Be(first.AppliesTo);
+            copied.StopIfTrue.Should().BeTrue();
+            listView.Items.Cast<ConditionalFormat>().Select(rule => rule.Priority).Should().Equal(1, 2, 3);
 
             dialog.Close();
         });
@@ -335,7 +388,7 @@ public sealed class ManageConditionalFormatsDialogTests
         var method = typeof(ManageConditionalFormatsDialog)
             .GetMethod("CloneWithPriority", BindingFlags.Static | BindingFlags.NonPublic);
         method.Should().NotBeNull();
-        return method!.Invoke(null, [source, priority]).Should().BeOfType<ConditionalFormat>().Subject;
+        return method!.Invoke(null, [source, priority, null]).Should().BeOfType<ConditionalFormat>().Subject;
     }
 
     private static T GetControl<T>(ManageConditionalFormatsDialog dialog, string name)
