@@ -45,6 +45,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;
+            if (sDto.ProtectionPermissions is { Count: > 0 })
+            {
+                sheet.ProtectionPermissions.Clear();
+                foreach (var permission in sDto.ProtectionPermissions.Where(Enum.IsDefined).Distinct())
+                    sheet.ProtectionPermissions.Add(permission);
+            }
             foreach (var property in sDto.CustomProperties ?? [])
             {
                 if (string.IsNullOrWhiteSpace(property?.Name) || property.Id <= 0)
