@@ -88,6 +88,7 @@ public sealed class PivotTableModel
     public bool ShowColumnHeaders { get; set; } = true;
     public bool ShowRowStripes { get; set; }
     public bool ShowColumnStripes { get; set; }
+    public bool ShowFieldHeaders { get; set; } = true;
     public string? EmptyValueText { get; set; }
     public bool AutofitColumnsOnUpdate { get; set; } = true;
     public bool PreserveFormattingOnUpdate { get; set; } = true;

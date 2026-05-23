@@ -19,6 +19,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _showColumnHeaders;
     private readonly bool _showRowStripes;
     private readonly bool _showColumnStripes;
+    private readonly bool? _showFieldHeaders;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
@@ -67,7 +68,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool updateAltText = false,
         bool? showExpandCollapseButtons = null,
         bool? autofitColumnsOnUpdate = null,
-        bool? preserveFormattingOnUpdate = null)
+        bool? preserveFormattingOnUpdate = null,
+        bool? showFieldHeaders = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -86,6 +88,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showColumnHeaders = showColumnHeaders;
         _showRowStripes = showRowStripes;
         _showColumnStripes = showColumnStripes;
+        _showFieldHeaders = showFieldHeaders;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
@@ -131,6 +134,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         pivotTable.ShowColumnHeaders = _showColumnHeaders;
         pivotTable.ShowRowStripes = _showRowStripes;
         pivotTable.ShowColumnStripes = _showColumnStripes;
+        if (_showFieldHeaders is { } showFieldHeaders)
+            pivotTable.ShowFieldHeaders = showFieldHeaders;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
         if (_printTitles is { } printTitles)
@@ -193,6 +198,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowColumnHeaders,
         bool ShowRowStripes,
         bool ShowColumnStripes,
+        bool ShowFieldHeaders,
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
@@ -221,6 +227,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowColumnHeaders,
                 pivotTable.ShowRowStripes,
                 pivotTable.ShowColumnStripes,
+                pivotTable.ShowFieldHeaders,
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
@@ -249,6 +256,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowColumnHeaders = ShowColumnHeaders;
             pivotTable.ShowRowStripes = ShowRowStripes;
             pivotTable.ShowColumnStripes = ShowColumnStripes;
+            pivotTable.ShowFieldHeaders = ShowFieldHeaders;
             pivotTable.EmptyValueText = EmptyValueText;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
