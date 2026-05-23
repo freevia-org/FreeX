@@ -21,6 +21,7 @@ public static class ChartTypeSupport
             or ChartType.Area
             or ChartType.Radar
             or ChartType.Stock
+            or ChartType.Surface
             or ChartType.ThreeDColumn
             or ChartType.ThreeDBar
             or ChartType.ThreeDArea;
