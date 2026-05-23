@@ -34,6 +34,9 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return new CommandOutcome(false, "Connected PivotTable was not found.");
 
         var (sheet, pivotTable) = target.Value;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+            return protectedOutcome;
+
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
         var headers = ReadPivotHeaders(sourceSheet, pivotTable);
         var sourceFieldIndex = headers.FindIndex(header =>
@@ -271,6 +274,9 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Connected PivotTable was not found.");
 
         var (sheet, pivotTable) = target.Value;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+            return protectedOutcome;
+
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
         var headers = ReadPivotHeaders(sourceSheet, pivotTable);
         var sourceFieldIndex = headers.FindIndex(header =>
