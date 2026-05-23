@@ -245,6 +245,8 @@ public sealed record SelectDataSourceDialogResult(
     bool FirstColumnIsCategories,
     bool SwitchRowColumn = false);
 
+public sealed record SelectDataSourceRangeSelectionRequest(string CurrentText, bool CollapseDialog = true);
+
 public sealed record SelectDataSourceSeriesPreview(string Name, string ValuesRangeText);
 
 public sealed record SelectDataSourceCategoryPreview(string Label);
@@ -261,11 +263,17 @@ public sealed class SelectDataSourceDialog : Window
     private readonly CheckBox _switchRowColumnBox = new() { Content = "_Switch Row/Column" };
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
+    private readonly Action<SelectDataSourceRangeSelectionRequest>? _requestRangeSelection;
 
     public SelectDataSourceDialogResult Result { get; private set; }
+    public SelectDataSourceRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public SelectDataSourceDialog(string sourceRangeText, bool firstColumnIsCategories = true)
+    public SelectDataSourceDialog(
+        string sourceRangeText,
+        bool firstColumnIsCategories = true,
+        Action<SelectDataSourceRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
         Title = "Select Data Source";
         Width = 620;
@@ -366,31 +374,18 @@ public sealed class SelectDataSourceDialog : Window
         return new SelectDataSourcePreview(series, categories, categoryRange);
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
-    {
-        var panel = new DockPanel();
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
-        return panel;
-    }
+    public static SelectDataSourceRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
+        new(currentText.Trim(), CollapseDialog: true);
 
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
-
-        textBox.Focus();
-        textBox.SelectAll();
-    }
+    private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request =>
+            {
+                RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
+                _requestRangeSelection?.Invoke(RangeSelectionRequest);
+            });
 
     private static Grid CreateSourceListPanel(
         string title,
