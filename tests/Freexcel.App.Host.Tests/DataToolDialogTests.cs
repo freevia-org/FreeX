@@ -52,6 +52,24 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialog_AllowsOnlySingleColumnSelections()
+    {
+        var sheetId = SheetId.New();
+
+        TextToColumnsDialog.CanConvertRange(new GridRange(
+                new CellAddress(sheetId, 2, 1),
+                new CellAddress(sheetId, 8, 1)))
+            .Should()
+            .BeTrue();
+
+        TextToColumnsDialog.CanConvertRange(new GridRange(
+                new CellAddress(sheetId, 2, 1),
+                new CellAddress(sheetId, 8, 2)))
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
@@ -632,6 +650,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_filterInPlaceButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_filterInPlaceButton);");
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
@@ -1004,6 +1033,17 @@ public sealed class DataToolDialogTests
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
         source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
+    }
+
+    [Fact]
+    public void DataTableDialogOpenedFromKeyboard_FocusesRowInputCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rowInputBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_rowInputBox);");
     }
 
     [Fact]

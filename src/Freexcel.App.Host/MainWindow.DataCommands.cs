@@ -57,6 +57,16 @@ public partial class MainWindow
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TextToColumnsDialog.CanConvertRange(range))
+        {
+            MessageBox.Show(
+                "Text to Columns works on one column at a time. Select a single column of cells and try again.",
+                "Text to Columns",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
