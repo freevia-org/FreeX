@@ -127,6 +127,82 @@ public sealed class ChartRendererTests
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
     }
 
+    [Theory]
+    [InlineData(ChartBlankDisplayMode.Gap, 3, true, false)]
+    [InlineData(ChartBlankDisplayMode.Span, 2, false, false)]
+    [InlineData(ChartBlankDisplayMode.Zero, 3, false, true)]
+    public void LineRenderer_HonorsBlankDisplayMode(
+        ChartBlankDisplayMode blankDisplayMode,
+        int expectedPointCount,
+        bool expectedGapPoint,
+        bool expectedZeroPoint)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            BlankDisplayMode = blankDisplayMode,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, ""),
+                Cell(4, 1, "C"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.Points.Should().HaveCount(expectedPointCount);
+        series.Points.Any(point => double.IsNaN(point.Y)).Should().Be(expectedGapPoint);
+        series.Points.Any(point => point.X == 1 && point.Y == 0).Should().Be(expectedZeroPoint);
+    }
+
+    [Theory]
+    [InlineData(ChartBlankDisplayMode.Gap, 3, true, false)]
+    [InlineData(ChartBlankDisplayMode.Span, 2, false, false)]
+    [InlineData(ChartBlankDisplayMode.Zero, 3, false, true)]
+    public void AreaRenderer_HonorsBlankDisplayMode(
+        ChartBlankDisplayMode blankDisplayMode,
+        int expectedPointCount,
+        bool expectedGapPoint,
+        bool expectedZeroPoint)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Area,
+            BlankDisplayMode = blankDisplayMode,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, ""),
+                Cell(4, 1, "C"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<AreaSeries>().Subject;
+        series.Points.Should().HaveCount(expectedPointCount);
+        series.Points.Any(point => double.IsNaN(point.Y)).Should().Be(expectedGapPoint);
+        series.Points.Any(point => point.X == 1 && point.Y == 0).Should().Be(expectedZeroPoint);
+    }
+
     [Fact]
     public void PivotChartRenderer_AddsFieldButtonAnnotations()
     {

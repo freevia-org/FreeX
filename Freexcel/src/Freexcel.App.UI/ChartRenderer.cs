@@ -193,7 +193,7 @@ public static partial class ChartRenderer
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                    AddLinePoints(lineSeries, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
+                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
                     AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
@@ -288,7 +288,7 @@ public static partial class ChartRenderer
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                    AddLinePoints(lineSeries, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
+                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
                     AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
@@ -314,6 +314,20 @@ public static partial class ChartRenderer
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
+                    }
+                    else if (cellLookup.TryGetValue((r, col), out cell) && string.IsNullOrWhiteSpace(cell.DisplayText))
+                    {
+                        if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+                        {
+                            series.Points.Add(new DataPoint(i, 0));
+                            trendPoints?.Add(new DataPoint(i, 0));
+                            if (ShouldUseAnnotationLabels(chart))
+                                AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, 0, 0);
+                        }
+                        else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
+                        {
+                            series.Points.Add(new DataPoint(i, double.NaN));
+                        }
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -385,7 +399,7 @@ public static partial class ChartRenderer
 
                 var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
-                AddLinePoints(series, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints);
+                AddLinePoints(series, chart, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints);
                 if (firstSeriesPoints is null)
                     firstSeriesPoints = trendPoints;
                 AddLineDataLabelAnnotations(model, chart, theme, series, seriesName, seriesIndex, categories);
