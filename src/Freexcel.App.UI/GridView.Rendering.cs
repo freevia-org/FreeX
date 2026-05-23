@@ -442,10 +442,7 @@ public partial class GridView
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
 
-        var occupied = new HashSet<(uint, uint)>(
-            Viewport.Cells
-                .Where(c => !string.IsNullOrEmpty(c.DisplayText) || c.ConditionalIcon is not null)
-                .Select(c => (c.Row, c.Col)));
+        var occupied = BuildOccupiedCellSet(Viewport.Cells, EditingCell);
 
         foreach (var cell in Viewport.Cells)
         {
