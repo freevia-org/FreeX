@@ -96,6 +96,21 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectDialogs_UseSharedButtonRowsOutsideChartDialogs()
+    {
+        var objectSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var formatPictureSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var namedRangeSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+        var shapeGradientSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
+
+        foreach (var source in new[] { objectSource, formatPictureSource, namedRangeSource, shapeGradientSource })
+        {
+            source.Should().Contain("DialogButtonRowFactory.Create");
+            source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+        }
+    }
+
+    [Fact]
     public void HyperlinkDialog_LabelsTextRowsWithAccessKeyTargets()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
