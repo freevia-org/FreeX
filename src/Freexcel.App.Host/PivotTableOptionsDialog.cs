@@ -34,7 +34,9 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowContextualTooltips = true,
     bool ShowPropertiesInTooltips = true,
     bool ShowClassicLayout = false,
-    bool MergeAndCenterLabels = false);
+    bool MergeAndCenterLabels = false,
+    bool PageOverThenDown = false,
+    int PageWrap = 0);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -54,6 +56,8 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _mergeLabelsBox = new() { Content = "_Merge and center cells with labels" };
     private readonly ComboBox _reportLayoutBox = new();
     private readonly TextBox _compactIndentBox = new() { Width = 60 };
+    private readonly ComboBox _pageFieldLayoutBox = new();
+    private readonly TextBox _pageWrapBox = new() { Width = 60 };
     private readonly ComboBox _styleBox = new();
     private readonly CheckBox _rowHeadersBox = new() { Content = "Row _headers" };
     private readonly CheckBox _columnHeadersBox = new() { Content = "Column hea_ders" };
@@ -122,7 +126,9 @@ public sealed class PivotTableOptionsDialog : Window
             showContextualTooltips: pivotTable.ShowContextualTooltips,
             showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
             showClassicLayout: pivotTable.ShowClassicLayout,
-            mergeAndCenterLabels: pivotTable.MergeAndCenterLabels);
+            mergeAndCenterLabels: pivotTable.MergeAndCenterLabels,
+            pageOverThenDown: pivotTable.PageOverThenDown,
+            pageWrap: pivotTable.PageWrap);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -154,7 +160,9 @@ public sealed class PivotTableOptionsDialog : Window
         bool showContextualTooltips = true,
         bool showPropertiesInTooltips = true,
         bool showClassicLayout = false,
-        bool mergeAndCenterLabels = false) =>
+        bool mergeAndCenterLabels = false,
+        bool pageOverThenDown = false,
+        int pageWrap = 0) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -185,7 +193,9 @@ public sealed class PivotTableOptionsDialog : Window
             showContextualTooltips,
             showPropertiesInTooltips,
             showClassicLayout,
-            mergeAndCenterLabels);
+            mergeAndCenterLabels,
+            pageOverThenDown,
+            NormalizePageWrap(pageWrap));
 
     private DockPanel CreateContent()
     {
@@ -211,6 +221,8 @@ public sealed class PivotTableOptionsDialog : Window
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
         AddLabeledControl(layoutPanel, "_Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
         AddLabeledControl(layoutPanel, "When in compact form indent row labels", _compactIndentBox);
+        AddLabeledControl(layoutPanel, "Display fields in report _filter area", _pageFieldLayoutBox, PageFieldLayoutLabels);
+        AddLabeledControl(layoutPanel, "Report filter fields per _column", _pageWrapBox);
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);
         AddCheckBox(layoutPanel, _blankLineBox);
         AddCheckBox(layoutPanel, _mergeLabelsBox);
@@ -335,6 +347,8 @@ public sealed class PivotTableOptionsDialog : Window
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
         _compactIndentBox.Text = result.CompactRowLabelIndent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _pageFieldLayoutBox.SelectedItem = result.PageOverThenDown ? PageFieldLayoutOverThenDown : PageFieldLayoutDownThenOver;
+        _pageWrapBox.Text = result.PageWrap.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _mergeLabelsBox.IsChecked = result.MergeAndCenterLabels;
         var styleNames = StyleNames.Contains(result.StyleName, StringComparer.OrdinalIgnoreCase)
             ? StyleNames
@@ -400,7 +414,9 @@ public sealed class PivotTableOptionsDialog : Window
             _contextualTooltipsBox.IsChecked == true,
             _propertiesInTooltipsBox.IsChecked == true,
             _classicLayoutBox.IsChecked == true,
-            _mergeLabelsBox.IsChecked == true);
+            _mergeLabelsBox.IsChecked == true,
+            PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
+            ParsePageWrap(_pageWrapBox.Text));
         DialogResult = true;
     }
 
@@ -412,6 +428,20 @@ public sealed class PivotTableOptionsDialog : Window
             : 1;
 
     private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+
+    private const string PageFieldLayoutDownThenOver = "Down, then over";
+    private const string PageFieldLayoutOverThenDown = "Over, then down";
+    private static readonly string[] PageFieldLayoutLabels = [PageFieldLayoutDownThenOver, PageFieldLayoutOverThenDown];
+
+    private static bool PageFieldLayoutForLabel(string? label) =>
+        string.Equals(label, PageFieldLayoutOverThenDown, StringComparison.OrdinalIgnoreCase);
+
+    private static int ParsePageWrap(string? text) =>
+        int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            ? NormalizePageWrap(value)
+            : 0;
+
+    private static int NormalizePageWrap(int pageWrap) => Math.Clamp(pageWrap, 0, 255);
 
     private const int MaximumMissingItemsLimit = 1_048_576;
     private const string MissingItemsAutomatic = "Automatic";
