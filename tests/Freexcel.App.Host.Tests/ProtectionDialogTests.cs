@@ -120,6 +120,12 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("new Label { Content = \"_Range:\"");
         source.Should().Contain("Target = _rangeBox");
         source.Should().Contain("Header = \"Range\"");
+        source.Should().Contain("Content = \"...\"");
+        source.Should().Contain("ToolTip = \"Select editable range\"");
+        source.Should().Contain("AutomationProperties.SetName(rangePicker, \"Select editable range\")");
+        source.Should().Contain("rangePicker.Click += RangePicker_Click");
+        source.Should().Contain("private void RangePicker_Click");
+        source.Should().Contain("_rangeBox.SelectAll()");
         source.Should().Contain("Use an A1-style range");
     }
 
