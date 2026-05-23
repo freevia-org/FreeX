@@ -12,6 +12,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<CellStyle> differentialStyles)
     {
         var result = new List<ConditionalFormat>();
+        var dataBarGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
         var tempSheet = SheetId.New();
         foreach (var conditionalFormatting in worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting") ?? [])
         {
@@ -57,6 +58,9 @@ public sealed partial class XlsxFileAdapter
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
+                    var x14Id = ExtractX14IdFromCfRule(rule);
+                    if (x14Id is not null)
+                        dataBarGuids[x14Id] = format;
                     result.Add(format);
                 }
                 else if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
@@ -103,7 +107,73 @@ public sealed partial class XlsxFileAdapter
             }
         }
 
+        ApplyX14DataBarProperties(dataBarGuids, worksheetXml);
         return result;
+    }
+
+    private static string? ExtractX14IdFromCfRule(XElement cfRule)
+    {
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        foreach (var extLst in cfRule.Elements().Where(e => e.Name.LocalName == "extLst"))
+        {
+            foreach (var ext in extLst.Elements().Where(e => e.Name.LocalName == "ext"))
+            {
+                var x14Id = ext.Elements(x14Ns + "id").FirstOrDefault();
+                if (x14Id is not null)
+                {
+                    var val = x14Id.Value?.Trim();
+                    if (!string.IsNullOrEmpty(val))
+                        return val;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static void ApplyX14DataBarProperties(
+        Dictionary<string, ConditionalFormat> dataBarGuids,
+        XDocument worksheetXml)
+    {
+        if (dataBarGuids.Count == 0)
+            return;
+
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
+
+        var worksheetRoot = worksheetXml.Root;
+        if (worksheetRoot is null)
+            return;
+
+        foreach (var extLst in worksheetRoot.Elements().Where(e => e.Name.LocalName == "extLst"))
+        {
+            foreach (var ext in extLst.Elements().Where(e => e.Name.LocalName == "ext"))
+            {
+                if (ext.Attribute("uri")?.Value != x14CfUri)
+                    continue;
+
+                foreach (var x14CFs in ext.Elements(x14Ns + "conditionalFormattings"))
+                {
+                    foreach (var x14CF in x14CFs.Elements(x14Ns + "conditionalFormatting"))
+                    {
+                        foreach (var x14CfRule in x14CF.Elements(x14Ns + "cfRule"))
+                        {
+                            var id = x14CfRule.Attribute("id")?.Value;
+                            if (id is null || !dataBarGuids.TryGetValue(id, out var format))
+                                continue;
+
+                            var x14DataBar = x14CfRule.Element(x14Ns + "dataBar");
+                            if (x14DataBar is null)
+                                continue;
+
+                            var gradientVal = x14DataBar.Attribute("gradient")?.Value;
+                            if (gradientVal is not null)
+                                format.DataBarGradient = !IsFalse(gradientVal);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static void ApplyNativeConditionalFormatRuleMetadata(
@@ -376,6 +446,7 @@ public sealed partial class XlsxFileAdapter
             DataBarShowValue = source.DataBarShowValue,
             DataBarMinLength = source.DataBarMinLength,
             DataBarMaxLength = source.DataBarMaxLength,
+            DataBarGradient  = source.DataBarGradient,
             AboveAverage = source.AboveAverage,
             FormulaText = source.FormulaText,
             IconSetStyle = source.IconSetStyle,
