@@ -64,6 +64,7 @@ public sealed class Lexer
             '%' => SingleChar(TokenType.Percent),
             '(' => SingleChar(TokenType.OpenParen),
             ')' => SingleChar(TokenType.CloseParen),
+            '[' => ReadStructuredReferenceSelector(),
             ',' => SingleChar(TokenType.Comma),
             ':' => SingleChar(TokenType.Colon),
             '=' => SingleChar(TokenType.Equal),
@@ -153,6 +154,50 @@ public sealed class Lexer
         }
 
         throw new FormulaParseException($"Unterminated string starting at position {start}");
+    }
+
+    private Token ReadStructuredReferenceSelector()
+    {
+        var start = _pos;
+        _pos++; // skip opening bracket
+        var depth = 1;
+        var sb = new StringBuilder();
+
+        while (_pos < _text.Length)
+        {
+            var c = _text[_pos];
+            if (c == '[')
+            {
+                depth++;
+                sb.Append(c);
+                _pos++;
+                continue;
+            }
+            else if (c == ']')
+            {
+                _pos++;
+                if (depth > 1)
+                {
+                    depth--;
+                    sb.Append(c);
+                    continue;
+                }
+
+                if (_pos < _text.Length && _text[_pos] == ']')
+                {
+                    sb.Append(']');
+                    _pos++;
+                    continue;
+                }
+
+                return new Token(TokenType.StructuredReferenceSelector, sb.ToString(), start);
+            }
+
+            sb.Append(c);
+            _pos++;
+        }
+
+        throw new FormulaParseException($"Unterminated structured reference starting at position {start}");
     }
 
     private Token ReadIdentifierOrRef()

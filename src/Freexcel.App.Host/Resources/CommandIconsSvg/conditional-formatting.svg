@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Conditional Formatting">
+
+<rect width="32" height="32" fill="none"/>
+<g transform="translate(16 16) scale(1.25) translate(-16 -16)">
+<rect x="6" y="7" width="20" height="18" rx="1.5" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="9" width="8" height="5" fill="#ffd7d7"/><rect x="17" y="9" width="7" height="5" fill="#ffb900"/><rect x="8" y="15" width="16" height="4" fill="#dff6dd"/><path d="M11 22h10" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

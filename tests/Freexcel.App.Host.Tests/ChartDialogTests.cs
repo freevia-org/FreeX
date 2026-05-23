@@ -1,4 +1,7 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -18,10 +21,12 @@ public sealed class ChartDialogTests
             ChartType.PercentStackedColumn,
             ChartType.Line,
             ChartType.Pie,
+            ChartType.ThreeDPie,
             ChartType.Doughnut,
             ChartType.Bar,
             ChartType.StackedBar,
             ChartType.PercentStackedBar,
+            ChartType.ThreeDBar,
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
@@ -65,7 +70,17 @@ public sealed class ChartDialogTests
         categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
             ChartType.StackedColumn,
-            ChartType.PercentStackedColumn);
+            ChartType.PercentStackedColumn,
+            ChartType.ThreeDColumn);
+        categories.Single(category => category.Name == "Pie").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Pie,
+            ChartType.ThreeDPie,
+            ChartType.Doughnut);
+        categories.Single(category => category.Name == "Bar").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Bar,
+            ChartType.StackedBar,
+            ChartType.PercentStackedBar,
+            ChartType.ThreeDBar);
     }
 
     [Fact]
@@ -84,7 +99,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartTypeDialogs_ExposeExcelInsertAndChangeSurfaces()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
 
         source.Should().Contain("Recommended Charts");
         source.Should().Contain("All Charts");
@@ -92,6 +107,9 @@ public sealed class ChartDialogTests
         source.Should().Contain("Chart subtype gallery");
         source.Should().Contain("Preview");
         source.Should().Contain("Choose a chart type");
+        source.Should().Contain("Recently used and suggested for your data");
+        source.Should().Contain("Chart preview sample");
+        source.Should().Contain("Choose a subtype to see how the chart will represent categories and values.");
     }
 
     [Fact]
@@ -142,8 +160,21 @@ public sealed class ChartDialogTests
         var options = ChartStyleDialog.GetStyleOptions();
 
         options.Should().HaveCount(49);
-        options[0].Should().Be(new ChartStyleOption(null, "Automatic"));
+        options[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
         options.Skip(1).Select(option => option.StyleId).Should().Equal(Enumerable.Range(1, 48).Cast<int?>());
+        options.Skip(1).Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.PreviewLabel));
+    }
+
+    [Fact]
+    public void ChartStyleDialog_UsesVisualGalleryInsteadOfPlainStyleCombo()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("Chart style gallery");
+        source.Should().Contain("CreateStyleGalleryTemplate");
+        source.Should().Contain("CreateStylePreviewSwatch");
+        source.Should().Contain("UniformGrid");
+        source.Should().NotContain("private readonly ComboBox _styleBox");
     }
 
     [Fact]
@@ -177,6 +208,22 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("Content = \"_Object in sheet\"");
+        source.Should().Contain("Content = \"_New chart sheet\"");
+        source.Should().Contain("Content = \"_Chart data range:\"");
+        source.Should().Contain("Content = \"_Switch Row/Column\"");
+        source.Should().Contain("Content = \"First column contains _category labels\"");
+        source.Should().Contain("\"_Add series\"");
+        source.Should().Contain("\"_Edit series\"");
+        source.Should().Contain("\"_Remove series\"");
+        source.Should().Contain("\"_Edit Axis Labels\"");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_NormalizesSourceRangeAndCategoryState()
     {
         var result = SelectDataSourceDialog.CreateResult("  A1:D12  ", true);
@@ -199,15 +246,60 @@ public sealed class ChartDialogTests
         source.Should().Contain("Legend Entries (Series)");
         source.Should().Contain("Horizontal (Category) Axis Labels");
         source.Should().Contain("AddEditRemoveButtons");
+        source.Should().Contain("Series list");
+        source.Should().Contain("Axis label list");
+        source.Should().Contain("_Add series");
+        source.Should().Contain("_Edit series");
+        source.Should().Contain("_Edit Axis Labels");
+        source.Should().Contain("Name and values are inferred from the selected chart range.");
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_EnablesExcelStyleSeriesAndAxisActions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+            var buttons = FindLogicalDescendants<Button>(dialog)
+                .Where(button => button.Content is string)
+                .ToDictionary(button => (string)button.Content);
+
+            foreach (var label in new[] { "_Add series", "_Edit series", "_Remove series", "_Edit Axis Labels" })
+            {
+                buttons[label].IsEnabled.Should().BeTrue();
+                buttons[label].ToolTip.Should().BeNull();
+                AutomationProperties.GetHelpText(buttons[label]).Should().BeEmpty();
+            }
+
+            buttons.Should().ContainKey("_Hidden and Empty Cells");
+        });
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_InferPreviewEntriesFromChartRange()
+    {
+        var preview = SelectDataSourceDialog.InferPreviewEntries("Sheet1!$A$1:$C$5", firstColumnIsCategories: true);
+
+        preview.Series.Select(series => series.Name).Should().ContainInOrder("Series 1", "Series 2");
+        preview.Series.Select(series => series.ValuesRangeText).Should().ContainInOrder(
+            "Sheet1!$B$2:$B$5",
+            "Sheet1!$C$2:$C$5");
+        preview.Categories.Select(category => category.Label).Should().ContainInOrder(
+            "Category 1",
+            "Category 2",
+            "Category 3",
+            "Category 4");
+        preview.CategoryRangeText.Should().Be("Sheet1!$A$2:$A$5");
     }
 
     [Fact]
     public void ChartFormatDialogs_RouteColorFieldsThroughColorPickerButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         source.Should().Contain("AddColorText");
-        source.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
+        helperSource.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
         foreach (var colorLabel in new[]
         {
             "Chart area fill color",
@@ -220,6 +312,55 @@ public sealed class ChartDialogTests
         })
         {
             source.Should().Contain($"AddColorText(stack, \"{colorLabel}\"");
+        }
+    }
+
+    [Fact]
+    public void ChartFormatDialogs_GroupLongStacksIntoExcelLikeSections()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
+
+        source.Should().Contain("CreateGroupBox(\"Fill & Line\"");
+        source.Should().Contain("CreateGroupBox(\"Legend\"");
+        source.Should().Contain("CreateGroupBox(\"Label Options\"");
+        source.Should().Contain("CreateGroupBox(\"Axis Options\"");
+        source.Should().Contain("CreateGroupBox(\"Tick Marks\"");
+        source.Should().Contain("CreateGroupBox(\"Series Options\"");
+        source.Should().Contain("CreateInlineHelp(");
+        source.Should().Contain("AddNumericText");
+        helperSource.Should().Contain("AutomationProperties.SetHelpText");
+    }
+
+    [Fact]
+    public void ChartFormatDialogs_ExposeKeyboardAccessKeysForOptionControls()
+    {
+        var source = string.Concat(
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs")));
+
+        foreach (var content in new[]
+        {
+            "Content = \"Use _recommended layout\"",
+            "Content = \"_Show legend\"",
+            "Content = \"O_verlay legend on chart\"",
+            "Content = \"_Show data labels\"",
+            "Content = \"_Category name\"",
+            "Content = \"_Series name\"",
+            "Content = \"_Percentage\"",
+            "Content = \"Data label _callouts\"",
+            "Content = \"_Show trendline\"",
+            "Content = \"Display _equation\"",
+            "Content = \"Display _R-squared value\"",
+            "Content = \"_Show error bars\"",
+            "Content = \"_End caps\"",
+            "Content = \"_Logarithmic scale\"",
+            "Content = \"_Major gridlines\"",
+            "Content = \"M_inor gridlines\"",
+            "Content = \"Show _labels\""
+        })
+        {
+            source.Should().Contain(content);
         }
     }
 
@@ -462,5 +603,42 @@ public sealed class ChartDialogTests
                 MarkerStyle: ChartMarkerStyle.Diamond,
                 MarkerSize: 9));
         options.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0);
+    }
+
+    [Fact]
+    public void ChartDialogs_LabelEditableHelperControlsWithTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
+
+        foreach (var expected in new[]
+        {
+            "new Label { Content = label, Target = box",
+            "new Label { Content = \"_Style\", Target = _styleGallery"
+        })
+            source.Should().Contain(expected);
+
+        foreach (var expected in new[]
+        {
+            "new Label { Content = label, Target = comboBox",
+            "new Label { Content = label, Target = textBox"
+        })
+            helperSource.Should().Contain(expected);
+
+        source.Should().NotContain("stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) })");
+        helperSource.Should().NotContain("stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) })");
+    }
+
+    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T typedChild)
+                yield return typedChild;
+
+            foreach (var descendant in FindLogicalDescendants<T>(child))
+                yield return descendant;
+        }
     }
 }

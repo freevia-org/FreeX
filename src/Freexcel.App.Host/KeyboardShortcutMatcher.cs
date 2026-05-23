@@ -10,12 +10,15 @@ public static class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.NewWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.N),
         new(KeyboardCommandShortcut.OpenWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.O),
         new(KeyboardCommandShortcut.SaveWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.S),
-        new(KeyboardCommandShortcut.Copy, (key, modifiers) => HasControl(modifiers) && key == Key.C),
-        new(KeyboardCommandShortcut.Cut, (key, modifiers) => HasControl(modifiers) && key == Key.X),
-        new(KeyboardCommandShortcut.Paste, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.V),
-        new(KeyboardCommandShortcut.SelectCurrentRegionOrAll, (key, modifiers) => HasControl(modifiers) && key == Key.A),
-        new(KeyboardCommandShortcut.Undo, (key, modifiers) => HasControl(modifiers) && key == Key.Z),
-        new(KeyboardCommandShortcut.Redo, (key, modifiers) => HasControl(modifiers) && key == Key.Y),
+        new(KeyboardCommandShortcut.Copy, (key, modifiers) => (modifiers == ModifierKeys.Control || modifiers == (ModifierKeys.Control | ModifierKeys.Shift)) && key == Key.C ||
+            modifiers == ModifierKeys.Control && key == Key.Insert),
+        new(KeyboardCommandShortcut.Cut, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.X ||
+            modifiers == ModifierKeys.Shift && key == Key.Delete),
+        new(KeyboardCommandShortcut.Paste, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.V ||
+            modifiers == ModifierKeys.Shift && key == Key.Insert),
+        new(KeyboardCommandShortcut.SelectCurrentRegionOrAll, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.A),
+        new(KeyboardCommandShortcut.Undo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Z),
+        new(KeyboardCommandShortcut.Redo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Y),
         new(KeyboardCommandShortcut.CreateTable, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.T or Key.L),
         new(KeyboardCommandShortcut.InsertHyperlink, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.K),
         new(KeyboardCommandShortcut.FillDown, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.D),
@@ -72,7 +75,7 @@ public static class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.SelectAllDependents, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemCloseBrackets),
         new(KeyboardCommandShortcut.SelectCellsWithComments, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.O),
         new(KeyboardCommandShortcut.EditCell, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F2),
-        new(KeyboardCommandShortcut.ClearSelection, (key, modifiers) => !HasControl(modifiers) && key == Key.Delete),
+        new(KeyboardCommandShortcut.ClearSelection, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.Delete),
         new(KeyboardCommandShortcut.ClearSelectionAndEdit, (key, modifiers) => !HasControl(modifiers) && key == Key.Back),
         new(KeyboardCommandShortcut.RepeatLastAction, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F4),
     ];
@@ -190,21 +193,21 @@ public static class KeyboardShortcutMatcher
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)
     {
         shortcut = default;
-        if ((key == Key.B && (modifiers & ModifierKeys.Control) != 0) ||
+        if ((key == Key.B && modifiers == ModifierKeys.Control) ||
             (key is Key.D2 or Key.NumPad2 && modifiers == ModifierKeys.Control))
         {
             shortcut = FontToggleShortcut.Bold;
             return true;
         }
 
-        if ((key == Key.I && (modifiers & ModifierKeys.Control) != 0) ||
+        if ((key == Key.I && modifiers == ModifierKeys.Control) ||
             (key is Key.D3 or Key.NumPad3 && modifiers == ModifierKeys.Control))
         {
             shortcut = FontToggleShortcut.Italic;
             return true;
         }
 
-        if ((key == Key.U && (modifiers & ModifierKeys.Control) != 0) ||
+        if ((key == Key.U && modifiers == ModifierKeys.Control) ||
             (key is Key.D4 or Key.NumPad4 && modifiers == ModifierKeys.Control))
         {
             shortcut = FontToggleShortcut.Underline;

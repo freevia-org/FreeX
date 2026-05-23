@@ -77,8 +77,11 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.S, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SaveWorkbook)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.Copy)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Cut)]
+    [InlineData(Key.Delete, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.Cut)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Paste)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.Paste)]
     [InlineData(Key.A, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectCurrentRegionOrAll)]
     [InlineData(Key.Z, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Undo)]
     [InlineData(Key.Y, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Redo)]
@@ -150,7 +153,6 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.None, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
     [InlineData(Key.F2, Key.None, ModifierKeys.None, KeyboardCommandShortcut.EditCell)]
     [InlineData(Key.Delete, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ClearSelection)]
-    [InlineData(Key.Delete, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.ClearSelection)]
     [InlineData(Key.Back, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ClearSelectionAndEdit)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.ClearSelectionAndEdit)]
     [InlineData(Key.F4, Key.None, ModifierKeys.None, KeyboardCommandShortcut.RepeatLastAction)]
@@ -164,6 +166,20 @@ public sealed class KeyboardShortcutMatcherTests
 
         result.Should().BeTrue();
         shortcut.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.A, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
+
+        result.Should().BeFalse();
     }
 
     [Theory]
@@ -201,6 +217,20 @@ public sealed class KeyboardShortcutMatcherTests
         result.Should().Be(expected is not null);
         if (expected is not null)
             shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.B, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.B, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.I, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.I, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void TryGetFontToggleShortcut_DoesNotStealExtraModifierCombinations(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out _);
+
+        result.Should().BeFalse();
     }
 
     [Theory]

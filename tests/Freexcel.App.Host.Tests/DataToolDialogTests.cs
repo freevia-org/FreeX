@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
@@ -23,22 +24,58 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsDialog_ExposesExcelWizardStepStateAndSourceModeChoices()
+    public void TextToColumnsResult_CombinesCheckedDelimiters()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Tab, TextToColumnsDelimiterKind.Comma, TextToColumnsDelimiterKind.Custom],
+            "|");
 
-        source.Should().Contain("_stepOneIndicator");
-        source.Should().Contain("_stepTwoIndicator");
-        source.Should().Contain("_stepThreeIndicator");
-        source.Should().Contain("Step 1 of 3");
-        source.Should().Contain("_delimitedButton");
-        source.Should().Contain("_fixedWidthButton");
-        source.Should().Contain("Delimited");
-        source.Should().Contain("Fixed width");
+        result.Delimiters.Should().Be("\t,|");
+        result.DelimiterKind.Should().Be(TextToColumnsDelimiterKind.Custom);
     }
 
     [Fact]
-    public void TextToColumnsDialog_ExposesExcelDelimiterQualifierPreviewAndDestinationAffordances()
+    public void TextToColumnsPreview_UsesSelectedTextRows()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 5, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East,42,Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West;7;Closed"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue(""));
+
+        TextToColumnsDialog.BuildPreviewRows(sheet, range).Should().Equal("East,42,Open", "West;7;Closed");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        source.Should().Contain("Original data type");
+        source.Should().Contain("Content = \"_Delimited\"");
+        source.Should().Contain("Content = \"Fi_xed width\"");
+        source.Should().Contain("CreateFixedWidthResult");
+        source.Should().Contain("ParseFixedWidthBreakPositions");
+        source.Should().Contain("Choose the delimiters that separate your selected text.");
+        source.Should().Contain("Header = \"Delimiters\"");
+        source.Should().Contain("Header = \"Fixed width\"");
+        source.Should().Contain("_fixedWidthRuler");
+        source.Should().Contain("MouseLeftButtonDown");
+        source.Should().Contain("MouseMove");
+        source.Should().Contain("MouseRightButtonDown");
+        source.Should().Contain("Click the ruler to create a break line");
+        source.Should().Contain("Text _qualifier:");
+        source.Should().Contain("_Treat consecutive delimiters as one");
+        source.Should().Contain("_Destination:");
+        source.Should().Contain("Column data format");
+        source.Should().Contain("Content = \"_General\"");
+        source.Should().Contain("Content = \"_Text\"");
+        source.Should().Contain("Do not import column (_skip)");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_ExposesDelimiterPreviewAffordances()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
@@ -49,17 +86,132 @@ public sealed class DataToolDialogTests
             "_Comma",
             "S_pace",
             "_Other:",
-            "Text _qualifier:",
-            "Data preview",
-            "_Destination:",
-            "CreateReferenceEditor(_destinationBox",
-            "ReferencePickerButton_Click"
+            "Data preview"
         })
             source.Should().Contain(content);
 
         source.Should().Contain("_previewGrid");
+        source.Should().Contain("RefreshPreview");
+        source.Should().Contain("TextToColumnsPlanner.SplitText");
         source.Should().Contain("_textQualifierBox");
+        source.Should().Contain("SelectedTextQualifier");
+        source.Should().Contain("TreatConsecutiveDelimitersAsOne");
         source.Should().Contain("_destinationBox");
+        source.Should().Contain("_formatColumnBox");
+        source.Should().Contain("BuildColumnFormats");
+        source.Should().Contain("ReferencePickerButton_Click");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_UsesExcelWizardChromeAroundDelimitedFlow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        source.Should().Contain("Step 2 of 3");
+        source.Should().Contain("CreateWizardButtonRow");
+        source.Should().Contain("Content = \"< _Back\"");
+        source.Should().Contain("Content = \"_Next >\"");
+        source.Should().Contain("Content = \"_Finish\"");
+        source.Should().Contain("IsDefault = true");
+        source.Should().Contain("Accept()");
+        source.Should().NotContain("Additional wizard steps are not supported yet.");
+    }
+
+    [Fact]
+    public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
+    {
+        TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
+            .Should()
+            .Equal(4, 8, 12);
+
+        var result = TextToColumnsDialog.CreateFixedWidthResult("4,8");
+        result.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
+        result.FixedWidthBreakPositions.Should().Equal(4, 8);
+    }
+
+    [Fact]
+    public void TextToColumnsFixedWidthBreakHelpers_AddMoveAndRemoveBreaks()
+    {
+        TextToColumnsDialog.AddFixedWidthBreakPosition([8, 4], 12, maxLength: 20)
+            .Should()
+            .Equal(4, 8, 12);
+        TextToColumnsDialog.AddFixedWidthBreakPosition([4, 8], 99, maxLength: 20)
+            .Should()
+            .Equal(4, 8, 19);
+
+        TextToColumnsDialog.MoveFixedWidthBreakPosition([4, 8, 12], index: 1, position: 10, maxLength: 20)
+            .Should()
+            .Equal(4, 10, 12);
+
+        TextToColumnsDialog.RemoveFixedWidthBreakPosition([4, 8, 12], index: 1)
+            .Should()
+            .Equal(4, 12);
+    }
+
+    [Fact]
+    public void TextToColumnsResult_CapturesTextQualifierAndConsecutiveDelimiterChoice()
+    {
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Comma],
+            textQualifier: TextToColumnsTextQualifier.SingleQuote,
+            treatConsecutiveDelimitersAsOne: true);
+
+        result.Delimiters.Should().Be(",");
+        result.TextQualifier.Should().Be(TextToColumnsTextQualifier.SingleQuote);
+        result.TextQualifierChar.Should().Be('\'');
+        result.TreatConsecutiveDelimitersAsOne.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TextToColumnsResult_NormalizesTrailingGeneralColumnFormats()
+    {
+        TextToColumnsDialog.NormalizeColumnFormats(
+            [
+                TextToColumnsColumnFormat.Text,
+                TextToColumnsColumnFormat.General,
+                TextToColumnsColumnFormat.General
+            ])
+            .Should()
+            .Equal(TextToColumnsColumnFormat.Text);
+
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Comma],
+            columnFormats:
+            [
+                TextToColumnsColumnFormat.General,
+                TextToColumnsColumnFormat.Skip
+            ]);
+
+        result.ColumnFormats.Should().Equal(
+            TextToColumnsColumnFormat.General,
+            TextToColumnsColumnFormat.Skip);
+    }
+
+    [Fact]
+    public void TextToColumnsResult_ParsesDestinationCellOrDefaultsToSelectionStart()
+    {
+        var sheetId = SheetId.New();
+        var defaultDestination = new CellAddress(sheetId, 2, 1);
+
+        TextToColumnsDialog.TryParseDestination("", defaultDestination, out var blankDestination).Should().BeTrue();
+        blankDestination.Should().Be(defaultDestination);
+
+        TextToColumnsDialog.TryParseDestination(" F2 ", defaultDestination, out var parsedDestination).Should().BeTrue();
+        parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
+
+        TextToColumnsDialog.TryParseDestination("F2:G3", defaultDestination, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TextToColumnsCommand_WarnsBeforeOverwritingDestinationData()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("FindOverwriteTargets");
+        source.Should().Contain("There's already data here. Do you want to replace it?");
+        source.Should().Contain("MessageBoxButton.YesNo");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("BuildTextToColumnsEdits");
     }
 
     [Fact]
@@ -100,6 +252,48 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_BuildsGenericColumnChoicesWhenHeadersAreDisabled()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Region"));
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 2),
+            new CellAddress(sheetId, 8, 4));
+
+        RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false).Should().Equal(
+            new RemoveDuplicateColumnChoice(0, "Column B", true),
+            new RemoveDuplicateColumnChoice(1, "Column C", true),
+            new RemoveDuplicateColumnChoice(2, "Column D", true));
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ExcludesHeaderRowOnlyWhenHeadersAreEnabled()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 8, 3));
+
+        RemoveDuplicatesDialog.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
+            new CellAddress(sheetId, 2, 1),
+            new CellAddress(sheetId, 8, 3)));
+        RemoveDuplicatesDialog.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
+        RemoveDuplicatesDialog.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
+            .Should()
+            .Be(new GridRange(range.Start, range.Start));
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ResultCapturesHeaderFlag()
+    {
+        var result = new RemoveDuplicatesDialogResult([0u, 2u], HasHeaders: true);
+
+        result.SelectedColumnOffsets.Should().Equal(0u, 2u);
+        result.HasHeaders.Should().BeTrue();
+    }
+
+    [Fact]
     public void SubtotalDialog_CreatesOptionsUsingSubtotalFunctionServiceNames()
     {
         var result = SubtotalDialog.CreateResult(
@@ -116,6 +310,19 @@ public sealed class DataToolDialogTests
         result.ReplaceCurrentSubtotals.Should().BeTrue();
         result.PageBreakBetweenGroups.Should().BeTrue();
         result.SummaryBelowData.Should().BeFalse();
+        result.Action.Should().Be(SubtotalDialogAction.Apply);
+    }
+
+    [Fact]
+    public void SubtotalDialog_CreatesRemoveAllResultWithoutSubtotalColumns()
+    {
+        var result = SubtotalDialog.CreateRemoveAllResult();
+
+        result.Action.Should().Be(SubtotalDialogAction.RemoveAll);
+        result.SubtotalColumnOffsets.Should().BeEmpty();
+        result.ReplaceCurrentSubtotals.Should().BeFalse();
+        result.PageBreakBetweenGroups.Should().BeFalse();
+        result.SummaryBelowData.Should().BeTrue();
     }
 
     [Fact]
@@ -148,9 +355,46 @@ public sealed class DataToolDialogTests
             "_Summary below data",
             "_At each change in:",
             "_Add subtotal to:",
-            "_Use function:"
+            "_Use function:",
+            "_Remove All"
         })
             source.Should().Contain($"Content = \"{content}\"");
+    }
+
+    [Fact]
+    public void SubtotalDialog_ExposesExcelStyleFunctionDropdownAndSubtotalChecklist()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("_functionBox = new ComboBox");
+        source.Should().Contain("SubtotalFunctionChoices");
+        source.Should().Contain("ItemsSource = SubtotalFunctionChoices");
+        source.Should().Contain("SelectedItem = \"Sum\"");
+        source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
+        source.Should().Contain("_subtotalColumnPanel");
+    }
+
+    [Fact]
+    public void SubtotalDialog_OrdersControlsLikeExcelSubtotalDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.IndexOf("Content = \"_At each change in:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal));
+        source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal));
+        source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Content = \"_Replace current subtotals\"", StringComparison.Ordinal));
+        source.Should().Contain("CreateSubtotalButtonRow");
+    }
+
+    [Fact]
+    public void SubtotalCommandSurface_RoutesRemoveAllToRemoveSubtotalRowsCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("SubtotalDialogAction.RemoveAll");
+        source.Should().Contain("new RemoveSubtotalRowsCommand(_currentSheetId, currentRange)");
     }
 
     [Fact]
@@ -193,6 +437,33 @@ public sealed class DataToolDialogTests
         result.CriteriaRange.Should().Be(new GridRange(new CellAddress(sheetId, 3, 3), new CellAddress(sheetId, 3, 3)));
         result.CopyToCell.Should().BeNull();
         result.UniqueRecordsOnly.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_ParsesSheetQualifiedListAndCriteriaRanges()
+    {
+        var currentSheetId = SheetId.New();
+        var dataSheetId = SheetId.New();
+        var criteriaSheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            currentSheetId,
+            listRangeText: "Data!A1:D20",
+            criteriaRangeText: "Criteria!F1:G2",
+            copyToCellText: "",
+            uniqueRecordsOnly: false,
+            resolveSheetId: sheetName => sheetName switch
+            {
+                "Data" => dataSheetId,
+                "Criteria" => criteriaSheetId,
+                _ => null
+            },
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.ListRange.Should().Be(new GridRange(new CellAddress(dataSheetId, 1, 1), new CellAddress(dataSheetId, 20, 4)));
+        result.CriteriaRange.Should().Be(new GridRange(new CellAddress(criteriaSheetId, 1, 6), new CellAddress(criteriaSheetId, 2, 7)));
     }
 
     [Fact]
@@ -239,11 +510,20 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
-        source.Should().Contain("Filter the list, in-place");
-        source.Should().Contain("Copy to another location");
-        source.Should().Contain("CreateReferenceEditor(_listRangeBox");
-        source.Should().Contain("CreateReferenceEditor(_criteriaRangeBox");
-        source.Should().Contain("CreateReferenceEditor(_copyToBox");
+        source.Should().Contain("Content = \"_Filter the list, in-place\"");
+        source.Should().Contain("Content = \"_Copy to another location\"");
+        source.Should().Contain("Content = \"_Unique records only\"");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 0, \"_List range:\", _listRangeBox");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"_Criteria range:\", _criteriaRangeBox");
+        source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
+        source.Should().Contain("var labelBlock = new Label");
+        source.Should().Contain("Target = textBox");
+        source.Should().Contain("Content = \"...\"");
+        source.Should().Contain("ToolTip = automationName");
+        source.Should().NotContain("Content = \"Collapse Dialog\"");
+        source.Should().NotContain("Text = \"E1:F2\"");
+        source.Should().Contain("Header = \"Action\"");
+        source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("ReferencePickerButton_Click");
     }
 
@@ -258,9 +538,13 @@ public sealed class DataToolDialogTests
         ConsolidateDialog.HaveSameSize([first, second]).Should().BeTrue();
         ConsolidateDialog.HaveSameSize([first, different]).Should().BeFalse();
 
-        var result = ConsolidateDialog.CreateResult([first, second], new CellAddress(sheetId, 9, 1));
+        var result = ConsolidateDialog.CreateResult(
+            [first, second],
+            new CellAddress(sheetId, 9, 1),
+            ConsolidateFunction.Sum);
         result.SourceRanges.Should().Equal(first, second);
         result.DestinationCell.Should().Be(new CellAddress(sheetId, 9, 1));
+        result.Function.Should().Be(ConsolidateFunction.Sum);
     }
 
     [Fact]
@@ -280,6 +564,30 @@ public sealed class DataToolDialogTests
             new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
             new GridRange(new CellAddress(sheetId, 5, 4), new CellAddress(sheetId, 7, 5)));
         result.DestinationCell.Should().Be(new CellAddress(sheetId, 10, 7));
+        result.Function.Should().Be(ConsolidateFunction.Sum);
+    }
+
+    [Fact]
+    public void ConsolidateDialog_TryParse_CapturesSelectedFunctionAndOptions()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B3; D5:E7",
+            destinationCellText: "G10",
+            function: ConsolidateFunction.Average,
+            useTopRowLabels: true,
+            useLeftColumnLabels: true,
+            createLinksToSourceData: true,
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.Function.Should().Be(ConsolidateFunction.Average);
+        result.UseTopRowLabels.Should().BeTrue();
+        result.UseLeftColumnLabels.Should().BeTrue();
+        result.CreateLinksToSourceData.Should().BeTrue();
     }
 
     [Fact]
@@ -296,10 +604,42 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("_referenceBox");
         source.Should().Contain("_referencesList");
-        source.Should().Contain("All references:");
+        source.Should().Contain("_Reference:");
+        source.Should().Contain("_All references:");
+        source.Should().Contain("_Destination cell:");
+        source.Should().Contain("Use _labels in:");
+        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = \"_Delete\"");
         source.Should().Contain("AddReferenceButton_Click");
         source.Should().Contain("DeleteReferenceButton_Click");
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_ExposesExcelStyleFunctionLabelsAndLinkOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("_functionBox");
+        source.Should().Contain("_topRowBox");
+        source.Should().Contain("_leftColumnBox");
+        source.Should().Contain("_createLinksBox");
+        source.Should().Contain("_Function:");
+        source.Should().Contain("_Top row");
+        source.Should().Contain("_Left column");
+        source.Should().Contain("Create _links to source data");
+        source.Should().Contain("Enum.GetValues<ConsolidateFunction>()");
+        source.Should().Contain("FunctionLabel(function)");
+        source.Should().Contain("ConsolidateFunction.CountNumbers => \"Count Numbers\"");
+        source.Should().Contain("SelectedFunction()");
+        source.Should().NotContain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
+        source.Should().NotContain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
+        source.Should().NotContain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
+        source.Should().Contain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
+        source.Should().Contain("UseTopRowLabels");
+        source.Should().Contain("UseLeftColumnLabels");
+        source.Should().Contain("consolidated values are written as results");
+        source.Should().Contain("AutomationProperties.SetHelpText(control, helpText)");
     }
 
     [Fact]
@@ -354,11 +694,13 @@ public sealed class DataToolDialogTests
     public void DataTableDialog_ParsesOneAndTwoVariableInputs()
     {
         var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
 
         var oneVariableParsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.OneVariable,
-            formulaCellText: "B2",
+            range,
             rowInputCellText: "",
             columnInputCellText: "C1",
             out var oneVariable,
@@ -366,51 +708,56 @@ public sealed class DataToolDialogTests
 
         oneVariableParsed.Should().BeTrue(oneVariableError);
         oneVariable.Mode.Should().Be(DataTableMode.OneVariable);
-        oneVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 2));
+        oneVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 3));
         oneVariable.RowInputCell.Should().BeNull();
         oneVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
 
         var twoVariableParsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.TwoVariable,
-            formulaCellText: "B2",
+            range,
             rowInputCellText: "A1",
             columnInputCellText: "C1",
             out var twoVariable,
             out var twoVariableError);
 
         twoVariableParsed.Should().BeTrue(twoVariableError);
+        twoVariable.Mode.Should().Be(DataTableMode.TwoVariable);
+        twoVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 2));
         twoVariable.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
         twoVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
     }
 
     [Fact]
-    public void DataTableDialog_RejectsInvalidFormulaCell()
+    public void DataTableDialog_RejectsMissingInputCells()
     {
         var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
 
         var parsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.OneVariable,
-            formulaCellText: "not-a-cell",
+            range,
             rowInputCellText: "",
-            columnInputCellText: "C1",
+            columnInputCellText: "",
             out _,
             out var error);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid formula cell.");
+        error.Should().Be("Enter either a row input cell or a column input cell.");
     }
 
     [Fact]
     public void DataTableDialog_RejectsInvalidOptionalInputCell()
     {
         var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
 
         var parsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.OneVariable,
-            formulaCellText: "B2",
+            range,
             rowInputCellText: "",
             columnInputCellText: "not-a-cell",
             out _,
@@ -425,13 +772,32 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
 
-        source.Should().Contain("CreateReferenceEditor(_formulaBox");
-        source.Should().Contain("CreateReferenceEditor(_rowInputBox");
-        source.Should().Contain("CreateReferenceEditor(_columnInputBox");
+        source.Should().Contain("AddReferenceRow(grid, 0, \"_Row input cell:\", _rowInputBox");
+        source.Should().Contain("AddReferenceRow(grid, 1, \"_Column input cell:\", _columnInputBox");
+        source.Should().NotContain("_formulaBox");
+        source.Should().NotContain("_modeBox");
         source.Should().Contain("ReferencePickerButton_Click");
-        source.Should().Contain("Select formula cell");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
+        source.Should().Contain("Content = \"...\"");
+        source.Should().NotContain("Content = \"Collapse Dialog\"");
+        source.Should().Contain("var labelBlock = new Label");
+        source.Should().Contain("Target = textBox");
+        source.Should().Contain("Header = \"Inputs\"");
+        source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
+    }
+
+    [Fact]
+    public void CreateTableDialog_ExposesHeadersCheckboxAndRangePicker()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("_headersBox");
+        source.Should().Contain("Content = \"_My table has headers\"");
+        source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
+        source.Should().Contain("CreateReferenceEditor(_rangeBox");
+        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("Select table range");
     }
 
     [Fact]
@@ -451,5 +817,23 @@ public sealed class DataToolDialogTests
         result.Range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 3)));
         result.FirstRowHasHeaders.Should().BeFalse();
         result.TableStyleName.Should().Be("TableStyleMedium2");
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("_Select All");
+        source.Should().Contain("_Unselect All");
+        source.Should().Contain("_My data has headers");
+        source.Should().Contain("_columnsPanel");
+        source.Should().Contain("Columns:");
+        source.Should().Contain("SelectAllButton_Click");
+        source.Should().Contain("UnselectAllButton_Click");
+        source.Should().Contain("RefreshColumnLabels");
+        source.Should().Contain("HasHeaders");
+        mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
     }
 }

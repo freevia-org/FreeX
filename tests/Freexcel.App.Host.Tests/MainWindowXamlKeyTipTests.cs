@@ -7,6 +7,102 @@ namespace Freexcel.App.Host.Tests;
 public sealed class MainWindowXamlKeyTipTests
 {
     [Fact]
+    public void RibbonSurface_IsReachableByKeyboardTabTraversal()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace keyboardNavigation = "clr-namespace:System.Windows.Input;assembly=PresentationFramework";
+
+        var ribbonTabs = document
+            .Descendants(presentation + "TabControl")
+            .Single(element => element.Attribute(x + "Name")?.Value == "RibbonTabs");
+
+        ribbonTabs.Attribute("Focusable")?.Value.Should().Be("True");
+        ribbonTabs.Attribute("IsTabStop")?.Value.Should().Be("True");
+        ribbonTabs.Attribute(keyboardNavigation + "KeyboardNavigation.TabNavigation")?.Value.Should().Be("Continue");
+        ribbonTabs.Attribute(keyboardNavigation + "KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Continue");
+        ribbonTabs.Attribute(keyboardNavigation + "KeyboardNavigation.DirectionalNavigation")?.Value.Should().Be("Contained");
+    }
+
+    [Fact]
+    public void RibbonCommandStyles_PreserveKeyboardFocusStops()
+    {
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var styles = resources
+            .Descendants(presentation + "Style")
+            .Where(style =>
+                (style.Attribute(x + "Key")?.Value is "RibbonBtn" or "RibbonToggleBtn") ||
+                style.Attribute("TargetType")?.Value == "TabItem")
+            .ToList();
+
+        styles.Should().HaveCount(3);
+        styles.Should().OnlyContain(style =>
+            style.Elements(presentation + "Setter").Any(setter =>
+                (string?)setter.Attribute("Property") == "Focusable" &&
+                (string?)setter.Attribute("Value") == "True"));
+        styles.Should().OnlyContain(style =>
+            style.Elements(presentation + "Setter").Any(setter =>
+                (string?)setter.Attribute("Property") == "IsTabStop" &&
+                (string?)setter.Attribute("Value") == "True"));
+    }
+
+    [Fact]
+    public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        const string callSite = "if (TryHandleFocusedRibbonKeyboardNavigation(e))";
+
+        source.Should().Contain(callSite);
+        var callIndex = source.IndexOf(callSite, StringComparison.Ordinal);
+        var gridNavigationIndex = source.IndexOf("if (SheetGrid.SelectedRange == null) return;", callIndex, StringComparison.Ordinal);
+
+        gridNavigationIndex.Should().BeGreaterThan(callIndex);
+        callIndex
+            .Should()
+            .BeLessThan(gridNavigationIndex);
+    }
+
+    [Fact]
+    public void BackstageSidebarButtons_RenderAccessKeyMarkersAsMnemonics()
+    {
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var sidebarButtonStyle = resources
+            .Descendants(presentation + "Style")
+            .Single(element => element.Attribute(x + "Key")?.Value == "SsNavBtn");
+
+        sidebarButtonStyle
+            .Descendants(presentation + "ContentPresenter")
+            .Single()
+            .Attribute("RecognizesAccessKey")
+            ?.Value
+            .Should()
+            .Be("True");
+    }
+
+    [Fact]
+    public void BackstageSaveAsButton_UsesAccessKeyMatchingKeyTip()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var saveAsButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "SaveAsButton_Click");
+
+        saveAsButton.Attribute("Content")?.Value.Should().Be("Save _As");
+        saveAsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("A");
+    }
+
+    [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -230,7 +326,10 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void MainWindowPreviewKeys_HandleWorksheetKeytipAndContextMenuEntryPoints()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
 
         source.Should().Contain("this.PreviewKeyDown += MainWindow_PreviewKeyDown;");
         source.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
@@ -240,7 +339,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void EscapeFromVisibleBackstage_ReturnsToWorkbookBeforeTransientCancellation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
 
         source.Should().Contain("IsStartScreenVisible()");
         source.Should().Contain("HideStartScreen();");
@@ -265,6 +364,9 @@ public sealed class MainWindowXamlKeyTipTests
         exportButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Export PDF/XPS");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PDF");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("XPS");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("selection");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("workbook");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("active sheet");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("PDF printer");
     }
 
@@ -327,7 +429,7 @@ public sealed class MainWindowXamlKeyTipTests
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
 
         var insertCommentButton = document
             .Descendants(presentation + "Button")
@@ -336,7 +438,7 @@ public sealed class MainWindowXamlKeyTipTests
         insertCommentButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("New Comment");
         insertCommentButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("threaded comment");
         insertCommentButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("not implemented");
-        source.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e)    => ReviewNewThreadedCommentBtn_Click(sender, e);");
+        source.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
     }
 
     [Fact]
@@ -708,6 +810,23 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageCommandButtons_ExposeVisibleAccessKeysForSaveAndClose()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var startScreen = document
+            .Descendants(presentation + "Grid")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
+
+        startScreen.Descendants(presentation + "Button")
+            .Select(button => button.Attribute("Content")?.Value)
+            .Should()
+            .Contain(["_Save", "_Close"]);
+    }
+
+    [Fact]
     public void BackstageMouseOnlyCommands_AreNotUsedForRecentPinnedTabs()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -914,6 +1033,49 @@ public sealed class MainWindowXamlKeyTipTests
         name!.Value.Should().Be("Zoom Slider");
         helpText!.Value.Should().Contain("10%").And.Contain("400%");
         tooltip!.Value.Should().Be("Zoom");
+    }
+
+    [Fact]
+    public void StatusBarAggregates_AreConstrainedAwayFromZoomControls()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var statusBarGrid = document
+            .Descendants(presentation + "Grid")
+            .Single(grid => grid.Attribute(x + "Name")?.Value == "StatusBarGrid");
+
+        statusBarGrid
+            .Element(presentation + "Grid.ColumnDefinitions")!
+            .Elements(presentation + "ColumnDefinition")
+            .Select(column => column.Attribute("Width")?.Value)
+            .Should()
+            .Equal("Auto", "*", "Auto");
+
+        var statsViewport = statusBarGrid
+            .Descendants(presentation + "Border")
+            .Single(border => border.Attribute(x + "Name")?.Value == "StatusStatsViewport");
+
+        statsViewport.Attribute("Grid.Column")?.Value.Should().Be("1");
+        statsViewport.Attribute("ClipToBounds")?.Value.Should().Be("True");
+        statsViewport.Attribute("Margin")?.Value.Should().NotContain("180");
+
+        var statsPanel = statsViewport
+            .Descendants(presentation + "StackPanel")
+            .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusStatsPanel");
+
+        statsPanel.Attribute("HorizontalAlignment")?.Value.Should().Be("Right");
+        statsPanel.Attribute("ClipToBounds")?.Value.Should().Be("True");
+
+        var zoomControls = statusBarGrid
+            .Descendants(presentation + "StackPanel")
+            .Single(panel => panel.Attribute(x + "Name")?.Value == "StatusZoomControls");
+
+        zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
+        zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
+        zoomControls.Attribute("Background")?.Value.Should().Be("{StaticResource FreexcelStatusSurfaceBrush}");
+        zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
     }
 
     [Theory]
@@ -1297,7 +1459,9 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("e.ClickCount == 2");
         source.Should().Contain("TryShowPivotTableDetails(showMessage: false)");
@@ -1386,6 +1550,20 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void PivotTableFieldListPane_RemoveButton_ExposesVisibleAccessKey()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click")
+            .Attribute("Content")?.Value
+            .Should()
+            .Be("_Remove");
+    }
+
+    [Fact]
     public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
@@ -1450,7 +1628,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         dialogXaml
             .Descendants(presentation + "TabItem")
-            .Select(tab => tab.Attribute("Header")?.Value)
+            .Select(tab => tab.Attribute("Header")?.Value?.Replace("_", "", StringComparison.Ordinal))
             .Should()
             .Contain(["Summarize Values By", "Show Values As", "Number Format"]);
 
@@ -1676,6 +1854,19 @@ public sealed class MainWindowXamlKeyTipTests
         source.Should().Contain("ApplyPivotOptions(");
         source.Should().Contain("new ConfigurePivotTableOptionsCommand");
         source.Should().NotContain("PivotTableRefreshService.Refresh(_workbook, sheet, pivotTable);");
+    }
+
+    [Fact]
+    public void PivotTableContextualLayoutCommands_PreserveCompactIndentWhenUsingOptionWrapper()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("int? compactRowLabelIndent = null");
+        source.Should().Contain("bool? printTitles = null");
+        source.Should().Contain("bool? printExpandCollapseButtons = null");
+        source.Should().Contain("bool updateAltText = false");
+        source.Should().Contain("compactRowLabelIndent,");
+        source.Should().Contain("updateAltText: true");
     }
 
     [Fact]

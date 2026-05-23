@@ -4,7 +4,9 @@ namespace Freexcel.App.Host;
 
 public static class InsertFunctionCatalogPlanner
 {
-    private const string AllCategory = "All";
+    public const string MostRecentlyUsedCategory = "Most Recently Used";
+    public const string AllCategory = "All";
+    private static readonly string[] MostRecentlyUsedFunctions = ["SUM", "AVERAGE", "COUNT", "MAX", "MIN", "IF", "XLOOKUP", "VLOOKUP"];
 
     public static IReadOnlyList<InsertFunctionCatalogEntry> BuildCatalog() =>
         BuiltInFunctions.Names
@@ -21,12 +23,20 @@ public static class InsertFunctionCatalogPlanner
     {
         var normalizedCategory = string.IsNullOrWhiteSpace(category) ? AllCategory : category.Trim();
         var search = searchText?.Trim() ?? "";
+        var searchSpansCatalog = search.Length > 0 && normalizedCategory == MostRecentlyUsedCategory;
         return catalog
-            .Where(entry => normalizedCategory == AllCategory || entry.Category == normalizedCategory)
+            .Where(entry =>
+                normalizedCategory == AllCategory ||
+                searchSpansCatalog ||
+                (normalizedCategory == MostRecentlyUsedCategory && MostRecentlyUsedFunctions.Contains(entry.Name, StringComparer.OrdinalIgnoreCase)) ||
+                entry.Category == normalizedCategory)
             .Where(entry =>
                 search.Length == 0 ||
                 entry.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                 entry.Description.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(entry => normalizedCategory == MostRecentlyUsedCategory && search.Length == 0
+                ? Array.IndexOf(MostRecentlyUsedFunctions, entry.Name)
+                : 0)
             .ToArray();
     }
 

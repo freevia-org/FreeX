@@ -29,23 +29,22 @@ public sealed class CreateNamesFromSelectionDialog : Window
             Text = "Create names from values in the:",
             Margin = new Thickness(0, 0, 0, 6)
         });
-        root.Children.Add(_topRow);
-        root.Children.Add(_leftColumn);
-        root.Children.Add(_bottomRow);
-        root.Children.Add(_rightColumn);
-
-        var buttons = new StackPanel
+        var group = new GroupBox { Header = "Create names from", Margin = new Thickness(0, 0, 0, 10) };
+        var options = new StackPanel { Margin = new Thickness(8, 4, 8, 8) };
+        options.Children.Add(_topRow);
+        options.Children.Add(_leftColumn);
+        options.Children.Add(_bottomRow);
+        options.Children.Add(_rightColumn);
+        group.Content = options;
+        root.Children.Add(group);
+        root.Children.Add(new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 18, 0, 0)
-        };
-        var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
-        ok.Click += (_, _) => DialogResult = true;
-        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
-        root.Children.Add(buttons);
+            Text = "Excel creates named ranges from the selected row or column labels.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        root.Children.Add(DialogButtonRowFactory.Create(() => DialogResult = true, buttonWidth: 76));
 
         Content = root;
     }

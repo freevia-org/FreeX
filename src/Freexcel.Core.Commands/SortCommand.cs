@@ -2,7 +2,16 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
 
-public sealed record SortKey(uint ColumnOffset, bool Ascending);
+public enum SortOn
+{
+    CellValues,
+    CellColor,
+    FontColor
+}
+
+public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues);
+
+public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
 /// <summary>
 /// Sorts the rows of a rectangular range by a specified column, ascending or descending.
@@ -13,6 +22,7 @@ public sealed class SortCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly IReadOnlyList<SortKey> _sortKeys;
+    private readonly SortOptions _options;
 
     // Snapshot for undo: list of rows, each row is a list of (address, cell?) pairs
     private List<List<(CellAddress Address, Cell? Cell)>>? _snapshot;
@@ -30,11 +40,12 @@ public sealed class SortCommand : IWorkbookCommand
     {
     }
 
-    public SortCommand(SheetId sheetId, GridRange range, IReadOnlyList<SortKey> sortKeys)
+    public SortCommand(SheetId sheetId, GridRange range, IReadOnlyList<SortKey> sortKeys, SortOptions? options = null)
     {
         _sheetId = sheetId;
         _range = range;
         _sortKeys = sortKeys.Count == 0 ? [new SortKey(0, true)] : sortKeys;
+        _options = options ?? new SortOptions();
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -57,14 +68,18 @@ public sealed class SortCommand : IWorkbookCommand
         uint startCol = _range.Start.Col;
         uint endCol   = _range.End.Col;
         uint colCount32 = endCol - startCol + 1;
-        if (_sortKeys.Any(key => key.ColumnOffset >= colCount32))
-            return new CommandOutcome(false, "Sort key column offset is outside the sort range.");
+        var keyLimit = _options.LeftToRight ? endRow - startRow + 1 : colCount32;
+        if (_sortKeys.Any(key => key.ColumnOffset >= keyLimit))
+            return new CommandOutcome(false, "Sort key offset is outside the sort range.");
         var keyColIndexes = _sortKeys
-            .Select(key => ((int)key.ColumnOffset, key.Ascending))
+            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn))
             .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);
         int colCount = (int)(endCol - startCol + 1);
+
+        if (_options.LeftToRight)
+            return ApplyLeftToRight(ctx.Workbook, sheet, startRow, endRow, startCol, endCol, keyColIndexes, rowCount, colCount);
 
         // Read current state and save snapshot. Redo replays Apply after Revert,
         // so the snapshot must describe the current pre-sort state each time.
@@ -109,11 +124,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         rows.Sort((a, b) =>
         {
-            foreach (var (index, ascending) in keyColIndexes)
+            foreach (var (index, ascending, sortOn) in keyColIndexes)
             {
-                var va = a.Cells[index]?.Value ?? BlankValue.Instance;
-                var vb = b.Cells[index]?.Value ?? BlankValue.Instance;
-                int cmp = CompareScalar(va, vb);
+                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -150,6 +163,105 @@ public sealed class SortCommand : IWorkbookCommand
 
                 sheet.ThreadedComments.Remove(addr);
                 var threadedComment = rows[ri].ThreadedComments[ci];
+                if (threadedComment is not null)
+                    sheet.ThreadedComments[addr] = threadedComment;
+
+                affected.Add(addr);
+            }
+        }
+
+        return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    private CommandOutcome ApplyLeftToRight(
+        Workbook workbook,
+        Sheet sheet,
+        uint startRow,
+        uint endRow,
+        uint startCol,
+        uint endCol,
+        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn)> keyRowIndexes,
+        int rowCount,
+        int colCount)
+    {
+        _snapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
+        _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
+        _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
+
+        var columns = new List<(Cell?[] Cells, string?[] Comments, ThreadedComment?[] ThreadedComments, int OriginalIndex)>(colCount);
+
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            uint row = startRow + (uint)ri;
+            var snapRow = new List<(CellAddress, Cell?)>(colCount);
+            for (int ci = 0; ci < colCount; ci++)
+            {
+                uint col = startCol + (uint)ci;
+                var addr = new CellAddress(_sheetId, row, col);
+                snapRow.Add((addr, sheet.GetCell(addr)?.Clone()));
+            }
+            _snapshot.Add(snapRow);
+        }
+
+        for (int ci = 0; ci < colCount; ci++)
+        {
+            uint col = startCol + (uint)ci;
+            var cells = new Cell?[rowCount];
+            var comments = new string?[rowCount];
+            var threadedComments = new ThreadedComment?[rowCount];
+
+            for (int ri = 0; ri < rowCount; ri++)
+            {
+                uint row = startRow + (uint)ri;
+                var addr = new CellAddress(_sheetId, row, col);
+                cells[ri] = sheet.GetCell(addr)?.Clone();
+                sheet.Comments.TryGetValue(addr, out comments[ri]);
+                sheet.ThreadedComments.TryGetValue(addr, out threadedComments[ri]);
+            }
+
+            columns.Add((cells, comments, threadedComments, ci));
+        }
+
+        _commentSnapshot = sheet.Comments
+            .Where(p => _range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+        _threadedCommentSnapshot = sheet.ThreadedComments
+            .Where(p => _range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+
+        columns.Sort((a, b) =>
+        {
+            foreach (var (index, ascending, sortOn) in keyRowIndexes)
+            {
+                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, _options.CaseSensitive);
+                if (cmp != 0)
+                    return ascending ? cmp : -cmp;
+            }
+
+            return a.OriginalIndex.CompareTo(b.OriginalIndex);
+        });
+
+        var affected = new List<CellAddress>(rowCount * colCount);
+        for (int ci = 0; ci < colCount; ci++)
+        {
+            uint col = startCol + (uint)ci;
+            for (int ri = 0; ri < rowCount; ri++)
+            {
+                uint row = startRow + (uint)ri;
+                var addr = new CellAddress(_sheetId, row, col);
+                var cell = columns[ci].Cells[ri];
+                if (cell is null)
+                    sheet.ClearCell(addr);
+                else
+                    sheet.SetCell(addr, cell.Clone());
+
+                sheet.Comments.Remove(addr);
+                var comment = columns[ci].Comments[ri];
+                if (comment is not null)
+                    sheet.Comments[addr] = comment;
+
+                sheet.ThreadedComments.Remove(addr);
+                var threadedComment = columns[ci].ThreadedComments[ri];
                 if (threadedComment is not null)
                     sheet.ThreadedComments[addr] = threadedComment;
 
@@ -198,10 +310,37 @@ public sealed class SortCommand : IWorkbookCommand
         InsertRowsCommand.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
     }
 
+    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, bool caseSensitive) =>
+        sortOn switch
+        {
+            SortOn.CellColor => CompareNullableColor(GetStyle(workbook, a).FillColor, GetStyle(workbook, b).FillColor),
+            SortOn.FontColor => CompareNullableColor(GetStyle(workbook, a).FontColor, GetStyle(workbook, b).FontColor),
+            _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, caseSensitive)
+        };
+
+    private static CellStyle GetStyle(Workbook workbook, Cell? cell) =>
+        workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+
+    private static int CompareNullableColor(CellColor? a, CellColor? b)
+    {
+        if (a is null && b is null)
+            return 0;
+        if (a is null)
+            return 1;
+        if (b is null)
+            return -1;
+
+        var red = a.Value.R.CompareTo(b.Value.R);
+        if (red != 0)
+            return red;
+        var green = a.Value.G.CompareTo(b.Value.G);
+        return green != 0 ? green : a.Value.B.CompareTo(b.Value.B);
+    }
+
     /// <summary>
     /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, blanks/errors last.
     /// </summary>
-    private static int CompareScalar(ScalarValue a, ScalarValue b)
+    private static int CompareScalar(ScalarValue a, ScalarValue b, bool caseSensitive)
     {
         bool aNum = a is NumberValue or DateTimeValue;
         bool bNum = b is NumberValue or DateTimeValue;
@@ -215,7 +354,7 @@ public sealed class SortCommand : IWorkbookCommand
         if (bNum) return  1;
         return (a, b) switch
         {
-            (TextValue ta,   TextValue tb  ) => string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase),
+            (TextValue ta,   TextValue tb  ) => string.Compare(ta.Value, tb.Value, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase),
             (TextValue,      _             ) => -1,  // text before bool/blank
             (_,              TextValue     ) =>  1,
             (BoolValue ba,   BoolValue bb  ) => ba.Value.CompareTo(bb.Value),

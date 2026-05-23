@@ -66,6 +66,21 @@ public class SpillEngineTests
         sheet.GetValue(2, 1).Should().Be(new NumberValue(99));
     }
 
+    [Fact]
+    public void IsSpillBlocked_DifferentAnchorSpill_ReturnsTrue()
+    {
+        var sheet = MakeSheet();
+        var firstAnchor = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetSpillRange(firstAnchor, new RangeValue(new ScalarValue[2, 1]
+        {
+            { new NumberValue(1) },
+            { new NumberValue(2) }
+        }));
+
+        var secondAnchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.IsSpillBlocked(secondAnchor, 2, 2).Should().BeTrue();
+    }
+
     // ── RecalcEngine spill integration ────────────────────────────────────────
 
     private static (RecalcEngine engine, Workbook wb) MakeEngine()
@@ -124,5 +139,44 @@ public class SpillEngineTests
         sheet.GetValue(1, 1).Should().Be(ErrorValue.Spill);
         sheet.GetValue(2, 1).Should().Be(new NumberValue(99));
         sheet.GetValue(3, 1).Should().Be(new BlankValue());
+    }
+
+    [Fact]
+    public void Recalc_BlockedSequenceAfterBlockerCleared_WritesSpillValues()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        var blocker = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(blocker, new NumberValue(99));
+        sheet.SetFormula(anchor, "SEQUENCE(3)");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.ClearCell(blocker);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Recalc_FormulaChangedFromSpillToScalar_ClearsOldSpillValues()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(anchor, "SEQUENCE(3)");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.SetFormula(anchor, "42");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(42));
+        sheet.GetValue(2, 1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(3, 1).Should().Be(BlankValue.Instance);
     }
 }

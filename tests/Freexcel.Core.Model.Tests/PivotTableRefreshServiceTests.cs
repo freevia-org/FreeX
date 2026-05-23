@@ -222,6 +222,7 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Theory]
+    [InlineData("PivotStyleMedium2", 31, 78, 121, 232, 240, 248)]
     [InlineData("PivotStyleLight16", 217, 225, 242, 242, 248, 238)]
     [InlineData("PivotStyleMedium10", 237, 125, 49, 253, 239, 230)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
@@ -282,6 +283,36 @@ public sealed class PivotTableRefreshServiceTests
         Number(sheet, "F5").Should().Be(30);
         Number(sheet, "G5").Should().Be(40);
         Number(sheet, "H5").Should().Be(70);
+    }
+
+    [Fact]
+    public void Refresh_MatrixUsesEmptyValueTextForMissingIntersections()
+    {
+        var workbook = new Workbook("PivotEmptyValueDisplayTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "I7"),
+            EmptyValueText = "N/A"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Number(sheet, "F3").Should().Be(10);
+        Text(sheet, "G3").Should().Be("N/A");
+        Text(sheet, "E4").Should().Be("West");
+        Text(sheet, "F4").Should().Be("N/A");
+        Number(sheet, "G4").Should().Be(25);
+        Number(sheet, "H3").Should().Be(10);
+        Number(sheet, "H4").Should().Be(25);
     }
 
     [Fact]
@@ -781,6 +812,32 @@ public sealed class PivotTableRefreshServiceTests
         Text(sheet, "E7").Should().Be("Grand Total");
         Number(sheet, "F7").Should().Be(70);
         sheet.GetCell(Addr(sheet, "G3")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_CompactReportLayoutAppliesConfiguredRowLabelIndent()
+    {
+        var workbook = new Workbook("PivotCompactIndentRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G8"),
+            ReportLayout = PivotReportLayout.Compact,
+            CompactRowLabelIndent = 3
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId).IndentLevel.Should().Be(3);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId).IndentLevel.Should().Be(3);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).IndentLevel.Should().Be(0);
     }
 
     [Fact]
@@ -1831,6 +1888,19 @@ public sealed class PivotTableRefreshServiceTests
         sheet.SetCell(Addr(sheet, "A5"), new TextValue("West"));
         sheet.SetCell(Addr(sheet, "B5"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C5"), new NumberValue(25));
+    }
+
+    private static void SeedSparseSalesData(Sheet sheet)
+    {
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(25));
     }
 
     private static void SeedSalesChannelData(Sheet sheet)

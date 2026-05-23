@@ -24,7 +24,7 @@
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Label Content="_Filter:" Target="{Binding ElementName=FilterBox}" VerticalAlignment="Center"/>
-                <ComboBox x:Name="FilterBox" Width="190" SelectedIndex="0">
+                <ComboBox x:Name="FilterBox" Width="190" SelectedIndex="0" SelectionChanged="FilterBox_SelectionChanged">
                     <ComboBoxItem Content="All names"/>
                     <ComboBoxItem Content="Names scoped to workbook"/>
                     <ComboBoxItem Content="Names scoped to worksheet"/>
@@ -55,21 +55,12 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="70"/>
                 <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Label Content="_Name:" Target="{Binding ElementName=NameBox}" VerticalAlignment="Center"/>
-            <TextBox x:Name="NameBox" Grid.Column="1"/>
-        </Grid>
-
-        <Grid Grid.Row="4" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="70"/>
-                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="32"/>
             </Grid.ColumnDefinitions>
-            <Label Content="_Range:" Target="{Binding ElementName=RangeBox}" VerticalAlignment="Center"/>
-            <TextBox x:Name="RangeBox" Grid.Column="1"
-                     ToolTip="Enter range in format: Sheet1!A1:B10"/>
-            <Button x:Name="RangePickerButton" Grid.Column="2" Content="..." Width="26" Margin="4,0,0,0" ToolTip="Select the referenced range from the worksheet" IsEnabled="False"/>
+            <Label Content="_Refers to:" Target="{Binding ElementName=RefersToBox}" VerticalAlignment="Center"/>
+            <TextBox x:Name="RefersToBox" Grid.Column="1" IsReadOnly="True"
+                     ToolTip="Selected name reference"/>
+            <Button x:Name="RefersToPickerButton" Grid.Column="2" Content="..." Width="26" Margin="4,0,0,0" ToolTip="Select the referenced range from the worksheet" IsEnabled="False"/>
         </Grid>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">

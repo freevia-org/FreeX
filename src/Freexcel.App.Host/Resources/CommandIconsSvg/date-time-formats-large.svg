@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  
+  <rect x="6.4" y="8" width="19.2" height="17.6" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="6.4" y="8" width="19.2" height="4.8" fill="#0078d4"/>
+  <text x="16" y="19.2" font-size="9.6"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">7</text>
+</svg>

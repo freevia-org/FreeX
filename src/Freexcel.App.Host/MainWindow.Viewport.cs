@@ -280,11 +280,18 @@ public partial class MainWindow
         SheetGrid.Viewport = viewport;
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
-        SheetGrid.Charts = sheet?.Charts;
-        SheetGrid.TextBoxes = sheet?.TextBoxes;
-        SheetGrid.DrawingShapes = sheet?.DrawingShapes;
+        SheetGrid.ObjectDisplayMode = _options.ObjectsDisplay switch
+        {
+            FreexcelObjectDisplay.Placeholders => Freexcel.App.UI.GridObjectDisplayMode.Placeholders,
+            FreexcelObjectDisplay.Nothing => Freexcel.App.UI.GridObjectDisplayMode.Nothing,
+            _ => Freexcel.App.UI.GridObjectDisplayMode.All
+        };
+        var keepObjectData = _options.ObjectsDisplay != FreexcelObjectDisplay.Nothing;
+        SheetGrid.Charts = keepObjectData ? sheet?.Charts : null;
+        SheetGrid.TextBoxes = keepObjectData ? sheet?.TextBoxes : null;
+        SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
         SheetGrid.WorkbookTheme = _workbook.Theme;
-        SheetGrid.Pictures = sheet?.Pictures;
+        SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null ? null : SparklineValuePlanner.BuildValues(sheet);
@@ -298,8 +305,12 @@ public partial class MainWindow
         {
             if (ViewGridlinesChk is not null)
                 ViewGridlinesChk.IsChecked = SheetGrid.ShowGridLines;
+            if (PageLayoutViewGridlinesChk is not null)
+                PageLayoutViewGridlinesChk.IsChecked = SheetGrid.ShowGridLines;
             if (ViewHeadersChk is not null)
                 ViewHeadersChk.IsChecked = SheetGrid.ShowHeaders;
+            if (PageLayoutViewHeadingsChk is not null)
+                PageLayoutViewHeadingsChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
             if (SplitViewBtn is not null)
@@ -309,6 +320,10 @@ public partial class MainWindow
         {
             _suppressViewOptionSync = false;
         }
+        if (PageLayoutPrintGridlinesChk is not null)
+            PageLayoutPrintGridlinesChk.IsChecked = sheet?.PrintGridlines ?? false;
+        if (PageLayoutPrintHeadingsChk is not null)
+            PageLayoutPrintHeadingsChk.IsChecked = sheet?.PrintHeadings ?? false;
         SheetGrid.RowPageBreaks = sheet?.RowPageBreaks;
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;
@@ -327,6 +342,7 @@ public partial class MainWindow
         VerticalScroll.LargeChange    = Math.Max(1, scrollableRowCount);
         HorizontalScroll.LargeChange  = Math.Max(1, scrollableColumnCount);
         RefreshValidationDropdown();
+        RefreshFormulaReferenceHighlights();
         RefreshPivotFieldListPane();
         RefreshSlicerTimelinePane();
     }

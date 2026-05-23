@@ -12,6 +12,14 @@ public static class GoToSpecialInputParser
             "comment" or "comments" => GoToSpecialKind.Comments,
             "validation" or "data validation" => GoToSpecialKind.DataValidation,
             "visible" or "visible cells" => GoToSpecialKind.VisibleCellsOnly,
+            "row differences" or "row difference" => GoToSpecialKind.RowDifferences,
+            "column differences" or "column difference" => GoToSpecialKind.ColumnDifferences,
+            "current region" => GoToSpecialKind.CurrentRegion,
+            "last cell" => GoToSpecialKind.LastCell,
+            "conditional format" or "conditional formats" => GoToSpecialKind.ConditionalFormats,
+            "object" or "objects" => GoToSpecialKind.Objects,
+            "precedent" or "precedents" => GoToSpecialKind.Precedents,
+            "dependent" or "dependents" => GoToSpecialKind.Dependents,
             _ => GoToSpecialKind.Blanks
         };
 }

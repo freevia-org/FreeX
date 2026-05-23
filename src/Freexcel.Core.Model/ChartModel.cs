@@ -7,6 +7,7 @@ public enum ChartType
     PercentStackedColumn,
     Line,
     Pie,
+    ThreeDPie,
     Doughnut,
     Bar,
     StackedBar,
@@ -25,7 +26,8 @@ public enum ChartType
     Waterfall,
     Funnel,
     Map,
-    ThreeDColumn
+    ThreeDColumn,
+    ThreeDBar
 }
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
@@ -49,6 +51,14 @@ public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
 public enum ChartErrorBarDirection { Both, Plus, Minus }
 
 public enum ChartBlankDisplayMode { Gap, Span, Zero }
+
+public enum StockChartSubtype
+{
+    HighLowClose,
+    OpenHighLowClose,
+    VolumeHighLowClose,
+    VolumeOpenHighLowClose
+}
 
 public sealed class ChartProtectionModel
 {
@@ -164,6 +174,7 @@ public sealed record ChartPointDataLabelFormat(
 public sealed class ChartModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    public string? Name { get; set; }
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsVisible { get; set; } = true;
@@ -173,6 +184,9 @@ public sealed class ChartModel
     public int? PivotCacheId { get; set; }
     public string? PivotFormatsXml { get; set; }
     public bool ShowPivotChartFieldButtons { get; set; } = true;
+    public bool ShowPivotChartReportFilterButtons { get; set; } = true;
+    public bool ShowPivotChartAxisFieldButtons { get; set; } = true;
+    public bool ShowPivotChartValueFieldButtons { get; set; } = true;
     public bool Uses1904DateSystem { get; set; }
     public string? Language { get; set; }
     public int? ChartStyleId { get; set; }
@@ -191,6 +205,7 @@ public sealed class ChartModel
     public int? BarGapWidth { get; set; }
     public int? BarOverlap { get; set; }
     public bool? VaryColorsByPoint { get; set; }
+    public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }

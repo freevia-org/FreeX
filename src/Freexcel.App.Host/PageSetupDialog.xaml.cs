@@ -9,6 +9,7 @@ namespace Freexcel.App.Host;
 public partial class PageSetupDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly GridRange? _currentSelection;
 
     public WorksheetPageOrientation Orientation { get; private set; }
     public WorksheetPaperSize PaperSize { get; private set; }
@@ -30,11 +31,33 @@ public partial class PageSetupDialog : Window
     public int? PrintQualityDpi { get; private set; }
     public WorksheetPrintErrorValue PrintErrorValue { get; private set; }
     public WorksheetPrintComments PrintComments { get; private set; }
+    public WorksheetHeaderFooter Header { get; private set; }
+    public WorksheetHeaderFooter Footer { get; private set; }
+    public WorksheetHeaderFooter FirstPageHeader { get; private set; }
+    public WorksheetHeaderFooter FirstPageFooter { get; private set; }
+    public WorksheetHeaderFooter EvenPageHeader { get; private set; }
+    public WorksheetHeaderFooter EvenPageFooter { get; private set; }
+    public WorksheetHeaderFooterPictureSet HeaderPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet FooterPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; private set; }
+    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; private set; }
+    public bool DifferentFirstPage { get; private set; }
+    public bool DifferentOddEvenPages { get; private set; }
+    public bool ScaleHeaderFooterWithDocument { get; private set; }
+    public bool AlignHeaderFooterWithMargins { get; private set; }
+    public PageSetupDialogAction RequestedAction { get; private set; } = PageSetupDialogAction.Ok;
 
-    public PageSetupDialog(Sheet sheet)
+    public PageSetupDialog(Sheet sheet, GridRange? currentSelection = null)
     {
         InitializeComponent();
         _sheetId = sheet.Id;
+        _currentSelection = currentSelection is { } selection &&
+                            selection.Start.Sheet == sheet.Id &&
+                            selection.End.Sheet == sheet.Id
+            ? selection
+            : null;
         Orientation = sheet.PageOrientation;
         PaperSize = sheet.PaperSize;
         Margins = sheet.PageMargins;
@@ -55,6 +78,22 @@ public partial class PageSetupDialog : Window
         PrintQualityDpi = sheet.PrintQualityDpi;
         PrintErrorValue = sheet.PrintErrorValue;
         PrintComments = sheet.PrintComments;
+        Header = sheet.PageHeader;
+        Footer = sheet.PageFooter;
+        FirstPageHeader = sheet.FirstPageHeader;
+        FirstPageFooter = sheet.FirstPageFooter;
+        EvenPageHeader = sheet.EvenPageHeader;
+        EvenPageFooter = sheet.EvenPageFooter;
+        HeaderPictures = sheet.PageHeaderPictures.DeepClone();
+        FooterPictures = sheet.PageFooterPictures.DeepClone();
+        FirstPageHeaderPictures = sheet.FirstPageHeaderPictures.DeepClone();
+        FirstPageFooterPictures = sheet.FirstPageFooterPictures.DeepClone();
+        EvenPageHeaderPictures = sheet.EvenPageHeaderPictures.DeepClone();
+        EvenPageFooterPictures = sheet.EvenPageFooterPictures.DeepClone();
+        DifferentFirstPage = sheet.DifferentFirstPageHeaderFooter;
+        DifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter;
+        ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument;
+        AlignHeaderFooterWithMargins = sheet.HeaderFooterAlignWithMargins;
         PopulateFields();
     }
 
@@ -115,9 +154,63 @@ public partial class PageSetupDialog : Window
             WorksheetPrintComments.AsDisplayed => 2,
             _ => 0
         };
+        SelectPreset(HeaderPresetBox, Header.Center);
+        SelectPreset(FooterPresetBox, Footer.Center);
+        DifferentFirstPageBox.IsChecked = DifferentFirstPage;
+        DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
+        ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
+        AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
+        UpdateScalingInputState();
+        UpdateHeaderFooterPreview();
     }
 
-    private void OkButton_Click(object sender, RoutedEventArgs e)
+    private void ScalingMode_Changed(object sender, RoutedEventArgs e) => UpdateScalingInputState();
+
+    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string targetName } ||
+            FindName(targetName) is not TextBox target)
+            return;
+
+        if (_currentSelection is { } selection)
+        {
+            target.Text = targetName switch
+            {
+                nameof(RowsRepeatBox) => $"{selection.Start.Row}:{selection.End.Row}",
+                nameof(ColumnsRepeatBox) => $"{CellAddress.NumberToColumnName(selection.Start.Col)}:{CellAddress.NumberToColumnName(selection.End.Col)}",
+                _ => selection.ToString()
+            };
+        }
+
+        target.Focus();
+        target.SelectAll();
+    }
+
+    private void UpdateScalingInputState()
+    {
+        if (ScalePercentBox is null || FitPagesWideBox is null || FitPagesTallBox is null)
+            return;
+
+        var adjustTo = AdjustToRadioButton.IsChecked == true;
+        var fitTo = FitToRadioButton.IsChecked == true;
+        ScalePercentBox.IsEnabled = adjustTo;
+        FitPagesWideBox.IsEnabled = fitTo;
+        FitPagesTallBox.IsEnabled = fitTo;
+    }
+
+    private void OkButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.Ok);
+
+    private void PrintButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.Print);
+
+    private void PrintPreviewButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.PrintPreview);
+
+    private void OptionsButton_Click(object sender, RoutedEventArgs e) =>
+        Accept(PageSetupDialogAction.Options);
+
+    private void Accept(PageSetupDialogAction requestedAction)
     {
         var marginsText = string.Join(",",
             LeftMarginBox.Text,
@@ -217,8 +310,110 @@ public partial class PageSetupDialog : Window
             "AsDisplayed" => WorksheetPrintComments.AsDisplayed,
             _ => WorksheetPrintComments.None
         };
+        DifferentFirstPage = DifferentFirstPageBox.IsChecked == true;
+        DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
+        ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true;
+        AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true;
+        RequestedAction = requestedAction;
         DialogResult = true;
         Close();
+    }
+
+    private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (HeaderPresetBox.SelectedItem is not ComboBoxItem { Tag: string preset })
+            return;
+
+        Header = Header with { Center = preset };
+        UpdateHeaderFooterPreview();
+    }
+
+    private void FooterPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FooterPresetBox.SelectedItem is not ComboBoxItem { Tag: string preset })
+            return;
+
+        Footer = Footer with { Center = preset };
+        UpdateHeaderFooterPreview();
+    }
+
+    private void CustomHeaderFooterButton_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = new Sheet(_sheetId, "Sheet")
+        {
+            PageHeader = Header,
+            PageFooter = Footer,
+            FirstPageHeader = FirstPageHeader,
+            FirstPageFooter = FirstPageFooter,
+            EvenPageHeader = EvenPageHeader,
+            EvenPageFooter = EvenPageFooter,
+            PageHeaderPictures = HeaderPictures.DeepClone(),
+            PageFooterPictures = FooterPictures.DeepClone(),
+            FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
+            FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
+            EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
+            EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
+            DifferentFirstPageHeaderFooter = DifferentFirstPageBox.IsChecked == true,
+            DifferentOddEvenHeaderFooter = DifferentOddEvenBox.IsChecked == true,
+            HeaderFooterScaleWithDocument = ScaleWithDocumentBox.IsChecked == true,
+            HeaderFooterAlignWithMargins = AlignWithMarginsBox.IsChecked == true
+        };
+
+        var dialog = new HeaderFooterDialog(sheet) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        Header = dialog.Header;
+        Footer = dialog.Footer;
+        FirstPageHeader = dialog.FirstPageHeader;
+        FirstPageFooter = dialog.FirstPageFooter;
+        EvenPageHeader = dialog.EvenPageHeader;
+        EvenPageFooter = dialog.EvenPageFooter;
+        HeaderPictures = dialog.HeaderPictures.DeepClone();
+        FooterPictures = dialog.FooterPictures.DeepClone();
+        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures.DeepClone();
+        FirstPageFooterPictures = dialog.FirstPageFooterPictures.DeepClone();
+        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures.DeepClone();
+        EvenPageFooterPictures = dialog.EvenPageFooterPictures.DeepClone();
+        DifferentFirstPage = dialog.DifferentFirstPage;
+        DifferentOddEvenPages = dialog.DifferentOddEvenPages;
+        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument;
+        AlignHeaderFooterWithMargins = dialog.AlignWithMargins;
+        DifferentFirstPageBox.IsChecked = DifferentFirstPage;
+        DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
+        ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
+        AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
+        SelectPreset(HeaderPresetBox, Header.Center);
+        SelectPreset(FooterPresetBox, Footer.Center);
+        UpdateHeaderFooterPreview();
+    }
+
+    private static void SelectPreset(ComboBox comboBox, string centerText)
+    {
+        for (var i = 0; i < comboBox.Items.Count; i++)
+        {
+            if (comboBox.Items[i] is ComboBoxItem { Tag: string preset } && preset == centerText)
+            {
+                comboBox.SelectedIndex = i;
+                return;
+            }
+        }
+
+        comboBox.SelectedIndex = -1;
+    }
+
+    private void UpdateHeaderFooterPreview()
+    {
+        HeaderPreviewText.Text = FormatHeaderFooterPreview(Header);
+        FooterPreviewText.Text = FormatHeaderFooterPreview(Footer);
+    }
+
+    private static string FormatHeaderFooterPreview(WorksheetHeaderFooter value)
+    {
+        var parts = new[] { value.Left, value.Center, value.Right }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .ToArray();
+        return parts.Length == 0 ? "(none)" : string.Join(" | ", parts);
     }
 
     private bool TryParseOptionalPrintArea(string input, out GridRange? printArea)
@@ -242,4 +437,12 @@ public partial class PageSetupDialog : Window
         }
     }
 
+}
+
+public enum PageSetupDialogAction
+{
+    Ok,
+    Print,
+    PrintPreview,
+    Options
 }

@@ -281,16 +281,25 @@ public partial class MainWindow
 
     private void AddWatchBtn_Click(object sender, RoutedEventArgs e)
     {
+        AddWatchFromSelection(showMessage: true);
+    }
+
+    private int AddWatchFromSelection(bool showMessage)
+    {
         if (SheetGrid.SelectedRange is not { } range)
-            return;
+            return 0;
 
         var added = WatchWindowService.AddWatches(_workbook, range);
         _watchWindowDialog?.Refresh();
-        MessageBox.Show(
-            WatchWindowMessageFormatter.FormatAddResult(added, FormatRangeReference(range.Start, range.End)),
-            "Watch Window",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        if (showMessage)
+        {
+            MessageBox.Show(
+                WatchWindowMessageFormatter.FormatAddResult(added, FormatRangeReference(range.Start, range.End)),
+                "Watch Window",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        return added;
     }
 
     private void DeleteWatchBtn_Click(object sender, RoutedEventArgs e)
@@ -317,6 +326,10 @@ public partial class MainWindow
                     RecalculateWorkbook();
                     return WatchWindowService.GetEntries(_workbook);
                 },
+                () => AddWatchFromSelection(showMessage: false),
+                () => SheetGrid.SelectedRange is { } range
+                    ? FormatRangeReference(range.Start, range.End)
+                    : "",
                 address =>
                 {
                     NavigateToCell(address);

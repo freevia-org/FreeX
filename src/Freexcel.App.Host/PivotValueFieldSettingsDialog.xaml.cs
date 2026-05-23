@@ -80,6 +80,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         NumberFormatPresetBox.SelectedIndex = FindNumberFormatPresetIndex(field.NumberFormatId);
         NumberFormatBox.Text = field.NumberFormatId?.ToString(CultureInfo.InvariantCulture) ?? "";
         NumberFormatCodeBox.Text = field.NumberFormatCode ?? "";
+        UpdateBaseFieldState();
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -96,8 +97,9 @@ public partial class PivotValueFieldSettingsDialog : Window
 
         var summaryFunction = SummaryFunctions[Math.Max(0, SummaryFunctionBox.SelectedIndex)].Value;
         var showValuesAs = ShowValuesAsOptions[Math.Max(0, ShowValuesAsBox.SelectedIndex)].Value;
-        int? baseFieldIndex = BaseFieldBox.SelectedIndex > 0 ? BaseFieldBox.SelectedIndex - 1 : null;
-        var baseItem = string.IsNullOrWhiteSpace(BaseItemBox.Text)
+        var usesBaseField = ShowValuesAsRequiresBaseField(showValuesAs);
+        int? baseFieldIndex = usesBaseField && BaseFieldBox.SelectedIndex > 0 ? BaseFieldBox.SelectedIndex - 1 : null;
+        var baseItem = !usesBaseField || string.IsNullOrWhiteSpace(BaseItemBox.Text)
             ? null
             : BaseItemBox.Text.Trim();
         var name = string.IsNullOrWhiteSpace(CustomNameBox.Text)
@@ -121,7 +123,76 @@ public partial class PivotValueFieldSettingsDialog : Window
     {
         var numberFormatId = PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(NumberFormatPresetBox.SelectedItem as string);
         NumberFormatBox.Text = numberFormatId?.ToString(CultureInfo.InvariantCulture) ?? "";
+        NumberFormatCodeBox.Text = "";
     }
+
+    private void ShowValuesAsBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) => UpdateBaseFieldState();
+
+    private void NumberFormatButton_Click(object sender, RoutedEventArgs e)
+    {
+        var style = new CellStyle { NumberFormat = CurrentNumberFormatCode() };
+        var dialog = new FormatCellsDialog(style, FormatCellsDialogTab.Number)
+        {
+            Owner = this,
+            Title = "Format Cells"
+        };
+
+        if (dialog.ShowDialog() != true || dialog.ResultDiff?.NumberFormat is not { } numberFormat)
+            return;
+
+        if (PivotValueFieldSettingsInputParser.TryResolveBuiltInNumberFormatIdForCode(numberFormat, out var builtInId))
+        {
+            NumberFormatCodeBox.Text = "";
+            NumberFormatBox.Text = builtInId?.ToString(CultureInfo.InvariantCulture) ?? "";
+            NumberFormatPresetBox.Text = PivotValueFieldSettingsInputParser.NumberFormatPresets
+                .First(preset => preset.NumberFormatId == builtInId && string.Equals(preset.FormatCode, numberFormat, StringComparison.OrdinalIgnoreCase))
+                .Label;
+            return;
+        }
+
+        NumberFormatCodeBox.Text = numberFormat;
+        NumberFormatBox.Text = PivotValueFieldSettingsInputParser.DefaultCustomNumberFormatId.ToString(CultureInfo.InvariantCulture);
+        NumberFormatPresetBox.Text = numberFormat;
+    }
+
+    private string CurrentNumberFormatCode()
+    {
+        var customCode = PivotValueFieldSettingsInputParser.ResolveOptionalNumberFormatCode(NumberFormatCodeBox.Text);
+        if (!string.IsNullOrWhiteSpace(customCode))
+            return customCode;
+
+        if (NumberFormatPresetBox.SelectedItem is string selectedPreset &&
+            PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(selectedPreset) is { } selectedCode)
+        {
+            return selectedCode;
+        }
+
+        return PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(NumberFormatPresetBox.Text)
+            ?? NumberFormatPresetBox.Text
+            ?? "General";
+    }
+
+    private void UpdateBaseFieldState()
+    {
+        if (BaseFieldPanel is null || BaseItemPanel is null || ShowValuesAsBox is null)
+            return;
+
+        var showValuesAs = ShowValuesAsOptions[Math.Max(0, ShowValuesAsBox.SelectedIndex)].Value;
+        var visible = ShowValuesAsRequiresBaseField(showValuesAs);
+        var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        BaseFieldPanel.Visibility = visibility;
+        BaseFieldPanel.IsEnabled = visible;
+        BaseItemPanel.Visibility = visibility;
+        BaseItemPanel.IsEnabled = visible;
+    }
+
+    private static bool ShowValuesAsRequiresBaseField(PivotShowValuesAs showValuesAs) =>
+        showValuesAs is PivotShowValuesAs.RunningTotalIn
+            or PivotShowValuesAs.DifferenceFrom
+            or PivotShowValuesAs.PercentDifferenceFrom
+            or PivotShowValuesAs.RankSmallest
+            or PivotShowValuesAs.RankLargest
+            or PivotShowValuesAs.PercentOfParentTotal;
 
     private static int FindNumberFormatPresetIndex(int? numberFormatId)
     {

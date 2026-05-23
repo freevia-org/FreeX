@@ -35,6 +35,17 @@ public sealed class ExcelParityDatabaseTests
             .Should().Be(new NumberValue(10000));
     }
 
+    [Theory]
+    [InlineData("=DSUM(A1:C5,\"Salary\",G1:G2)", 1000.0)]
+    [InlineData("=DCOUNT(A1:C5,\"Salary\",G1:G2)", 4.0)]
+    public void DatabaseBlankCriteriaRow_MatchesAllRecords(string formula, double expected)
+    {
+        var sheet = DatabaseSheet();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 7), new TextValue("Age"));
+
+        _eval.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+    }
+
     [Fact]
     public void DatabaseFunctions_IgnoreNonNumericFieldValuesForNumericAggregates()
     {

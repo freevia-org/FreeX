@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Freexcel Options"
-        Width="680" Height="520"
+        Width="760" Height="560"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
@@ -48,7 +48,7 @@
 
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="190"/>
+                <ColumnDefinition Width="220"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -61,8 +61,16 @@
                          ItemContainerStyle="{StaticResource OptionTabItem}">
                     <ListBoxItem Content="_General"/>
                     <ListBoxItem Content="_Formulas"/>
-                    <ListBoxItem Content="_View"/>
+                    <ListBoxItem Content="_Proofing"/>
                     <ListBoxItem Content="_Save"/>
+                    <ListBoxItem Content="_Language"/>
+                    <ListBoxItem Content="_Ease of Access"/>
+                    <ListBoxItem Content="_Advanced"/>
+                    <ListBoxItem Content="_Customize Ribbon"/>
+                    <ListBoxItem Content="_Quick Access Toolbar"/>
+                    <ListBoxItem Content="_Add-ins"/>
+                    <ListBoxItem Content="_Trust Center"/>
+                    <ListBoxItem Content="_View"/>
                 </ListBox>
             </Border>
 
@@ -200,6 +208,21 @@
                         <StackPanel x:Name="OptErrorCheckingRules"/>
                     </StackPanel>
 
+                    <!-- PROOFING -->
+                    <StackPanel x:Name="PanelProofing" Visibility="Collapsed">
+                        <TextBlock Text="AutoCorrect options"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <CheckBox Content="_Check spelling as you type" IsChecked="True"
+                                  FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox Content="Ignore words in _UPPERCASE"
+                                  FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox Content="Flag repeated _words"
+                                  FontSize="12" Margin="0,0,0,12"/>
+                        <Button Content="AutoCorrect _Options..." Width="150" Height="26"
+                                HorizontalAlignment="Left"/>
+                    </StackPanel>
+
                     <!-- VIEW -->
                     <StackPanel x:Name="PanelView" Visibility="Collapsed">
 
@@ -213,6 +236,74 @@
                         <CheckBox x:Name="OptFormulaBarExpanded"
                                   Content="Expand formula ba_r"
                                   FontSize="12" Margin="0,0,0,4"/>
+                    </StackPanel>
+
+                    <!-- LANGUAGE -->
+                    <StackPanel x:Name="PanelLanguage" Visibility="Collapsed">
+                        <TextBlock Text="Choose editing languages"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <TextBlock Text="Editing language: English (United States)"
+                                   FontSize="12" Margin="0,0,0,8"/>
+                        <Button Content="_Add a Language..." Width="150" Height="26"
+                                HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <!-- EASE OF ACCESS -->
+                    <StackPanel x:Name="PanelEaseOfAccess" Visibility="Collapsed">
+                        <TextBlock Text="Ease of Access options"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <CheckBox Content="Provide feedback with _sound"
+                                  FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox Content="Show _Quick Analysis options on selection"
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox Content="Optimize display for _accessibility"
+                                  FontSize="12" Margin="0,0,0,6"/>
+                    </StackPanel>
+
+                    <!-- ADVANCED -->
+                    <StackPanel x:Name="PanelAdvanced" Visibility="Collapsed">
+                        <TextBlock Text="Editing options"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <CheckBox x:Name="OptMoveAfterEnter"
+                                  Content="After pressing Enter, _move selection"
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,8"/>
+                        <Grid Margin="18,0,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="140"/>
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0" Content="_Direction:"
+                                   Target="{Binding ElementName=OptAfterEnterDirection}"
+                                   Padding="0" VerticalAlignment="Center" FontSize="12"/>
+                            <ComboBox x:Name="OptAfterEnterDirection" Grid.Column="1"
+                                      Height="24" VerticalAlignment="Center"/>
+                        </Grid>
+                        <CheckBox Content="Enable fill _handle and cell drag-and-drop"
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox Content="Enable _AutoComplete for cell values"
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
+
+                        <TextBlock Text="Display options for this workbook"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <CheckBox x:Name="OptShowGridlines" Content="Show _gridlines"
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="OptShowHeadings" Content="Show row and column _headings"
+                                  IsChecked="True" FontSize="12" Margin="0,0,0,8"/>
+                        <Grid Margin="0,0,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="230"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0" Content="For _objects, show:"
+                                   Target="{Binding ElementName=OptObjectsDisplay}"
+                                   Padding="0" VerticalAlignment="Center" FontSize="12"/>
+                            <ComboBox x:Name="OptObjectsDisplay" Grid.Column="1"
+                                      Height="24" VerticalAlignment="Center"/>
+                        </Grid>
                     </StackPanel>
 
                     <!-- ═══ SAVE ═══════════════════════════════════════════ -->
@@ -257,6 +348,50 @@
                                      VerticalContentAlignment="Center"
                                      Padding="6,0" FontSize="11" Foreground="#666"/>
                         </Grid>
+                    </StackPanel>
+
+                    <!-- CUSTOMIZE RIBBON -->
+                    <StackPanel x:Name="PanelCustomizeRibbon" Visibility="Collapsed">
+                        <TextBlock Text="Customize the Ribbon"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <TextBlock Text="Choose commands from: Popular Commands"
+                                   FontSize="12" Margin="0,0,0,8"/>
+                        <Button Content="_Import/Export..." Width="130" Height="26"
+                                HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <!-- QUICK ACCESS TOOLBAR -->
+                    <StackPanel x:Name="PanelQuickAccessToolbar" Visibility="Collapsed">
+                        <TextBlock Text="Customize the Quick Access Toolbar"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <CheckBox Content="Show Quick Access Toolbar _below the Ribbon"
+                                  FontSize="12" Margin="0,0,0,8"/>
+                        <Button Content="_Reset..." Width="90" Height="26"
+                                HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <!-- ADD-INS -->
+                    <StackPanel x:Name="PanelAddIns" Visibility="Collapsed">
+                        <TextBlock Text="View and manage Add-ins"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <TextBlock Text="Active Application Add-ins"
+                                   FontSize="12" Margin="0,0,0,8"/>
+                        <Button Content="_Go..." Width="70" Height="26"
+                                HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <!-- TRUST CENTER -->
+                    <StackPanel x:Name="PanelTrustCenter" Visibility="Collapsed">
+                        <TextBlock Text="Trust Center"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+                        <TextBlock Text="Security and privacy settings for Freexcel."
+                                   FontSize="12" Foreground="#555" Margin="0,0,0,12"/>
+                        <Button Content="Trust Center _Settings..." Width="170" Height="26"
+                                HorizontalAlignment="Left"/>
                     </StackPanel>
 
                 </Grid>

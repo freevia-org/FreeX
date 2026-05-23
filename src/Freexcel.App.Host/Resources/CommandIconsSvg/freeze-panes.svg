@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Freeze Panes">
+  
+  <rect width="54" height="54" fill="none"/>
+  <g><rect stroke="#202124" stroke-width="1.8" x="9.72" y="9.72" width="34.56" height="34.56" fill="#ffffff"/><path d="M21.24 9.72v34.56M32.76 9.72v34.56M9.72 21.24h34.56M9.72 32.76h34.56" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><rect x="9.72" y="9.72" width="34.56" height="9.72" fill="#dff6dd"/><rect x="9.72" y="9.72" width="9.72" height="34.56" fill="#dff6dd"/>  </g>
+</svg>
+

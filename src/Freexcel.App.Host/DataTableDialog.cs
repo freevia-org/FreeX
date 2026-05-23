@@ -20,8 +20,7 @@ public sealed record DataTableDialogResult(
 public sealed class DataTableDialog : Window
 {
     private readonly SheetId _sheetId;
-    private readonly ComboBox _modeBox = new();
-    private readonly TextBox _formulaBox = new();
+    private readonly GridRange _range;
     private readonly TextBox _rowInputBox = new();
     private readonly TextBox _columnInputBox = new();
 
@@ -30,35 +29,37 @@ public sealed class DataTableDialog : Window
     public DataTableDialog(SheetId sheetId, GridRange range)
     {
         _sheetId = sheetId;
+        _range = range;
         Title = "Data Table";
-        Width = 340;
-        Height = 260;
+        Width = 360;
+        Height = 210;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        _modeBox.ItemsSource = Enum.GetValues<DataTableMode>();
-        _modeBox.SelectedItem = DataTableMode.OneVariable;
-        _formulaBox.Text = new CellAddress(sheetId, range.Start.Row, Math.Min(CellAddress.MaxCol, range.Start.Col + 1)).ToA1();
-        _columnInputBox.Text = _formulaBox.Text;
-
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock { Text = "Type:" });
-        root.Children.Add(_modeBox);
-        root.Children.Add(new TextBlock { Text = "Formula cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_formulaBox, "Select formula cell"));
-        root.Children.Add(new TextBlock { Text = "Row input cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_rowInputBox, "Select row input cell"));
-        root.Children.Add(new TextBlock { Text = "Column input cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_columnInputBox, "Select column input cell"));
-        root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
+        root.Children.Add(new TextBlock
+        {
+            Text = "Substitute values in the selected data table using worksheet input cells.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+
+        var inputGroup = new GroupBox { Header = "Inputs", Margin = new Thickness(0, 12, 0, 0) };
+        var grid = new Grid { Margin = new Thickness(8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddReferenceRow(grid, 0, "_Row input cell:", _rowInputBox, "Select row input cell");
+        AddReferenceRow(grid, 1, "_Column input cell:", _columnInputBox, "Select column input cell");
+        inputGroup.Content = grid;
+        root.Children.Add(inputGroup);
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 14, 0, 0)));
         Content = root;
     }
 
     public static bool TryParse(
         SheetId currentSheetId,
-        DataTableMode mode,
-        string formulaCellText,
+        GridRange range,
         string? rowInputCellText,
         string? columnInputCellText,
         out DataTableDialogResult result,
@@ -66,12 +67,6 @@ public sealed class DataTableDialog : Window
     {
         result = default!;
         error = null;
-
-        if (!DataTableInputParser.TryParseCell(formulaCellText, currentSheetId, out var formulaCell))
-        {
-            error = "Enter a valid formula cell.";
-            return false;
-        }
 
         var hasRowInput = !string.IsNullOrWhiteSpace(rowInputCellText);
         var hasColumnInput = !string.IsNullOrWhiteSpace(columnInputCellText);
@@ -87,17 +82,14 @@ public sealed class DataTableDialog : Window
             return false;
         }
 
-        if (mode == DataTableMode.OneVariable && hasRowInput == hasColumnInput)
+        if (!hasRowInput && !hasColumnInput)
         {
             error = "Enter either a row input cell or a column input cell.";
             return false;
         }
 
-        if (mode == DataTableMode.TwoVariable && (!hasRowInput || !hasColumnInput))
-        {
-            error = "Enter both row and column input cells.";
-            return false;
-        }
+        var mode = hasRowInput && hasColumnInput ? DataTableMode.TwoVariable : DataTableMode.OneVariable;
+        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(range, mode == DataTableMode.TwoVariable);
 
         result = new DataTableDialogResult(mode, formulaCell, rowInputCell, columnInputCell);
         return true;
@@ -137,6 +129,28 @@ public sealed class DataTableDialog : Window
         return panel;
     }
 
+    private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
+    {
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var labelBlock = new Label
+        {
+            Content = label,
+            Target = textBox,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0)
+        };
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        var editor = CreateReferenceEditor(textBox, automationName);
+        editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
+        Grid.SetRow(editor, row);
+        Grid.SetColumn(editor, 1);
+        grid.Children.Add(editor);
+    }
+
     private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: TextBox textBox })
@@ -148,7 +162,7 @@ public sealed class DataTableDialog : Window
 
     private void Accept()
     {
-        if (!TryParse(_sheetId, (DataTableMode)_modeBox.SelectedItem, _formulaBox.Text, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
+        if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
         {
             MessageBox.Show(this, error ?? "Enter valid data table cells.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;

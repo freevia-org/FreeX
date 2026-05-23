@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  
+  <text x="7" y="8" font-size="6"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">T</text>
+  <text x="13" y="13" font-size="6"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">F</text>
+  <path d="M5 11 L15 11" stroke-width="0.8" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

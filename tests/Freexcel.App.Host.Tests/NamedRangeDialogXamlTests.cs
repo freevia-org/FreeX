@@ -1,3 +1,4 @@
+using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -15,8 +16,7 @@ public sealed class NamedRangeDialogXamlTests
             .Single()
             .Attribute("Header")?.Value.Should().Be("_Defined Names");
 
-        AssertLabelTargets(document, presentation, "_Name:", "NameBox");
-        AssertLabelTargets(document, presentation, "_Range:", "RangeBox");
+        AssertLabelTargets(document, presentation, "_Refers to:", "RefersToBox");
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)
@@ -49,13 +49,65 @@ public sealed class NamedRangeDialogXamlTests
     public void Dialog_ProvidesFilterAndRefersToRangePickerAffordance()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        foreach (var name in new[] { "FilterBox", "RangePickerButton" })
+        foreach (var name in new[] { "FilterBox", "RefersToPickerButton" })
         {
             document.Descendants()
                 .Any(element => element.Attribute(x + "Name")?.Value == name)
                 .Should().BeTrue($"{name} should exist for Excel-like name manager workflow");
         }
+
+        document.Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FilterBox")
+            .Attribute("SelectionChanged")?.Value.Should().Be("FilterBox_SelectionChanged");
+    }
+
+    [Fact]
+    public void Dialog_UsesExcelLikeRefersToSummaryInsteadOfInlineNameEditing()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document.Descendants()
+            .Any(element => element.Attribute(x + "Name")?.Value == "NameBox")
+            .Should().BeFalse("New/Edit should happen in the dedicated Excel-like name dialog");
+
+        document.Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "RefersToBox")
+            .Attribute("IsReadOnly")?.Value.Should().Be("True");
+    }
+
+    [Fact]
+    public void Source_ProvidesNewEditNameDialogWithExcelNameFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+
+        source.Should().Contain("NameDefinitionDialog");
+        source.Should().Contain("_scopeBox");
+        source.Should().Contain("_commentBox");
+        source.Should().Contain("_refersToBox");
+        source.Should().Contain("_rangePickerButton");
+        source.Should().Contain("_rangePickerButton.Click");
+        source.Should().Contain("_refersToBox.SelectAll");
+        source.Should().NotContain("IsEnabled = false");
+        source.Should().Contain("GetScopeOptions");
+        source.Should().Contain("NamedRangeMetadata");
+    }
+
+    [Fact]
+    public void Planner_FiltersWorkbookAndWorksheetScopedNames()
+    {
+        var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
+        var sheetName = new NamedRangeViewModel("Local", "Sheet2!B1:B2", "Sheet2!B1:B2", "Sheet2", "");
+
+        NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.All)
+            .Should().Equal(workbookName, sheetName);
+        NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.Workbook)
+            .Should().Equal(workbookName);
+        NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.Worksheet)
+            .Should().Equal(sheetName);
     }
 }

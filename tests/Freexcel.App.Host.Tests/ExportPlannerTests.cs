@@ -69,15 +69,52 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PlanExport_AppendsXpsExtensionForExplicitExtensionlessXpsRequests()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report", ExportFormat.Xps, ExportOptions.ExcelLikeDefault);
+
+        request.Should().Be(new ExportRequest(
+            @"C:\temp\report.xps",
+            ExportFormat.Xps,
+            ExportOptions.ExcelLikeDefault,
+            null));
+        request.UsesXpsFallback.Should().BeFalse();
+        request.ActualPath.Should().Be(@"C:\temp\report.xps");
+    }
+
+    [Theory]
+    [InlineData(@"C:\temp\report.pdf", "xps", @"C:\temp\report.xps")]
+    [InlineData(@"C:\temp\report.xps", "pdf", @"C:\temp\report.pdf")]
+    [InlineData(@"C:\temp\report.export", "pdf", @"C:\temp\report.pdf")]
+    [InlineData(@"C:\temp\report.export", "xps", @"C:\temp\report.xps")]
+    public void PlanExport_NormalizesMismatchedExtensionForExplicitFormatRequests(
+        string path,
+        string explicitFormat,
+        string expectedPath)
+    {
+        var format = explicitFormat == "xps"
+            ? ExportFormat.Xps
+            : ExportFormat.Pdf;
+
+        var request = ExportPlanner.PlanExport(path, format, ExportOptions.ExcelLikeDefault);
+
+        request.Path.Should().Be(expectedPath);
+        request.Format.Should().Be(format);
+        request.ActualPath.Should().Be(expectedPath);
+    }
+
+    [Fact]
     public void ExportOptions_DefaultsToActiveSheetWithoutDocumentProperties()
     {
         ExportOptions.ExcelLikeDefault.Should().Be(new ExportOptions(
             ExportContentScope.ActiveSheet,
             IncludeDocumentProperties: false,
-            OpenAfterPublish: false));
+            OpenAfterPublish: false,
+            IgnorePrintAreas: false,
+            Quality: ExportQuality.Standard));
 
         ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
-            .Should().Be("Active sheet only; document properties are not included.");
+            .Should().Be("Active sheet only; standard quality; document properties are not included.");
     }
 
     [Fact]
@@ -87,14 +124,17 @@ public class ExportPlannerTests
             ExportContentScope.Selection,
             IncludeDocumentProperties: true,
             OpenAfterPublish: true,
-            PageRange: new ExportPageRange(2, 4));
+            IgnorePrintAreas: true,
+            PageRange: new ExportPageRange(2, 4),
+            Quality: ExportQuality.MinimumSize,
+            CreateBookmarks: true);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; pages 2-4; document properties are included; open after publishing.");
+            .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; bookmarks use sheet names; open after publishing.");
     }
 
     [Fact]
-    public void ExportOptions_DescribeWithXpsFormatDoesNotClaimPdfDocumentProperties()
+    public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
             ExportContentScope.Selection,
@@ -102,7 +142,33 @@ public class ExportPlannerTests
             OpenAfterPublish: true);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; document properties are not included in XPS output; open after publishing.");
+            .Should().Be("Selection; standard quality; document properties are included; open after publishing.");
+    }
+
+    [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyBookmarks()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.EntireWorkbook,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: false,
+            CreateBookmarks: true);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Entire workbook; standard quality; document properties are included; bookmarks are PDF-only.");
+    }
+
+    [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyMinimumSize()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            Quality: ExportQuality.MinimumSize);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Selection; minimum size is PDF-only; document properties are not included.");
     }
 
     [Fact]
@@ -114,7 +180,7 @@ public class ExportPlannerTests
             OpenAfterPublish: false);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Entire workbook; document properties are not included.");
+            .Should().Be("Entire workbook; standard quality; document properties are not included.");
     }
 
     [Fact]
@@ -124,13 +190,19 @@ public class ExportPlannerTests
                 ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
                 openAfterPublish: true,
-                pageRange: new ExportPageRange(3, 3))
+                ignorePrintAreas: true,
+                pageRange: new ExportPageRange(3, 3),
+                quality: ExportQuality.MinimumSize,
+                createBookmarks: true)
             .Should()
             .Be(new ExportOptions(
                 ExportContentScope.EntireWorkbook,
                 IncludeDocumentProperties: true,
                 OpenAfterPublish: true,
-                PageRange: new ExportPageRange(3, 3)));
+                IgnorePrintAreas: true,
+                PageRange: new ExportPageRange(3, 3),
+                Quality: ExportQuality.MinimumSize,
+                CreateBookmarks: true));
     }
 
     [Fact]
@@ -140,12 +212,18 @@ public class ExportPlannerTests
 
         foreach (var expected in new[]
         {
-            "Content = \"_Active sheet\"",
-            "Content = \"_Selection\"",
-            "Content = \"_Entire workbook\"",
+            "Content = \"Active _sheet(s)\"",
+            "Content = \"Selected _range\"",
+            "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
             "Content = \"_Open after publishing\"",
-            "Content = \"_Pages from\"",
+            "Content = \"_Ignore print areas\"",
+            "Content = \"Create _PDF bookmarks using sheet names\"",
+            "Content = \"_Standard\"",
+            "Content = \"_Minimum size\"",
+            "Content = \"_All\"",
+            "Content = \"_Pages\"",
+            "_fromPageBox.IsEnabled = false",
             "Target = _fromPageBox",
             "Content = \"t_o\"",
             "Target = _toPageBox",
@@ -153,6 +231,8 @@ public class ExportPlannerTests
             "Content = \"_Cancel\""
         })
             source.Should().Contain(expected);
+
+        source.Should().NotContain("CSV _delimiter:");
     }
 
     [Theory]
@@ -216,11 +296,11 @@ public class ExportPlannerTests
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; document properties are not included.");
+            "Options: Active sheet only; standard quality; document properties are not included.");
     }
 
     [Fact]
-    public void DescribeRequest_ForXpsDoesNotClaimPdfDocumentPropertiesAreEmbedded()
+    public void DescribeRequest_ForXpsIncludesDocumentProperties()
     {
         var request = ExportPlanner.PlanExport(
             @"C:\temp\report.xps",
@@ -230,7 +310,15 @@ public class ExportPlannerTests
                 OpenAfterPublish: false));
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; document properties are not included in XPS output.");
+            "Options: Active sheet only; standard quality; document properties are included.");
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_MapsQualityToRasterDpi()
+    {
+        PdfDocumentExporter.ResolveRasterDpi(ExportQuality.Standard).Should().Be(96.0);
+        PdfDocumentExporter.ResolveRasterDpi(ExportQuality.MinimumSize).Should().Be(72.0);
+        PdfDocumentExporter.ResolveRasterDpi((ExportQuality)99).Should().Be(96.0);
     }
 
     [Theory]
@@ -331,6 +419,36 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesRequestedBookmarksAndFiltersThemToPageRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 3);
+            var bookmarks = new[]
+            {
+                new PdfBookmark("Summary", PageIndex: 0),
+                new PdfBookmark("Details", PageIndex: 1),
+                new PdfBookmark("Hidden", PageIndex: 2)
+            };
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2), bookmarks: bookmarks);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(1);
+                pdf.Outlines.Count.Should().Be(1);
+                pdf.Outlines[0].Title.Should().Be("Details");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
     {
         StaTestRunner.Run(() =>
@@ -411,6 +529,36 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_TrimsDocumentPropertiesBeforeWriting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var properties = new PdfDocumentProperties(
+                Title: "  Quarterly Review  ",
+                Author: "\tFinance Team\t",
+                Subject: "  Workbook export",
+                Keywords: "Freexcel, spreadsheet  ");
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, properties);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().Be("Quarterly Review");
+                pdf.Info.Author.Should().Be("Finance Team");
+                pdf.Info.Subject.Should().Be("Workbook export");
+                pdf.Info.Keywords.Should().Be("Freexcel, spreadsheet");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentProperties_FromWorkbook_ReturnsNullUnlessOptionIsRequested()
     {
         var workbook = new Workbook("Budget Model");
@@ -429,6 +577,28 @@ public class ExportPlannerTests
                 Author: "Freexcel",
                 Subject: "Freexcel workbook export",
                 Keywords: "Freexcel, spreadsheet"));
+    }
+
+    [Fact]
+    public void XpsDocumentProperties_ApplyToPackageProperties_WhenOptionIsRequested()
+    {
+        var workbook = new Workbook("Budget Model");
+        using var stream = new MemoryStream();
+        using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
+
+        XpsDocumentProperties.ApplyToPackage(
+            package,
+            XpsDocumentProperties.FromWorkbook(
+                workbook,
+                new ExportOptions(
+                    ExportContentScope.ActiveSheet,
+                    IncludeDocumentProperties: true,
+                    OpenAfterPublish: false)));
+
+        package.PackageProperties.Title.Should().Be("Budget Model");
+        package.PackageProperties.Creator.Should().Be("Freexcel");
+        package.PackageProperties.Subject.Should().Be("Freexcel workbook export");
+        package.PackageProperties.Keywords.Should().Be("Freexcel, spreadsheet");
     }
 
     private static FixedDocument CreateOnePageDocument()
@@ -471,6 +641,18 @@ public class ExportPlannerTests
         source.Should().Contain("PrintDocument(document.DocumentPaginator");
     }
 
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData("", 1)]
+    [InlineData("0", 1)]
+    [InlineData("2", 2)]
+    [InlineData("1000", 999)]
+    [InlineData("not a number", 1)]
+    public void PrintPreviewDialog_NormalizeCopyCount_ClampsToExcelLikeCopiesRange(string? text, int expected)
+    {
+        PrintPreviewDialog.NormalizeCopyCount(text).Should().Be(expected);
+    }
+
     [Fact]
     public void PrintSettingsPlanner_SummarizesExcelLikeActiveSheetSettings()
     {
@@ -502,9 +684,54 @@ public class ExportPlannerTests
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("PrintSettingsPlan settings");
+        source.Should().Contain("Action? showMargins = null");
+        source.Should().Contain("Action? showPageSetup = null");
+        source.Should().Contain("Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null");
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
-        printExport.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
+        printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
+        printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
+        printExport.Should().Contain("refreshPreview: BuildActiveSheetPrintPreview");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("showMargins?.Invoke()");
+        source.Should().Contain("showPageSetup?.Invoke()");
+        source.Should().Contain("RefreshPreviewDocument()");
+        source.Should().Contain("viewer.Document = previewDocument");
+        source.Should().Contain("settingsSummaryText.Text = refreshed.Settings.Summary");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesPageEntryAndStatus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"_Page:\"");
+        source.Should().Contain("pageNumberBox");
+        source.Should().Contain("pageStatusText");
+        source.Should().Contain("Page 1 of");
+        source.Should().Contain("NavigationCommands.GoToPage");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesHonestPrinterCopiesAndStatusSurface()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"Pr_inter:\"");
+        source.Should().Contain("Content = \"_Copies:\"");
+        source.Should().Contain("printerBox");
+        source.Should().Contain("copiesBox");
+        source.Should().Contain("statusText");
+        source.Should().Contain("NormalizeCopyCount(copiesBox.Text)");
+        source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
+        source.Should().Contain("AutomationProperties.SetHelpText");
+        source.Should().Contain("RefreshPrintStatus");
     }
 
     [Fact]
@@ -513,7 +740,8 @@ public class ExportPlannerTests
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null)");
-        printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result)");
+        printExport.Should().Contain("saveDlg.FilterIndex == 2");
+        printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("RenderExportPaginator(options)");
         printExport.Should().Contain("ApplyExportPageRange(options");
@@ -521,9 +749,12 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
-        printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange)");
+        printExport.Should().Contain("CreatePdfBookmarks(options)");
+        printExport.Should().Contain("options.CreateBookmarks");
+        printExport.Should().Contain("new PdfBookmark(sheet.Name, pageIndex)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 }

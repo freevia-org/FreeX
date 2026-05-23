@@ -124,6 +124,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_OmittedRangeLookup_DefaultsToApproximateMatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),   (1, 2, new TextValue("one")),
+            (2, 1, new NumberValue(10)),  (2, 2, new TextValue("ten")),
+            (3, 1, new NumberValue(100)), (3, 2, new TextValue("hundred")));
+
+        _eval.Evaluate("=VLOOKUP(15,A1:B3,2,)", sheet).Should().Be(new TextValue("ten"));
+    }
+
+    [Fact]
     public void Vlookup_TextKey_ExactMatch()
     {
         var sheet = MakeSheet(
@@ -171,6 +182,27 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_IndexLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,0,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,-1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Vlookup_IndexBeyondTable_ReturnsRefError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,3,FALSE)", sheet).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
     public void Vlookup_DateKey_ExactMatchesDateSerial()
     {
         var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
@@ -199,6 +231,16 @@ public class FunctionLibraryTests
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)), (1, 2, new NumberValue(20)));
         _eval.Evaluate("=HLOOKUP(99,A1:B2,2,FALSE)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_OmittedRangeLookup_DefaultsToApproximateMatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)), (1, 3, new NumberValue(100)),
+            (2, 1, new TextValue("one")), (2, 2, new TextValue("ten")), (2, 3, new TextValue("hundred")));
+
+        _eval.Evaluate("=HLOOKUP(15,A1:C2,2,)", sheet).Should().Be(new TextValue("ten"));
     }
 
     [Fact]
@@ -235,6 +277,27 @@ public class FunctionLibraryTests
     public void Hlookup_TableArgumentError_PropagatesError()
     {
         _eval.Evaluate("=HLOOKUP(\"b\",NA(),2,FALSE)", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_IndexLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new TextValue("ten")));
+
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,0,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,-1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Hlookup_IndexBeyondTable_ReturnsRefError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new TextValue("ten")));
+
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,3,FALSE)", sheet).Should().Be(ErrorValue.Ref);
     }
 
     [Fact]
@@ -407,6 +470,17 @@ public class FunctionLibraryTests
             (3, 1, new NumberValue(10)));
         // lookup 7 with match_type=1 → position 2 (5 is largest <= 7)
         _eval.Evaluate("=MATCH(7,A1:A3,1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_OmittedMatchType_DefaultsToAscendingApproximate()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(5)),
+            (3, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=MATCH(7,A1:A3,)", sheet).Should().Be(new NumberValue(2));
     }
 
     [Fact]
@@ -781,6 +855,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀x"));
+        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("x😀"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -1019,6 +1103,28 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_EmptyFindTextUseScalarEndBoundary()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Find_WithinTextError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -1052,6 +1158,15 @@ public class FunctionLibraryTests
         var sheet = MakeSheet();
         // "h*o" matches "hello"
         _eval.Evaluate("=SEARCH(\"h?llo\",\"hello\")", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Search_WildcardQuestionTreatsSurrogatePairAsSingleCharacter()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=SEARCH(\"?x\",\"😀x\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"??\",\"😀\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1113,6 +1228,17 @@ public class FunctionLibraryTests
     }
 
     // ── REPT ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Mid_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("x"));
+        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("y"));
+    }
 
     [Fact]
     public void Mid_StartNumError_PropagatesError()
@@ -1383,6 +1509,13 @@ public class FunctionLibraryTests
     }
 
     // ── EDATE ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Weekday_SerialOutsideExcelDateRange_ReturnsNumError()
+    {
+        _eval.Evaluate("=WEEKDAY(2958466)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WEEKDAY(10000000000)", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
 
     [Fact]
     public void Weekday_ReturnTypeError_PropagatesError()
@@ -2435,11 +2568,31 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_OmittedIfNotFound_DefaultsToNA()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2,,0)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Xlookup_LookupArrayArgumentError_PropagatesError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)));
 
         _eval.Evaluate("=XLOOKUP(\"B\",NA(),A1:A1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xlookup_LookupArrayElementError_PropagatesErrorWhenNoMatchFoundFirst()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA), (2, 1, new TextValue("A")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -2511,6 +2664,16 @@ public class FunctionLibraryTests
     public void Xmatch_LookupArrayArgumentError_PropagatesError()
     {
         _eval.Evaluate("=XMATCH(\"A\",NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xmatch_LookupArrayElementError_PropagatesErrorWhenNoMatchFoundFirst()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA),
+            (2, 1, new TextValue("A")));
+
+        _eval.Evaluate("=XMATCH(\"Z\",A1:A2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -3947,6 +4110,16 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("Hello Excel"));
 
     [Fact]
+    public void Replace_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Qx"));
+        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQy"));
+        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("😀Qx"));
+    }
+
+    [Fact]
     public void Replace_StartNumError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -4363,6 +4536,15 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
         _eval.Evaluate("=SEQUENCE(A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Sequence_HugeFiniteDimensions_ReturnsValueError()
+    {
+        _eval.Evaluate("=SEQUENCE(2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(1,2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(-2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(1,-2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -4925,19 +5107,32 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Take_ZeroRows_ReturnsValueError()
+    public void Take_ZeroRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]
-    public void Drop_AllRows_ReturnsValueError()
+    public void TakeAndDrop_HugeFiniteSliceCount_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+
+        _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Drop_AllRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=DROP(A1:A1,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A1,1)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]
@@ -4975,6 +5170,25 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Chooserows_AcceptsDynamicArrayRowIndexes()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(1)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(2)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(3)));
+
+        var result = _eval.Evaluate("=CHOOSEROWS(A1:B3,VSTACK(3,1))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new TextValue("C"));
+        rv.Cells[0, 1].Should().Be(new NumberValue(3));
+        rv.Cells[1, 0].Should().Be(new TextValue("A"));
+        rv.Cells[1, 1].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Choosecols_ReordersColumnsAndAllowsRepeats()
     {
         var sheet = MakeSheet(
@@ -5006,6 +5220,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Choosecols_AcceptsDynamicArrayColumnIndexes()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new TextValue("B")), (1,3,new TextValue("C")),
+            (2,1,new NumberValue(1)), (2,2,new NumberValue(2)), (2,3,new NumberValue(3)));
+
+        var result = _eval.Evaluate("=CHOOSECOLS(A1:C2,HSTACK(1,3))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new TextValue("A"));
+        rv.Cells[0, 1].Should().Be(new TextValue("C"));
+        rv.Cells[1, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 1].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void ChooserowsAndChoosecols_TreatScalarArrayAsSingleCellArray()
     {
         var rows = _eval.Evaluate("=CHOOSEROWS(5,1)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
@@ -5033,6 +5265,17 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
         _eval.Evaluate("=CHOOSECOLS(A1:A1,2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void ChooserowsAndChoosecols_HugeFiniteIndex_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new TextValue("A")), (2,1,new TextValue("B")));
+
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -5274,6 +5517,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_HugeFiniteWrapCount_ReturnsNumError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        _eval.Evaluate("=WRAPROWS(A1:A1,2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPROWS(A1:A1,-2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPCOLS(A1:A1,2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPCOLS(A1:A1,-2147483648)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void Wrapcols_TwoDimensionalArray_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -5368,6 +5622,14 @@ public class FunctionLibraryTests
     }
 
     // ── UNIQUE ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Expand_TooManyCells_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        _eval.Evaluate("=EXPAND(A1,1000001,1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact] public void Sort_SortIndexError_PropagatesError()
     {
@@ -5751,9 +6013,96 @@ public class FunctionLibraryTests
     public void Unicode_BasicAscii_ReturnsCodePoint() =>
         _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
 
+    [Theory]
+    [InlineData("=UNICODE(65)", 54)]
+    [InlineData("=UNICODE(TRUE)", 84)]
+    public void Unicode_CoercesScalarArgumentsToText(string formula, double expected) =>
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+
     [Fact]
     public void Unicode_EmptyText_ReturnsValueError() =>
         _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
+
+    // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
+
+    [Fact]
+    public void Asc_ConvertsFullWidthAsciiAndKanaToHalfWidthText()
+    {
+        _eval.Evaluate("=ASC(\"ＡＢＣ１２３！　アイウ\")", MakeSheet())
+            .Should().Be(new TextValue("ABC123! ｱｲｳ"));
+    }
+
+    [Fact]
+    public void Dbcs_ConvertsHalfWidthAsciiAndKanaToFullWidthText()
+    {
+        _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
+            .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
+    }
+
+    [Fact]
+    public void Phonetic_ReturnsTextOrUpperLeftRangeText()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("東京")),
+            (1, 2, new TextValue("大阪")));
+
+        _eval.Evaluate("=PHONETIC(\"東京\")", sheet).Should().Be(new TextValue("東京"));
+        _eval.Evaluate("=PHONETIC(A1:B1)", sheet).Should().Be(new TextValue("東京"));
+    }
+
+    [Fact]
+    public void Bahttext_ConvertsNumbersToThaiBahtText()
+    {
+        _eval.Evaluate("=BAHTTEXT(1234)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทถ้วน"));
+        _eval.Evaluate("=BAHTTEXT(1234.56)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบหกสตางค์"));
+        _eval.Evaluate("=BAHTTEXT(-21.5)", MakeSheet())
+            .Should().Be(new TextValue("ลบยี่สิบเอ็ดบาทห้าสิบสตางค์"));
+    }
+
+    [Fact]
+    public void Encodeurl_EncodesReservedSpacesAndUnicodeAsUtf8PercentEscapes()
+    {
+        _eval.Evaluate("=ENCODEURL(\"https://example.com/a b?q=São Paulo&x=1\")", MakeSheet())
+            .Should().Be(new TextValue("https%3A%2F%2Fexample.com%2Fa%20b%3Fq%3DS%C3%A3o%20Paulo%26x%3D1"));
+    }
+
+    [Fact]
+    public void Encodeurl_EmptyText_ReturnsEmptyText()
+    {
+        _eval.Evaluate("=ENCODEURL(\"\")", MakeSheet())
+            .Should().Be(new TextValue(""));
+    }
+
+    [Fact]
+    public void Filterxml_ReturnsSingleXPathNodeText()
+    {
+        _eval.Evaluate("=FILTERXML(\"<root><item>A</item><item>B</item></root>\",\"/root/item[2]\")", MakeSheet())
+            .Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
+    public void Filterxml_ReturnsMultipleXPathNodeTextsAsVerticalArray()
+    {
+        var result = _eval.Evaluate("=FILTERXML(\"<root><item>A</item><item>B</item></root>\",\"/root/item\")", MakeSheet())
+            .Should().BeOfType<RangeValue>()
+            .Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.At(1, 1).Should().Be(new TextValue("A"));
+        result.At(2, 1).Should().Be(new TextValue("B"));
+    }
+
+    [Theory]
+    [InlineData("=FILTERXML(\"<root>\",\"/root\")")]
+    [InlineData("=FILTERXML(\"<root><item>A</item></root>\",\"/root/missing\")")]
+    [InlineData("=FILTERXML(\"<root><item>A</item></root>\",\"//*[)\")")]
+    public void Filterxml_InvalidXmlXPathOrNoMatch_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
+    }
 
     // ── NUMBERVALUE edge cases ───────────────────────────────────────────────
 

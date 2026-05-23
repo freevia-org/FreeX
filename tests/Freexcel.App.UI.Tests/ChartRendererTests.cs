@@ -22,7 +22,6 @@ public sealed class ChartRendererTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void ChartRenderer_DoesNotRenderDeferredAdvancedChartFamiliesAsLineCharts(ChartType type)
     {
         var sheetId = SheetId.New();
@@ -45,6 +44,33 @@ public sealed class ChartRendererTests
             []));
 
         model.Should().BeNull();
+    }
+
+    [Fact]
+    public void ThreeDColumnRenderer_UsesColumnSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.ThreeDColumn,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>();
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
     }
 
     [Fact]
@@ -104,6 +130,38 @@ public sealed class ChartRendererTests
             .Select(annotation => annotation.Text)
             .Should()
             .NotContain(["PivotTable1", "Axis Fields", "Values"]);
+    }
+
+    [Fact]
+    public void PivotChartRenderer_HidesIndividualFieldButtonAnnotations()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartValueFieldButtons = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Region"),
+                Cell(1, 2, "Sum of Amount"),
+                Cell(2, 1, "East"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .Contain(["PivotTable1", "Axis Fields"])
+            .And
+            .NotContain("Values");
     }
 
     [Fact]
@@ -171,6 +229,40 @@ public sealed class ChartRendererTests
                 columnHeaderHeight: 24)
             .Should()
             .BeNull();
+    }
+
+    [Fact]
+    public void GridView_DoesNotHitTestIndividuallyHiddenPivotChartFieldButtons()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartValueFieldButtons = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            Left = 100,
+            Top = 80,
+            Width = 400,
+            Height = 300
+        };
+
+        GridView.HitTestPivotChartFieldButton(
+                [chart],
+                new System.Windows.Point(428, 374),
+                rowHeaderWidth: 40,
+                columnHeaderHeight: 24)
+            .Should()
+            .BeNull();
+
+        GridView.HitTestPivotChartFieldButton(
+                [chart],
+                new System.Windows.Point(148, 374),
+                rowHeaderWidth: 40,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be((chart, "Axis Fields"));
     }
 
     [Fact]
@@ -1714,6 +1806,193 @@ public sealed class ChartRendererTests
         series.Items[0].High.Should().Be(15);
         series.Items[0].Low.Should().Be(9);
         series.Items[0].Close.Should().Be(13);
+    }
+
+    [Fact]
+    public void StockRenderer_UsesVolumeColumnAndOhlcColumnsForVolumeOpenHighLowClose()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 6))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Volume"),
+                Cell(1, 3, "Open"),
+                Cell(1, 4, "High"),
+                Cell(1, 5, "Low"),
+                Cell(1, 6, "Close"),
+                Cell(2, 1, "Mon"),
+                Cell(2, 2, "1000"),
+                Cell(2, 3, "10"),
+                Cell(2, 4, "15"),
+                Cell(2, 5, "9"),
+                Cell(2, 6, "13"),
+                Cell(3, 1, "Tue"),
+                Cell(3, 2, "1200"),
+                Cell(3, 3, "13"),
+                Cell(3, 4, "18"),
+                Cell(3, 5, "12"),
+                Cell(3, 6, "16")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        model.Series[0].Should().BeOfType<RectangleBarSeries>();
+        var stockSeries = model.Series[1].Should().BeOfType<HighLowSeries>().Subject;
+        stockSeries.Items[0].Open.Should().Be(10);
+        stockSeries.Items[0].High.Should().Be(15);
+        stockSeries.Items[0].Low.Should().Be(9);
+        stockSeries.Items[0].Close.Should().Be(13);
+    }
+
+    [Fact]
+    public void ThreeDBarRenderer_UsesBarSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.ThreeDBar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>();
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
+    }
+
+    [Fact]
+    public void ThreeDPieRenderer_UsesPieSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.ThreeDPie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>();
+        model.Axes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void StockRenderer_UsesDateTimeAxisForDateCategories()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 6))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Volume"),
+                Cell(1, 3, "Open"),
+                Cell(1, 4, "High"),
+                Cell(1, 5, "Low"),
+                Cell(1, 6, "Close"),
+                Cell(2, 1, "2026-01-02"),
+                Cell(2, 2, "1000"),
+                Cell(2, 3, "10"),
+                Cell(2, 4, "15"),
+                Cell(2, 5, "9"),
+                Cell(2, 6, "13"),
+                Cell(3, 1, "2026-01-05"),
+                Cell(3, 2, "1200"),
+                Cell(3, 3, "13"),
+                Cell(3, 4, "18"),
+                Cell(3, 5, "12"),
+                Cell(3, 6, "16")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Bottom).Which;
+        axis.Should().BeOfType<DateTimeAxis>();
+
+        var stockSeries = model.Series[1].Should().BeOfType<HighLowSeries>().Subject;
+        stockSeries.Items[0].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 2)), 0.0001);
+        stockSeries.Items[1].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 5)), 0.0001);
+
+        var volumeSeries = model.Series[0].Should().BeOfType<RectangleBarSeries>().Subject;
+        var firstVolume = volumeSeries.Items[0];
+        ((firstVolume.X0 + firstVolume.X1) / 2).Should().BeApproximately(stockSeries.Items[0].X, 0.0001);
+    }
+
+    [Fact]
+    public void StockRenderer_UsesCandlestickSeriesWhenUpDownBarsAreEnabled()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.OpenHighLowClose,
+            ShowUpDownBars = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Open"),
+                Cell(1, 3, "High"),
+                Cell(1, 4, "Low"),
+                Cell(1, 5, "Close"),
+                Cell(2, 1, "2026-01-02"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "15"),
+                Cell(2, 4, "9"),
+                Cell(2, 5, "13"),
+                Cell(3, 1, "2026-01-05"),
+                Cell(3, 2, "13"),
+                Cell(3, 3, "18"),
+                Cell(3, 4, "12"),
+                Cell(3, 5, "11")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<CandleStickSeries>().Subject;
+        series.IncreasingColor.Should().Be(OxyColors.White);
+        series.DecreasingColor.Should().Be(OxyColors.Black);
+        series.Items.Should().HaveCount(2);
+        series.Items[0].Open.Should().Be(10);
+        series.Items[0].Close.Should().Be(13);
+        series.Items[1].Open.Should().Be(13);
+        series.Items[1].Close.Should().Be(11);
     }
 
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)

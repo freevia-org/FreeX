@@ -140,6 +140,37 @@ public sealed class AutoFilterDropdownPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_IncludesExcelStyleSectionSeparators()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        menu.Entries.Select(entry => entry.Kind).Should().ContainInOrder(
+            AutoFilterMenuEntryKind.SortAscending,
+            AutoFilterMenuEntryKind.SortDescending,
+            AutoFilterMenuEntryKind.Separator,
+            AutoFilterMenuEntryKind.ClearFilter,
+            AutoFilterMenuEntryKind.FilterByColor,
+            AutoFilterMenuEntryKind.FilterFamily,
+            AutoFilterMenuEntryKind.Separator,
+            AutoFilterMenuEntryKind.Search,
+            AutoFilterMenuEntryKind.SelectAll,
+            AutoFilterMenuEntryKind.Separator,
+            AutoFilterMenuEntryKind.ChecklistItem,
+            AutoFilterMenuEntryKind.ChecklistItem);
+    }
+
+    [Fact]
     public void CreateMenuPlan_ChoosesNumberAndDateFilterFamiliesFromBodyValues()
     {
         var numberSheet = new Sheet(SheetId, "Sheet1");
@@ -162,13 +193,13 @@ public sealed class AutoFilterDropdownPlannerTests
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Number);
         AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
             .Entries.Single(entry => entry.Header == "Number Filters")
-            .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "above average", "below average", "blank", "nonblank");
+            .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "toppercent:", "bottompercent:", "above average", "below average", "blank", "nonblank");
 
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Date);
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
             .Entries.Single(entry => entry.Header == "Date Filters")
-            .CriteriaSuggestions.Should().Equal("date=", "date>", "date<", "datebetween:", "blank", "nonblank");
+            .CriteriaSuggestions.Should().Equal("date=", "date<>", "date>", "date>=", "date<", "date<=", "datebetween:", "blank", "nonblank");
     }
 
     [Fact]
@@ -204,5 +235,58 @@ public sealed class AutoFilterDropdownPlannerTests
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
             .Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
             .CriteriaSuggestions.Should().ContainInOrder("blank", "nonblank");
+    }
+
+    [Fact]
+    public void CreateMenuPlan_CollectsDistinctColumnFillAndFontColorsForFilterByColorMenu()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var sid = sheet.Id;
+        var green = new CellColor(0, 176, 80);
+        var yellow = new CellColor(255, 192, 0);
+        var red = new CellColor(192, 0, 0);
+        var greenStyle = CellStyle.Default.Clone();
+        greenStyle.FillColor = green;
+        var yellowStyle = CellStyle.Default.Clone();
+        yellowStyle.FillColor = yellow;
+        yellowStyle.FontColor = red;
+        var greenStyleId = workbook.RegisterStyle(greenStyle);
+        var yellowStyleId = workbook.RegisterStyle(yellowStyle);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue("Ready"));
+        sheet.SetCell(new CellAddress(sid, 3, 1), new TextValue("Blocked"));
+        sheet.SetCell(new CellAddress(sid, 4, 1), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sid, 5, 1), new TextValue("Closed"));
+        sheet.GetCell(2, 1)!.StyleId = greenStyleId;
+        sheet.GetCell(3, 1)!.StyleId = yellowStyleId;
+        sheet.GetCell(4, 1)!.StyleId = greenStyleId;
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 5, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(workbook, sheet, plan);
+
+        menu.ColorOptions.Should().Equal(
+            new AutoFilterColorOption("#00B050", AutoFilterColorFilterKind.CellFillColor, green),
+            new AutoFilterColorOption("#FFC000", AutoFilterColorFilterKind.CellFillColor, yellow),
+            new AutoFilterColorOption("No Fill", AutoFilterColorFilterKind.NoFill, null),
+            new AutoFilterColorOption("#C00000", AutoFilterColorFilterKind.FontColor, red));
+    }
+
+    [Fact]
+    public void CreateMenuPlan_OmitsColorChoicesWhenWorkbookIsUnavailable()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 2, 1)),
+            FilterColumnOffset: 0);
+
+        AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)
+            .ColorOptions.Should().BeEmpty();
     }
 }

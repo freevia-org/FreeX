@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Increase Decimal Places">
+<rect width="20" height="20" fill="none"/>
+<text x="0" y="8.5" font-family="Segoe UI,Arial,sans-serif" font-size="9.5" font-weight="500" fill="#242424">.0</text>
+<text x="0" y="18" font-family="Segoe UI,Arial,sans-serif" font-size="9.5" font-weight="500" fill="#242424">.00</text>
+<path d="M12 10h5.5" stroke="#0078d4" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M15.5 7.5l3 2.5-3 2.5" fill="none" stroke="#0078d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

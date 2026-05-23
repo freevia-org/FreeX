@@ -10,6 +10,8 @@ namespace Freexcel.App.Host;
 public sealed class WatchWindowDialog : Window
 {
     private readonly Func<IReadOnlyList<WatchWindowEntry>> _getEntries;
+    private readonly Action? _addWatch;
+    private readonly Func<string> _getSelectionText;
     private readonly Action<CellAddress> _navigateTo;
     private readonly Action<CellAddress> _removeWatch;
     private readonly ObservableCollection<WatchWindowRow> _rows = [];
@@ -17,10 +19,14 @@ public sealed class WatchWindowDialog : Window
 
     public WatchWindowDialog(
         Func<IReadOnlyList<WatchWindowEntry>> getEntries,
+        Action? addWatch,
+        Func<string>? getSelectionText,
         Action<CellAddress> navigateTo,
         Action<CellAddress> removeWatch)
     {
         _getEntries = getEntries;
+        _addWatch = addWatch;
+        _getSelectionText = getSelectionText ?? (() => "");
         _navigateTo = navigateTo;
         _removeWatch = removeWatch;
 
@@ -43,6 +49,26 @@ public sealed class WatchWindowDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
+        var add = new Button
+        {
+            Content = "_Add Watch",
+            Width = 96,
+            Height = 26,
+            Margin = new Thickness(4, 0, 0, 0),
+            IsEnabled = _addWatch is not null,
+            ToolTip = "Add the current worksheet selection to the Watch Window."
+        };
+        add.Click += (_, _) =>
+        {
+            var dialog = new AddWatchDialog(_getSelectionText()) { Owner = this };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            _addWatch?.Invoke();
+            Refresh();
+        };
+        buttons.Children.Add(add);
+
         var refresh = new Button { Content = "_Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
@@ -63,9 +89,10 @@ public sealed class WatchWindowDialog : Window
             {
                 new GridViewColumn { Header = "Book", Width = 90, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
                 new GridViewColumn { Header = "Sheet", Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
+                new GridViewColumn { Header = "Name", Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
                 new GridViewColumn { Header = "Cell", Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
                 new GridViewColumn { Header = "Value", Width = 120, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
-                new GridViewColumn { Header = "Formula", Width = 190, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
+                new GridViewColumn { Header = "Formula", Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
             }
         };
         root.Children.Add(_listView);
@@ -81,6 +108,7 @@ public sealed class WatchWindowDialog : Window
             _rows.Add(new WatchWindowRow(
                 "This Workbook",
                 entry.SheetName,
+                "",
                 entry.Address.ToA1(),
                 entry.ValueText,
                 entry.FormulaText ?? "",
@@ -115,8 +143,60 @@ public sealed class WatchWindowDialog : Window
     private sealed record WatchWindowRow(
         string Book,
         string Sheet,
+        string Name,
         string Cell,
         string Value,
         string Formula,
         CellAddress Address);
+}
+
+public sealed class AddWatchDialog : Window
+{
+    public AddWatchDialog(string selectedRangeText)
+    {
+        Title = "Add Watch";
+        Width = 360;
+        Height = 170;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+
+        var add = new Button { Content = "_Add", Width = 76, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        add.Click += (_, _) => DialogResult = true;
+        buttons.Children.Add(add);
+        buttons.Children.Add(new Button { Content = "_Cancel", Width = 76, IsCancel = true });
+
+        var body = new StackPanel();
+        root.Children.Add(body);
+        body.Children.Add(new TextBlock
+        {
+            Text = "Selected range:",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        body.Children.Add(new TextBox
+        {
+            Text = selectedRangeText,
+            IsReadOnly = true,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        body.Children.Add(new TextBlock
+        {
+            Text = "The selected cells will be added to the Watch Window.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush
+        });
+
+        Content = root;
+    }
 }

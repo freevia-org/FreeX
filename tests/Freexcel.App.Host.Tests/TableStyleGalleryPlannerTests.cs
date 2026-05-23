@@ -38,7 +38,7 @@ public sealed class TableStyleGalleryPlannerTests
     public void MainWindow_PopulatesFormatAsTableMenuFromGalleryPlanner()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         xaml.Should().Contain("x:Name=\"FormatTableGalleryMenu\"");
         xaml.Should().NotContain("Header=\"Light 1\"  Tag=\"0\"");
