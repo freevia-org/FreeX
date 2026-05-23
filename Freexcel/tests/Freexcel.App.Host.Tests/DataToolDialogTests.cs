@@ -110,6 +110,45 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_formatColumnBox");
         source.Should().Contain("BuildColumnFormats");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("TextToColumnsRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void TextToColumnsRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        TextToColumnsDialog.CreateRangeSelectionRequest(" F2 ")
+            .Should()
+            .Be(new TextToColumnsRangeSelectionRequest("F2", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void TextToColumnsDestinationPicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var requests = new List<TextToColumnsRangeSelectionRequest>();
+            var dialog = new TextToColumnsDialog(
+                ["East,42"],
+                new CellAddress(sheetId, 2, 6),
+                requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select destination cell");
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new TextToColumnsRangeSelectionRequest("F2", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
