@@ -7,6 +7,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
     private readonly GridRange _listRange;
     private readonly GridRange _criteriaRange;
     private readonly CellAddress? _copyTo;
+    private readonly GridRange? _copyToRange;
     private readonly bool _uniqueRecordsOnly;
     private HashSet<uint>? _previousFilterHiddenRows;
     private List<(CellAddress Address, Cell? OldCell)>? _copySnapshot;
@@ -17,11 +18,13 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         GridRange ListRange,
         GridRange CriteriaRange,
         CellAddress? CopyTo,
-        bool UniqueRecordsOnly)
+        bool UniqueRecordsOnly,
+        GridRange? CopyToRange = null)
     {
         _listRange = ListRange;
         _criteriaRange = CriteriaRange;
         _copyTo = CopyTo;
+        _copyToRange = CopyToRange;
         _uniqueRecordsOnly = UniqueRecordsOnly;
     }
 
@@ -171,22 +174,26 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
     private void CopyMatches(Sheet sheet, IReadOnlyList<uint> rows)
     {
         _copySnapshot = [];
+        var outputColumns = ResolveCopyOutputColumns(sheet);
+        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
+        var clearWidth = Math.Max(_listRange.ColCount, outputWidth);
         var outputRowCount = 1 + rows.Count;
-        var rowsToReplace = Math.Max(outputRowCount, CountExistingDestinationRows(sheet));
+        var rowsToReplace = Math.Max(outputRowCount, CountExistingDestinationRows(sheet, clearWidth));
         for (uint r = 0; r < rowsToReplace; r++)
         {
-            for (uint c = 0; c < _listRange.ColCount; c++)
+            for (uint c = 0; c < clearWidth; c++)
             {
                 var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
                 _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
-                if (r >= outputRowCount)
+                if (r >= outputRowCount || c >= outputWidth)
                 {
                     sheet.ClearCell(target);
                     continue;
                 }
 
                 var sourceRow = r == 0 ? _listRange.Start.Row : rows[(int)r - 1];
-                var source = new CellAddress(sheet.Id, sourceRow, _listRange.Start.Col + c);
+                var sourceCol = outputColumns is null ? _listRange.Start.Col + c : outputColumns[(int)c];
+                var source = new CellAddress(sheet.Id, sourceRow, sourceCol);
                 var sourceCell = sheet.GetCell(source)?.Clone()
                     ?? Cell.FromValue(sheet.GetValue(source.Row, source.Col));
                 sheet.SetCell(target, sourceCell);
@@ -194,7 +201,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         }
     }
 
-    private uint CountExistingDestinationRows(Sheet sheet)
+    private uint CountExistingDestinationRows(Sheet sheet, uint outputWidth)
     {
         if (_copyTo is null)
             return 0;
@@ -206,7 +213,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         for (var row = _copyTo.Value.Row; row <= usedRange.End.Row; row++)
         {
             var hasOutputCell = false;
-            for (uint colOffset = 0; colOffset < _listRange.ColCount; colOffset++)
+            for (uint colOffset = 0; colOffset < outputWidth; colOffset++)
             {
                 if (sheet.GetCell(row, _copyTo.Value.Col + colOffset) is null)
                     continue;
@@ -222,6 +229,27 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         }
 
         return count;
+    }
+
+    private IReadOnlyList<uint>? ResolveCopyOutputColumns(Sheet sheet)
+    {
+        if (_copyToRange is not { } range || range.Start.Row != range.End.Row)
+            return null;
+
+        var headers = BuildHeaderMap(sheet, _listRange);
+        var selectedColumns = new List<uint>();
+        for (var col = range.Start.Col; col <= range.End.Col; col++)
+        {
+            var headerText = FilterValueFormatter.ToText(sheet.GetValue(range.Start.Row, col));
+            if (string.IsNullOrWhiteSpace(headerText))
+                return null;
+            if (!headers.TryGetValue(headerText, out var sourceCol))
+                return null;
+
+            selectedColumns.Add(sourceCol);
+        }
+
+        return selectedColumns.Count == 0 ? null : selectedColumns;
     }
 
     private static IFilterCriterion CreateCriterion(string criteriaText)

@@ -62,6 +62,27 @@ public sealed class AdvancedFilterInputParserTests
     }
 
     [Theory]
+    [InlineData("A8:C8", true, "A8", "C8")]
+    [InlineData("D4", true, "D4", "D4")]
+    [InlineData("A8:C9", false, "", "")]
+    [InlineData("bad", false, "", "")]
+    public void TryParseCopyDestinationRange_AllowsCellOrSingleRowHeaderRange(
+        string input,
+        bool expected,
+        string expectedStart,
+        string expectedEnd)
+    {
+        var result = AdvancedFilterInputParser.TryParseCopyDestinationRange(input, SheetId, out var range);
+
+        result.Should().Be(expected);
+        if (expected && range is not null)
+        {
+            range.Value.Start.ToA1().Should().Be(expectedStart);
+            range.Value.End.ToA1().Should().Be(expectedEnd);
+        }
+    }
+
+    [Theory]
     [InlineData("yes", true)]
     [InlineData("Y", true)]
     [InlineData("true", true)]

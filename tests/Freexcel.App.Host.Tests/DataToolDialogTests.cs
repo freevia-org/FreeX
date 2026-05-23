@@ -421,7 +421,27 @@ public sealed class DataToolDialogTests
         result.ListRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 20, 4)));
         result.CriteriaRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 6), new CellAddress(sheetId, 2, 7)));
         result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
+        result.CopyToRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 10), new CellAddress(sheetId, 1, 10)));
         result.UniqueRecordsOnly.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_ParsesCopyToHeaderRange()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToCellText: "J1:L1",
+            uniqueRecordsOnly: true,
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
+        result.CopyToRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 10), new CellAddress(sheetId, 1, 12)));
     }
 
     [Fact]
@@ -487,7 +507,7 @@ public sealed class DataToolDialogTests
             out var error);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid copy-to cell.");
+        error.Should().Be("Enter a valid copy-to cell or one-row header range.");
     }
 
     [Fact]
