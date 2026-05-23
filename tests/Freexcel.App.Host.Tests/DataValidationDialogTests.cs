@@ -61,6 +61,33 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_ShowsValueRangePickerForNonListValidationTypes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "=Sheet1!$B$2:$B$8" };
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "Any");
+                GetControl<Button>(dialog, "SourcePickerButton").Visibility.Should().Be(Visibility.Collapsed);
+
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "WholeNumber");
+                GetControl<Button>(dialog, "SourcePickerButton").Visibility.Should().Be(Visibility.Visible);
+                GetControl<Button>(dialog, "UseSelectionButton").Visibility.Should().Be(Visibility.Collapsed);
+
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "Custom");
+                GetControl<Button>(dialog, "SourcePickerButton").Visibility.Should().Be(Visibility.Visible);
+                GetControl<Button>(dialog, "UseSelectionButton").Visibility.Should().Be(Visibility.Collapsed);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DataValidationDialog_UsesExcelStyleSettingsInputAndErrorTabs()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
