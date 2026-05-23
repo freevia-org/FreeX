@@ -1018,6 +1018,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialogOpenedFromKeyboard_FocusesRowInputCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rowInputBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_rowInputBox);");
+    }
+
+    [Fact]
     public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
