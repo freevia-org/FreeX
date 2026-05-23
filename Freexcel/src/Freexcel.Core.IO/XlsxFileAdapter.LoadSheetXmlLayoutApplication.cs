@@ -30,6 +30,12 @@ public sealed partial class XlsxFileAdapter
         if (layout.DefaultRowHeight is { } defaultRowHeight)
             sheet.DefaultRowHeight = defaultRowHeight;
         sheet.BackgroundImage = layout.BackgroundImage;
+        sheet.PageHeaderPictures = layout.HeaderFooterPictures.PageHeader;
+        sheet.PageFooterPictures = layout.HeaderFooterPictures.PageFooter;
+        sheet.FirstPageHeaderPictures = layout.HeaderFooterPictures.FirstPageHeader;
+        sheet.FirstPageFooterPictures = layout.HeaderFooterPictures.FirstPageFooter;
+        sheet.EvenPageHeaderPictures = layout.HeaderFooterPictures.EvenPageHeader;
+        sheet.EvenPageFooterPictures = layout.HeaderFooterPictures.EvenPageFooter;
         sheet.CodeName = layout.CodeName;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)

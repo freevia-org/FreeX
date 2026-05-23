@@ -64,6 +64,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook);
         }
 
+        if (workbook.Sheets.Any(XlsxHeaderFooterPictureReaderWriter.HasPictures))
+        {
+            packageStream.Position = 0;
+            XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook);
+        }
+
         if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))
         {
             packageStream.Position = 0;
