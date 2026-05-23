@@ -274,6 +274,7 @@ public sealed partial class NativeJsonAdapter
         public int IndentLevel { get; set; }
         public int TextRotation { get; set; }
         public bool Locked { get; set; } = true;
+        public bool Hidden { get; set; }
         public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
         public IReadOnlyList<string>? NativeDifferentialChildXmls { get; set; }
         public IReadOnlyDictionary<string, string>? NativeDifferentialElementXmls { get; set; }
