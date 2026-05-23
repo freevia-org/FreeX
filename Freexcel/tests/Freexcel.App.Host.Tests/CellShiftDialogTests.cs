@@ -55,4 +55,15 @@ public sealed class CellShiftDialogTests
         source.Should().NotContain("Choose how Excel should close the gap");
         source.Should().Contain("DialogButtonRowFactory.Create");
     }
+
+    [Fact]
+    public void DialogOpenedFromKeyboard_FocusesDefaultShiftChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CellShiftDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_buttons.FirstOrDefault()?.Focus();");
+        source.Should().Contain("Keyboard.Focus(firstButton);");
+    }
 }

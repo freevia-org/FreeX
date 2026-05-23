@@ -757,6 +757,12 @@ public sealed class XlsxChartPartReaderTests
                         <c:errValType val="percentage"/>
                         <c:noEndCap val="1"/>
                         <c:val val="12.5"/>
+                        <c:spPr>
+                          <a:ln w="25400" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                            <a:solidFill><a:schemeClr val="accent3"/></a:solidFill>
+                            <a:prstDash val="dash"/>
+                          </a:ln>
+                        </c:spPr>
                       </c:errBars>
                       <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
                       <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
@@ -775,6 +781,10 @@ public sealed class XlsxChartPartReaderTests
         chart.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Plus);
         chart.ErrorBarValue.Should().Be(12.5);
         chart.ErrorBarEndCaps.Should().BeFalse();
+        chart.ErrorBarThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3));
+        chart.ErrorBarColor.Should().BeNull();
+        chart.ErrorBarThickness.Should().Be(2);
+        chart.ErrorBarDashStyle.Should().Be(ChartLineDashStyle.Dash);
     }
 
     [Fact]

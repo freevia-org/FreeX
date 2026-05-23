@@ -1154,7 +1154,11 @@ public class XlsxCorpusRunnerTests
             chart.ErrorBarKind,
             chart.ErrorBarDirection,
             chart.ErrorBarValue,
-            chart.ErrorBarEndCaps);
+            chart.ErrorBarEndCaps,
+            chart.ErrorBarColor is null ? "" : ToColorSummary(chart.ErrorBarColor.Value),
+            chart.ErrorBarThemeColor,
+            chart.ErrorBarThickness,
+            chart.ErrorBarDashStyle);
 
     private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
         new(
@@ -2252,7 +2256,11 @@ public class XlsxCorpusRunnerTests
         ChartErrorBarKind Kind,
         ChartErrorBarDirection Direction,
         double Value,
-        bool EndCaps);
+        bool EndCaps,
+        string Color,
+        WorkbookThemeColorReference? ThemeColor,
+        double Thickness,
+        ChartLineDashStyle DashStyle);
 
     private sealed record ChartColorMapSummary(
         bool UseMasterColorMapping,
