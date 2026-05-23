@@ -645,7 +645,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (pr <= 0 || redemption <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dcf = DayCountFraction(sd, md, basis);
         if (dcf <= 0) return ErrorValue.Num;
@@ -663,7 +664,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (investment <= 0 || redemption <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dcf = DayCountFraction(sd, md, basis);
         if (dcf <= 0) return ErrorValue.Num;
@@ -681,7 +683,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (investment <= 0 || discount <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dcf = DayCountFraction(sd, md, basis);
         double denom = 1 - discount * dcf;
@@ -718,7 +721,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
             return ErrorValue.Num;
         if (discount <= 0 || discount >= 1) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
         if (dsm <= 0 || dsm > 182) return ErrorValue.Num;
         return NumberResult((365 * discount) / (360 - discount * dsm));
@@ -733,7 +737,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount))
             return ErrorValue.Num;
         if (discount <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
         if (dsm <= 0) return ErrorValue.Num;
         return NumberResult(100 * (1 - discount * dsm / 360.0));
@@ -748,7 +753,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(pr))
             return ErrorValue.Num;
         if (pr <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
         if (dsm <= 0) return ErrorValue.Num;
         return NumberResult((100 - pr) / pr * 360.0 / dsm);
