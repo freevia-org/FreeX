@@ -1299,6 +1299,8 @@ public sealed class MainWindowSourceHygieneTests
         selectionSource.Should().Contain("Key.Right => FocusNavigationDirection.Right");
         selectionSource.Should().Contain("Key.Up => FocusNavigationDirection.Up");
         selectionSource.Should().Contain("Key.Down => FocusNavigationDirection.Down");
+        selectionSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
+        selectionSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
         selectionSource.Should().Contain("private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)");
         selectionSource.Should().Contain("focusedUiElement.MoveFocus(new TraversalRequest(direction));");
     }
