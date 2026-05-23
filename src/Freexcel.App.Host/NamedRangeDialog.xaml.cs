@@ -14,8 +14,11 @@ public sealed partial class NamedRangeDialog : Window
 {
     private readonly Workbook _workbook;
     private readonly ICommandBus _commandBus;
+    private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly ObservableCollection<NamedRangeViewModel> _items = [];
     private readonly string _initialRefersTo;
+
+    public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     /// <param name="workbook">The active workbook.</param>
     /// <param name="commandBus">Command bus for dispatching define/delete commands.</param>
@@ -23,10 +26,15 @@ public sealed partial class NamedRangeDialog : Window
     ///   Optional initial range (e.g. the current selection). If provided, pre-fills
     ///   the Range text box in Sheet!A1:B10 notation.
     /// </param>
-    public NamedRangeDialog(Workbook workbook, ICommandBus commandBus, GridRange? initialRange = null)
+    public NamedRangeDialog(
+        Workbook workbook,
+        ICommandBus commandBus,
+        GridRange? initialRange = null,
+        Action<NamedRangeSelectionRequest>? requestRangeSelection = null)
     {
         _workbook = workbook;
         _commandBus = commandBus;
+        _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
         RefreshList();
         UpdateSelectionCommands();
@@ -83,6 +91,9 @@ public sealed partial class NamedRangeDialog : Window
 
     private void ApplyFilter()
     {
+        if (NamesList is null)
+            return;
+
         var selected = FilterBox.SelectedIndex switch
         {
             1 => NamedRangeFilterOption.Workbook,
@@ -108,6 +119,10 @@ public sealed partial class NamedRangeDialog : Window
 
     private void RefersToPickerButton_Click(object sender, RoutedEventArgs e)
     {
+        RangeSelectionRequest = CreateRangeSelectionRequest(
+            NamedRangeSelectionTarget.SelectedNameRefersTo,
+            RefersToBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
         RefersToBox.Focus();
         RefersToBox.SelectAll();
     }
@@ -116,7 +131,8 @@ public sealed partial class NamedRangeDialog : Window
     {
         var dialog = new NameDefinitionDialog(
             new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
-            GetScopeOptions()) { Owner = this };
+            GetScopeOptions(),
+            RequestRangeSelection) { Owner = this };
         if (dialog.ShowDialog() == true)
             DefineOrUpdateName(dialog.Result);
     }
@@ -131,7 +147,8 @@ public sealed partial class NamedRangeDialog : Window
 
         var dialog = new NameDefinitionDialog(
             new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
-            GetScopeOptions())
+            GetScopeOptions(),
+            RequestRangeSelection)
         {
             Owner = this
         };
@@ -213,7 +230,29 @@ public sealed partial class NamedRangeDialog : Window
             .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    public static NamedRangeSelectionRequest CreateRangeSelectionRequest(
+        NamedRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private void RequestRangeSelection(NamedRangeSelectionRequest request)
+    {
+        RangeSelectionRequest = request;
+        _requestRangeSelection?.Invoke(request);
+    }
 }
+
+public enum NamedRangeSelectionTarget
+{
+    SelectedNameRefersTo,
+    DefinitionRefersTo
+}
+
+public sealed record NamedRangeSelectionRequest(
+    NamedRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
 
 public enum NamedRangeFilterOption
 {
@@ -249,13 +288,19 @@ internal sealed class NameDefinitionDialog : Window
     private readonly TextBox _refersToBox = new();
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
     private readonly IReadOnlyList<string> _scopeOptions;
+    private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
 
     public NameDefinitionDialogResult Result { get; private set; }
+    public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public NameDefinitionDialog(NameDefinitionDialogResult initial, IReadOnlyList<string> scopeOptions)
+    public NameDefinitionDialog(
+        NameDefinitionDialogResult initial,
+        IReadOnlyList<string> scopeOptions,
+        Action<NamedRangeSelectionRequest>? requestRangeSelection = null)
     {
         Result = initial;
         _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
+        _requestRangeSelection = requestRangeSelection;
         Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
         Width = 460;
         Height = 300;
@@ -270,9 +315,13 @@ internal sealed class NameDefinitionDialog : Window
             string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
         _commentBox.Text = initial.Comment;
         _refersToBox.Text = initial.RefersTo;
-        _rangePickerButton.ToolTip = "Select the referenced range from the worksheet";
+        _rangePickerButton.ToolTip = "Collapse dialog and select the referenced range from the worksheet";
         _rangePickerButton.Click += (_, _) =>
         {
+            RangeSelectionRequest = NamedRangeDialog.CreateRangeSelectionRequest(
+                NamedRangeSelectionTarget.DefinitionRefersTo,
+                _refersToBox.Text);
+            _requestRangeSelection?.Invoke(RangeSelectionRequest);
             _refersToBox.Focus();
             _refersToBox.SelectAll();
         };
