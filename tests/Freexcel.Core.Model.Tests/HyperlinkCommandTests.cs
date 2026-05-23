@@ -68,6 +68,39 @@ public sealed class HyperlinkCommandTests
             "support@example.com"));
     }
 
+    [Fact]
+    public void SetHyperlinkCommand_RejectsProtectedSheetWithoutInsertHyperlinksPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.IsProtected = true;
+
+        var outcome = new SetHyperlinkCommand(sheet.Id, addr, "https://example.com", "Example").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.Hyperlinks.Should().NotContainKey(addr);
+    }
+
+    [Fact]
+    public void SetHyperlinkCommand_AllowsProtectedSheetWithInsertHyperlinksPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.InsertHyperlinks);
+
+        var outcome = new SetHyperlinkCommand(sheet.Id, addr, "https://example.com", "Example").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(addr).Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks[addr].Should().Be("https://example.com");
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
