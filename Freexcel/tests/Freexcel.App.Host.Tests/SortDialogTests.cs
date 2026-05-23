@@ -13,6 +13,7 @@ public sealed class SortDialogTests
         var levels = new[]
         {
             new SortDialogLevel(2, true) { SortOn = "Cell Values" },
+            new SortDialogLevel(1, true) { SortOn = "Cell Color" },
             new SortDialogLevel(0, false) { SortOn = "Font Color" }
         };
 
@@ -20,6 +21,7 @@ public sealed class SortDialogTests
 
         keys.Should().Equal(
             new SortKey(2, true),
+            new SortKey(1, true, SortOn.CellColor),
             new SortKey(0, false, SortOn.FontColor));
     }
 
@@ -154,6 +156,22 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void UpdateLevel_PreservesSortOnChoice()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true),
+            new SortDialogLevel(1, false) { SortOn = "Font Color" }
+        };
+
+        SortDialog.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
+            .Should()
+            .Equal(
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(2, true) { SortOn = "Font Color" });
+    }
+
+    [Fact]
     public void CopyLevel_InsertsDuplicateAfterRequestedLevel()
     {
         var levels = new[]
@@ -168,6 +186,23 @@ public sealed class SortDialogTests
                 new SortDialogLevel(0, true),
                 new SortDialogLevel(2, false),
                 new SortDialogLevel(2, false));
+    }
+
+    [Fact]
+    public void CopyLevel_PreservesSortOnChoice()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true),
+            new SortDialogLevel(2, false) { SortOn = "Cell Color" }
+        };
+
+        SortDialog.CopyLevel(levels, 1)
+            .Should()
+            .Equal(
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(2, false) { SortOn = "Cell Color" },
+                new SortDialogLevel(2, false) { SortOn = "Cell Color" });
     }
 
     [Fact]
