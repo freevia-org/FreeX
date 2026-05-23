@@ -53,6 +53,14 @@ internal static class DelimitedTextWorkbookReader
     {
         delimiter = default;
 
+        if (fields.Count == 2 &&
+            string.Equals(fields[0], "sep=", StringComparison.OrdinalIgnoreCase) &&
+            fields[1].Length == 0)
+        {
+            delimiter = ',';
+            return true;
+        }
+
         if (fields.Count != 1)
             return false;
 
