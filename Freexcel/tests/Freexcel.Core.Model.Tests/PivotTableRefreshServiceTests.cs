@@ -870,6 +870,36 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MergeAndCenterLabelsMergesSuppressedRepeatedOuterRowLabels()
+    {
+        var workbook = new Workbook("PivotMergeSuppressedLabelsRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I10"),
+            ShowSubtotals = false,
+            RepeatItemLabels = false,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E3"), Addr(sheet, "E4")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E5"), Addr(sheet, "E6")));
+        Text(sheet, "E3").Should().Be("East");
+        sheet.GetCell(Addr(sheet, "E4")).Should().BeNull();
+        Text(sheet, "E5").Should().Be("West");
+        sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
+    }
+
+    [Fact]
     public void Refresh_MergeAndCenterLabelsRemovesStalePivotMergesWhenDisabled()
     {
         var workbook = new Workbook("PivotMergeLabelsRefreshDisableTest");
