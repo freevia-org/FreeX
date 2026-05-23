@@ -7,7 +7,7 @@ generated-structure-001,generated/structure-001.xlsx,generated,local,2026-05-17,
 generated-validation-001,generated/validation-001.xlsx,generated,local,2026-05-17,Freexcel-generated,data-validation named-ranges,,supported-pass,List numeric date and custom validation
 generated-conditional-formatting-001,generated/conditional-formatting-001.xlsx,generated,local,2026-05-17,Freexcel-generated,conditional-formatting,,supported-pass,Cell/formula rules plus long-tail conditional formatting metadata
 generated-objects-001,generated/objects-001.xlsx,generated,local,2026-05-17,Freexcel-generated,objects hyperlinks comments,,supported-pass,Comments and hyperlinks
-generated-charts-001,generated/charts-001.xlsx,generated,local,2026-05-17,Freexcel-generated,charts,,supported-pass,Supported native chart families
+generated-charts-001,generated/charts-001.xlsx,generated,local,2026-05-17,Freexcel-generated,charts surface-charts,,supported-pass,Supported native chart families including surface and 3D surface charts
 generated-protection-page-setup-001,generated/protection-page-setup-001.xlsx,generated,local,2026-05-17,Freexcel-generated,protection page-setup,,supported-pass,Protection allow-edit ranges margins print area and scaling
 generated-color-scales-001,generated/color-scales-001.xlsx,generated,local,2026-05-17,Freexcel-generated,conditional-formatting color-scales,,supported-pass,Color scale conditional formatting metadata is model-first supported and round-trips through XLSX
 generated-data-bars-001,generated/data-bars-001.xlsx,generated,local,2026-05-17,Freexcel-generated,conditional-formatting data-bars,,supported-pass,Data bar conditional formatting metadata is model-first supported and round-trips through XLSX

@@ -44,6 +44,25 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCorpusRows_IncludeSurfaceChartCoverage()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("surface-charts"))
+            .ToArray();
+
+        rows.Should().ContainSingle("surface charts are now a supported native chart family and need deterministic corpus coverage");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbook = XlsxCorpusFixtureFactory.Create(rows[0].Id);
+        workbook.Sheets
+            .SelectMany(sheet => sheet.Charts)
+            .Select(chart => chart.Type)
+            .Should().Contain([ChartType.Surface, ChartType.ThreeDSurface]);
+    }
+
+    [Fact]
     public void GeneratedKnownGapRows_DeclareExpectedWarningsAndNotes()
     {
         var rows = ReadManifestRows()
@@ -495,6 +514,15 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("charts") && !tags.Contains("unsupported-chart-family"))
             summary.Sheets.Sum(sheet => sheet.ChartCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("surface-charts"))
+        {
+            var chartTypes = workbook.Sheets
+                .SelectMany(sheet => sheet.Charts)
+                .Select(chart => chart.Type)
+                .ToArray();
+            chartTypes.Should().Contain([ChartType.Surface, ChartType.ThreeDSurface], row.Id);
+        }
 
         if (row.SourceType == "generated" && (tags.Contains("styles") || tags.Contains("formatting")))
             (workbook.Sheets.Sum(sheet => sheet.EnumerateCells().Count(item => item.Cell.StyleId != StyleId.Default)) +

@@ -1154,6 +1154,20 @@ internal static class XlsxCorpusFixtureFactory
             ShowHighLowLines = true,
             ShowUpDownBars = true
         });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Surface,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "Surface View",
+            ShowLegend = true
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.ThreeDSurface,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "3D Surface View",
+            ShowLegend = true
+        });
         return workbook;
     }
 
