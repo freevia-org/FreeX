@@ -31,8 +31,8 @@ public sealed partial class CustomViewsDialog : Window
             _items.Add(new CustomViewViewModel(
                 view.Name,
                 view.Sheets.Count,
-                "Included",
-                "Included"));
+                view.IncludePrintSettings ? "Included" : "Not included",
+                view.IncludeHiddenRowsColumnsAndFilterSettings ? "Included" : "Not included"));
 
         if (_items.Count > 0 && ViewsList.SelectedIndex < 0)
             ViewsList.SelectedIndex = 0;
@@ -75,7 +75,10 @@ public sealed partial class CustomViewsDialog : Window
         var name = dialog.Result.ViewName;
         if (string.IsNullOrWhiteSpace(name)) return;
 
-        var outcome = _commandBus.Execute(_workbook.Id, new SaveCustomViewCommand(name));
+        var outcome = _commandBus.Execute(_workbook.Id, new SaveCustomViewCommand(
+            name,
+            dialog.Result.IncludePrintSettings,
+            dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings));
         if (!outcome.Success)
         {
             MessageBox.Show(outcome.ErrorMessage ?? "Could not save custom view.",
@@ -121,11 +124,16 @@ internal sealed class CustomViewViewModel(string name, int sheetCount, string pr
     public string FilterSettingsIndicator { get; } = filterSettingsIndicator;
 }
 
-public sealed record CustomViewNameDialogResult(string ViewName);
+public sealed record CustomViewNameDialogResult(
+    string ViewName,
+    bool IncludePrintSettings = true,
+    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
 
 public sealed class CustomViewNameDialog : Window
 {
     private readonly TextBox _nameBox = new();
+    private readonly CheckBox _printSettingsBox = new() { Content = "_Print settings", IsChecked = true };
+    private readonly CheckBox _hiddenFilterSettingsBox = new() { Content = "_Hidden rows, columns and filter settings", IsChecked = true };
 
     public CustomViewNameDialogResult Result { get; private set; }
 
@@ -134,7 +142,7 @@ public sealed class CustomViewNameDialog : Window
         Result = CreateResult(defaultValue);
         Title = "Add View";
         Width = 320;
-        Height = 140;
+        Height = 190;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -143,8 +151,12 @@ public sealed class CustomViewNameDialog : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var label = new Label { Content = "_Name:", Target = _nameBox, Margin = new Thickness(0, 0, 0, 4) };
         _nameBox.Text = Result.ViewName;
+        _printSettingsBox.Margin = new Thickness(0, 8, 0, 4);
+        _hiddenFilterSettingsBox.Margin = new Thickness(0, 0, 0, 4);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -159,20 +171,34 @@ public sealed class CustomViewNameDialog : Window
 
         Grid.SetRow(label, 0);
         Grid.SetRow(_nameBox, 1);
-        Grid.SetRow(buttons, 2);
+        Grid.SetRow(_printSettingsBox, 2);
+        Grid.SetRow(_hiddenFilterSettingsBox, 3);
+        Grid.SetRow(buttons, 4);
         grid.Children.Add(label);
         grid.Children.Add(_nameBox);
+        grid.Children.Add(_printSettingsBox);
+        grid.Children.Add(_hiddenFilterSettingsBox);
         grid.Children.Add(buttons);
         Content = grid;
 
         Loaded += (_, _) => _nameBox.SelectAll();
     }
 
-    public static CustomViewNameDialogResult CreateResult(string viewName) => new(viewName.Trim());
+    public static CustomViewNameDialogResult CreateResult(
+        string viewName,
+        bool includePrintSettings = true,
+        bool includeHiddenRowsColumnsAndFilterSettings = true) =>
+        new(
+            viewName.Trim(),
+            includePrintSettings,
+            includeHiddenRowsColumnsAndFilterSettings);
 
     private void Accept()
     {
-        Result = CreateResult(_nameBox.Text);
+        Result = CreateResult(
+            _nameBox.Text,
+            _printSettingsBox.IsChecked == true,
+            _hiddenFilterSettingsBox.IsChecked == true);
         if (string.IsNullOrWhiteSpace(Result.ViewName))
             return;
 

@@ -1117,9 +1117,13 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
         source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
         source.Should().NotContain("InsertChartOfType(ChartType.Map)");
+        source.Should().Contain("InsertChartOfType(ChartType.ThreeDPie)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDColumn)");
+        source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
         xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DColumnMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"Chart3DBarMenuItem_Click\"");
         xaml.Should().Contain("Surface");
         xaml.Should().Contain("Treemap");
         xaml.Should().Contain("Sunburst");
@@ -1129,7 +1133,9 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Waterfall");
         xaml.Should().Contain("Funnel");
         xaml.Should().Contain("Map");
+        xaml.Should().Contain("3D Pie");
         xaml.Should().Contain("3D Column");
+        xaml.Should().Contain("3D Bar");
     }
 
     [Fact]

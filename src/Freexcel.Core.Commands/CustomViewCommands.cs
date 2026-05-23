@@ -5,14 +5,21 @@ namespace Freexcel.Core.Commands;
 public sealed class SaveCustomViewCommand : IWorkbookCommand
 {
     private readonly string _name;
+    private readonly bool _includePrintSettings;
+    private readonly bool _includeHiddenRowsColumnsAndFilterSettings;
     private WorkbookCustomView? _previousView;
     private bool _hadPreviousView;
 
     public string Label => "Save Custom View";
 
-    public SaveCustomViewCommand(string name)
+    public SaveCustomViewCommand(
+        string name,
+        bool includePrintSettings = true,
+        bool includeHiddenRowsColumnsAndFilterSettings = true)
     {
         _name = name.Trim();
+        _includePrintSettings = includePrintSettings;
+        _includeHiddenRowsColumnsAndFilterSettings = includeHiddenRowsColumnsAndFilterSettings;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -27,7 +34,9 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
 
         var view = new WorkbookCustomView(
             _name,
-            workbook.Sheets.Select(CaptureSheetState).ToList());
+            workbook.Sheets.Select(CaptureSheetState).ToList(),
+            IncludePrintSettings: _includePrintSettings,
+            IncludeHiddenRowsColumnsAndFilterSettings: _includeHiddenRowsColumnsAndFilterSettings);
 
         if (_hadPreviousView)
             workbook.CustomViews[index] = view;

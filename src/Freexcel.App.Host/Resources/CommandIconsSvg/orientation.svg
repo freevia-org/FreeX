@@ -1,21 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Orientation">
-<defs><style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style></defs>
+
 <rect width="32" height="32" fill="none"/>
 <g transform="rotate(-35 16 16)">
-<text class="txt" x="15" y="15" text-anchor="middle" font-size="14">ab</text><path class="line" d="M7 21h18"/><path class="line" d="M22 18l3 3-3 3"/>
+<text x="15" y="15" text-anchor="middle" font-size="14" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">ab</text><path d="M7 21h18" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 18l3 3-3 3" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </svg>

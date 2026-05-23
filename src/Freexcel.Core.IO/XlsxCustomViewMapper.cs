@@ -91,6 +91,8 @@ internal static class XlsxCustomViewMapper
                 workbookNs + "customWorkbookView",
                 new XAttribute("name", item.View.Name),
                 new XAttribute("guid", item.Id),
+                item.View.IncludePrintSettings ? new XAttribute("includePrintSettings", "1") : new XAttribute("includePrintSettings", "0"),
+                item.View.IncludeHiddenRowsColumnsAndFilterSettings ? new XAttribute("includeHiddenRowCol", "1") : new XAttribute("includeHiddenRowCol", "0"),
                 new XAttribute("autoUpdate", "0"),
                 new XAttribute("mergeInterval", "0"),
                 new XAttribute("personalView", "0")))));

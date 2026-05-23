@@ -22,6 +22,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.PercentStackedColumn)]
     [InlineData(ChartType.Line)]
     [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.ThreeDPie)]
     [InlineData(ChartType.Doughnut)]
     [InlineData(ChartType.Bar)]
     [InlineData(ChartType.StackedBar)]
@@ -32,6 +33,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.ThreeDColumn)]
+    [InlineData(ChartType.ThreeDBar)]
     public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -105,7 +107,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesXAxisLogScaleChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Scatter, ChartType.Bubble };
+        var supportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar, ChartType.Scatter, ChartType.Bubble };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsXAxisLogScale(type));
@@ -134,7 +136,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesValueAxisBoundsChartTypes()
     {
-        var xAxisSupportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Scatter, ChartType.Bubble };
+        var xAxisSupportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar, ChartType.Scatter, ChartType.Bubble };
         var yAxisSupportedTypes = new[]
         {
             ChartType.Column,

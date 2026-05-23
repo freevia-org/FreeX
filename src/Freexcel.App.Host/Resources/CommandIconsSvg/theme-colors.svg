@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Theme Colors">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><rect class="green2" stroke="#202124" stroke-width="0.8" x="11.07" y="11.88" width="8.64" height="8.64"/><rect class="blue" stroke="#202124" stroke-width="0.8" x="21.6" y="11.88" width="8.64" height="8.64"/><rect class="yellow" stroke="#202124" stroke-width="0.8" x="32.13" y="11.88" width="8.64" height="8.64"/><rect class="red" stroke="#202124" stroke-width="0.8" x="11.07" y="22.41" width="8.64" height="8.64"/><rect class="purple" stroke="#202124" stroke-width="0.8" x="21.6" y="22.41" width="8.64" height="8.64"/><rect class="orange" stroke="#202124" stroke-width="0.8" x="32.13" y="22.41" width="8.64" height="8.64"/>  </g>
+  <g><rect stroke="#202124" stroke-width="0.8" x="11.07" y="11.88" width="8.64" height="8.64" fill="#dff6dd"/><rect stroke="#202124" stroke-width="0.8" x="21.6" y="11.88" width="8.64" height="8.64" fill="#0078d4"/><rect stroke="#202124" stroke-width="0.8" x="32.13" y="11.88" width="8.64" height="8.64" fill="#ffb900"/><rect stroke="#202124" stroke-width="0.8" x="11.07" y="22.41" width="8.64" height="8.64" fill="#d32f2f"/><rect stroke="#202124" stroke-width="0.8" x="21.6" y="22.41" width="8.64" height="8.64" fill="#8b5cf6"/><rect stroke="#202124" stroke-width="0.8" x="32.13" y="22.41" width="8.64" height="8.64" fill="#f7630c"/>  </g>
 </svg>
 

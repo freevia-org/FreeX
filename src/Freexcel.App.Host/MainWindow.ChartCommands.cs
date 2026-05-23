@@ -216,6 +216,7 @@ public partial class MainWindow
     private void ChartPercentStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.PercentStackedColumn);
     private void ChartLineMenuItem_Click(object sender, RoutedEventArgs e)   => InsertChartOfType(ChartType.Line);
     private void ChartPieMenuItem_Click(object sender, RoutedEventArgs e)    => InsertChartOfType(ChartType.Pie);
+    private void Chart3DPieMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDPie);
     private void ChartDoughnutMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Doughnut);
     private void ChartBarMenuItem_Click(object sender, RoutedEventArgs e)    => InsertChartOfType(ChartType.Bar);
     private void ChartStackedBarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.StackedBar);
@@ -226,6 +227,7 @@ public partial class MainWindow
     private void ChartRadarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Radar);
     private void ChartStockMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Stock);
     private void Chart3DColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDColumn);
+    private void Chart3DBarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDBar);
     private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();
 
     private static void ShowDeferredChartFamilyMessage() =>
@@ -240,7 +242,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableChartLayout(
                 "First Slice Angle",
                 "Insert or select a pie or doughnut chart before changing first-slice angle.",
-                chart => chart.Type is ChartType.Pie or ChartType.Doughnut,
+                chart => chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut,
                 "First-slice angle only applies to pie and doughnut charts.",
                 chart => new ChartLayoutOptions(FirstSliceAngle: chart.FirstSliceAngle >= 270 ? 0 : chart.FirstSliceAngle + 90)))
             return;
@@ -272,7 +274,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableChartLayout(
                 "Explode Slice",
                 "Insert or select a pie or doughnut chart before exploding a slice.",
-                chart => chart.Type is (ChartType.Pie or ChartType.Doughnut) && ChartTypeSupport.GetDataPointCount(chart) > 0,
+                chart => chart.Type is (ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut) && ChartTypeSupport.GetDataPointCount(chart) > 0,
                 "Exploded slices require a pie or doughnut chart with chart data.",
                 chart =>
                 {

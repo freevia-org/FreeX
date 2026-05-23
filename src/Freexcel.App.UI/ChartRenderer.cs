@@ -81,7 +81,7 @@ public static partial class ChartRenderer
         ConfigureLegend(model, chart, theme);
         AddPivotChartFieldButtons(model, chart);
 
-        if (chart.Type is ChartType.Pie or ChartType.Doughnut)
+        if (chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut)
         {
             var pieSeriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((startRow, dataStartCol), out var pieHeader)
                 ? pieHeader.DisplayText
@@ -226,7 +226,7 @@ public static partial class ChartRenderer
                     firstSeriesPoints = trendPoints;
                 model.Series.Add(series);
             }
-            else if (chart.Type == ChartType.Bar)
+            else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
             {
                 var catAxis = new CategoryAxis { Position = AxisPosition.Left };
                 catAxis.Labels.AddRange(categories);

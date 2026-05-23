@@ -383,6 +383,14 @@ public class PhaseCFinancialTests
     // ── INTRATE ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void Disc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("DISC(43831,44197,97,100,5)").Should().Be("#NUM!");
+        CalcError("DISC(43831,44197,97,100,-1)").Should().Be("#NUM!");
+        CalcError("DISC(43831,44197,97,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Intrate_SimpleCase()
     {
         // Settlement 43831, Maturity 44197, Invest 90, Redeem 100
@@ -394,6 +402,14 @@ public class PhaseCFinancialTests
     // ── RECEIVED ─────────────────────────────────────────────────────────
 
     [Fact]
+    public void Intrate_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("INTRATE(43831,44197,90,100,5)").Should().Be("#NUM!");
+        CalcError("INTRATE(43831,44197,90,100,-1)").Should().Be("#NUM!");
+        CalcError("INTRATE(43831,44197,90,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Received_SimpleCase()
     {
         // Investment = 100, discount = 0.05, DCF ≈ 1 year
@@ -403,6 +419,14 @@ public class PhaseCFinancialTests
     }
 
     // ── TBILLEQ / TBILLPRICE / TBILLYIELD ────────────────────────────────
+
+    [Fact]
+    public void Received_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("RECEIVED(43831,44197,100,0.05,5)").Should().Be("#NUM!");
+        CalcError("RECEIVED(43831,44197,100,0.05,-1)").Should().Be("#NUM!");
+        CalcError("RECEIVED(43831,44197,100,0.05,1E309)").Should().Be("#NUM!");
+    }
 
     [Fact]
     public void Tbillprice_SimpleCase()
@@ -467,6 +491,17 @@ public class PhaseCFinancialTests
     // ── PRICE / YIELD round-trip ──────────────────────────────────────────
 
     [Fact]
+    public void CouponFunctions_InvalidBasis_ReturnNumError()
+    {
+        CalcError("COUPDAYBS(43831,44197,2,5)").Should().Be("#NUM!");
+        CalcError("COUPDAYS(43831,44197,2,-1)").Should().Be("#NUM!");
+        CalcError("COUPDAYSNC(43831,44197,2,1E309)").Should().Be("#NUM!");
+        CalcError("COUPNCD(43831,44197,2,5)").Should().Be("#NUM!");
+        CalcError("COUPNUM(43831,44197,2,-1)").Should().Be("#NUM!");
+        CalcError("COUPPCD(43831,44197,2,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Price_KnownBond()
     {
         // 10% annual coupon, 5-year bond, yield=10% → price should be ~100
@@ -519,6 +554,22 @@ public class PhaseCFinancialTests
     // ── PRICEMAT / YIELDMAT ────────────────────────────────────────────────
 
     [Fact]
+    public void Pricedisc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("PRICEDISC(43831,44197,0.05,100,5)").Should().Be("#NUM!");
+        CalcError("PRICEDISC(43831,44197,0.05,100,-1)").Should().Be("#NUM!");
+        CalcError("PRICEDISC(43831,44197,0.05,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
+    public void Yielddisc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("YIELDDISC(43831,44197,95,100,5)").Should().Be("#NUM!");
+        CalcError("YIELDDISC(43831,44197,95,100,-1)").Should().Be("#NUM!");
+        CalcError("YIELDDISC(43831,44197,95,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Pricemat_SimpleCase()
     {
         // PRICEMAT with issue=settlement gives price = 100*(1+rate*0)/(1+yld*dcf)
@@ -557,6 +608,18 @@ public class PhaseCFinancialTests
     }
 
     // ── EFFECT/NOMINAL edge cases ─────────────────────────────────────────
+
+    [Fact]
+    public void BondAndAccrualFunctions_InvalidBasis_ReturnNumError()
+    {
+        CalcError("PRICE(43831,45658,0.1,0.1,100,1,5)").Should().Be("#NUM!");
+        CalcError("YIELD(43831,45658,0.1,100,100,1,-1)").Should().Be("#NUM!");
+        CalcError("PRICEMAT(43831,44197,43831,0.05,0.05,1E309)").Should().Be("#NUM!");
+        CalcError("YIELDMAT(43831,44197,43831,0.05,100,5)").Should().Be("#NUM!");
+        CalcError("DURATION(43831,45656,0.08,0.06,2,-1)").Should().Be("#NUM!");
+        CalcError("MDURATION(43831,45656,0.08,0.06,2,1E309)").Should().Be("#NUM!");
+        CalcError("ACCRINT(43831,43831,44197,0.05,1000,2,5)").Should().Be("#NUM!");
+    }
 
     [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
