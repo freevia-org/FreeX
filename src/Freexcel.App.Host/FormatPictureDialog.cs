@@ -131,7 +131,7 @@ public sealed class FormatPictureDialog : Window
         tabs.Items.Add(new TabItem { Header = "_Alt Text", Content = CreateAltTextTab() });
         root.Children.Add(tabs);
 
-        var buttons = InsertChartDialog.CreateButtonRow(Accept);
+        var buttons = DialogButtonRowFactory.Create(Accept, 72);
         Grid.SetRow(buttons, 1);
         root.Children.Add(buttons);
         return root;
