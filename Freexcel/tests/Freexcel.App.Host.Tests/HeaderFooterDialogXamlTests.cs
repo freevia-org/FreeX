@@ -1,5 +1,8 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 using System.Xml.Linq;
+using Freexcel.Core.Model;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -116,10 +119,53 @@ public sealed class HeaderFooterDialogXamlTests
             .Attribute("Click")?.Value
             .Should()
             .Be("FormatPictureButton_Click");
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Content")?.Value == "For_mat picture")
+            .Attributes().FirstOrDefault(a => a.Name.LocalName == "Name")?.Value
+            .Should()
+            .Be("FormatPictureButton");
+        document.Descendants(presentation + "TextBlock")
+            .Any(element => element.Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "PictureTargetStatusText"))
+            .Should().BeTrue();
 
         source.Should().Contain("new OpenFileDialog");
         source.Should().Contain("HeaderFooterPictureFormatDialog");
         source.Should().Contain("SetPictureForActiveBox");
+        source.Should().Contain("UpdatePictureButtonState");
+        source.Should().Contain("Insert a picture in");
+    }
+
+    [Fact]
+    public void FormatPictureButton_TracksActiveSectionPictureState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Sheet(SheetId.New(), "Sheet1")
+            {
+                PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+                    Left: null,
+                    Center: new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 120, 48),
+                    Right: null)
+            };
+            var dialog = new HeaderFooterDialog(sheet);
+            dialog.Show();
+            try
+            {
+                var button = GetControl<Button>(dialog, "FormatPictureButton");
+                var status = GetControl<TextBlock>(dialog, "PictureTargetStatusText");
+                button.IsEnabled.Should().BeTrue();
+                status.Text.Should().Be("Target: center section has a picture.");
+
+                GetControl<TextBox>(dialog, "HeaderLeftBox").Focus();
+
+                button.IsEnabled.Should().BeFalse();
+                status.Text.Should().Be("Target: left section has no picture.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -220,4 +266,12 @@ public sealed class HeaderFooterDialogXamlTests
             .Elements(presentation + "ComboBoxItem")
             .Select(element => element.Attribute("Content")?.Value)
             .ToList();
+
+    private static T GetControl<T>(HeaderFooterDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(HeaderFooterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
 }

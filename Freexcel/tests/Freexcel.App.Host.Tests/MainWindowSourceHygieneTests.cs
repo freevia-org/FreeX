@@ -1260,6 +1260,34 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void F6StatusBar_FocusesFirstZoomControlBeforeSliderFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        selectionSource.Should().Contain("return FocusStatusBar();");
+        selectionSource.Should().Contain("private bool FocusStatusBar()");
+        selectionSource.Should().Contain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
+        xaml.Should().Contain("x:Name=\"StatusZoomOutButton\"");
+        xaml.Should().Contain("x:Name=\"StatusZoomInButton\"");
+    }
+
+    [Fact]
+    public void FocusedStatusBar_TabTraversalIsNotHijackedByWorksheetMovement()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedStatusBarKeyboardNavigation(e))");
+        selectionSource.Should().Contain("private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        selectionSource.Should().Contain("!IsDescendantOf(focusedElement, StatusBarGrid)");
+        selectionSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
+        selectionSource.Should().Contain("new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift");
+        selectionSource.Should().Contain("FocusNavigationDirection.Previous");
+        selectionSource.Should().Contain("FocusNavigationDirection.Next");
+        selectionSource.Should().Contain("focusedElement.MoveFocus(request);");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));

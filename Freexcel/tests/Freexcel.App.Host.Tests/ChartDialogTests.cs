@@ -265,6 +265,8 @@ public sealed class ChartDialogTests
 
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("Select chart data range");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("SelectDataSourceRangeSelectionRequest");
         source.Should().Contain("_switchRowColumnBox");
         source.Should().Contain("_seriesList");
         source.Should().Contain("_axisLabelsList");
@@ -297,6 +299,23 @@ public sealed class ChartDialogTests
             }
 
             buttons.Should().ContainKey("_Hidden and Empty Cells");
+        });
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_RangePickerRaisesSelectionIntent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<SelectDataSourceRangeSelectionRequest>();
+            var dialog = new SelectDataSourceDialog(" A1:D12 ", requestRangeSelection: requests.Add);
+            var picker = FindLogicalDescendants<Button>(dialog)
+                .Single(button => AutomationProperties.GetName(button) == "Select chart data range");
+
+            picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            requests.Should().Equal(new SelectDataSourceRangeSelectionRequest("A1:D12", CollapseDialog: true));
+            dialog.RangeSelectionRequest.Should().Be(requests[0]);
         });
     }
 
