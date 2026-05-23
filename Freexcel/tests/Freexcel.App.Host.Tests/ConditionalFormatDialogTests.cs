@@ -25,11 +25,11 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("CreateAccessLabel(\"Maximum _value:\", _dataBarMaxValueBox)");
         source.Should().Contain("CreateAccessLabel(\"_Minimum bar length (%):\", _dataBarMinLengthBox)");
         source.Should().Contain("CreateAccessLabel(\"Ma_ximum bar length (%):\", _dataBarMaxLengthBox)");
-        source.Should().Contain("CreateAccessLabel(\"_Minimum color (R,G,B):\", _colorScaleMinColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum color:\", _colorScaleMinColorBox)");
         source.Should().Contain("CreateAccessLabel(\"_Midpoint type:\", _colorScaleMidTypeBox)");
         source.Should().Contain("CreateAccessLabel(\"Midpoint _value:\", _colorScaleMidValueBox)");
-        source.Should().Contain("CreateAccessLabel(\"Midpoint _color (R,G,B):\", _colorScaleMidColorBox)");
-        source.Should().Contain("CreateAccessLabel(\"Ma_ximum color (R,G,B):\", _colorScaleMaxColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"Midpoint _color:\", _colorScaleMidColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum color:\", _colorScaleMaxColorBox)");
         source.Should().Contain("CreateAccessLabel(\"_Icon set:\", _iconSetStyleBox)");
         source.Should().Contain("CreateAccessLabel(\"_Date period:\", _dateOccurringPeriodBox)");
         source.Should().Contain("CreateAccessLabel(\"Format cells that _contain:\", _duplicateValuesKindBox)");
@@ -460,19 +460,56 @@ public sealed class ConditionalFormatDialogTests
             var midType = GetControl<ComboBox>(dialog, "_colorScaleMidTypeBox");
             var midValue = GetControl<TextBox>(dialog, "_colorScaleMidValueBox");
             var midColor = GetControl<TextBox>(dialog, "_colorScaleMidColorBox");
+            var midColorButton = GetControl<Button>(dialog, "_colorScaleMidColorButton");
 
             threeColor.IsChecked.Should().BeFalse();
             midType.IsEnabled.Should().BeFalse();
             midValue.IsEnabled.Should().BeFalse();
             midColor.IsEnabled.Should().BeFalse();
+            midColorButton.IsEnabled.Should().BeFalse();
 
             threeColor.IsChecked = true;
             midType.IsEnabled.Should().BeTrue();
             midValue.IsEnabled.Should().BeTrue();
             midColor.IsEnabled.Should().BeTrue();
+            midColorButton.IsEnabled.Should().BeTrue();
 
             dialog.Close();
         });
+    }
+
+    [Fact]
+    public void ColorScaleRule_ExposesExcelLikeColorPickerButtons()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Color Scale", RangeFor(SheetId.New())));
+
+            GetControl<Button>(dialog, "_colorScaleMinColorButton").Content.Should().Be("...");
+            GetControl<Button>(dialog, "_colorScaleMinColorButton").ToolTip.Should().Be("Choose minimum color");
+            GetControl<Button>(dialog, "_colorScaleMidColorButton").ToolTip.Should().Be("Choose midpoint color");
+            GetControl<Button>(dialog, "_colorScaleMaxColorButton").ToolTip.Should().Be("Choose maximum color");
+
+            FindLabel(dialog.Content, "_Minimum color:").Should().NotBeNull();
+            FindLabel(dialog.Content, "Midpoint _color:").Should().NotBeNull();
+            FindLabel(dialog.Content, "Ma_ximum color:").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ColorScaleRule_SourceUsesSharedColorPickerDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+
+        source.Should().Contain("CreateColorScaleColorButton");
+        source.Should().Contain("CreateColorScaleColorEditor");
+        source.Should().Contain("ColorScaleColorButton_Click");
+        source.Should().Contain("new ColorPickerDialog(initialColor)");
+        source.Should().NotContain("_Minimum color (R,G,B):");
+        source.Should().NotContain("Midpoint _color (R,G,B):");
+        source.Should().NotContain("Ma_ximum color (R,G,B):");
     }
 
     [Fact]
