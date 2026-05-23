@@ -96,7 +96,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("Insert", 1024);
+            harness.SelectRibbonTab("Insert", 800);
 
             harness.VisibleRibbonCommandLabels.Should().NotContain("Label Border", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);

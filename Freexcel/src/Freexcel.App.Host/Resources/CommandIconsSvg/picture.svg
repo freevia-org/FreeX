@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Picture">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><rect class="paper" stroke="#202124" stroke-width="1.8" x="9.72" y="11.88" width="34.56" height="28.08" rx="2.16"/><circle class="yellow" cx="35.64" cy="18.36" r="3.24"/><path class="green2" d="M11.88 37.8l10.8-11.88l8.1 7.56l5.94-5.94l9.18 10.26z"/>  </g>
+  <g><rect stroke="#202124" stroke-width="1.8" x="9.72" y="11.88" width="34.56" height="28.08" rx="2.16" fill="#ffffff"/><circle cx="35.64" cy="18.36" r="3.24" fill="#ffb900"/><path d="M11.88 37.8l10.8-11.88l8.1 7.56l5.94-5.94l9.18 10.26z" fill="#dff6dd"/>  </g>
 </svg>
 

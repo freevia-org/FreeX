@@ -491,6 +491,17 @@ public class PhaseCFinancialTests
     // ── PRICE / YIELD round-trip ──────────────────────────────────────────
 
     [Fact]
+    public void CouponFunctions_InvalidBasis_ReturnNumError()
+    {
+        CalcError("COUPDAYBS(43831,44197,2,5)").Should().Be("#NUM!");
+        CalcError("COUPDAYS(43831,44197,2,-1)").Should().Be("#NUM!");
+        CalcError("COUPDAYSNC(43831,44197,2,1E309)").Should().Be("#NUM!");
+        CalcError("COUPNCD(43831,44197,2,5)").Should().Be("#NUM!");
+        CalcError("COUPNUM(43831,44197,2,-1)").Should().Be("#NUM!");
+        CalcError("COUPPCD(43831,44197,2,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Price_KnownBond()
     {
         // 10% annual coupon, 5-year bond, yield=10% → price should be ~100

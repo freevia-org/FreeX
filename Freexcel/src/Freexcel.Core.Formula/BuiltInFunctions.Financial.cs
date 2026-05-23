@@ -753,8 +753,8 @@ public static partial class BuiltInFunctions
         double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        int basis = args.Count > 3 && args[3] is not BlankValue ? (int)Math.Truncate(ToNumber(args[3])) : 0;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
@@ -767,8 +767,8 @@ public static partial class BuiltInFunctions
         double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        int basis = args.Count > 3 && args[3] is not BlankValue ? (int)Math.Truncate(ToNumber(args[3])) : 0;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
@@ -785,8 +785,8 @@ public static partial class BuiltInFunctions
         double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
-        int basis = args.Count > 3 && args[3] is not BlankValue ? (int)Math.Truncate(ToNumber(args[3])) : 0;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         if (sd >= md) return ErrorValue.Num;
         DateTime ncd = CouponDateAfter(sd, md, frequency);
@@ -800,6 +800,7 @@ public static partial class BuiltInFunctions
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         if (sd >= md) return ErrorValue.Num;
         DateTime ncd = CouponDateAfter(sd, md, frequency);
@@ -813,6 +814,7 @@ public static partial class BuiltInFunctions
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         if (sd >= md) return ErrorValue.Num;
         int months = 12 / frequency;
@@ -829,6 +831,7 @@ public static partial class BuiltInFunctions
         double maturity   = ToNumber(args[1]);
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);

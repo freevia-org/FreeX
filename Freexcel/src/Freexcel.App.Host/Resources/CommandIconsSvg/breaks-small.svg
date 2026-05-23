@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .r{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g{fill:#107c41}
-      .g2{fill:#dff6dd}
-      .b{fill:#0078d4}
-      .o{fill:#f7630c}
-      .y{fill:#ffb900}
-      .rd{fill:#d32f2f}
-      .p{fill:#8b5cf6}
-      .w{fill:#ffffff}
-      .k{fill:#242424}
-      .f{fill:#f3f2f1}
-      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-</style>
-  </defs>
-  <path class="f s" d="M5 2.5 H13 L16 5.5 V17 H5 Z M13 2.5 V5.5 H16" stroke-width="1"/>
-  <path class="r" d="M6 10 L14 10" stroke-width="1"/>
+  
+  <path d="M5 2.5 H13 L16 5.5 V17 H5 Z M13 2.5 V5.5 H16" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6 10 L14 10" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M7 8 L8.5 11.8 M11.5 8 L13 11.8" fill="none" stroke="#d83b01" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
 </svg>
