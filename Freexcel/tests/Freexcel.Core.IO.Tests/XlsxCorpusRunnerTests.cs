@@ -869,6 +869,12 @@ public class XlsxCorpusRunnerTests
             sheet.DifferentOddEvenHeaderFooter,
             sheet.HeaderFooterScaleWithDocument,
             sheet.HeaderFooterAlignWithMargins,
+            CaptureHeaderFooterPictureSetSummary(sheet.PageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.PageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageFooterPictures),
             sheet.CenterHorizontallyOnPage,
             sheet.CenterVerticallyOnPage,
             sheet.PageOrder,
@@ -1232,6 +1238,22 @@ public class XlsxCorpusRunnerTests
             NormalizeHeaderFooterText(value.Left),
             NormalizeHeaderFooterText(value.Center),
             NormalizeHeaderFooterText(value.Right));
+
+    private static HeaderFooterPictureSetSummary CaptureHeaderFooterPictureSetSummary(WorksheetHeaderFooterPictureSet value) =>
+        new(
+            CaptureHeaderFooterPictureSummary(value.Left),
+            CaptureHeaderFooterPictureSummary(value.Center),
+            CaptureHeaderFooterPictureSummary(value.Right));
+
+    private static HeaderFooterPictureSummary? CaptureHeaderFooterPictureSummary(WorksheetHeaderFooterPicture? picture) =>
+        picture is null
+            ? null
+            : new HeaderFooterPictureSummary(
+                picture.ContentType,
+                picture.FileName ?? "",
+                picture.ImageBytes.Length,
+                picture.Width,
+                picture.Height);
 
     private static string NormalizeHeaderFooterText(string text) =>
         text
@@ -1765,6 +1787,12 @@ public class XlsxCorpusRunnerTests
         bool DifferentOddEvenHeaderFooter,
         bool HeaderFooterScaleWithDocument,
         bool HeaderFooterAlignWithMargins,
+        HeaderFooterPictureSetSummary PageHeaderPictures,
+        HeaderFooterPictureSetSummary PageFooterPictures,
+        HeaderFooterPictureSetSummary FirstPageHeaderPictures,
+        HeaderFooterPictureSetSummary FirstPageFooterPictures,
+        HeaderFooterPictureSetSummary EvenPageHeaderPictures,
+        HeaderFooterPictureSetSummary EvenPageFooterPictures,
         bool CenterHorizontallyOnPage,
         bool CenterVerticallyOnPage,
         WorksheetPageOrder PageOrder,
@@ -1874,6 +1902,18 @@ public class XlsxCorpusRunnerTests
     {
         public static HeaderFooterSummary Empty { get; } = new("", "", "");
     }
+
+    private sealed record HeaderFooterPictureSetSummary(
+        HeaderFooterPictureSummary? Left,
+        HeaderFooterPictureSummary? Center,
+        HeaderFooterPictureSummary? Right);
+
+    private sealed record HeaderFooterPictureSummary(
+        string ContentType,
+        string FileName,
+        int ByteLength,
+        double Width,
+        double Height);
 
     private sealed record ChartSummary(
         ChartType Type,
