@@ -31,16 +31,12 @@ public sealed class NamedRangeInputParserTests
     }
 
     [Fact]
-    public void TryParseRange_FallsBackToFirstSheetForUnknownSheetLikeExistingDialog()
+    public void TryParseRange_RejectsUnknownSheetQualifiedRange()
     {
         var workbook = new Workbook("Book");
-        var sheet = workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Sheet1");
 
-        NamedRangeInputParser.TryParseRange(workbook, "Missing!C3:D4", out var range).Should().BeTrue();
-
-        range.Start.Sheet.Should().Be(sheet.Id);
-        range.Start.ToA1().Should().Be("C3");
-        range.End.ToA1().Should().Be("D4");
+        NamedRangeInputParser.TryParseRange(workbook, "Missing!C3:D4", out _).Should().BeFalse();
     }
 
     [Theory]
