@@ -134,6 +134,8 @@ public sealed class ManageConditionalFormatsDialogTests
         source.Should().Contain("new AppliesToRangeConverter(_sheet.Id)");
         source.Should().Contain("ToolTipProperty, \"Select Applies To range text\"");
         source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1");
+        source.Should().Contain("SetBinding(UIElement.IsEnabledProperty, new Binding(\"IsSelected\")");
     }
 
     [Fact]
