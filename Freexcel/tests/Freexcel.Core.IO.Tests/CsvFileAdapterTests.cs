@@ -82,4 +82,19 @@ public sealed class CsvFileAdapterTests
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("2026-05-17,2026-05-17 09:30:00,09:30:00\r\n");
     }
+
+    [Fact]
+    public void Save_IgnoresCellsBeyondExcelGridLimits()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("visible"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, CellAddress.MaxCol + 1), new TextValue("overflow-column"));
+        sheet.SetCell(new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1), new TextValue("overflow-row"));
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("visible\r\n");
+    }
 }
