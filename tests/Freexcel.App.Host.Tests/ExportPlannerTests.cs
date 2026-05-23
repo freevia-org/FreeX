@@ -6,6 +6,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Model;
+using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
 namespace Freexcel.App.Host.Tests;
@@ -388,6 +389,35 @@ public class ExportPlannerTests
                 pdf.Info.Subject.Should().Be("Workbook export");
                 pdf.Info.Keywords.Should().Be("Freexcel, spreadsheet");
                 pdf.Info.Creator.Should().Be("Freexcel");
+                ReadDisplayDocTitle(pdf).Should().BeTrue();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_DoesNotRequestTitleDisplayWithoutTitle()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var properties = new PdfDocumentProperties(
+                Title: "   ",
+                Author: "Finance Team",
+                Subject: "Workbook export",
+                Keywords: "Freexcel, spreadsheet");
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, properties);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().BeEmpty();
+                ReadDisplayDocTitle(pdf).Should().BeFalse();
             }
             finally
             {
@@ -777,4 +807,9 @@ public class ExportPlannerTests
         printExport.Should().Contain("new PdfBookmark(sheet.Name, pageIndex)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
+
+    private static bool ReadDisplayDocTitle(PdfDocument pdf) =>
+        pdf.Internals.Catalog.Elements
+            .GetDictionary("/ViewerPreferences")
+            ?.Elements.GetBoolean("/DisplayDocTitle", false) == true;
 }
