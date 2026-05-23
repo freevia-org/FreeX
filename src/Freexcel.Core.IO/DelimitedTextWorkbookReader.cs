@@ -27,7 +27,11 @@ internal static class DelimitedTextWorkbookReader
                 if (field.Length == 0)
                     continue;
 
-                sheet.SetCell(new CellAddress(sheet.Id, row, (uint)(i + 1)), CoerceValue(field));
+                var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
+                if (TryReadFormula(field, out var formulaText))
+                    sheet.SetCell(address, Cell.FromFormula(formulaText));
+                else
+                    sheet.SetCell(address, CoerceValue(field));
             }
 
             row++;
@@ -136,6 +140,16 @@ internal static class DelimitedTextWorkbookReader
             return new NumberValue(number);
 
         return new TextValue(field);
+    }
+
+    private static bool TryReadFormula(string field, out string formulaText)
+    {
+        formulaText = "";
+        if (field.Length <= 1 || field[0] != '=')
+            return false;
+
+        formulaText = field[1..];
+        return true;
     }
 
     private static bool TryParsePercentage(string field, out double value)

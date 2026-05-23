@@ -54,4 +54,17 @@ public sealed class CsvFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Alice"));
         sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
     }
+
+    [Fact]
+    public void Load_ImportsExcelStyleFormulaFieldsAsFormulas()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2,=A1*2\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(2));
+        var formulaCell = sheet.GetCell(new CellAddress(sheet.Id, 1, 2));
+        formulaCell.Should().NotBeNull();
+        formulaCell!.FormulaText.Should().Be("A1*2");
+    }
 }
