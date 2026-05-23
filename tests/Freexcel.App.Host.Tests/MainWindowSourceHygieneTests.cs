@@ -1288,6 +1288,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FocusedRibbon_TabAndArrowKeysRequestFocusTraversal()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        selectionSource.Should().Contain("MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift");
+        selectionSource.Should().Contain("FocusNavigationDirection.Previous");
+        selectionSource.Should().Contain("FocusNavigationDirection.Next");
+        selectionSource.Should().Contain("Key.Left => FocusNavigationDirection.Left");
+        selectionSource.Should().Contain("Key.Right => FocusNavigationDirection.Right");
+        selectionSource.Should().Contain("Key.Up => FocusNavigationDirection.Up");
+        selectionSource.Should().Contain("Key.Down => FocusNavigationDirection.Down");
+        selectionSource.Should().Contain("private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)");
+        selectionSource.Should().Contain("focusedUiElement.MoveFocus(new TraversalRequest(direction));");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
