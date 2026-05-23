@@ -330,7 +330,15 @@ public sealed class ChartModel
     public double ErrorBarThickness { get; set; } = 1;
     public ChartLineDashStyle ErrorBarDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowDropLines { get; set; }
+    public CellColor? DropLineColor { get; set; }
+    public WorkbookThemeColorReference? DropLineThemeColor { get; set; }
+    public double DropLineThickness { get; set; } = 1;
+    public ChartLineDashStyle DropLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowHighLowLines { get; set; }
+    public CellColor? HighLowLineColor { get; set; }
+    public WorkbookThemeColorReference? HighLowLineThemeColor { get; set; }
+    public double HighLowLineThickness { get; set; } = 1;
+    public ChartLineDashStyle HighLowLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowUpDownBars { get; set; }
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];

@@ -1114,9 +1114,19 @@ public class XlsxCorpusRunnerTests
             chart.VaryColorsByPoint,
             CaptureChartTrendlineSummary(chart),
             CaptureChartErrorBarSummary(chart),
-            chart.ShowDropLines,
+            CaptureChartGuideLineSummary(
+                chart.ShowDropLines,
+                chart.DropLineColor,
+                chart.DropLineThemeColor,
+                chart.DropLineThickness,
+                chart.DropLineDashStyle),
             chart.StockSubtype,
-            chart.ShowHighLowLines,
+            CaptureChartGuideLineSummary(
+                chart.ShowHighLowLines,
+                chart.HighLowLineColor,
+                chart.HighLowLineThemeColor,
+                chart.HighLowLineThickness,
+                chart.HighLowLineDashStyle),
             chart.ShowUpDownBars,
             CaptureChartDataTableSummary(chart.DataTable),
             CaptureChart3DViewSummary(chart.ThreeDView),
@@ -1159,6 +1169,18 @@ public class XlsxCorpusRunnerTests
             chart.ErrorBarThemeColor,
             chart.ErrorBarThickness,
             chart.ErrorBarDashStyle);
+    private static ChartGuideLineSummary CaptureChartGuideLineSummary(
+        bool show,
+        CellColor? color,
+        WorkbookThemeColorReference? themeColor,
+        double thickness,
+        ChartLineDashStyle dashStyle) =>
+        new(
+            show,
+            color is null ? "" : ToColorSummary(color.Value),
+            themeColor,
+            thickness,
+            dashStyle);
 
     private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
         new(
@@ -2186,9 +2208,9 @@ public class XlsxCorpusRunnerTests
         bool? VaryColorsByPoint,
         ChartTrendlineSummary Trendline,
         ChartErrorBarSummary ErrorBars,
-        bool ShowDropLines,
+        ChartGuideLineSummary DropLines,
         StockChartSubtype StockSubtype,
-        bool ShowHighLowLines,
+        ChartGuideLineSummary HighLowLines,
         bool ShowUpDownBars,
         ChartDataTableSummary? DataTable,
         Chart3DViewSummary? ThreeDView,
@@ -2257,6 +2279,13 @@ public class XlsxCorpusRunnerTests
         ChartErrorBarDirection Direction,
         double Value,
         bool EndCaps,
+        string Color,
+        WorkbookThemeColorReference? ThemeColor,
+        double Thickness,
+        ChartLineDashStyle DashStyle);
+
+    private sealed record ChartGuideLineSummary(
+        bool Show,
         string Color,
         WorkbookThemeColorReference? ThemeColor,
         double Thickness,

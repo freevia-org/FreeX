@@ -1299,6 +1299,9 @@ internal static class XlsxCorpusFixtureFactory
             Title = "Stock View",
             ShowLegend = true,
             ShowHighLowLines = true,
+            HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+            HighLowLineThickness = 2,
+            HighLowLineDashStyle = ChartLineDashStyle.Dash,
             ShowUpDownBars = true
         });
         sheet.Charts.Add(new ChartModel
