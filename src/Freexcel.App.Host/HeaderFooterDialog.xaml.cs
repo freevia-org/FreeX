@@ -232,6 +232,12 @@ public partial class HeaderFooterDialog : Window
             EvenFooterLeftBox.Text,
             EvenFooterCenterBox.Text,
             EvenFooterRightBox.Text);
+        HeaderPictures = PrunePicturesWithoutTokens(Header, HeaderPictures);
+        FooterPictures = PrunePicturesWithoutTokens(Footer, FooterPictures);
+        FirstPageHeaderPictures = PrunePicturesWithoutTokens(FirstPageHeader, FirstPageHeaderPictures);
+        FirstPageFooterPictures = PrunePicturesWithoutTokens(FirstPageFooter, FirstPageFooterPictures);
+        EvenPageHeaderPictures = PrunePicturesWithoutTokens(EvenPageHeader, EvenPageHeaderPictures);
+        EvenPageFooterPictures = PrunePicturesWithoutTokens(EvenPageFooter, EvenPageFooterPictures);
         DifferentFirstPage = DifferentFirstPageBox.IsChecked == true;
         DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
         ScaleWithDocument = ScaleWithDocumentBox.IsChecked == true;
@@ -239,6 +245,17 @@ public partial class HeaderFooterDialog : Window
         DialogResult = true;
         Close();
     }
+
+    private static WorksheetHeaderFooterPictureSet PrunePicturesWithoutTokens(
+        WorksheetHeaderFooter text,
+        WorksheetHeaderFooterPictureSet pictures) =>
+        new(
+            ContainsPictureToken(text.Left) ? pictures.Left : null,
+            ContainsPictureToken(text.Center) ? pictures.Center : null,
+            ContainsPictureToken(text.Right) ? pictures.Right : null);
+
+    private static bool ContainsPictureToken(string text) =>
+        text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase);
 
     private WorksheetHeaderFooterPicture? GetPictureForActiveBox()
     {
