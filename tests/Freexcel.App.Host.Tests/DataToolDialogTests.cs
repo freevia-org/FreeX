@@ -52,6 +52,24 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialog_AllowsOnlySingleColumnSelections()
+    {
+        var sheetId = SheetId.New();
+
+        TextToColumnsDialog.CanConvertRange(new GridRange(
+                new CellAddress(sheetId, 2, 1),
+                new CellAddress(sheetId, 8, 1)))
+            .Should()
+            .BeTrue();
+
+        TextToColumnsDialog.CanConvertRange(new GridRange(
+                new CellAddress(sheetId, 2, 1),
+                new CellAddress(sheetId, 8, 2)))
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));

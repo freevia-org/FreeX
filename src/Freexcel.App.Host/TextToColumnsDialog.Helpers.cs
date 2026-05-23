@@ -94,7 +94,10 @@ public sealed partial class TextToColumnsDialog
         return rows;
     }
 
-public static bool TryParseDestination(string? input, CellAddress defaultDestination, out CellAddress destination)
+    public static bool CanConvertRange(GridRange range) =>
+        range.Start.Col == range.End.Col;
+
+    public static bool TryParseDestination(string? input, CellAddress defaultDestination, out CellAddress destination)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
