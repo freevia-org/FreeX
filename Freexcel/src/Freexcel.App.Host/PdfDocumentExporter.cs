@@ -124,7 +124,10 @@ internal static class PdfDocumentExporter
             return;
 
         if (NormalizeProperty(properties.Title) is { } title)
+        {
             pdf.Info.Title = title;
+            SetDisplayDocumentTitlePreference(pdf);
+        }
         if (NormalizeProperty(properties.Author) is { } author)
             pdf.Info.Author = author;
         if (NormalizeProperty(properties.Subject) is { } subject)
@@ -135,6 +138,21 @@ internal static class PdfDocumentExporter
 
     private static string? NormalizeProperty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void SetDisplayDocumentTitlePreference(PdfDocument pdf)
+    {
+        const string viewerPreferencesKey = "/ViewerPreferences";
+        const string displayDocTitleKey = "/DisplayDocTitle";
+
+        var viewerPreferences = pdf.Internals.Catalog.Elements.GetDictionary(viewerPreferencesKey);
+        if (viewerPreferences is null)
+        {
+            viewerPreferences = new PdfDictionary(pdf);
+            pdf.Internals.Catalog.Elements[viewerPreferencesKey] = viewerPreferences;
+        }
+
+        viewerPreferences.Elements.SetBoolean(displayDocTitleKey, true);
+    }
 
     private static FixedPage GetFixedPage(PageContent pageContent)
     {
