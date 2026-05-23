@@ -347,7 +347,7 @@ public static partial class BuiltInFunctions
             count = 0;
             return false;
         }
-        if (raw > int.MaxValue || raw < int.MinValue)
+        if (raw > int.MaxValue || raw <= int.MinValue)
         {
             start = 0;
             count = 0;
@@ -740,6 +740,11 @@ public static partial class BuiltInFunctions
 
         double rawWrapCount = ToNumber(args[1]);
         if (!double.IsFinite(rawWrapCount)) return false;
+        if (rawWrapCount > int.MaxValue || rawWrapCount <= int.MinValue)
+        {
+            error = ErrorValue.Num;
+            return false;
+        }
         wrapCount = (int)rawWrapCount;
         if (wrapCount < 1)
         {

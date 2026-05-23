@@ -5062,8 +5062,10 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
 
         _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 
@@ -5454,6 +5456,17 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
         _eval.Evaluate("=WRAPROWS(A1:A1,0)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void WraprowsAndWrapcols_HugeFiniteWrapCount_ReturnsNumError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        _eval.Evaluate("=WRAPROWS(A1:A1,2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPROWS(A1:A1,-2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPCOLS(A1:A1,2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPCOLS(A1:A1,-2147483648)", sheet).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
