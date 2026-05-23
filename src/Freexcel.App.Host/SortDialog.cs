@@ -32,11 +32,12 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
     public bool Equals(SortDialogLevel? other) =>
         other is not null &&
         ColumnOffset == other.ColumnOffset &&
-        Ascending == other.Ascending;
+        Ascending == other.Ascending &&
+        string.Equals(SortOn, other.SortOn, StringComparison.Ordinal);
 
     public override bool Equals(object? obj) => Equals(obj as SortDialogLevel);
 
-    public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending);
+    public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending, SortOn);
 
     public override string ToString() => $"Column offset {ColumnOffset}, {(Ascending ? "Ascending" : "Descending")}";
 }
@@ -296,7 +297,10 @@ public sealed class SortDialog : Window
         if (index >= 0 && index < updated.Count)
         {
             var level = updated[index];
-            updated.Insert(index + 1, new SortDialogLevel(level.ColumnOffset, level.Ascending));
+            updated.Insert(index + 1, new SortDialogLevel(level.ColumnOffset, level.Ascending)
+            {
+                SortOn = level.SortOn
+            });
         }
 
         return updated;
@@ -321,7 +325,10 @@ public sealed class SortDialog : Window
     {
         var updated = NormalizeLevels(levels).ToList();
         if (index >= 0 && index < updated.Count)
-            updated[index] = new SortDialogLevel(columnOffset, ascending);
+            updated[index] = new SortDialogLevel(columnOffset, ascending)
+            {
+                SortOn = updated[index].SortOn
+            };
 
         return updated;
     }
