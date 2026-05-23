@@ -676,6 +676,15 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void OddCouponFunctions_NegativeDateSerial_ReturnNumError()
+    {
+        CalcError("ODDFPRICE(-1,10,-2,5,0.05,0.06,100,2)").Should().Be("#NUM!");
+        CalcError("ODDFYIELD(-1,10,-2,5,0.05,100,100,2)").Should().Be("#NUM!");
+        CalcError("ODDLPRICE(-1,10,-2,0.05,0.06,100,2)").Should().Be("#NUM!");
+        CalcError("ODDLYIELD(-1,10,-2,0.05,100,100,2)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
     {
         double r = 0.12;
