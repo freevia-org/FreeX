@@ -72,7 +72,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("Original data type");
         source.Should().Contain("Content = \"_Delimited\"");
@@ -105,7 +105,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void TextToColumnsDialog_ExposesDelimiterPreviewAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var source = ReadTextToColumnsDialogSources();
 
         foreach (var content in new[]
         {
@@ -172,7 +172,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
-        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var dialogSource = ReadTextToColumnsDialogSources();
         var modelSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogModel.cs"));
 
         foreach (var dateOrder in new[] { "MDY", "DMY", "YMD", "MYD", "DYM", "YDM" })
@@ -185,7 +185,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void TextToColumnsDialog_UsesExcelWizardChromeAroundDelimitedFlow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("Step {_wizardStep} of 3");
         source.Should().Contain("CreateWizardButtonRow");
@@ -1302,4 +1302,11 @@ public sealed class DataToolDialogTests
                 yield return descendant;
         }
     }
+
+    private static string ReadTextToColumnsDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.FixedWidth.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.ColumnFormats.cs")));
 }
