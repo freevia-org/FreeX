@@ -865,6 +865,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LeftAndRight_OmittedNumChars_DefaultsToOne()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEFT(\"abc\",)", sheet).Should().Be(new TextValue("a"));
+        _eval.Evaluate("=RIGHT(\"abc\",)", sheet).Should().Be(new TextValue("c"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
