@@ -244,6 +244,7 @@ public sealed class PivotWorkflowDialogTests
             emptyValueText: "  N/A  ",
             refreshOnOpen: true,
             saveSourceData: false,
+            showExpandCollapseButtons: false,
             compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
@@ -262,6 +263,8 @@ public sealed class PivotWorkflowDialogTests
             "N/A",
             true,
             false,
+            false,
+            ShowExpandCollapseButtons: false,
             CompactRowLabelIndent: 3));
     }
 
@@ -311,6 +314,8 @@ public sealed class PivotWorkflowDialogTests
             ShowRowStripes = true,
             ShowColumnStripes = true,
             EmptyValueText = "-",
+            ShowExpandCollapseButtons = false,
+            PrintExpandCollapseButtons = true,
             CompactRowLabelIndent = 5
         };
 
@@ -330,6 +335,8 @@ public sealed class PivotWorkflowDialogTests
                 true,
                 PivotReportLayout.Compact,
                 "-",
+                PrintExpandCollapseButtons: true,
+                ShowExpandCollapseButtons: false,
                 CompactRowLabelIndent: 5));
     }
 
@@ -380,6 +387,7 @@ public sealed class PivotWorkflowDialogTests
             "_autofitColumnsBox",
             "_preserveFormattingBox",
             "_refreshOnOpenBox",
+            "_showExpandCollapseBox",
             "_printTitlesBox",
             "_printExpandCollapseBox",
             "_altTextTitleBox",
@@ -395,6 +403,7 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Header = \"Printing\"");
+        source.Should().Contain("Show expand/collapse _buttons");
         source.Should().Contain("Set print _titles");
         source.Should().Contain("Print expand/collapse _buttons when displayed on PivotTable");
         source.Should().NotContain("Print titles and print expand/collapse buttons are not yet available.");
@@ -459,6 +468,7 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"_Autofit column widths on update\"",
             "Content = \"_Preserve cell formatting on update\"",
             "Content = \"_Refresh data when opening the file\"",
+            "Content = \"Show expand/collapse _buttons\"",
             "Content = \"Set print _titles\"",
             "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
         })
@@ -485,11 +495,13 @@ public sealed class PivotWorkflowDialogTests
             refreshOnOpen: true,
             saveSourceData: false,
             compactRowLabelIndent: 6,
+            showExpandCollapseButtons: false,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
             altTextDescription: " Quarterly sales summary ");
 
+        result.ShowExpandCollapseButtons.Should().BeFalse();
         result.PrintTitles.Should().BeTrue();
         result.PrintExpandCollapseButtons.Should().BeTrue();
         result.CompactRowLabelIndent.Should().Be(6);
