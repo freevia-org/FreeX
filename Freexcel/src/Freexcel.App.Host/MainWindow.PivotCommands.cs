@@ -174,8 +174,12 @@ public partial class MainWindow
             return;
         }
 
+        var dialog = new PivotChartTypeDialog(ChartType.Column) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
         if (!TryExecuteCommand(
-                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, ChartType.Column, $"{pivotTable.Name} Chart"),
+                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, dialog.Result.ChartType, $"{pivotTable.Name} Chart"),
                 "Insert PivotChart"))
             return;
 
