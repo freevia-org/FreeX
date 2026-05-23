@@ -4,6 +4,17 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public enum DataValidationRangeSelectionTarget
+{
+    Formula1,
+    Formula2
+}
+
+public sealed record DataValidationRangeSelectionRequest(
+    DataValidationRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 /// <summary>
 /// Dialog for creating or editing a data validation rule.
 /// </summary>
@@ -14,16 +25,19 @@ public partial class DataValidationDialog : Window
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
     public string? SelectionSource { get; set; }
+    public DataValidationRangeSelectionRequest? RangeSelectionRequest { get; private set; }
     private readonly Guid _resultId = Guid.NewGuid();
+    private readonly Action<DataValidationRangeSelectionRequest>? _requestRangeSelection;
 
-    public DataValidationDialog()
+    public DataValidationDialog(Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
         ResetToDefaults(markClearRequested: false);
     }
 
-    public DataValidationDialog(DataValidation? existing)
-        : this()
+    public DataValidationDialog(DataValidation? existing, Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
+        : this(requestRangeSelection)
     {
         if (existing is null)
             return;
@@ -105,7 +119,7 @@ public partial class DataValidationDialog : Window
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
         Formula1Box.Visibility   = isAny ? Visibility.Collapsed : Visibility.Visible;
-        SourcePickerButton.Visibility = !isAny && !string.IsNullOrWhiteSpace(SelectionSource)
+        SourcePickerButton.Visibility = !isAny
             ? Visibility.Visible
             : Visibility.Collapsed;
         UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
@@ -117,7 +131,7 @@ public partial class DataValidationDialog : Window
                             (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag is "Between" or "NotBetween";
         Formula2Label.Visibility = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
         Formula2Box.Visibility   = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
-        SourcePicker2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
+        SourcePicker2Button.Visibility = showFormula2
             ? Visibility.Visible
             : Visibility.Collapsed;
         UseSelection2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
@@ -226,8 +240,7 @@ public partial class DataValidationDialog : Window
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula1Box.Text = SelectionSource;
 
-        Formula1Box.Focus();
-        Formula1Box.SelectAll();
+        RequestRangeSelection(DataValidationRangeSelectionTarget.Formula1, Formula1Box);
     }
 
     private void SourcePicker2Button_Click(object sender, RoutedEventArgs e)
@@ -235,14 +248,26 @@ public partial class DataValidationDialog : Window
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula2Box.Text = SelectionSource;
 
-        Formula2Box.Focus();
-        Formula2Box.SelectAll();
+        RequestRangeSelection(DataValidationRangeSelectionTarget.Formula2, Formula2Box);
     }
 
     private void UseSelection2Button_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula2Box.Text = SelectionSource;
+    }
+
+    public static DataValidationRangeSelectionRequest CreateRangeSelectionRequest(
+        DataValidationRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private void RequestRangeSelection(DataValidationRangeSelectionTarget target, TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
