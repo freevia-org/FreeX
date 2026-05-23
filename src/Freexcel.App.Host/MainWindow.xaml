@@ -3343,7 +3343,7 @@
                             MinWidth="210"
                             Background="{StaticResource FreexcelStatusSurfaceBrush}"
                             Panel.ZIndex="1">
-                    <Button Content="−" Width="18" Height="18" Margin="0,0,2,0"
+                    <Button x:Name="StatusZoomOutButton" Content="−" Width="18" Height="18" Margin="0,0,2,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
@@ -3357,7 +3357,7 @@
                             SmallChange="5" LargeChange="10"
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
-                    <Button Content="+" Width="18" Height="18" Margin="0,0,6,0"
+                    <Button x:Name="StatusZoomInButton" Content="+" Width="18" Height="18" Margin="0,0,6,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
