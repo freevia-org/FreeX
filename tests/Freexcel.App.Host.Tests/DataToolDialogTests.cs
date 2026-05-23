@@ -633,10 +633,11 @@ public sealed class DataToolDialogTests
         source.Should().Contain("ConsolidateFunction.CountNumbers => \"Count Numbers\"");
         source.Should().Contain("SelectedFunction()");
         source.Should().NotContain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
-        source.Should().Contain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
-        source.Should().Contain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
+        source.Should().NotContain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
+        source.Should().NotContain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
         source.Should().Contain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
-        source.Should().Contain("source ranges are consolidated by position");
+        source.Should().Contain("UseTopRowLabels");
+        source.Should().Contain("UseLeftColumnLabels");
         source.Should().Contain("consolidated values are written as results");
         source.Should().Contain("AutomationProperties.SetHelpText(control, helpText)");
     }

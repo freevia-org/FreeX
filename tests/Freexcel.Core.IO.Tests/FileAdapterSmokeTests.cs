@@ -6711,7 +6711,8 @@ public partial class FileAdapterSmokeTests
     [Theory]
     [InlineData(ChartType.Radar, "radarChart")]
     [InlineData(ChartType.Stock, "stockChart")]
-    public void XlsxAdapter_Save_WritesEmbeddedRadarAndStockChartPackagePart(ChartType chartType, string expectedElementName)
+    [InlineData(ChartType.ThreeDColumn, "bar3DChart")]
+    public void XlsxAdapter_Save_WritesEmbeddedRadarStockAnd3DColumnChartPackagePart(ChartType chartType, string expectedElementName)
     {
         var workbook = new Workbook("RadarStockChartPackageSave");
         var sheet = workbook.AddSheet("Sheet1");
