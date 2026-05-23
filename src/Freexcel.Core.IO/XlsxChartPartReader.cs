@@ -50,7 +50,7 @@ public static partial class XlsxChartPartReader
         else if (radarCharts.Count > 0)
             read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
         else if (stockCharts.Count > 0)
-            read = TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart);
+            read = TryReadStockChart(chartXml, plotArea, stockCharts, barCharts, sheetId, out chart);
         else if (threeDColumnChart is not null)
             read = TryReadDeferredAdvancedChart(chartXml, threeDColumnChart, sheetId, ChartType.ThreeDColumn, out chart);
         else if (deferredAdvancedChart is { } advanced)
@@ -68,6 +68,46 @@ public static partial class XlsxChartPartReader
         }
 
         return read;
+    }
+
+    private static bool TryReadStockChart(
+        XDocument chartXml,
+        XElement? plotArea,
+        IReadOnlyList<XElement> stockCharts,
+        IReadOnlyList<XElement> barCharts,
+        SheetId sheetId,
+        out ChartModel chart)
+    {
+        if (!TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart))
+            return false;
+
+        var stockSeriesCount = stockCharts.Sum(plotChart => plotChart.Elements(ChartNs + "ser").Count());
+        var volumeRanges = new List<GridRange>();
+        foreach (var series in barCharts.SelectMany(plotChart => plotChart.Elements(ChartNs + "ser")))
+        {
+            foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
+            {
+                if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
+                    volumeRanges.Add(range);
+            }
+        }
+
+        if (volumeRanges.Count > 0)
+        {
+            var ranges = new List<GridRange> { chart.DataRange };
+            ranges.AddRange(volumeRanges);
+            chart.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
+        }
+
+        chart.StockSubtype = (volumeRanges.Count > 0, stockSeriesCount >= 4) switch
+        {
+            (true, true) => StockChartSubtype.VolumeOpenHighLowClose,
+            (true, false) => StockChartSubtype.VolumeHighLowClose,
+            (false, true) => StockChartSubtype.OpenHighLowClose,
+            _ => StockChartSubtype.HighLowClose
+        };
+
+        return true;
     }
 
     private static bool TryReadLineLikeChart(
@@ -137,210 +177,6 @@ public static partial class XlsxChartPartReader
         return true;
     }
 
-    private static bool TryReadBarLineComboChart(
-        XDocument chartXml,
-        XElement? plotArea,
-        IReadOnlyList<XElement> barCharts,
-        IReadOnlyList<XElement> lineCharts,
-        SheetId sheetId,
-        out ChartModel chart)
-    {
-        var firstBarChart = barCharts.FirstOrDefault();
-        var barDirection = firstBarChart?.Element(ChartNs + "barDir")?.Attribute("val")?.Value;
-        if (barDirection is not ("col" or "bar"))
-        {
-            chart = new ChartModel();
-            return false;
-        }
-
-        var ranges = new List<GridRange>();
-        var hasTitleRange = false;
-        var hasCategoryRange = false;
-        var result = new ChartModel
-        {
-            Type = ReadBarChartType(firstBarChart!, barDirection),
-            Title = XlsxChartLevelReader.ReadTitle(chartXml),
-            UseComboLineForSecondarySeries = true
-        };
-        ApplyBarChartMetadata(firstBarChart!, result);
-
-        foreach (var barChart in barCharts)
-        {
-            if (barChart.Element(ChartNs + "barDir")?.Attribute("val")?.Value != barDirection)
-            {
-                chart = new ChartModel();
-                return false;
-            }
-
-            var barUsesSecondaryAxis = XlsxChartSeriesRangeReader.UsesSecondaryValueAxis(plotArea, barChart);
-            var fallbackSeriesIndex = 0;
-            foreach (var series in barChart.Elements(ChartNs + "ser"))
-            {
-                var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
-                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
-                hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
-                foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
-                {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
-                        ranges.Add(range);
-                }
-
-                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
-                    result.SeriesFormats.Add(format);
-
-                if (barUsesSecondaryAxis && seriesIndex > 0)
-                    result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
-
-                XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
-                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
-                fallbackSeriesIndex++;
-            }
-        }
-
-        foreach (var lineChart in lineCharts)
-        {
-            XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(lineChart, result);
-            var lineUsesSecondaryAxis = XlsxChartSeriesRangeReader.UsesSecondaryValueAxis(plotArea, lineChart);
-            var fallbackSeriesIndex = 0;
-            foreach (var series in lineChart.Elements(ChartNs + "ser"))
-            {
-                var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
-                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
-                hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
-                foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
-                {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
-                        ranges.Add(range);
-                }
-
-                result.ComboLineSeriesIndexes.Add(seriesIndex);
-                if (lineUsesSecondaryAxis && seriesIndex > 0)
-                    result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
-
-                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
-                    result.SeriesFormats.Add(format);
-
-                XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
-                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
-                fallbackSeriesIndex++;
-            }
-        }
-
-        if (ranges.Count == 0)
-        {
-            chart = new ChartModel();
-            return false;
-        }
-
-        result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
-            .Where(index => index > 0)
-            .Distinct()
-            .Order()
-            .ToList();
-        result.ComboLineSeriesIndexes = result.ComboLineSeriesIndexes
-            .Where(index => index > 0)
-            .Distinct()
-            .Order()
-            .ToList();
-        result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
-        result.UseComboLineForSecondarySeries = result.ComboLineSeriesIndexes.Count > 0;
-        result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
-        result.FirstRowIsHeader = hasTitleRange;
-        result.FirstColIsCategories = hasCategoryRange;
-        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
-        XlsxChartSanitizer.SanitizeLoadedChart(result);
-        chart = result;
-        return true;
-    }
-
-    private static bool TryReadBarChart(
-        XDocument chartXml,
-        XElement? plotArea,
-        IReadOnlyList<XElement> barCharts,
-        SheetId sheetId,
-        out ChartModel chart)
-    {
-        var firstBarChart = barCharts.FirstOrDefault();
-        var barDirection = firstBarChart?.Element(ChartNs + "barDir")?.Attribute("val")?.Value;
-        if (barDirection is not ("col" or "bar"))
-        {
-            chart = new ChartModel();
-            return false;
-        }
-
-        var ranges = new List<GridRange>();
-        var hasTitleRange = false;
-        var hasCategoryRange = false;
-        var result = new ChartModel
-        {
-            Type = ReadBarChartType(firstBarChart!, barDirection),
-            Title = XlsxChartLevelReader.ReadTitle(chartXml)
-        };
-        ApplyBarChartMetadata(firstBarChart!, result);
-
-        foreach (var barChart in barCharts)
-        {
-            if (barChart.Element(ChartNs + "barDir")?.Attribute("val")?.Value != barDirection)
-            {
-                chart = new ChartModel();
-                return false;
-            }
-
-            var usesSecondaryAxis = XlsxChartSeriesRangeReader.UsesSecondaryValueAxis(plotArea, barChart);
-            var fallbackSeriesIndex = 0;
-            foreach (var series in barChart.Elements(ChartNs + "ser"))
-            {
-                var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
-                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
-                hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
-                foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
-                {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
-                        ranges.Add(range);
-                }
-
-                if (usesSecondaryAxis && seriesIndex > 0)
-                    result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
-
-                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
-                    result.SeriesFormats.Add(format);
-
-                XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
-                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
-                fallbackSeriesIndex++;
-            }
-        }
-
-        if (ranges.Count == 0)
-        {
-            chart = new ChartModel();
-            return false;
-        }
-
-        result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
-            .Distinct()
-            .Order()
-            .ToList();
-        result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
-        result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
-        result.FirstRowIsHeader = hasTitleRange;
-        result.FirstColIsCategories = hasCategoryRange;
-        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
-        XlsxChartSanitizer.SanitizeLoadedChart(result);
-        chart = result;
-        return true;
-    }
-
-    private static void ApplyBarChartMetadata(XElement barChart, ChartModel chart)
-    {
-        chart.BarGapWidth = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value);
-        chart.BarOverlap = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value);
-        chart.VaryColorsByPoint = XlsxChartScalarReader.ReadOptionalBool(barChart.Element(ChartNs + "varyColors")?.Attribute("val")?.Value);
-    }
-
     private static bool TryReadLineChart(
         XDocument chartXml,
         XElement? plotArea,
@@ -404,82 +240,6 @@ public static partial class XlsxChartPartReader
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
-    }
-
-    private static bool TryReadScatterChart(
-        XDocument chartXml,
-        XElement? plotArea,
-        IReadOnlyList<XElement> scatterCharts,
-        SheetId sheetId,
-        out ChartModel chart)
-    {
-        var ranges = new List<GridRange>();
-        var hasTitleRange = false;
-        var result = new ChartModel
-        {
-            Type = ChartType.Scatter,
-            Title = XlsxChartLevelReader.ReadTitle(chartXml),
-            FirstColIsCategories = false
-        };
-
-        foreach (var scatterChart in scatterCharts)
-        {
-            var usesSecondaryAxis = XlsxChartSeriesRangeReader.UsesSecondaryValueAxis(plotArea, scatterChart);
-            var fallbackSeriesIndex = 0;
-            foreach (var series in scatterChart.Elements(ChartNs + "ser"))
-            {
-                var modelSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackSeriesIndex);
-                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
-                foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series, "tx", "xVal", "yVal"))
-                {
-                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
-                        ranges.Add(range);
-                }
-
-                if (usesSecondaryAxis && modelSeriesIndex > 0)
-                    result.SecondaryAxisSeriesIndexes.Add(modelSeriesIndex);
-
-                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, modelSeriesIndex, out var format))
-                    result.SeriesFormats.Add(format);
-
-                XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
-                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
-                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
-                fallbackSeriesIndex++;
-            }
-        }
-
-        if (ranges.Count == 0)
-        {
-            chart = new ChartModel();
-            return false;
-        }
-
-        result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
-        result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
-            .Distinct()
-            .Order()
-            .ToList();
-        result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
-        result.FirstRowIsHeader = hasTitleRange;
-        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
-        XlsxChartSanitizer.SanitizeLoadedChart(result);
-        chart = result;
-        return true;
-    }
-
-    private static ChartType ReadBarChartType(XElement barChart, string? barDirection)
-    {
-        var grouping = barChart.Element(ChartNs + "grouping")?.Attribute("val")?.Value;
-        return (barDirection, grouping) switch
-        {
-            ("bar", "stacked") => ChartType.StackedBar,
-            ("bar", "percentStacked") => ChartType.PercentStackedBar,
-            ("bar", _) => ChartType.Bar,
-            (_, "stacked") => ChartType.StackedColumn,
-            (_, "percentStacked") => ChartType.PercentStackedColumn,
-            _ => ChartType.Column
-        };
     }
 
 
