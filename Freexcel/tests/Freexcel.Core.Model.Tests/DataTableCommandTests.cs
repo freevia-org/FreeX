@@ -38,6 +38,37 @@ public sealed class DataTableCommandTests
     }
 
     [Fact]
+    public void OneVariableDataTableCommand_RowInputUsesTopRowTrialValues()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var inputCell = new CellAddress(sheet.Id, 1, 2);
+        var formulaCell = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(inputCell, new NumberValue(10));
+        sheet.SetFormula(formulaCell, "B1*2");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("old"));
+
+        var command = new OneVariableDataTableCommand(
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
+            formulaCell,
+            inputCell,
+            DataTableInputOrientation.Row);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetCell(2, 2)!.FormulaText.Should().Be("B1*2");
+        sheet.GetCell(2, 3)!.FormulaText.Should().Be("C1*2");
+
+        command.Revert(ctx);
+
+        sheet.GetValue(2, 2).Should().Be(new TextValue("old"));
+        sheet.GetCell(2, 3).Should().BeNull();
+    }
+
+    [Fact]
     public void TwoVariableDataTableCommand_FillsGridFormulasAndUndoRestores()
     {
         var workbook = new Workbook("test");

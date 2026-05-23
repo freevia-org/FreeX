@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  
-  <path d="M6 5 H14 V17 H6 Z M8 3 H12 V6 H8 Z" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Paste">
+  <rect width="20" height="20" fill="none"/>
+  <rect x="4.5" y="5.5" width="11" height="12" rx="1" fill="#ffb900" stroke="#242424" stroke-width="1"/>
+  <rect x="7.5" y="3.5" width="5" height="4" rx="0.75" fill="#fff4ce" stroke="#242424" stroke-width="1"/>
+  <path d="M7.5 11.5H12.5" fill="none" stroke="#8a6500" stroke-width="1" stroke-linecap="square"/>
 </svg>
