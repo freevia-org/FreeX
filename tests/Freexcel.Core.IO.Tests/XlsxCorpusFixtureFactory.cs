@@ -1089,9 +1089,9 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "A2", new TextValue("Jan"));
         Set(sheet, "A3", new TextValue("Feb"));
         Set(sheet, "A4", new TextValue("Mar"));
-        Set(sheet, "I2", new TextValue("Jan"));
-        Set(sheet, "I3", new TextValue("Feb"));
-        Set(sheet, "I4", new TextValue("Mar"));
+        Set(sheet, "I2", new TextValue("2026-01-02"));
+        Set(sheet, "I3", new TextValue("2026-01-05"));
+        Set(sheet, "I4", new TextValue("2026-01-06"));
         Set(sheet, "B2", new NumberValue(100));
         Set(sheet, "B3", new NumberValue(120));
         Set(sheet, "B4", new NumberValue(140));
