@@ -184,6 +184,15 @@ public class PhaseDLambdaTests
         Assert.Equal(ErrorValue.Value, result);
     }
 
+    [Fact]
+    public void Map_ArrayReturningLambda_ReturnsCalcError()
+    {
+        Set(16, 1, new NumberValue(1));
+        Set(16, 2, new NumberValue(2));
+
+        Assert.Equal(ErrorValue.Calc, Eval("=MAP(A16:B16, LAMBDA(x, HSTACK(x,x)))"));
+    }
+
     // ── REDUCE ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -311,6 +320,18 @@ public class PhaseDLambdaTests
         Assert.Equal(2.0, Num(result.At(1, 2)));
     }
 
+    [Fact]
+    public void ByRowAndByCol_ArrayReturningLambda_ReturnsCalcError()
+    {
+        Set(16, 1, new NumberValue(1));
+        Set(16, 2, new NumberValue(2));
+        Set(17, 1, new NumberValue(3));
+        Set(17, 2, new NumberValue(4));
+
+        Assert.Equal(ErrorValue.Calc, Eval("=BYROW(A16:B17, LAMBDA(row, row))"));
+        Assert.Equal(ErrorValue.Calc, Eval("=BYCOL(A16:B17, LAMBDA(col, col))"));
+    }
+
     // ── MAKEARRAY ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -357,6 +378,15 @@ public class PhaseDLambdaTests
         Assert.Equal(2, result.ColCount);
         Assert.Equal(2.0, Num(result.At(1, 1)));
         Assert.Equal(4.0, Num(result.At(2, 2)));
+    }
+
+    [Fact]
+    public void MakeArray_ArrayReturningLambda_ReturnsCalcError()
+    {
+        Set(16, 1, new NumberValue(1));
+        Set(16, 2, new NumberValue(2));
+
+        Assert.Equal(ErrorValue.Calc, Eval("=MAKEARRAY(2, 1, LAMBDA(r, c, HSTACK(r,c)))"));
     }
 
     // ── Edge cases ──────────────────────────────────────────────────────────

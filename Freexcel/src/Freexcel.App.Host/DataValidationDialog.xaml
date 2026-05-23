@@ -70,6 +70,10 @@
 
                     <Label x:Name="Formula2Label" Grid.Row="4" Grid.Column="0" Content="Ma_ximum:" Target="{Binding ElementName=Formula2Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,0,0,8">
+                        <Button x:Name="SourcePicker2Button" DockPanel.Dock="Right"
+                                Content="..." Width="28" Margin="6,0,0,0"
+                                AutomationProperties.Name="Select maximum range"
+                                Click="SourcePicker2Button_Click"/>
                         <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
                                 Content="Use _Selection" Width="104" Margin="6,0,0,0"
                                 Click="UseSelection2Button_Click"/>
