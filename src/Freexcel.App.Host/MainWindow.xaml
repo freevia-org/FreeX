@@ -3403,6 +3403,7 @@
         <Grid x:Name="StartScreenOverlay"
               Grid.Row="1" Grid.RowSpan="5"
               Panel.ZIndex="200"
+              PreviewKeyDown="StartScreenOverlay_PreviewKeyDown"
               Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="190"/>
@@ -3410,7 +3411,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- ── Left sidebar ─────────────────────────────────────────── -->
-            <DockPanel Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
+            <DockPanel x:Name="StartScreenSidebar" Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
 
                 <!-- Back arrow -->
 	                <Button x:Name="SsBackBtn" DockPanel.Dock="Top"
