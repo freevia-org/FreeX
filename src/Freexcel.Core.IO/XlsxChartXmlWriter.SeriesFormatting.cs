@@ -141,7 +141,8 @@ internal static partial class XlsxChartXmlWriter
     private static XElement? ToErrorBarsXml(
         ChartModel chart,
         int seriesIndex,
-        XNamespace chartNs)
+        XNamespace chartNs,
+        XNamespace drawingNs)
     {
         if (!chart.ShowErrorBars || seriesIndex != 0 || !SupportsErrorBars(chart.Type))
             return null;
@@ -152,7 +153,24 @@ internal static partial class XlsxChartXmlWriter
             chart.ErrorBarEndCaps ? null : new XElement(chartNs + "noEndCap", new XAttribute("val", "1")),
             chart.ErrorBarKind is ChartErrorBarKind.Percentage or ChartErrorBarKind.FixedValue
                 ? new XElement(chartNs + "val", new XAttribute("val", Math.Clamp(chart.ErrorBarValue, 0, 1000).ToString(CultureInfo.InvariantCulture)))
-                : null);
+                : null,
+            ToErrorBarShapeProperties(chart, chartNs, drawingNs));
+    }
+
+    private static XElement? ToErrorBarShapeProperties(
+        ChartModel chart,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var fill = ToSolidFill(chart.ErrorBarThemeColor, chart.ErrorBarColor, drawingNs);
+        if (fill is null && chart.ErrorBarThickness == 1 && chart.ErrorBarDashStyle == ChartLineDashStyle.Solid)
+            return null;
+
+        return new XElement(chartNs + "spPr",
+            new XElement(drawingNs + "ln",
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.ErrorBarThickness, 0.5, 10) * 12700))),
+                fill,
+                ToPresetDash(chart.ErrorBarDashStyle, drawingNs)));
     }
 
     private static bool SupportsErrorBars(ChartType chartType) =>

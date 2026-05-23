@@ -119,6 +119,32 @@
             <Setter Property="Padding" Value="2"/>
         </Style>
 
+        <Style x:Key="TitleBarQatButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource FreexcelTitleBarHoverBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelTitleBarButtonBorderBrush}"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{StaticResource FreexcelTitleBarPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelTitleBarButtonBorderBrush}"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelTitleBarDisabledBrush}"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Ribbon tab item style — flat, green underline when selected -->
         <Style TargetType="TabItem">
             <Setter Property="Padding" Value="7,4"/>
@@ -166,10 +192,16 @@
             <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#20000000"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelTitleBarHoverBrush}"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#33000000"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelTitleBarPressedBrush}"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelTitleBarDisabledBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -177,12 +209,16 @@
         <Style x:Key="CloseSysBtnStyle" BasedOn="{StaticResource SysBtnStyle}" TargetType="Button">
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#C42B1C"/>
-                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Background" Value="#D13438"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#F1707A"/>
-                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Background" Value="#A4262C"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{StaticResource FreexcelTitleBarDisabledBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
