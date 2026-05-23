@@ -383,6 +383,14 @@ public class PhaseCFinancialTests
     // ── INTRATE ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void Disc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("DISC(43831,44197,97,100,5)").Should().Be("#NUM!");
+        CalcError("DISC(43831,44197,97,100,-1)").Should().Be("#NUM!");
+        CalcError("DISC(43831,44197,97,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Intrate_SimpleCase()
     {
         // Settlement 43831, Maturity 44197, Invest 90, Redeem 100
@@ -394,6 +402,14 @@ public class PhaseCFinancialTests
     // ── RECEIVED ─────────────────────────────────────────────────────────
 
     [Fact]
+    public void Intrate_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("INTRATE(43831,44197,90,100,5)").Should().Be("#NUM!");
+        CalcError("INTRATE(43831,44197,90,100,-1)").Should().Be("#NUM!");
+        CalcError("INTRATE(43831,44197,90,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Received_SimpleCase()
     {
         // Investment = 100, discount = 0.05, DCF ≈ 1 year
@@ -403,6 +419,14 @@ public class PhaseCFinancialTests
     }
 
     // ── TBILLEQ / TBILLPRICE / TBILLYIELD ────────────────────────────────
+
+    [Fact]
+    public void Received_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("RECEIVED(43831,44197,100,0.05,5)").Should().Be("#NUM!");
+        CalcError("RECEIVED(43831,44197,100,0.05,-1)").Should().Be("#NUM!");
+        CalcError("RECEIVED(43831,44197,100,0.05,1E309)").Should().Be("#NUM!");
+    }
 
     [Fact]
     public void Tbillprice_SimpleCase()
@@ -517,6 +541,22 @@ public class PhaseCFinancialTests
     }
 
     // ── PRICEMAT / YIELDMAT ────────────────────────────────────────────────
+
+    [Fact]
+    public void Pricedisc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("PRICEDISC(43831,44197,0.05,100,5)").Should().Be("#NUM!");
+        CalcError("PRICEDISC(43831,44197,0.05,100,-1)").Should().Be("#NUM!");
+        CalcError("PRICEDISC(43831,44197,0.05,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
+    public void Yielddisc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("YIELDDISC(43831,44197,95,100,5)").Should().Be("#NUM!");
+        CalcError("YIELDDISC(43831,44197,95,100,-1)").Should().Be("#NUM!");
+        CalcError("YIELDDISC(43831,44197,95,100,1E309)").Should().Be("#NUM!");
+    }
 
     [Fact]
     public void Pricemat_SimpleCase()

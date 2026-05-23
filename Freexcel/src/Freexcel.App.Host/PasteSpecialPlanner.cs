@@ -12,6 +12,7 @@ public static class PasteSpecialPlanner
             SkipBlanks: selection.SkipBlanks,
             ContentKind: selection.Mode switch
             {
+                PasteSpecialDialogMode.AllUsingSourceTheme => PasteSpecialContentKind.AllUsingSourceTheme,
                 PasteSpecialDialogMode.AllExceptBorders => PasteSpecialContentKind.AllExceptBorders,
                 PasteSpecialDialogMode.AllMergingConditionalFormats => PasteSpecialContentKind.AllMergingConditionalFormats,
                 PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
