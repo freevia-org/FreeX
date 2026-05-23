@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -13,6 +14,7 @@ public enum DataTableMode
 
 public sealed record DataTableDialogResult(
     DataTableMode Mode,
+    DataTableInputOrientation Orientation,
     CellAddress FormulaCell,
     CellAddress? RowInputCell,
     CellAddress? ColumnInputCell);
@@ -89,9 +91,12 @@ public sealed class DataTableDialog : Window
         }
 
         var mode = hasRowInput && hasColumnInput ? DataTableMode.TwoVariable : DataTableMode.OneVariable;
-        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(range, mode == DataTableMode.TwoVariable);
+        var orientation = hasRowInput && !hasColumnInput
+            ? DataTableInputOrientation.Row
+            : DataTableInputOrientation.Column;
+        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(range, orientation, mode == DataTableMode.TwoVariable);
 
-        result = new DataTableDialogResult(mode, formulaCell, rowInputCell, columnInputCell);
+        result = new DataTableDialogResult(mode, orientation, formulaCell, rowInputCell, columnInputCell);
         return true;
     }
 
