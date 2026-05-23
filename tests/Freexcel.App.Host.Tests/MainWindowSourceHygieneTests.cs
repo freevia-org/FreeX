@@ -461,7 +461,7 @@ public sealed class MainWindowSourceHygieneTests
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
-        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands()");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
 
@@ -831,11 +831,14 @@ public sealed class MainWindowSourceHygieneTests
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
         var appHostDirectory = Directory.GetParent(mainWindowPath)!.FullName;
         var xaml = File.ReadAllText(mainWindowPath);
+        var resourcesPath = Path.Combine(appHostDirectory, "Resources", "MainWindowResources.xaml");
+        var resourcesXaml = File.ReadAllText(resourcesPath);
 
         File.Exists(Path.Combine(appHostDirectory, "Resources", "ThemeResources.xaml")).Should().BeTrue();
         File.Exists(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml")).Should().BeTrue();
-        xaml.Should().Contain("Source=\"Resources/ThemeResources.xaml\"");
-        xaml.Should().Contain("Source=\"Resources/IconResources.xaml\"");
+        xaml.Should().Contain("Source=\"Resources/MainWindowResources.xaml\"");
+        resourcesXaml.Should().Contain("Source=\"ThemeResources.xaml\"");
+        resourcesXaml.Should().Contain("Source=\"IconResources.xaml\"");
     }
 
     [Fact]
@@ -1157,6 +1160,50 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardWorksheetContextMenu_IsAnchoredToActiveCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("OpenKeyboardContextMenu()");
+        source.Should().Contain("TryGetCellOverlayRect(address)");
+        source.Should().Contain("menu.Placement = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint");
+        source.Should().Contain("menu.HorizontalOffset = screenPoint.X");
+        source.Should().Contain("menu.VerticalOffset = screenPoint.Y");
+        source.Should().NotContain("OnGridContextMenuRequested(address, default);");
+    }
+
+    [Fact]
+    public void WorksheetContextMenu_UsesObjectAwareTargetKind()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
+        source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
+        source.Should().Contain("PictureSizeBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.FormatDrawingObject:");
+        source.Should().Contain("ObjectSizeBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.EditAltText:");
+        source.Should().Contain("SetAltTextBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.SelectionPane:");
+        source.Should().Contain("SelectionPaneBtn_Click(this, new RoutedEventArgs());");
+    }
+
+    [Fact]
+    public void WorksheetContextMenu_UsesRowAndColumnSelectionTargetKinds()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
+        source.Should().Contain("SelectionRangeService.IsWholeRowSelection(selectedRange)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.RowSelection");
+        source.Should().Contain("SelectionRangeService.IsWholeColumnSelection(selectedRange)");
+        source.Should().Contain("WorksheetContextMenuTargetKind.ColumnSelection");
+    }
+
+    [Fact]
     public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
     {
         var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
@@ -1175,6 +1222,19 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("case WorksheetContextMenuAction.NewComment:");
         source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());");
+    }
+
+    [Fact]
+    public void WorksheetContextMenuEditAndDeleteComment_UseThreadedCommentWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.EditComment:");
+        source.Should().Contain("case WorksheetContextMenuAction.DeleteComment:");
+        source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());");
+        reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
+        reviewSource.Should().Contain("new DeleteThreadedCommentCommand(");
     }
 
     [Fact]
@@ -1249,6 +1309,26 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_MoreChartsReusesInsertChartDialogPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("case QuickAnalysisCommand.MoreCharts:");
+        source.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
+    }
+
+    [Fact]
+    public void QuickAnalysisMenu_RoutesExpandedTotalsGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("case QuickAnalysisCommand.PercentTotal:");
+        source.Should().Contain("case QuickAnalysisCommand.RunningTotal:");
+        source.Should().Contain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
+        source.Should().Contain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
+    }
+
+    [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
@@ -1280,7 +1360,7 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
         var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
-        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)");
+        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
         source.Should().Contain("new AutoFilterDialog(menuPlan)");
         dialog.Should().Contain("AutoFilterMenuPlan menuPlan");
         dialog.Should().Contain("CriteriaSuggestions");
@@ -1462,7 +1542,8 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().NotContain("Cycle grand totals");
         xaml.Should().NotContain("Cycle subtotals");
         xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
-        source.Should().Contain("new PivotTableOptionsDialog(pivotTable)");
+        source.Should().Contain("_workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId)");
+        source.Should().Contain("new PivotTableOptionsDialog(pivotTable, cache)");
         source.Should().Contain("ApplyPivotOptions(pivotTable, dialog.Result)");
         source.Should().NotContain("var reportLayout = pivotTable.ReportLayout switch");
         source.Should().NotContain("var styleName = pivotTable.StyleName switch");

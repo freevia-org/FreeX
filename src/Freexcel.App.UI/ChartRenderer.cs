@@ -11,7 +11,7 @@ using Freexcel.Core.Model;
 namespace Freexcel.App.UI;
 
 /// <summary>Renders a ChartModel into a WPF ImageSource for use in DrawingContext.</summary>
-public static class ChartRenderer
+public static partial class ChartRenderer
 {
     private const string SecondaryYAxisKey = "SecondaryY";
     private static readonly OxyColor[] PieSlicePalette =
@@ -488,10 +488,21 @@ public static class ChartRenderer
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
         var valueColumnCount = endCol >= dataStartCol ? endCol - dataStartCol + 1 : 0;
-        var hasOpenColumn = valueColumnCount >= 4;
-        var highCol = hasOpenColumn ? dataStartCol + 1 : dataStartCol;
-        var lowCol = hasOpenColumn ? dataStartCol + 2 : dataStartCol + 1;
-        var closeCol = hasOpenColumn ? dataStartCol + 3 : dataStartCol + 2;
+        var hasVolumeColumn = chart.StockSubtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose;
+        var hasOpenColumn = chart.StockSubtype is StockChartSubtype.OpenHighLowClose or StockChartSubtype.VolumeOpenHighLowClose ||
+                            (!hasVolumeColumn && valueColumnCount >= 4);
+        var volumeOffset = hasVolumeColumn ? 1u : 0u;
+        var requiredValueColumns = volumeOffset + (hasOpenColumn ? 4u : 3u);
+        if (valueColumnCount < requiredValueColumns)
+            return model;
+
+        if (hasVolumeColumn)
+            AddStockVolumeSeries(model, cellLookup, dataStartRow, endRow, dataStartCol);
+
+        var openCol = hasOpenColumn ? dataStartCol + volumeOffset : (uint?)null;
+        var highCol = dataStartCol + volumeOffset + (hasOpenColumn ? 1u : 0u);
+        var lowCol = highCol + 1;
+        var closeCol = highCol + 2;
         if (valueColumnCount < 3 || closeCol > endCol)
             return model;
 
@@ -510,7 +521,7 @@ public static class ChartRenderer
                 !TryGetNumericCell(cellLookup, row, closeCol, out var close))
                 continue;
 
-            var open = hasOpenColumn && TryGetNumericCell(cellLookup, row, dataStartCol, out var parsedOpen)
+            var open = openCol is { } parsedOpenCol && TryGetNumericCell(cellLookup, row, parsedOpenCol, out var parsedOpen)
                 ? parsedOpen
                 : close;
             series.Items.Add(new HighLowItem(index, high, low, open, close));
@@ -518,6 +529,31 @@ public static class ChartRenderer
 
         model.Series.Add(series);
         return model;
+    }
+
+    private static void AddStockVolumeSeries(
+        PlotModel model,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        uint dataStartRow,
+        uint endRow,
+        uint volumeCol)
+    {
+        var series = new RectangleBarSeries
+        {
+            Title = "Volume",
+            FillColor = OxyColor.FromArgb(90, 91, 155, 213),
+            StrokeColor = OxyColor.FromArgb(140, 91, 155, 213),
+            StrokeThickness = 0.5
+        };
+
+        var i = 0;
+        for (uint row = dataStartRow; row <= endRow; row++, i++)
+        {
+            if (TryGetNumericCell(cellLookup, row, volumeCol, out var volume))
+                series.Items.Add(new RectangleBarItem(i - 0.35, 0, i + 0.35, volume));
+        }
+
+        model.Series.Add(series);
     }
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)
@@ -843,672 +879,4 @@ public static class ChartRenderer
             ? displayValue / 100
             : sourceValue;
 
-    private static bool ShouldSkipScatterXColumn(ChartModel chart, uint col, uint dataStartCol) =>
-        chart.Type == ChartType.Scatter
-            && !chart.FirstColIsCategories
-            && col == dataStartCol;
-
-    private static int GetSeriesIndex(ChartModel chart, uint col, uint dataStartCol) =>
-        (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
-
-    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex) =>
-        chart.SeriesFormats.LastOrDefault(format => format.SeriesIndex == seriesIndex);
-
-    private static ChartPointDataLabelFormat? GetPointDataLabelFormat(ChartModel chart, int seriesIndex, int pointIndex) =>
-        chart.PointDataLabelFormats.LastOrDefault(format => format.SeriesIndex == seriesIndex && format.PointIndex == pointIndex);
-
-    private static void ApplyAxisBounds(PlotModel model, ChartModel chart)
-    {
-        for (var index = 0; index < model.Axes.Count; index++)
-        {
-            var axis = model.Axes[index];
-            if (axis is not LinearAxis linearAxis)
-                continue;
-
-            if (ShouldUseLogAxis(chart, linearAxis))
-            {
-                var logAxis = new LogarithmicAxis
-                {
-                    Position = linearAxis.Position,
-                    Title = linearAxis.Title,
-                    Key = linearAxis.Key,
-                    Minimum = GetPositiveAxisValue(linearAxis.Minimum),
-                    Maximum = GetPositiveAxisValue(linearAxis.Maximum),
-                    MajorStep = GetPositiveAxisValue(linearAxis.MajorStep),
-                    MinorStep = GetPositiveAxisValue(linearAxis.MinorStep),
-                    LabelFormatter = linearAxis.LabelFormatter
-                };
-                model.Axes[index] = logAxis;
-                axis = logAxis;
-            }
-
-            if (axis.Position is AxisPosition.Bottom or AxisPosition.Top)
-            {
-                ApplyAxisTitleStyle(axis, chart);
-                if (ChartTypeSupport.SupportsXAxisBounds(chart.Type))
-                {
-                    if (chart.XAxisMinimum is { } minimum)
-                        axis.Minimum = ShouldUseLogAxis(chart, axis) ? Math.Max(double.Epsilon, minimum) : minimum;
-                    if (chart.XAxisMaximum is { } maximum)
-                        axis.Maximum = ShouldUseLogAxis(chart, axis) ? Math.Max(double.Epsilon, maximum) : maximum;
-                    if (chart.XAxisMajorUnit is { } majorUnit)
-                        axis.MajorStep = majorUnit;
-                    if (chart.XAxisMinorUnit is { } minorUnit)
-                        axis.MinorStep = minorUnit;
-                }
-                if (ChartTypeSupport.SupportsXAxisBounds(chart.Type) &&
-                    chart.XAxisNumberFormat != ChartDataLabelNumberFormat.General &&
-                    axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => FormatAxisValue(chart.XAxisNumberFormat, value);
-                ApplyGridlineStyle(
-                    axis,
-                    chart.ShowXAxisMajorGridlines,
-                    chart.ShowXAxisMinorGridlines,
-                    chart.XAxisMajorGridlineColor,
-                    chart.XAxisMinorGridlineColor,
-                    chart.XAxisGridlineThickness);
-                ApplyTickAndLabelStyle(axis, chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle, chart.ShowXAxisLabels);
-                ApplyAxisLabelStyle(axis, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle);
-                ApplyAxisLineStyle(axis, chart.XAxisLineColor, chart.XAxisLineThickness);
-            }
-            else if (axis.Position is AxisPosition.Left or AxisPosition.Right)
-            {
-                ApplyAxisTitleStyle(axis, chart);
-                if (ChartTypeSupport.SupportsYAxisBounds(chart.Type))
-                {
-                    if (chart.YAxisMinimum is { } minimum)
-                        axis.Minimum = ShouldUseLogAxis(chart, axis) ? Math.Max(double.Epsilon, minimum) : minimum;
-                    if (chart.YAxisMaximum is { } maximum)
-                        axis.Maximum = ShouldUseLogAxis(chart, axis) ? Math.Max(double.Epsilon, maximum) : maximum;
-                    if (chart.YAxisMajorUnit is { } majorUnit)
-                        axis.MajorStep = majorUnit;
-                    if (chart.YAxisMinorUnit is { } minorUnit)
-                        axis.MinorStep = minorUnit;
-                }
-                if (ChartTypeSupport.SupportsYAxisBounds(chart.Type) &&
-                    chart.YAxisNumberFormat != ChartDataLabelNumberFormat.General &&
-                    axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => FormatAxisValue(chart.YAxisNumberFormat, value);
-                ApplyGridlineStyle(
-                    axis,
-                    chart.ShowYAxisMajorGridlines,
-                    chart.ShowYAxisMinorGridlines,
-                    chart.YAxisMajorGridlineColor,
-                    chart.YAxisMinorGridlineColor,
-                    chart.YAxisGridlineThickness);
-                ApplyTickAndLabelStyle(axis, chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle, chart.ShowYAxisLabels);
-                ApplyAxisLabelStyle(axis, chart.YAxisLabelTextColor, chart.YAxisLabelFontSize, chart.YAxisLabelAngle);
-                ApplyAxisLineStyle(axis, chart.YAxisLineColor, chart.YAxisLineThickness);
-            }
-        }
-    }
-
-    private static void ApplyAreaStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
-    {
-        if (chart.ResolveChartAreaFillColor(theme) is { } chartFill)
-            model.Background = OxyColor.FromRgb(chartFill.R, chartFill.G, chartFill.B);
-        if (chart.ResolvePlotAreaFillColor(theme) is { } plotFill)
-            model.PlotAreaBackground = OxyColor.FromRgb(plotFill.R, plotFill.G, plotFill.B);
-        if (chart.ResolvePlotAreaBorderColor(theme) is { } plotBorder)
-            model.PlotAreaBorderColor = OxyColor.FromRgb(plotBorder.R, plotBorder.G, plotBorder.B);
-        model.PlotAreaBorderThickness = new OxyThickness(chart.PlotAreaBorderThickness);
-    }
-
-    private static void ApplyTitleStyle(PlotModel model, ChartModel chart)
-    {
-        model.TitleFontSize = chart.ChartTitleFontSize;
-        if (chart.ChartTitleTextColor is { } titleColor)
-            model.TitleColor = OxyColor.FromRgb(titleColor.R, titleColor.G, titleColor.B);
-    }
-
-    private static void ApplyAxisTitleStyle(Axis axis, ChartModel chart)
-    {
-        axis.TitleFontSize = chart.AxisTitleFontSize;
-        if (chart.AxisTitleTextColor is { } titleColor)
-            axis.TitleColor = OxyColor.FromRgb(titleColor.R, titleColor.G, titleColor.B);
-    }
-
-    private static void ApplyGridlineStyle(
-        Axis axis,
-        bool showMajor,
-        bool showMinor,
-        CellColor? majorColor,
-        CellColor? minorColor,
-        double thickness)
-    {
-        axis.MajorGridlineStyle = showMajor ? LineStyle.Solid : LineStyle.None;
-        axis.MajorGridlineColor = ToOxyColor(majorColor) ?? OxyColor.FromRgb(220, 220, 220);
-        axis.MajorGridlineThickness = thickness;
-        axis.MinorGridlineStyle = showMinor ? LineStyle.Dot : LineStyle.None;
-        axis.MinorGridlineColor = ToOxyColor(minorColor) ?? OxyColor.FromRgb(235, 235, 235);
-        axis.MinorGridlineThickness = Math.Max(0.25, thickness * 0.75);
-    }
-
-    private static void ApplyTickAndLabelStyle(
-        Axis axis,
-        ChartAxisTickStyle majorTickStyle,
-        ChartAxisTickStyle minorTickStyle,
-        bool showLabels)
-    {
-        axis.TickStyle = ToOxyTickStyle(majorTickStyle);
-        axis.MajorTickSize = GetTickSize(majorTickStyle);
-        axis.MinorTickSize = GetTickSize(minorTickStyle);
-        if (!showLabels)
-            axis.TextColor = OxyColors.Transparent;
-    }
-
-    private static void ApplyAxisLabelStyle(Axis axis, CellColor? textColor, double fontSize, double angle)
-    {
-        axis.FontSize = fontSize;
-        axis.Angle = angle;
-        if (textColor is { } color && axis.TextColor != OxyColors.Transparent)
-            axis.TextColor = OxyColor.FromRgb(color.R, color.G, color.B);
-    }
-
-    private static void ApplyAxisLineStyle(Axis axis, CellColor? color, double thickness)
-    {
-        axis.AxislineStyle = LineStyle.Solid;
-        axis.AxislineThickness = thickness;
-        if (color is { } lineColor)
-            axis.AxislineColor = OxyColor.FromRgb(lineColor.R, lineColor.G, lineColor.B);
-    }
-
-    private static double GetTickSize(ChartAxisTickStyle tickStyle) =>
-        tickStyle switch
-        {
-            ChartAxisTickStyle.None => 0,
-            ChartAxisTickStyle.Inside => 4,
-            ChartAxisTickStyle.Cross => 8,
-            _ => 6
-        };
-
-    private static TickStyle ToOxyTickStyle(ChartAxisTickStyle tickStyle) =>
-        tickStyle switch
-        {
-            ChartAxisTickStyle.None => TickStyle.None,
-            ChartAxisTickStyle.Inside => TickStyle.Inside,
-            ChartAxisTickStyle.Cross => TickStyle.Crossing,
-            _ => TickStyle.Outside
-        };
-
-    private static string FormatAxisValue(ChartDataLabelNumberFormat format, double value) =>
-        format switch
-        {
-            ChartDataLabelNumberFormat.Number => value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Percent => value.ToString("0%", System.Globalization.CultureInfo.InvariantCulture),
-            _ => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
-        };
-
-    private static bool ShouldUseLogAxis(ChartModel chart, Axis axis) =>
-        axis.Position is AxisPosition.Bottom or AxisPosition.Top
-            ? chart.XAxisLogScale && ChartTypeSupport.SupportsXAxisLogScale(chart.Type)
-            : chart.YAxisLogScale && ChartTypeSupport.SupportsYAxisLogScale(chart.Type);
-
-    private static double GetPositiveAxisValue(double value) =>
-        double.IsNaN(value) || value <= 0 ? double.NaN : value;
-
-    private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
-    {
-        if (format is null)
-            return;
-        if (format.ResolveStrokeColor(theme) is { } stroke)
-            series.Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        else if (format.ResolveFillColor(theme) is { } fill)
-            series.Color = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.StrokeThickness is { } thickness)
-            series.StrokeThickness = thickness;
-        if (format.DashStyle is { } dashStyle)
-            series.LineStyle = ToOxyLineStyle(dashStyle);
-        if (format.MarkerStyle is { } markerStyle)
-            series.MarkerType = ToOxyMarkerType(markerStyle);
-        if (format.MarkerSize is { } markerSize)
-            series.MarkerSize = Math.Clamp(markerSize, 1, 20);
-        if (format.ResolveFillColor(theme) is { } markerFill)
-            series.MarkerFill = OxyColor.FromRgb(markerFill.R, markerFill.G, markerFill.B);
-        if (format.ResolveStrokeColor(theme) is { } markerStroke)
-            series.MarkerStroke = OxyColor.FromRgb(markerStroke.R, markerStroke.G, markerStroke.B);
-        if (format.StrokeThickness is { } markerStrokeThickness)
-            series.MarkerStrokeThickness = markerStrokeThickness;
-    }
-
-    private static void ApplyRectangleBarFormat(RectangleBarSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
-    {
-        if (format is null)
-            return;
-        if (format.ResolveFillColor(theme) is { } fill)
-            series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.ResolveStrokeColor(theme) is { } stroke)
-            series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.StrokeThickness is { } thickness)
-            series.StrokeThickness = thickness;
-    }
-
-    private static void ApplyBarFormat(BarSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
-    {
-        if (format is null)
-            return;
-        if (format.ResolveFillColor(theme) is { } fill)
-            series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.ResolveStrokeColor(theme) is { } stroke)
-            series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.StrokeThickness is { } thickness)
-            series.StrokeThickness = thickness;
-    }
-
-    private static void ApplyPieFormat(PieSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
-    {
-        if (format is null)
-            return;
-        if (format.ResolveStrokeColor(theme) is { } stroke)
-            series.Stroke = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.StrokeThickness is { } thickness)
-            series.StrokeThickness = thickness;
-    }
-
-    private static void ApplyPieDataLabelStyle(PieSeries series, ChartModel chart, WorkbookTheme theme)
-    {
-        series.FontSize = chart.DataLabelFontSize;
-        if (chart.ResolveDataLabelTextColor(theme) is not { } color)
-            return;
-
-        var oxyColor = OxyColor.FromRgb(color.R, color.G, color.B);
-        series.TextColor = oxyColor;
-        series.InsideLabelColor = oxyColor;
-    }
-
-    private static void ApplyAreaFormat(AreaSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
-    {
-        if (format is null)
-            return;
-        if (format.ResolveStrokeColor(theme) is { } stroke)
-            series.Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.ResolveFillColor(theme) is { } fill)
-            series.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.StrokeThickness is { } thickness)
-            series.StrokeThickness = thickness;
-        if (format.DashStyle is { } dashStyle)
-            series.LineStyle = ToOxyLineStyle(dashStyle);
-    }
-
-    private static void ApplyScatterFormat(ScatterSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
-    {
-        if (format is null)
-            return;
-        if (format.ResolveFillColor(theme) is { } fill)
-            series.MarkerFill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.ResolveStrokeColor(theme) is { } stroke)
-            series.MarkerStroke = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.StrokeThickness is { } thickness)
-            series.MarkerStrokeThickness = thickness;
-        if (format.MarkerStyle is { } markerStyle)
-            series.MarkerType = ToOxyMarkerType(markerStyle);
-        if (format.MarkerSize is { } markerSize)
-            series.MarkerSize = Math.Clamp(markerSize, 1, 30);
-    }
-
-    private static bool ShouldUseNativeValueLabels(ChartModel chart) =>
-        ChartDataLabelFormatter.ShouldUseNativeValueLabels(chart);
-
-    private static void ApplyNativeDataLabelStyle(PlotElement element, ChartModel chart, WorkbookTheme theme)
-    {
-        if (!ShouldUseNativeValueLabels(chart))
-            return;
-
-        element.FontSize = chart.DataLabelFontSize;
-        if (chart.ResolveDataLabelTextColor(theme) is { } color)
-            element.TextColor = OxyColor.FromRgb(color.R, color.G, color.B);
-    }
-
-    private static bool ShouldUseAnnotationLabels(ChartModel chart) =>
-        ChartDataLabelFormatter.ShouldUseAnnotationLabels(chart);
-
-    private static void AddDataLabelAnnotation(
-        PlotModel model,
-        ChartModel chart,
-        WorkbookTheme theme,
-        string seriesName,
-        int seriesIndex,
-        int pointIndex,
-        string categoryName,
-        double x,
-        double y,
-        double value)
-    {
-        var pointFormat = GetPointDataLabelFormat(chart, seriesIndex, pointIndex);
-        var textColor = pointFormat?.ResolveTextColor(theme) ?? chart.ResolveDataLabelTextColor(theme);
-        var borderColor = pointFormat?.ResolveBorderColor(theme) ?? chart.ResolveDataLabelBorderColor(theme);
-        var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
-        model.Annotations.Add(new TextAnnotation
-        {
-            Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, categoryName, value),
-            TextPosition = new DataPoint(x, y),
-            TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
-            TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
-                ? OxyPlot.VerticalAlignment.Top
-                : OxyPlot.VerticalAlignment.Bottom,
-            TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
-            FontSize = pointFormat?.FontSize ?? chart.DataLabelFontSize,
-            Stroke = ToOxyColor(borderColor) ?? (chart.ShowDataLabelCallouts ? OxyColors.Gray : OxyColors.Transparent),
-            StrokeThickness = pointFormat?.BorderThickness ?? (chart.DataLabelBorderThickness > 0 ? chart.DataLabelBorderThickness : chart.ShowDataLabelCallouts ? 1 : 0),
-            Background = ToOxyColor(fillColor) ?? (chart.ShowDataLabelCallouts ? OxyColor.FromAColor(235, OxyColors.White) : OxyColors.Transparent),
-            TextRotation = chart.DataLabelAngle,
-            Padding = new OxyThickness(chart.ShowDataLabelCallouts ? 4 : 2)
-        });
-    }
-
-    private static OxyColor? ToOxyColor(CellColor? color) =>
-        color is { } value ? OxyColor.FromRgb(value.R, value.G, value.B) : null;
-
-    private static void AddLineDataLabelAnnotations(
-        PlotModel model,
-        ChartModel chart,
-        WorkbookTheme theme,
-        LineSeries series,
-        string seriesName,
-        int seriesIndex,
-        IReadOnlyList<string> categories)
-    {
-        if (!ShouldUseAnnotationLabels(chart))
-            return;
-
-        for (var pointIndex = 0; pointIndex < series.Points.Count; pointIndex++)
-        {
-            var point = series.Points[pointIndex];
-            AddDataLabelAnnotation(
-                model,
-                chart,
-                theme,
-                seriesName,
-                seriesIndex,
-                pointIndex,
-                ChartDataLabelFormatter.GetCategory(categories, (int)Math.Round(point.X)),
-                point.X,
-                point.Y,
-                point.Y);
-        }
-    }
-
-    private static bool UsesSecondaryAxis(ChartModel chart, int seriesIndex)
-    {
-        if (!chart.ShowSecondaryAxis || seriesIndex <= 0)
-            return false;
-
-        return chart.SecondaryAxisSeriesIndexes.Count == 0 ||
-               chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
-    }
-
-    private static bool IsComboLineSeries(ChartModel chart, int seriesIndex)
-    {
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || !chart.UseComboLineForSecondarySeries || seriesIndex <= 0)
-            return false;
-
-        return chart.ComboLineSeriesIndexes.Contains(seriesIndex);
-    }
-
-    private static LabelPlacement ToOxyLabelPlacement(ChartDataLabelPosition position) =>
-        position switch
-        {
-            ChartDataLabelPosition.Center => LabelPlacement.Middle,
-            ChartDataLabelPosition.InsideEnd => LabelPlacement.Inside,
-            ChartDataLabelPosition.OutsideEnd => LabelPlacement.Outside,
-            _ => LabelPlacement.Outside
-        };
-
-    private static double ToLabelMargin(ChartDataLabelPosition position) =>
-        position switch
-        {
-            ChartDataLabelPosition.Center => -8,
-            ChartDataLabelPosition.InsideEnd => -4,
-            ChartDataLabelPosition.OutsideEnd => 8,
-            _ => 4
-        };
-
-    private static void AddLinePoints(
-        LineSeries series,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        uint dataStartRow,
-        uint endRow,
-        uint col,
-        List<DataPoint>? trendPoints,
-        out List<DataPoint>? capturedTrendPoints)
-    {
-        var i = 0;
-        for (uint r = dataStartRow; r <= endRow; r++, i++)
-        {
-            if (cellLookup.TryGetValue((r, col), out var cell)
-                && double.TryParse(cell.DisplayText, out var v))
-            {
-                var point = new DataPoint(i, v);
-                series.Points.Add(point);
-                trendPoints?.Add(point);
-            }
-        }
-
-        capturedTrendPoints = trendPoints;
-    }
-
-    private static void AddTrendlineIfRequested(
-        PlotModel model,
-        ChartModel chart,
-        WorkbookTheme theme,
-        IReadOnlyList<DataPoint>? points,
-        bool swapTrendlineAxes = false)
-    {
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type) || points is null || points.Count < 2)
-            return;
-
-        var trendPoints = ChartTrendlineCalculator.Calculate(
-            chart.TrendlineType,
-            points,
-            chart.TrendlinePeriod,
-            chart.TrendlineOrder);
-        if (trendPoints.Count < 2)
-            return;
-
-        var trendline = new LineSeries
-        {
-            Title = GetTrendlineTitle(chart.TrendlineType),
-            LineStyle = ToOxyLineStyle(chart.TrendlineDashStyle),
-            StrokeThickness = chart.TrendlineThickness,
-            Color = chart.ResolveTrendlineColor(theme) is { } color
-                ? OxyColor.FromRgb(color.R, color.G, color.B)
-                : OxyColors.Gray
-        };
-        var displaySourcePoints = swapTrendlineAxes
-            ? points.Select(point => new DataPoint(point.Y, point.X)).ToArray()
-            : points;
-        foreach (var point in trendPoints)
-            trendline.Points.Add(swapTrendlineAxes ? new DataPoint(point.Y, point.X) : point);
-        model.Series.Add(trendline);
-        AddTrendlineInfoIfRequested(model, chart, points, trendPoints, displaySourcePoints);
-    }
-
-    private static LineStyle ToOxyLineStyle(ChartLineDashStyle dashStyle) =>
-        dashStyle switch
-        {
-            ChartLineDashStyle.Solid => LineStyle.Solid,
-            ChartLineDashStyle.Dot => LineStyle.Dot,
-            _ => LineStyle.Dash
-        };
-
-    private static MarkerType ToOxyMarkerType(ChartMarkerStyle markerStyle) =>
-        markerStyle switch
-        {
-            ChartMarkerStyle.None => MarkerType.None,
-            ChartMarkerStyle.Square => MarkerType.Square,
-            ChartMarkerStyle.Diamond => MarkerType.Diamond,
-            ChartMarkerStyle.Triangle => MarkerType.Triangle,
-            _ => MarkerType.Circle
-        };
-
-    private static void AddTrendlineInfoIfRequested(
-        PlotModel model,
-        ChartModel chart,
-        IReadOnlyList<DataPoint> sourcePoints,
-        IReadOnlyList<DataPoint> trendPoints,
-        IReadOnlyList<DataPoint> displaySourcePoints)
-    {
-        if (!chart.ShowTrendlineEquation && !chart.ShowTrendlineRSquared)
-            return;
-
-        var lines = new List<string>();
-        if (chart.ShowTrendlineEquation)
-            lines.Add(GetTrendlineEquationText(chart, trendPoints));
-        if (chart.ShowTrendlineRSquared && ChartTrendlineCalculator.TryCalculateRSquared(sourcePoints, trendPoints, out var rSquared))
-            lines.Add($"R² = {rSquared:0.0000}");
-        if (lines.Count == 0)
-            return;
-
-        model.Annotations.Add(new TextAnnotation
-        {
-            Text = string.Join(Environment.NewLine, lines),
-            TextPosition = new DataPoint(
-                displaySourcePoints.Min(point => point.X),
-                displaySourcePoints.Max(point => point.Y)),
-            TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Left,
-            TextVerticalAlignment = OxyPlot.VerticalAlignment.Top,
-            Background = OxyColor.FromAColor(220, OxyColors.White),
-            Stroke = OxyColors.LightGray,
-            StrokeThickness = 1,
-            Padding = new OxyThickness(4)
-        });
-    }
-
-    private static string GetTrendlineEquationText(ChartModel chart, IReadOnlyList<DataPoint> trendPoints)
-    {
-        if (chart.TrendlineType == ChartTrendlineType.MovingAverage)
-            return $"Moving average ({Math.Max(2, chart.TrendlinePeriod)})";
-        if (chart.TrendlineType == ChartTrendlineType.Polynomial)
-            return $"Polynomial (order {Math.Clamp(chart.TrendlineOrder, 2, 6)})";
-        if (trendPoints.Count < 2)
-            return GetTrendlineTitle(chart.TrendlineType);
-
-        var first = trendPoints[0];
-        var last = trendPoints[^1];
-        var dx = last.X - first.X;
-        if (Math.Abs(dx) < double.Epsilon)
-            return GetTrendlineTitle(chart.TrendlineType);
-
-        return chart.TrendlineType switch
-        {
-            ChartTrendlineType.Exponential when first.Y > 0 && last.Y > 0 =>
-                FormatExponentialEquation(first, last, dx),
-            ChartTrendlineType.Logarithmic when first.X > 0 && last.X > 0 =>
-                FormatLogarithmicEquation(first, last),
-            ChartTrendlineType.Power when first.X > 0 && last.X > 0 && first.Y > 0 && last.Y > 0 =>
-                FormatPowerEquation(first, last),
-            _ => FormatLinearEquation(first, last, dx)
-        };
-    }
-
-    private static string FormatLinearEquation(DataPoint first, DataPoint last, double dx)
-    {
-        var slope = (last.Y - first.Y) / dx;
-        var intercept = first.Y - (slope * first.X);
-        return $"y = {slope:0.###}x {FormatSigned(intercept)}";
-    }
-
-    private static string FormatExponentialEquation(DataPoint first, DataPoint last, double dx)
-    {
-        var b = Math.Log(last.Y / first.Y) / dx;
-        var a = first.Y / Math.Exp(b * first.X);
-        return $"y = {a:0.###}e^({b:0.###}x)";
-    }
-
-    private static string FormatLogarithmicEquation(DataPoint first, DataPoint last)
-    {
-        var dLogX = Math.Log(last.X) - Math.Log(first.X);
-        if (Math.Abs(dLogX) < double.Epsilon)
-            return "Logarithmic Trendline";
-
-        var b = (last.Y - first.Y) / dLogX;
-        var a = first.Y - (b * Math.Log(first.X));
-        return $"y = {b:0.###}ln(x) {FormatSigned(a)}";
-    }
-
-    private static string FormatPowerEquation(DataPoint first, DataPoint last)
-    {
-        var dLogX = Math.Log(last.X) - Math.Log(first.X);
-        if (Math.Abs(dLogX) < double.Epsilon)
-            return "Power Trendline";
-
-        var b = Math.Log(last.Y / first.Y) / dLogX;
-        var a = first.Y / Math.Pow(first.X, b);
-        return $"y = {a:0.###}x^{b:0.###}";
-    }
-
-    private static string FormatSigned(double value) =>
-        value < 0 ? $"- {Math.Abs(value):0.###}" : $"+ {value:0.###}";
-
-    private static string GetTrendlineTitle(ChartTrendlineType type) =>
-        type switch
-        {
-            ChartTrendlineType.Exponential => "Exponential Trendline",
-            ChartTrendlineType.Logarithmic => "Logarithmic Trendline",
-            ChartTrendlineType.Power => "Power Trendline",
-            ChartTrendlineType.MovingAverage => "Moving Average",
-            ChartTrendlineType.Polynomial => "Polynomial Trendline",
-            _ => "Linear Trendline"
-        };
-
-    private static void AddSecondaryAxisIfRequested(PlotModel model, ChartModel chart)
-    {
-        if (!chart.ShowSecondaryAxis || !ChartTypeSupport.SupportsSecondaryAxis(chart.Type))
-            return;
-
-        if (!HasAnySecondaryAxisSeries(chart))
-            return;
-
-        if (model.Axes.Any(axis => axis.Key == SecondaryYAxisKey))
-            return;
-
-        model.Axes.Add(new LinearAxis
-        {
-            Key = SecondaryYAxisKey,
-            Position = AxisPosition.Right,
-            Title = "Secondary"
-        });
-    }
-
-    private static bool HasAnySecondaryAxisSeries(ChartModel chart)
-    {
-        var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
-        if (seriesCount < 2)
-            return false;
-
-        return chart.SecondaryAxisSeriesIndexes.Count == 0
-            ? seriesCount > 1
-            : chart.SecondaryAxisSeriesIndexes.Any(index => index > 0 && index < seriesCount);
-    }
-
-    private static void ConfigureLegend(PlotModel model, ChartModel chart, WorkbookTheme theme)
-    {
-        if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None)
-            return;
-
-        var legend = new Legend
-        {
-            LegendPlacement = chart.LegendOverlay ? LegendPlacement.Inside : LegendPlacement.Outside,
-            LegendTextColor = ToOxyColor(chart.ResolveLegendTextColor(theme)) ?? OxyColors.Automatic,
-            LegendFontSize = chart.LegendFontSize,
-            LegendBackground = ToOxyColor(chart.ResolveLegendFillColor(theme)) ?? OxyColors.Undefined,
-            LegendBorder = ToOxyColor(chart.ResolveLegendBorderColor(theme)) ?? OxyColors.Undefined,
-            LegendBorderThickness = chart.LegendBorderThickness,
-            LegendPosition = GetLegendPosition(chart.LegendPosition, chart.LegendOverlay)
-        };
-        model.Legends.Add(legend);
-    }
-
-    private static OxyPlot.Legends.LegendPosition GetLegendPosition(ChartLegendPosition position, bool overlay) =>
-        position switch
-        {
-            ChartLegendPosition.Left => overlay ? OxyPlot.Legends.LegendPosition.LeftTop : OxyPlot.Legends.LegendPosition.LeftMiddle,
-            ChartLegendPosition.Top => OxyPlot.Legends.LegendPosition.TopCenter,
-            ChartLegendPosition.Bottom => OxyPlot.Legends.LegendPosition.BottomCenter,
-            _ => overlay ? OxyPlot.Legends.LegendPosition.RightTop : OxyPlot.Legends.LegendPosition.RightMiddle
-        };
 }
-
-
-

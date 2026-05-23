@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -7,15 +8,22 @@ namespace Freexcel.App.Host;
 public sealed partial class FindReplaceDialog : Window
 {
     private readonly Func<Workbook> _getWorkbook;
+    private readonly Func<SheetId?> _getCurrentSheetId;
     private readonly ICommandBus _commandBus;
     private readonly Action<CellAddress> _navigateTo;
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
     private string _lastSearch = string.Empty;
 
-    public FindReplaceDialog(Func<Workbook> getWorkbook, ICommandBus commandBus, Action<CellAddress> navigateTo, bool replaceMode = false)
+    public FindReplaceDialog(
+        Func<Workbook> getWorkbook,
+        ICommandBus commandBus,
+        Action<CellAddress> navigateTo,
+        bool replaceMode = false,
+        Func<SheetId?>? getCurrentSheetId = null)
     {
         _getWorkbook = getWorkbook;
+        _getCurrentSheetId = getCurrentSheetId ?? (() => null);
         _commandBus = commandBus;
         _navigateTo = navigateTo;
         InitializeComponent();
@@ -32,7 +40,10 @@ public sealed partial class FindReplaceDialog : Window
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
+    private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options <<";
+    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
 
     private void FindBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -52,9 +63,9 @@ public sealed partial class FindReplaceDialog : Window
 
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
+            CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true,
-            searchFormulas: SearchFormulas);
+            matchEntireCell: MatchEntireBox.IsChecked == true);
 
         UpdateResultsGrid();
 
@@ -80,9 +91,9 @@ public sealed partial class FindReplaceDialog : Window
         _currentIndex = -1;
         _results = FindReplaceService.Find(
             _getWorkbook(), search,
+            CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true,
-            searchFormulas: SearchFormulas);
+            matchEntireCell: MatchEntireBox.IsChecked == true);
 
         UpdateResultsGrid();
         StatusLabel.Text = _results.Count == 0 ? "No matches found." : $"{_results.Count} cell(s) found.";
@@ -95,6 +106,7 @@ public sealed partial class FindReplaceDialog : Window
 
         var count = FindReplaceService.ReplaceAll(
             _getWorkbook(), _commandBus, search, ReplaceBox.Text,
+            CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true);
 
@@ -104,9 +116,53 @@ public sealed partial class FindReplaceDialog : Window
         UpdateResultsGrid();
     }
 
+    private void ReplaceOne()
+    {
+        var search = SearchText;
+        if (string.IsNullOrEmpty(search)) return;
+
+        if (_results.Count == 0 || _currentIndex < 0 || search != _lastSearch)
+            FindNext();
+
+        if (_results.Count == 0 || _currentIndex < 0)
+            return;
+
+        var result = _results[_currentIndex];
+        var replaced = FindReplaceDialogPlanner.ReplaceSingleMatch(
+            _getWorkbook(),
+            _commandBus,
+            result,
+            search,
+            ReplaceBox.Text,
+            matchCase: MatchCaseBox.IsChecked == true,
+            matchEntireCell: MatchEntireBox.IsChecked == true);
+
+        if (!replaced)
+        {
+            StatusLabel.Text = "No replaceable match found.";
+            return;
+        }
+
+        StatusLabel.Text = "Replaced 1 cell.";
+        _results = [];
+        _currentIndex = -1;
+        UpdateResultsGrid();
+    }
+
     private string SearchText => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox.Text : FindBox.Text;
 
-    private bool SearchFormulas => LookInCombo.SelectedIndex == 0;
+    private FindOptions CreateFindOptions() =>
+        new(
+            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Sheet : FindWithin.Workbook,
+            CurrentSheetId: _getCurrentSheetId(),
+            SearchOrder: SearchCombo.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
+            LookIn: LookInCombo.SelectedIndex switch
+            {
+                0 => FindLookIn.Formulas,
+                2 => FindLookIn.Notes,
+                3 => FindLookIn.Comments,
+                _ => FindLookIn.Values
+            });
 
     private void UpdateResultsGrid()
     {
@@ -116,4 +172,60 @@ public sealed partial class FindReplaceDialog : Window
     }
 
     private sealed record FindResultRow(string Address, string Value);
+}
+
+internal static class FindReplaceDialogPlanner
+{
+    public static bool ReplaceSingleMatch(
+        Workbook workbook,
+        ICommandBus commandBus,
+        FindResult match,
+        string searchText,
+        string replaceText,
+        bool matchCase,
+        bool matchEntireCell)
+    {
+        if (string.IsNullOrEmpty(searchText))
+            return false;
+
+        var sheet = workbook.GetSheet(match.Address.Sheet);
+        var cell = sheet?.GetCell(match.Address);
+        if (cell is null || cell.HasFormula)
+            return false;
+
+        var currentText = GetDisplayText(cell.Value);
+        if (currentText is null)
+            return false;
+
+        var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var isMatch = matchEntireCell
+            ? currentText.Equals(searchText, comparison)
+            : currentText.Contains(searchText, comparison);
+
+        if (!isMatch)
+            return false;
+
+        var newText = matchEntireCell
+            ? replaceText
+            : currentText.Replace(searchText, replaceText, comparison);
+
+        ScalarValue newValue = double.TryParse(newText, NumberStyles.Any, CultureInfo.InvariantCulture, out var d)
+            ? new NumberValue(d)
+            : new TextValue(newText);
+
+        var command = new EditCellsCommand(match.Address.Sheet, [(match.Address, Cell.FromValue(newValue))]);
+        commandBus.Execute(workbook.Id, command);
+        return true;
+    }
+
+    private static string? GetDisplayText(ScalarValue value) => value switch
+    {
+        BlankValue => null,
+        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
+        TextValue t => t.Value,
+        BoolValue b => b.Value ? "TRUE" : "FALSE",
+        DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ErrorValue err => err.Code,
+        _ => null
+    };
 }

@@ -10,7 +10,7 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO.Tests;
 
-public class FileAdapterSmokeTests
+public partial class FileAdapterSmokeTests
 {
     private const string NumberStoredAsTextCode = "NumberStoredAsText";
     private const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
@@ -56,6 +56,31 @@ public class FileAdapterSmokeTests
     }
 
     // ── XLSX ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
+    {
+        var workbook = new Workbook("HeaderPicture");
+        var sheet = workbook.AddSheet("Sheet1");
+        var picture = new WorksheetHeaderFooterPicture([1, 2, 3, 4], "image/png", "logo.png", 120, 48);
+        sheet.PageHeader = new WorksheetHeaderFooter("&[Picture]", "", "");
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(picture, null, null);
+
+        var adapter = new NativeJsonAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.PageHeader.Left.Should().Be("&[Picture]");
+        loaded.PageHeaderPictures.Left.Should().NotBeNull();
+        loaded.PageHeaderPictures.Left!.ImageBytes.Should().Equal([1, 2, 3, 4]);
+        loaded.PageHeaderPictures.Left.ContentType.Should().Be("image/png");
+        loaded.PageHeaderPictures.Left.FileName.Should().Be("logo.png");
+        loaded.PageHeaderPictures.Left.Width.Should().Be(120);
+        loaded.PageHeaderPictures.Left.Height.Should().Be(48);
+    }
 
     [Fact]
     public void NativeJsonAdapter_RoundTrip_IgnoredFormulaErrors()
@@ -522,6 +547,114 @@ public class FileAdapterSmokeTests
         chart.Top.Should().Be(34);
         chart.Width.Should().Be(500);
         chart.Height.Should().Be(240);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_PivotChartOptions()
+    {
+        var workbook = new Workbook("PivotChartNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(100));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            IsPivotChart = true,
+            PivotSourceSheetName = "Pivot",
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 7,
+            ChartStyleId = 48,
+            ShowPivotChartFieldButtons = false,
+            ShowPivotChartReportFilterButtons = false,
+            ShowPivotChartAxisFieldButtons = true,
+            ShowPivotChartValueFieldButtons = false
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedChart = adapter.Load(ms).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.IsPivotChart.Should().BeTrue();
+        loadedChart.PivotSourceSheetName.Should().Be("Pivot");
+        loadedChart.PivotTableName.Should().Be("PivotTable1");
+        loadedChart.PivotCacheId.Should().Be(7);
+        loadedChart.ChartStyleId.Should().Be(48);
+        loadedChart.ShowPivotChartFieldButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        loadedChart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_ChartDesignMetadata()
+    {
+        var workbook = new Workbook("ChartDesignNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            PivotFormatsXml = "<c:pivotFmts><c:pivotFmt /></c:pivotFmts>",
+            Uses1904DateSystem = true,
+            Language = "en-US",
+            RoundedCorners = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            ShowDataLabelsOverMaximum = true,
+            AutoTitleDeleted = true,
+            ShowDataInHiddenRowsAndColumns = true,
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                UseMasterColorMapping = true,
+                OverrideMappings = { ["accent1"] = "accent2" }
+            },
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternal",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "../externalLinks/externalLink1.xml",
+                TargetMode = "External",
+                AutoUpdate = true
+            },
+            PlotAreaLayout = new ChartManualLayoutModel { LayoutTarget = "inner", XMode = "factor", X = 0.1, Y = 0.2, Width = 0.8, Height = 0.6 },
+            LegendLayout = new ChartManualLayoutModel { LayoutTarget = "inner", X = 0.76, Height = 0.7 },
+            Protection = new ChartProtectionModel { ChartObject = true, Data = true, Formatting = false, Selection = true, UserInterface = true },
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel { Left = 0.7, Right = 0.7, Top = 0.75, Bottom = 0.75, Header = 0.3, Footer = 0.3 },
+                PageSetup = new ChartPageSetupModel { PaperSize = "9", Orientation = "landscape", Copies = 2, BlackAndWhite = true, Draft = false }
+            }
+        };
+        sheet.Charts.Add(chart);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedChart = adapter.Load(ms).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.PivotFormatsXml.Should().Be(chart.PivotFormatsXml);
+        loadedChart.Uses1904DateSystem.Should().BeTrue();
+        loadedChart.Language.Should().Be("en-US");
+        loadedChart.RoundedCorners.Should().BeTrue();
+        loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+        loadedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        loadedChart.AutoTitleDeleted.Should().BeTrue();
+        loadedChart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
+        loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
+        loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
+        loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
+        loadedChart.Protection.Should().BeEquivalentTo(chart.Protection);
+        loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
     }
 
     [Fact]
@@ -1748,6 +1881,9 @@ public class FileAdapterSmokeTests
             Anchor = new CellAddress(sheet.Id, 3, 4),
             SourceRowCount = 2,
             SourceColumnCount = 2,
+            IsLinkedToSourceRange = true,
+            LinkedSourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            LinkedSourceSheetName = "Sheet1",
             Width = 160,
             Height = 40,
             AltText = "Copied range snapshot",
@@ -1769,6 +1905,9 @@ public class FileAdapterSmokeTests
         picture.Anchor.Row.Should().Be(3);
         picture.Anchor.Col.Should().Be(4);
         picture.SourceRowCount.Should().Be(2);
+        picture.IsLinkedToSourceRange.Should().BeTrue();
+        picture.LinkedSourceRange.Should().Be(new GridRange(new CellAddress(loaded.GetSheetAt(0).Id, 1, 1), new CellAddress(loaded.GetSheetAt(0).Id, 2, 2)));
+        picture.LinkedSourceSheetName.Should().Be("Sheet1");
         picture.AltText.Should().Be("Copied range snapshot");
         picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 1 && cell.Text == "D");
     }
@@ -1914,6 +2053,7 @@ public class FileAdapterSmokeTests
         var imageBytes = MinimalPngBytes();
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Product Photo",
             Anchor = new CellAddress(sheet.Id, 2, 3),
             Kind = PictureKind.Image,
             ImageBytes = imageBytes,
@@ -1939,6 +2079,7 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         var picture = loaded.GetSheetAt(0).Pictures.Should().ContainSingle().Subject;
+        picture.Name.Should().Be("Product Photo");
         picture.Kind.Should().Be(PictureKind.Image);
         picture.ImageBytes.Should().Equal(imageBytes);
         picture.ContentType.Should().Be("image/png");
@@ -2043,6 +2184,7 @@ public class FileAdapterSmokeTests
         var sheet = workbook.AddSheet("Sheet1");
         sheet.TextBoxes.Add(new TextBoxModel
         {
+            Name = "Review Callout",
             Anchor = new CellAddress(sheet.Id, 2, 2),
             Text = "Review note",
             Width = 220,
@@ -2056,6 +2198,7 @@ public class FileAdapterSmokeTests
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
+            Name = "Approval Shape",
             Anchor = new CellAddress(sheet.Id, 4, 3),
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
@@ -2150,6 +2293,7 @@ public class FileAdapterSmokeTests
         sheet.TextBoxes.Add(new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 2, 2),
+            Name = "Review Callout",
             Text = "Review note",
             Width = 220,
             Height = 120,
@@ -2160,6 +2304,7 @@ public class FileAdapterSmokeTests
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 4, 3),
+            Name = "Approval Shape",
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
             Height = 90,
@@ -2181,6 +2326,9 @@ public class FileAdapterSmokeTests
             XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             drawingXml.Descendants(xdr + "sp").Should().HaveCount(2);
+            drawingXml.Descendants(xdr + "cNvPr").Select(e => e.Attribute("name")?.Value)
+                .Should()
+                .Contain(["Review Callout", "Approval Shape"]);
             drawingXml.Descendants(a + "t").Select(e => e.Value).Should().Contain("Review note");
             drawingXml.Descendants(a + "prstGeom").Select(e => e.Attribute("prst")?.Value).Should().Contain("ellipse");
             drawingXml.Descendants(a + "gradFill").Should().ContainSingle();
@@ -2190,8 +2338,11 @@ public class FileAdapterSmokeTests
         ms.Position = 0;
         var loaded = adapter.Load(ms);
         var loadedSheet = loaded.GetSheetAt(0);
-        loadedSheet.TextBoxes.Should().ContainSingle().Which.Text.Should().Be("Review note");
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        loadedTextBox.Name.Should().Be("Review Callout");
+        loadedTextBox.Text.Should().Be("Review note");
         var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedShape.Name.Should().Be("Approval Shape");
         loadedShape.Kind.Should().Be(DrawingShapeKind.Ellipse);
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
@@ -2533,6 +2684,49 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesFormulaNativeMetadata()
+    {
+        var workbook = new Workbook("FormulaNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(3.14));
+        var formulaCell = Cell.FromFormula("A1*2");
+        formulaCell.Value = new NumberValue(6.28);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), formulaCell);
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetFormulaNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var formula = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2")
+            .Element(worksheetNs + "f");
+        formula.Should().NotBeNull();
+        formula!.Attribute("t").Should().NotBeNull();
+        formula.Attribute("t")!.Value.Should().Be("array");
+        formula.Attribute("ref").Should().NotBeNull();
+        formula.Attribute("ref")!.Value.Should().Be("A2:A2");
+        formula.Attribute("ca").Should().NotBeNull();
+        formula.Attribute("ca")!.Value.Should().Be("1");
+        formula.Attribute("customAttr").Should().NotBeNull();
+        formula.Attribute("customAttr")!.Value.Should().Be("formula-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_NamedRange_OnSheetWithApostrophe()
     {
         var workbook = new Workbook("NamedRangeTest");
@@ -2569,6 +2763,9 @@ public class FileAdapterSmokeTests
         {
             Bold = true,
             FontColor = new CellColor(200, 0, 0),
+            FillColor = new CellColor(255, 242, 204),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(112, 48, 160)
         };
         var styleId = workbook.RegisterStyle(style);
 
@@ -2588,6 +2785,9 @@ public class FileAdapterSmokeTests
         var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
         loadedStyle.Bold.Should().BeTrue();
         loadedStyle.FontColor.R.Should().Be(200);
+        loadedStyle.FillColor.Should().Be(new CellColor(255, 242, 204));
+        loadedStyle.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+        loadedStyle.FillPatternColor.Should().Be(new CellColor(112, 48, 160));
     }
 
     [Fact]
@@ -3172,7 +3372,8 @@ public class FileAdapterSmokeTests
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.HeaderMargin = 0.35;
         sheet.FooterMargin = 0.45;
-        sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
+        const string friendlyTokens = "&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &[Picture]";
+        sheet.PageHeader = new WorksheetHeaderFooter("Left header", friendlyTokens, "Right header");
         sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Page &[Page] of &[Pages]", "Right footer");
         sheet.FirstPageHeader = new WorksheetHeaderFooter("First header left", "First header center", "First header right");
         sheet.FirstPageFooter = new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right");
@@ -3200,6 +3401,22 @@ public class FileAdapterSmokeTests
         adapter.Save(workbook, ms);
         ms.Position = 0;
 
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var sheetXml = zip.GetEntry("xl/worksheets/sheet1.xml");
+            sheetXml.Should().NotBeNull();
+            using var reader = new StreamReader(sheetXml.Open());
+            var xml = XDocument.Parse(reader.ReadToEnd());
+            XNamespace main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            xml.Descendants(main + "oddHeader")
+                .Single()
+                .Value
+                .Should()
+                .Contain("&C&D &T &F &Z &A &P/&N &G");
+        }
+
+        ms.Position = 0;
+
         var loaded = adapter.Load(ms);
 
         var loadedSheet = loaded.GetSheetAt(0);
@@ -3207,7 +3424,7 @@ public class FileAdapterSmokeTests
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
         loadedSheet.HeaderMargin.Should().Be(0.35);
         loadedSheet.FooterMargin.Should().Be(0.45);
-        loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
+        loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", friendlyTokens, "Right header"));
         loadedSheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Page &[Page] of &[Pages]", "Right footer"));
         loadedSheet.FirstPageHeader.Should().Be(new WorksheetHeaderFooter("First header left", "First header center", "First header right"));
         loadedSheet.FirstPageFooter.Should().Be(new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right"));
@@ -3229,6 +3446,25 @@ public class FileAdapterSmokeTests
         loadedSheet.RowPageBreaks.Should().Contain(20u);
         loadedSheet.ColumnPageBreaks.Should().Contain(4u);
         loadedSheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 1));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ConvertsExcelHeaderFooterShortTokens()
+    {
+        using var xl = new XLWorkbook();
+        var xlSheet = xl.AddWorksheet("Summary");
+        xlSheet.Cell(1, 1).Value = "x";
+        xlSheet.PageSetup.Header.Center.AddText("&D &T &F &Z &A &P/&N &G", XLHFOccurrence.AllPages);
+
+        var ms = new MemoryStream();
+        xl.SaveAs(ms);
+        ms.Position = 0;
+
+        var loaded = new XlsxFileAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).PageHeader.Center
+            .Should()
+            .Be("&[Date] &[Time] &[File] &[Path] &[Tab] &[Page]/&[Pages] &[Picture]");
     }
 
     [Fact]
@@ -3343,6 +3579,10 @@ public class FileAdapterSmokeTests
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(addr, new TextValue("Example"));
         sheet.Hyperlinks[addr] = "https://example.com/docs";
+        sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open documentation",
+            "");
 
         var ms = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -3354,7 +3594,39 @@ public class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         var loadedAddr = new CellAddress(loadedSheet.Id, 1, 1);
         loadedSheet.Hyperlinks[loadedAddr].Should().Be("https://example.com/docs");
+        loadedSheet.HyperlinkMetadata[loadedAddr].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open documentation",
+            ""));
         loadedSheet.GetValue(loadedAddr).Should().Be(new TextValue("Example"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_InternalHyperlinkMetadata()
+    {
+        var workbook = new Workbook("HyperlinkInternalTest");
+        var sheet = workbook.AddSheet("S1");
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("Jump"));
+        sheet.Hyperlinks[addr] = "S1!B2";
+        sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to details",
+            "S1!B2");
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+        var loadedAddr = new CellAddress(loadedSheet.Id, 1, 1);
+
+        loadedSheet.Hyperlinks[loadedAddr].Should().Be("S1!B2");
+        loadedSheet.HyperlinkMetadata[loadedAddr].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to details",
+            "S1!B2"));
     }
 
     [Fact]
@@ -3387,6 +3659,17 @@ public class FileAdapterSmokeTests
             .Element(worksheetNs + "hyperlinks")!
             .Elements(worksheetNs + "hyperlink")
             .Single(element => element.Attribute("ref")?.Value == "A1");
+        worksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")!
+            .Attribute("nativeHyperlinksAttr")
+            .Should()
+            .NotBeNull();
+        worksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")!
+            .Attribute("nativeHyperlinksAttr")!
+            .Value
+            .Should()
+            .Be("kept");
         hyperlink.Attribute("tooltip").Should().NotBeNull();
         hyperlink.Attribute("tooltip")!.Value.Should().Be("Open documentation");
         hyperlink.Attribute("display").Should().NotBeNull();
@@ -3448,6 +3731,10 @@ public class FileAdapterSmokeTests
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("objects")?.Value).Should().Be("1");
         (protection.Attribute("scenarios")?.Value).Should().Be("1");
+        protection.Elements(XName.Get("sheetProtectionNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -3484,6 +3771,10 @@ public class FileAdapterSmokeTests
         protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
         protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
         protectedRange.Element(worksheetNs + "extLst").Should().NotBeNull();
+        protectedRange.Elements(XName.Get("protectedRangeNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -3614,6 +3905,10 @@ public class FileAdapterSmokeTests
         (protection.Attribute("saltValue")?.Value).Should().Be("salt456");
         (protection.Attribute("spinCount")?.Value).Should().Be("100000");
         (protection.Attribute("lockWindows")?.Value).Should().Be("1");
+        protection.Elements(XName.Get("workbookProtectionNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -3695,6 +3990,45 @@ public class FileAdapterSmokeTests
             .Element(worksheetNs + "t")!
             .Value.Should().Be("ri-chi");
         richString.Element(worksheetNs + "phoneticPr").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesInlineStringRichTextAndPhonetics()
+    {
+        var workbook = new Workbook("InlineStringNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Inline phonetic"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddInlineStringRichTextAndPhonetics(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cell = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A1");
+        cell.Attribute("t")!.Value.Should().Be("inlineStr");
+        var inlineString = cell.Element(worksheetNs + "is");
+        inlineString.Should().NotBeNull();
+        inlineString!.Elements(worksheetNs + "r").Should().HaveCount(2);
+        inlineString.Element(worksheetNs + "rPh").Should().NotBeNull();
+        inlineString.Element(worksheetNs + "rPh")!
+            .Element(worksheetNs + "t")!
+            .Value.Should().Be("in-line");
+        inlineString.Element(worksheetNs + "phoneticPr").Should().NotBeNull();
     }
 
     [Fact]
@@ -4794,6 +5128,10 @@ public class FileAdapterSmokeTests
         var address = new CellAddress(sheet.Id, 2, 3);
         sheet.SetCell(address, new TextValue("Docs"));
         sheet.Hyperlinks[address] = "https://example.com/docs";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open docs section",
+            "Docs!A1");
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -4805,6 +5143,10 @@ public class FileAdapterSmokeTests
         var loadedAddress = new CellAddress(loaded.GetSheetAt(0).Id, 2, 3);
         loaded.GetSheetAt(0).Hyperlinks.Should().ContainKey(loadedAddress);
         loaded.GetSheetAt(0).Hyperlinks[loadedAddress].Should().Be("https://example.com/docs");
+        loaded.GetSheetAt(0).HyperlinkMetadata[loadedAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open docs section",
+            "Docs!A1"));
     }
 
     [Fact]
@@ -4833,6 +5175,7 @@ public class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.Hyperlinks.Should().ContainSingle();
         loadedSheet.Hyperlinks[new CellAddress(loadedSheet.Id, 2, 3)].Should().Be("https://example.com/docs");
+        loadedSheet.HyperlinkMetadata[new CellAddress(loadedSheet.Id, 2, 3)].Should().Be(new HyperlinkMetadata());
     }
 
     [Fact]
@@ -4995,6 +5338,8 @@ public class FileAdapterSmokeTests
             Bold = true,
             FontColor = new CellColor(12, 34, 56),
             FillColor = new CellColor(200, 210, 220),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(90, 80, 70),
             Locked = false
         });
         sheet.SetCell(address, cell);
@@ -5012,6 +5357,8 @@ public class FileAdapterSmokeTests
         loadedStyle.Bold.Should().BeTrue();
         loadedStyle.FontColor.Should().Be(new CellColor(12, 34, 56));
         loadedStyle.FillColor.Should().Be(new CellColor(200, 210, 220));
+        loadedStyle.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+        loadedStyle.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
         loadedStyle.Locked.Should().BeFalse();
     }
 
@@ -5048,9 +5395,12 @@ public class FileAdapterSmokeTests
     {
         var workbook = new Workbook("NamedRangeNativeTest");
         var sheet = workbook.AddSheet("Data");
-        workbook.DefineNamedRange("SalesData", new GridRange(
-            new CellAddress(sheet.Id, 2, 2),
-            new CellAddress(sheet.Id, 5, 4)));
+        workbook.DefineNamedRange(
+            "SalesData",
+            new GridRange(
+                new CellAddress(sheet.Id, 2, 2),
+                new CellAddress(sheet.Id, 5, 4)),
+            new NamedRangeMetadata("Data", "Quarterly sales"));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -5064,6 +5414,7 @@ public class FileAdapterSmokeTests
         loaded.NamedRanges["SalesData"].Should().Be(new GridRange(
             new CellAddress(loadedSheet.Id, 2, 2),
             new CellAddress(loadedSheet.Id, 5, 4)));
+        loaded.NamedRangeMetadataByName["SalesData"].Should().Be(new NamedRangeMetadata("Data", "Quarterly sales"));
     }
 
     [Fact]
@@ -5109,6 +5460,43 @@ public class FileAdapterSmokeTests
         loadedSheet.MergedRegions[0].Start.Row.Should().Be(1);
         loadedSheet.MergedRegions[0].End.Row.Should().Be(2);
         loadedSheet.MergedRegions[0].End.Col.Should().Be(3);
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesMergedCellNativeMetadata()
+    {
+        var workbook = new Workbook("MergedCellNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("merged"));
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2)));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMergedCellNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells");
+        mergeCells.Should().NotBeNull();
+        mergeCells!.Attribute("nativeMergeContainerAttr").Should().NotBeNull();
+        mergeCells.Attribute("nativeMergeContainerAttr")!.Value.Should().Be("kept");
+        var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+            .Single(element => element.Attribute("ref")?.Value == "A1:B2");
+        mergeCell.Attribute("nativeMergeCellAttr").Should().NotBeNull();
+        mergeCell.Attribute("nativeMergeCellAttr")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -6366,6 +6754,64 @@ public class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.Type.Should().Be(chartType);
         loadedChart.Title.Should().Be(chartType.ToString());
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesVolumeOpenHighLowCloseStockChartPackagePart()
+    {
+        var workbook = new Workbook("StockVolumeChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        string[] headers = ["Date", "Volume", "Open", "High", "Low", "Close"];
+        for (var i = 0; i < headers.Length; i++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)i + 1), new TextValue(headers[i]));
+
+        for (uint row = 2; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Day {row - 1}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(1000 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(10 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(15 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 5), new NumberValue(9 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 6), new NumberValue(13 + row));
+        }
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            Title = "OHLCV",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 6)),
+            ShowHighLowLines = true,
+            ShowUpDownBars = true
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + "barChart").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "barChart").Descendants(chartNs + "ser").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "stockChart").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "stockChart").Descendants(chartNs + "ser").Should().HaveCount(4);
+            chartXml.Descendants(chartNs + "hiLowLines").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "upDownBars").Should().ContainSingle();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Stock);
+        loadedChart.StockSubtype.Should().Be(StockChartSubtype.VolumeOpenHighLowClose);
+        loadedChart.DataRange.End.Col.Should().Be(6);
+        loadedChart.ShowHighLowLines.Should().BeTrue();
+        loadedChart.ShowUpDownBars.Should().BeTrue();
     }
 
     [Theory]
@@ -9109,6 +9555,11 @@ public class FileAdapterSmokeTests
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreexcelNativeTableStyle")
             .Should().BeTrue();
+        tableStyles.Element(XName.Get("tableStylesNativeChild", "urn:freexcel:test"))!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
         loaded.PivotTableStyles.Should().ContainSingle(style =>
             style.Name == "FreexcelNativePivotStyle" &&
             style.AppliesToPivotTables &&
@@ -9244,6 +9695,10 @@ public class FileAdapterSmokeTests
         workbookPr!.Attribute("date1904").Should().NotBeNull();
         workbookPr.Attribute("date1904")!.Value.Should().Be("1");
         workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
+        workbookPr.Elements(XName.Get("workbookPrNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -9601,6 +10056,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSheetViewsNativeAttributes()
+    {
+        var workbook = new Workbook("WorksheetSheetViewsNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSheetViewsNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+        sheetViews.Should().NotBeNull();
+        sheetViews!.Attribute("nativeSheetViewsAttr").Should().NotBeNull();
+        sheetViews.Attribute("nativeSheetViewsAttr")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_MergesExistingWorksheetSheetViewChildNativeMetadata()
     {
         var workbook = new Workbook("ExistingWorksheetSheetViewChildMetadata");
@@ -9675,6 +10160,12 @@ public class FileAdapterSmokeTests
         sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1");
         sheetFormat.Attribute("thickTop")!.Value.Should().Be("1");
         sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3");
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild").Should().NotBeNull();
+        sheetFormat.Element(worksheetNs + "nativeSheetFormatChild")!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -9856,6 +10347,12 @@ public class FileAdapterSmokeTests
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
         pageSetup.Attribute("copies")!.Value.Should().Be("3");
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        pageSetup.Element(worksheetNs + "nativePageSetupChild").Should().NotBeNull();
+        pageSetup.Element(worksheetNs + "nativePageSetupChild")!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -9891,6 +10388,70 @@ public class FileAdapterSmokeTests
         pageMargins.Attribute("footer")!.Value.Should().Be("0.45");
         pageMargins.Attribute("customAttr").Should().NotBeNull();
         pageMargins.Attribute("customAttr")!.Value.Should().Be("page-margins-native");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetHeaderFooterNativeAttributes()
+    {
+        var workbook = new Workbook("HeaderFooterNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.PageHeader = new WorksheetHeaderFooter("Left", "Center", "Right");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetHeaderFooterNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+
+        headerFooter.Should().NotBeNull();
+        headerFooter!.Attribute("nativeHeaderFooterAttr").Should().NotBeNull();
+        headerFooter.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
+        headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDimensionNativeAttributes()
+    {
+        var workbook = new Workbook("DimensionNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetDimensionNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
+        dimension.Should().NotBeNull();
+        dimension!.Attribute("nativeDimensionAttr").Should().NotBeNull();
+        dimension.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
+        dimension.Attribute("ref")!.Value.Should().Be("A1:A2");
     }
 
     [Fact]
@@ -10128,9 +10689,25 @@ public class FileAdapterSmokeTests
             .Element(worksheetNs + "sheetData")!
             .Elements(worksheetNs + "row")
             .Single(element => element.Attribute("r")?.Value == "2");
+        worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Attribute("nativeSheetDataAttr")
+            .Should()
+            .NotBeNull();
+        worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Attribute("nativeSheetDataAttr")!
+            .Value
+            .Should()
+            .Be("kept");
         row.Attribute("thickTop")!.Value.Should().Be("1");
         row.Attribute("ph")!.Value.Should().Be("1");
         row.Attribute("customAttr")!.Value.Should().Be("row-native");
+        row.Element(XName.Get("rowNativeChild", "urn:freexcel:test"))!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -10165,6 +10742,11 @@ public class FileAdapterSmokeTests
         cell.Attribute("vm")!.Value.Should().Be("1");
         cell.Attribute("ph")!.Value.Should().Be("1");
         cell.Attribute("customAttr")!.Value.Should().Be("cell-native");
+        cell.Element(XName.Get("cellNativeChild", "urn:freexcel:test"))!
+            .Attribute("value")!
+            .Value
+            .Should()
+            .Be("kept");
     }
 
     [Fact]
@@ -10240,6 +10822,17 @@ public class FileAdapterSmokeTests
             .Element(worksheetNs + "cols")!
             .Elements(worksheetNs + "col")
             .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
+        worksheetXml.Root!
+            .Element(worksheetNs + "cols")!
+            .Attribute("nativeColsAttr")
+            .Should()
+            .NotBeNull();
+        worksheetXml.Root!
+            .Element(worksheetNs + "cols")!
+            .Attribute("nativeColsAttr")!
+            .Value
+            .Should()
+            .Be("kept");
         column.Attribute("bestFit")!.Value.Should().Be("1");
         column.Attribute("phonetic")!.Value.Should().Be("1");
         column.Attribute("customAttr")!.Value.Should().Be("column-native");
@@ -10565,6 +11158,10 @@ public class FileAdapterSmokeTests
         sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
         sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
+        sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freexcel:test"))
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo("first", "second");
     }
 
     [Fact]
@@ -12053,7 +12650,11 @@ public class FileAdapterSmokeTests
             Name = "PivotTable1",
             CacheId = 1,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
-            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
+            PrintTitles = true,
+            PrintExpandCollapseButtons = true,
+            AltTextTitle = "Sales pivot",
+            AltTextDescription = "Pivot summary for sales"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
@@ -12075,14 +12676,23 @@ public class FileAdapterSmokeTests
             var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
             pivotXml.ToString().Should().Contain("rowFields");
             pivotXml.ToString().Should().Contain("dataFields");
+            pivotXml.Root!.Attribute("itemPrintTitles")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
+            pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
         }
 
         saved.Position = 0;
         var loaded = adapter.Load(saved);
         loaded.PivotCaches.Should().ContainSingle().Which.Fields.Select(field => field.Name)
             .Should().Equal("Category", "Amount");
-        loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Which.DataFields
-            .Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
+        loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        loadedPivot.PrintTitles.Should().BeTrue();
+        loadedPivot.PrintExpandCollapseButtons.Should().BeTrue();
+        loadedPivot.AltTextTitle.Should().Be("Sales pivot");
+        loadedPivot.AltTextDescription.Should().Be("Pivot summary for sales");
     }
 
     [Fact]
@@ -13521,6 +14131,7 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
             XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -13933,684 +14544,12 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddUnknownConditionalFormatting(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            worksheetXml.Root!.Add(new XElement(
-                worksheetNs + "conditionalFormatting",
-                new XAttribute("sqref", "A2:A10"),
-                new XElement(
-                    worksheetNs + "cfRule",
-                    new XAttribute("type", "freexcelFutureRule"),
-                    new XAttribute("priority", "1"),
-                    new XElement(worksheetNs + "formula", "UNKNOWN_CF_SENTINEL"))));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddAdvancedConditionalFormatNativeMetadata(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            var conditionalFormatting = worksheetXml.Root!
-                .Elements(worksheetNs + "conditionalFormatting")
-                .First(element => element.Elements(worksheetNs + "cfRule").Any(rule => rule.Attribute("type")?.Value == "colorScale"));
-            conditionalFormatting.SetAttributeValue("customBlockAttr", "cf-container");
-            conditionalFormatting.Add(new XElement(
-                worksheetNs + "extLst",
-                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEXCEL-CF-CONTAINER-EXT}"))));
-            var rule = conditionalFormatting
-                .Elements(worksheetNs + "cfRule")
-                .First(element => element.Attribute("type")?.Value == "colorScale");
-            rule.SetAttributeValue("customAttr", "cf-native");
-            rule.Add(new XElement(
-                worksheetNs + "extLst",
-                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEXCEL-CF-EXT}"))));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddAdvancedConditionalFormatPayloadNativeMetadata(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            var dataBar = worksheetXml.Root!
-                .Descendants(worksheetNs + "dataBar")
-                .First();
-            dataBar.SetAttributeValue("border", "1");
-            dataBar.SetAttributeValue("axisPosition", "middle");
-            dataBar.Add(
-                new XElement(worksheetNs + "negativeFillColor", new XAttribute("rgb", "FFFF0000")),
-                new XElement(worksheetNs + "axisColor", new XAttribute("rgb", "FF000000")));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddConditionalFormatDifferentialStyleNativeMetadata(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
-            var dxf = stylesXml.Root!
-                .Element(workbookNs + "dxfs")!
-                .Elements(workbookNs + "dxf")
-                .Single();
-            dxf.SetAttributeValue("customAttr", "dxf-native");
-            var font = dxf.Element(workbookNs + "font")!;
-            font.SetAttributeValue("customFontAttr", "font-native");
-            font.Add(new XElement(workbookNs + "scheme", new XAttribute("val", "minor")));
-            dxf.Add(new XElement(
-                workbookNs + "extLst",
-                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEXCEL-DXF-NATIVE}"))));
-            ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalExternalLinkPackage(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-
-            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/externalLinks/externalLink1.xml",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml");
-            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Elements(workbookNs + "externalReferences").Remove();
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "externalReferences",
-                new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", "rIdFreexcelExternalLink"))));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-
-            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
-            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
-            workbookRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", "rIdFreexcelExternalLink"),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink"),
-                new XAttribute("Target", "externalLinks/externalLink1.xml")));
-            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
-
-            ReplacePackageXml(archive, "xl/externalLinks/externalLink1.xml", new XDocument(
-                new XElement(
-                    workbookNs + "externalLink",
-                    new XAttribute(XNamespace.Xmlns + "r", relNs),
-                    new XElement(
-                        workbookNs + "externalBook",
-                        new XAttribute(relNs + "id", "rIdFreexcelExternalBook"),
-                        new XElement(workbookNs + "sheetNames",
-                            new XElement(workbookNs + "sheetName", new XAttribute("val", "Sheet1")))))));
-            ReplacePackageXml(archive, "xl/externalLinks/_rels/externalLink1.xml.rels", new XDocument(
-                new XElement(
-                    packageRelNs + "Relationships",
-                    new XElement(
-                        packageRelNs + "Relationship",
-                        new XAttribute("Id", "rIdFreexcelExternalBook"),
-                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"),
-                        new XAttribute("Target", "linked-workbook.xlsx"),
-                        new XAttribute("TargetMode", "External")))));
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalCalcChainPackage(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace calcNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-
-            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/calcChain.xml",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml");
-            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
-
-            ReplacePackageXml(archive, "xl/calcChain.xml", new XDocument(
-                new XElement(
-                    calcNs + "calcChain",
-                    new XElement(calcNs + "c", new XAttribute("r", "A1"), new XAttribute("i", "1")))));
-
-            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
-            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
-            workbookRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", "rIdFreexcelCalcChain"),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"),
-                new XAttribute("Target", "calcChain.xml")));
-            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalPrinterSettingsPackage(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-
-            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/printerSettings/printerSettings1.bin",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
-            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
-
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
-            if (pageSetup is null)
-            {
-                pageSetup = new XElement(worksheetNs + "pageSetup", new XAttribute("paperSize", "1"), new XAttribute("orientation", "portrait"));
-                worksheetXml.Root.Add(pageSetup);
-            }
-
-            pageSetup.SetAttributeValue(relNs + "id", "rIdPrinterSettings1");
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
-
-            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
-            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
-                ? LoadPackageXml(worksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
-            worksheetRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", "rIdPrinterSettings1"),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings"),
-                new XAttribute("Target", "../printerSettings/printerSettings1.bin")));
-            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
-
-            archive.GetEntry("xl/printerSettings/printerSettings1.bin")?.Delete();
-            var settingsEntry = archive.CreateEntry("xl/printerSettings/printerSettings1.bin");
-            using var settingsStream = settingsEntry.Open();
-            settingsStream.Write([0x46, 0x58, 0x4C, 0x50, 0x52, 0x4E]);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddHeaderFooterLegacyDrawingPackage(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-
-            archive.GetEntry("xl/drawings/vmlDrawing1.vml")?.Delete();
-            var vmlEntry = archive.CreateEntry("xl/drawings/vmlDrawing1.vml");
-            using (var writer = new StreamWriter(vmlEntry.Open(), Encoding.UTF8))
-            {
-                writer.Write("""
-                    <xml xmlns:v="urn:schemas-microsoft-com:vml"
-                         xmlns:o="urn:schemas-microsoft-com:office:office"
-                         xmlns:x="urn:schemas-microsoft-com:office:excel">
-                      <v:shape id="LH" type="#_x0000_t75">
-                        <v:imagedata o:relid="rIdImage1" o:title="Header"/>
-                      </v:shape>
-                    </xml>
-                    """);
-            }
-            archive.GetEntry("xl/media/headerFooterImage1.png")?.Delete();
-            var imageEntry = archive.CreateEntry("xl/media/headerFooterImage1.png");
-            using (var imageStream = imageEntry.Open())
-                imageStream.Write(MinimalPngBytes());
-
-            ReplacePackageXml(archive, "xl/drawings/_rels/vmlDrawing1.vml.rels", new XDocument(
-                new XElement(
-                    packageRelNs + "Relationships",
-                    new XElement(
-                        packageRelNs + "Relationship",
-                        new XAttribute("Id", "rIdImage1"),
-                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-                        new XAttribute("Target", "../media/headerFooterImage1.png")))));
-
-            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
-            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
-                ? LoadPackageXml(worksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
-            worksheetRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", "rIdHeaderFooterDrawing1"),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"),
-                new XAttribute("Target", "../drawings/vmlDrawing1.vml")));
-            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
-
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            worksheetXml.Root!.Add(new XElement(
-                worksheetNs + "legacyDrawingHF",
-                new XAttribute(relNs + "id", "rIdHeaderFooterDrawing1")));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
-
-            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/drawings/vmlDrawing1.vml",
-                "application/vnd.openxmlformats-officedocument.vmlDrawing");
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/media/headerFooterImage1.png",
-                "image/png");
-            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalWorkbookExtensionList(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "extLst",
-                new XElement(
-                    workbookNs + "ext",
-                    new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
-                    new XElement(
-                        x15Ns + "futureMetadata",
-                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
-                        new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalWorkbookWebPublishObjects(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "webPublishObjects",
-                new XAttribute("count", "1"),
-                new XElement(
-                    workbookNs + "webPublishObject",
-                    new XAttribute("id", "1"),
-                    new XAttribute("divId", "FreexcelWebPublish"),
-                    new XAttribute("sourceObject", "Data"),
-                    new XAttribute("destinationFile", "https://example.invalid/report.htm"),
-                    new XAttribute("title", "Report"),
-                    new XAttribute("autoRepublish", "0"))));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalWorkbookWebPublishingSettings(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "webPublishing",
-                new XAttribute("css", "1"),
-                new XAttribute("thicket", "0"),
-                new XAttribute("longFileNames", "1"),
-                new XAttribute("vml", "1"),
-                new XAttribute("allowPng", "1"),
-                new XAttribute("targetScreenSize", "800x600"),
-                new XAttribute("dpi", "96")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalWorkbookRevisionPointer(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-
-            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/revisionHeaders/revisionHeader1.xml",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionHeaders+xml");
-            AddContentTypeOverride(
-                contentTypesXml,
-                contentTypeNs,
-                "/xl/revisions/revisionLog1.xml",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionLog+xml");
-            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
-
-            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
-            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
-            workbookRelsXml.Root!.Add(new XElement(
-                packageRelNs + "Relationship",
-                new XAttribute("Id", "rIdFreexcelRevisionHeaders"),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders"),
-                new XAttribute("Target", "revisionHeaders/revisionHeader1.xml")));
-            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.AddFirst(new XElement(
-                workbookNs + "revisionPtr",
-                new XAttribute("revIDLastSave", "1"),
-                new XAttribute("documentId", "FreexcelRevisionDoc"),
-                new XAttribute("coauthVersionLast", "1"),
-                new XAttribute("coauthVersionMax", "1")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-
-            ReplacePackageXml(archive, "xl/revisionHeaders/revisionHeader1.xml", new XDocument(
-                new XElement(
-                    workbookNs + "headers",
-                    new XElement(
-                        workbookNs + "header",
-                        new XAttribute("guid", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
-                        new XAttribute("dateTime", "2026-05-20T00:00:00Z"),
-                        new XAttribute("maxSheetId", "1")))));
-            ReplacePackageXml(archive, "xl/revisions/revisionLog1.xml", new XDocument(
-                new XElement(workbookNs + "revisions")));
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddMinimalWorkbookOleSize(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "oleSize",
-                new XAttribute("ref", "A1:D12")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddUnsupportedDefinedName(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames");
-            if (definedNames is null)
-            {
-                definedNames = new XElement(workbookNs + "definedNames");
-                workbookXml.Root!.Add(definedNames);
-            }
-
-            definedNames.Add(new XElement(
-                workbookNs + "definedName",
-                new XAttribute("name", "DynamicSalesRange"),
-                new XAttribute("hidden", "1"),
-                "1+1"));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddAdditionalWorkbookView(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            var bookViews = workbookXml.Root!.Element(workbookNs + "bookViews");
-            if (bookViews is null)
-            {
-                bookViews = new XElement(workbookNs + "bookViews");
-                workbookXml.Root!.AddFirst(bookViews);
-            }
-
-            bookViews.Add(new XElement(
-                workbookNs + "workbookView",
-                new XAttribute("visibility", "hidden"),
-                new XAttribute("minimized", "1"),
-                new XAttribute("showHorizontalScroll", "0"),
-                new XAttribute("showVerticalScroll", "0"),
-                new XAttribute("showSheetTabs", "0"),
-                new XAttribute("tabRatio", "700"),
-                new XAttribute("firstSheet", "0"),
-                new XAttribute("activeTab", "0")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddPrimaryWorkbookViewNativeMetadata(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            var bookViews = workbookXml.Root!.Element(workbookNs + "bookViews");
-            bookViews.Should().NotBeNull();
-            var workbookView = bookViews!.Elements(workbookNs + "workbookView").Single();
-            workbookView.SetAttributeValue("visibility", "visible");
-            workbookView.SetAttributeValue("showSheetTabs", "0");
-            workbookView.SetAttributeValue("tabRatio", "700");
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddCustomWorkbookViews(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "customWorkbookViews",
-                new XElement(
-                    workbookNs + "customWorkbookView",
-                    new XAttribute("name", "FreexcelView"),
-                    new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
-                    new XAttribute("autoUpdate", "0"),
-                    new XAttribute("mergeInterval", "0"),
-                    new XAttribute("personalView", "0"),
-                    new XAttribute("includePrintSettings", "1"),
-                    new XAttribute("includeHiddenRowCol", "1"))));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddWorkbookFileVersion(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.AddFirst(new XElement(
-                workbookNs + "fileVersion",
-                new XAttribute("appName", "xl"),
-                new XAttribute("lastEdited", "7"),
-                new XAttribute("lowestEdited", "7"),
-                new XAttribute("rupBuild", "28129")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddWorkbookFileSharing(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.AddFirst(new XElement(
-                workbookNs + "fileSharing",
-                new XAttribute("readOnlyRecommended", "1"),
-                new XAttribute("userName", "FreexcelTest")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddWorkbookFileRecoveryProperties(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "fileRecoveryPr",
-                new XAttribute("autoRecover", "1"),
-                new XAttribute("crashSave", "1"),
-                new XAttribute("repairLoad", "0")));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddWorkbookSmartTagMetadata(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(
-                new XElement(
-                    workbookNs + "smartTagPr",
-                    new XAttribute("embed", "1"),
-                    new XAttribute("show", "all")),
-                new XElement(
-                    workbookNs + "smartTagTypes",
-                    new XElement(
-                        workbookNs + "smartTagType",
-                        new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
-                        new XAttribute("name", "place"))));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddWorkbookFunctionGroups(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            workbookXml.Root!.Add(new XElement(
-                workbookNs + "functionGroups",
-                new XAttribute("builtInGroupCount", "16"),
-                new XElement(
-                    workbookNs + "functionGroup",
-                    new XAttribute("name", "FreexcelNativeFunctions"))));
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddUnsupportedWorkbookProperties(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
-            if (workbookPr is null)
-            {
-                workbookPr = new XElement(workbookNs + "workbookPr");
-                workbookXml.Root!.AddFirst(workbookPr);
-            }
-
-            workbookPr.SetAttributeValue("date1904", "1");
-            workbookPr.SetAttributeValue("defaultThemeVersion", "166925");
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
-    private static void AddWorkbookCalculationNativeMetadata(MemoryStream packageStream)
-    {
-        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
-            var calcPr = workbookXml.Root!.Element(workbookNs + "calcPr");
-            calcPr.Should().NotBeNull();
-            calcPr!.SetAttributeValue("calcId", "191029");
-            calcPr.SetAttributeValue("refMode", "A1");
-            calcPr.SetAttributeValue("fullPrecision", "0");
-            calcPr.SetAttributeValue("concurrentCalc", "1");
-            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-        }
-
-        packageStream.Position = 0;
-    }
-
     private static void AddStylesheetNativeMetadata(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
             stylesXml.Root!.Elements(workbookNs + "colors").Remove();
@@ -14628,6 +14567,7 @@ public class FileAdapterSmokeTests
             }
 
             tableStyles.SetAttributeValue("defaultPivotStyle", "PivotStyleMedium9");
+            tableStyles.Add(new XElement(freexcelNs + "tableStylesNativeChild", new XAttribute("value", "kept")));
             tableStyles.Add(new XElement(
                 workbookNs + "tableStyle",
                 new XAttribute("name", "FreexcelNativeTableStyle"),
@@ -14910,6 +14850,22 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddWorksheetSheetViewsNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+            sheetViews.Should().NotBeNull();
+            sheetViews!.SetAttributeValue("nativeSheetViewsAttr", "kept");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddExistingWorksheetSheetViewChildNativeMetadata(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -14956,6 +14912,9 @@ public class FileAdapterSmokeTests
             sheetFormat.SetAttributeValue("zeroHeight", "1");
             sheetFormat.SetAttributeValue("thickTop", "1");
             sheetFormat.SetAttributeValue("outlineLevelRow", "3");
+            sheetFormat.Add(new XElement(
+                worksheetNs + "nativeSheetFormatChild",
+                new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15110,6 +15069,9 @@ public class FileAdapterSmokeTests
             pageSetup.SetAttributeValue("usePrinterDefaults", "1");
             pageSetup.SetAttributeValue("copies", "3");
             pageSetup.SetAttributeValue("customAttr", "page-setup-native");
+            pageSetup.Add(new XElement(
+                worksheetNs + "nativePageSetupChild",
+                new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15139,6 +15101,57 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddMergedCellNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var mergeCells = worksheetXml.Root!.Element(worksheetNs + "mergeCells");
+            mergeCells.Should().NotBeNull();
+            mergeCells!.SetAttributeValue("nativeMergeContainerAttr", "kept");
+            var mergeCell = mergeCells.Elements(worksheetNs + "mergeCell")
+                .Single(element => element.Attribute("ref")?.Value == "A1:B2");
+            mergeCell.SetAttributeValue("nativeMergeCellAttr", "kept");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetHeaderFooterNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+            headerFooter.Should().NotBeNull();
+            headerFooter!.SetAttributeValue("nativeHeaderFooterAttr", "kept");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetDimensionNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
+            dimension.Should().NotBeNull();
+            dimension!.SetAttributeValue("nativeDimensionAttr", "kept");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddWorksheetHyperlinkNativeMetadata(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -15146,6 +15159,9 @@ public class FileAdapterSmokeTests
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!
+                .Element(worksheetNs + "hyperlinks")!
+                .SetAttributeValue("nativeHyperlinksAttr", "kept");
             var hyperlink = worksheetXml.Root!
                 .Element(worksheetNs + "hyperlinks")!
                 .Elements(worksheetNs + "hyperlink")
@@ -15233,6 +15249,69 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddInlineStringRichTextAndPhonetics(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var cell = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Descendants(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A1");
+            cell.SetAttributeValue("t", "inlineStr");
+            cell.Elements(worksheetNs + "v").Remove();
+            cell.Add(new XElement(
+                worksheetNs + "is",
+                new XElement(
+                    worksheetNs + "r",
+                    new XElement(
+                        worksheetNs + "rPr",
+                        new XElement(worksheetNs + "i"),
+                        new XElement(worksheetNs + "rFont", new XAttribute("val", "FreexcelInline"))),
+                    new XElement(worksheetNs + "t", "Inline ")),
+                new XElement(
+                    worksheetNs + "r",
+                    new XElement(worksheetNs + "t", "phonetic")),
+                new XElement(
+                    worksheetNs + "rPh",
+                    new XAttribute("sb", "0"),
+                    new XAttribute("eb", "6"),
+                    new XElement(worksheetNs + "t", "in-line")),
+                new XElement(
+                    worksheetNs + "phoneticPr",
+                    new XAttribute("fontId", "1"),
+                    new XAttribute("type", "noConversion"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetFormulaNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var formula = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Descendants(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A2")
+                .Element(worksheetNs + "f");
+            formula.Should().NotBeNull();
+            formula!.SetAttributeValue("t", "array");
+            formula.SetAttributeValue("ref", "A2:A2");
+            formula.SetAttributeValue("ca", "1");
+            formula.SetAttributeValue("customAttr", "formula-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddWorksheetPageSetupModeledAndNativeAttributes(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -15302,8 +15381,12 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .SetAttributeValue("nativeSheetDataAttr", "kept");
             var row = worksheetXml.Root!
                 .Element(worksheetNs + "sheetData")!
                 .Elements(worksheetNs + "row")
@@ -15311,6 +15394,7 @@ public class FileAdapterSmokeTests
             row.SetAttributeValue("thickTop", "1");
             row.SetAttributeValue("ph", "1");
             row.SetAttributeValue("customAttr", "row-native");
+            row.Add(new XElement(freexcelNs + "rowNativeChild", new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15322,6 +15406,7 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var cell = worksheetXml.Root!
@@ -15332,6 +15417,7 @@ public class FileAdapterSmokeTests
             cell.SetAttributeValue("vm", "1");
             cell.SetAttributeValue("ph", "1");
             cell.SetAttributeValue("customAttr", "cell-native");
+            cell.Add(new XElement(freexcelNs + "cellNativeChild", new XAttribute("value", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15380,6 +15466,7 @@ public class FileAdapterSmokeTests
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var columns = worksheetXml.Root!.Element(worksheetNs + "cols");
             columns.Should().NotBeNull();
+            columns!.SetAttributeValue("nativeColsAttr", "kept");
             var column = columns!.Elements(worksheetNs + "col")
                 .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
             column.SetAttributeValue("bestFit", "1");
@@ -15447,6 +15534,7 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
@@ -15464,6 +15552,9 @@ public class FileAdapterSmokeTests
                     new XAttribute("autoPageBreaks", "0")));
             }
 
+            sheetPr.Add(
+                new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "second")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15682,6 +15773,7 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Element(worksheetNs + "sheetProtection")?.Remove();
@@ -15693,7 +15785,9 @@ public class FileAdapterSmokeTests
                 new XAttribute("saltValue", "salt123"),
                 new XAttribute("spinCount", "100000"),
                 new XAttribute("objects", "1"),
-                new XAttribute("scenarios", "1")));
+                new XAttribute("scenarios", "1"),
+                new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "second"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15705,6 +15799,7 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Add(new XElement(
@@ -15719,7 +15814,9 @@ public class FileAdapterSmokeTests
                         worksheetNs + "extLst",
                         new XElement(
                             worksheetNs + "ext",
-                            new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))))));
+                            new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))),
+                    new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "first")),
+                    new XElement(freexcelNs + "protectedRangeNativeChild", new XAttribute("id", "second")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -15751,6 +15848,7 @@ public class FileAdapterSmokeTests
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
 
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.Root!.Element(workbookNs + "workbookProtection")?.Remove();
@@ -15762,7 +15860,9 @@ public class FileAdapterSmokeTests
                 new XAttribute("algorithmName", "SHA-512"),
                 new XAttribute("hashValue", "def456"),
                 new XAttribute("saltValue", "salt456"),
-                new XAttribute("spinCount", "100000")));
+                new XAttribute("spinCount", "100000"),
+                new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
+                new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

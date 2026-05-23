@@ -718,7 +718,15 @@ public partial class MainWindow
         bool showColumnHeaders,
         bool showRowStripes,
         bool showColumnStripes,
-        PivotReportLayout reportLayout)
+        PivotReportLayout reportLayout,
+        string? emptyValueText = null,
+        bool updateEmptyValueText = false,
+        bool? refreshOnOpen = null,
+        bool? saveSourceData = null,
+        bool printTitles = false,
+        bool printExpandCollapseButtons = false,
+        string? altTextTitle = null,
+        string? altTextDescription = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -735,7 +743,15 @@ public partial class MainWindow
                     showColumnHeaders,
                     showRowStripes,
                     showColumnStripes,
-                    reportLayout),
+                    reportLayout,
+                    emptyValueText,
+                    updateEmptyValueText,
+                    refreshOnOpen,
+                    saveSourceData,
+                    printTitles,
+                    printExpandCollapseButtons,
+                    altTextTitle,
+                    altTextDescription),
                 "PivotTable Options"))
             return;
 
@@ -747,7 +763,8 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out _, out var pivotTable))
             return;
 
-        var dialog = new PivotTableOptionsDialog(pivotTable) { Owner = this };
+        var cache = _workbook.PivotCaches.FirstOrDefault(item => item.CacheId == pivotTable.CacheId);
+        var dialog = new PivotTableOptionsDialog(pivotTable, cache) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -935,7 +952,15 @@ public partial class MainWindow
             result.ShowColumnHeaders,
             result.ShowRowStripes,
             result.ShowColumnStripes,
-            result.ReportLayout);
+            result.ReportLayout,
+            result.EmptyValueText,
+            updateEmptyValueText: true,
+            result.RefreshOnOpen,
+            result.SaveSourceData,
+            result.PrintTitles,
+            result.PrintExpandCollapseButtons,
+            result.AltTextTitle,
+            result.AltTextDescription);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
@@ -1098,13 +1123,28 @@ public partial class MainWindow
             .Concat(pivotTable.PageFields)
             .FirstOrDefault(field => field.SourceFieldIndex == sourceIndex.Value)
             ?.SelectedItems;
-        var dialog = new PivotFieldFilterDialog(ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value), existingItems)
+        var dialog = new PivotFieldFilterDialog(
+            ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value),
+            existingItems,
+            pivotTable.DataFields.Count > 0)
         {
             Owner = this,
             Title = $"{PivotUiPlanner.FieldCaption(headers, sourceIndex.Value)} Filter"
         };
         if (dialog.ShowDialog() != true)
             return;
+
+        if (dialog.RequestedAction == PivotFieldFilterDialogAction.LabelFilter)
+        {
+            PivotFieldLabelFilterMenuItem_Click(sender, e);
+            return;
+        }
+
+        if (dialog.RequestedAction == PivotFieldFilterDialogAction.ValueFilter)
+        {
+            PivotFieldValueFilterMenuItem_Click(sender, e);
+            return;
+        }
 
         var allItems = ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value).ToList();
         var selectedItems = dialog.SelectedItems;

@@ -10,6 +10,7 @@ public enum DrawingShapeKind
 public sealed class DrawingShapeModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
     public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
     public double Width { get; set; } = 120;

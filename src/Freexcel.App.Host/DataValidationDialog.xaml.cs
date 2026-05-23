@@ -14,17 +14,65 @@ public partial class DataValidationDialog : Window
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
     public string? SelectionSource { get; set; }
+    private readonly Guid _resultId = Guid.NewGuid();
 
     public DataValidationDialog()
     {
         InitializeComponent();
+        ResetToDefaults(markClearRequested: false);
+    }
+
+    public DataValidationDialog(DataValidation? existing)
+        : this()
+    {
+        if (existing is null)
+            return;
+
+        _resultId = existing.Id;
+        SelectComboItemByTag(TypeCombo, TypeTag(existing.Type));
+        SelectComboItemByTag(OperatorCombo, OperatorTag(existing.Operator));
+        SelectComboItemByTag(AlertStyleCombo, AlertStyleTag(existing.AlertStyle));
+        Formula1Box.Text = existing.Formula1 ?? "";
+        Formula2Box.Text = existing.Formula2 ?? "";
+        AllowBlankBox.IsChecked = existing.AllowBlank;
+        ShowDropdownBox.IsChecked = existing.ShowDropdown;
+        ShowInputMessageBox.IsChecked = existing.ShowInputMessage;
+        ShowErrorMessageBox.IsChecked = existing.ShowErrorMessage;
+        ErrorTitleBox.Text = existing.ErrorTitle ?? "";
+        PromptTitleBox.Text = existing.PromptTitle ?? "";
+        PromptMessageBox.Text = existing.PromptMessage ?? "";
+        ErrorMessageBox.Text = existing.ErrorMessage ?? "";
+        UpdateVisibility();
+    }
+
+    private void ResetToDefaults(bool markClearRequested)
+    {
         TypeCombo.SelectedIndex = 0;
         OperatorCombo.SelectedIndex = 0;
         AlertStyleCombo.SelectedIndex = 0;
+        Formula1Box.Text = "";
+        Formula2Box.Text = "";
+        AllowBlankBox.IsChecked = true;
+        ShowDropdownBox.IsChecked = true;
+        SameSettingsBox.IsChecked = false;
+        ShowInputMessageBox.IsChecked = true;
+        ShowErrorMessageBox.IsChecked = true;
+        ErrorTitleBox.Text = "";
+        PromptTitleBox.Text = "";
+        PromptMessageBox.Text = "";
+        ErrorMessageBox.Text = "";
+        ClearRequested = markClearRequested;
+        Result = null;
+        ApplyToSameSettings = false;
         UpdateVisibility();
     }
 
     private void TypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateVisibility();
+    }
+
+    private void OperatorCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateVisibility();
     }
@@ -46,13 +94,13 @@ public partial class DataValidationDialog : Window
 
         // Formula1 label changes by type
         if (isList)
-            Formula1Label.Text = "Source:";
+            Formula1Label.Content = "_Source:";
         else if (isCustom)
-            Formula1Label.Text = "Formula:";
+            Formula1Label.Content = "_Formula:";
         else
         {
             var opTag = (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
-            Formula1Label.Text = (opTag == "Between" || opTag == "NotBetween") ? "Minimum:" : "Value:";
+            Formula1Label.Content = (opTag == "Between" || opTag == "NotBetween") ? "_Minimum:" : "_Value:";
         }
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
@@ -115,6 +163,7 @@ public partial class DataValidationDialog : Window
 
         Result = new DataValidation
         {
+            Id = _resultId,
             Type         = dvType,
             Operator     = dvOp,
             Formula1     = Formula1Box.Text.Trim(),
@@ -143,10 +192,7 @@ public partial class DataValidationDialog : Window
 
     private void ClearAllButton_Click(object sender, RoutedEventArgs e)
     {
-        ClearRequested = true;
-        Result = null;
-        DialogResult = true;
-        Close();
+        ResetToDefaults(markClearRequested: true);
     }
 
     private void UseSelectionButton_Click(object sender, RoutedEventArgs e)
@@ -169,4 +215,43 @@ public partial class DataValidationDialog : Window
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula2Box.Text = SelectionSource;
     }
+
+    private static void SelectComboItemByTag(ComboBox comboBox, string tag)
+    {
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal))
+            ?? comboBox.Items[0];
+    }
+
+    private static string TypeTag(DvType type) => type switch
+    {
+        DvType.List => "List",
+        DvType.WholeNumber => "WholeNumber",
+        DvType.Decimal => "Decimal",
+        DvType.Date => "Date",
+        DvType.Time => "Time",
+        DvType.TextLength => "TextLength",
+        DvType.Custom => "Custom",
+        _ => "Any"
+    };
+
+    private static string OperatorTag(DvOperator op) => op switch
+    {
+        DvOperator.NotBetween => "NotBetween",
+        DvOperator.Equal => "Equal",
+        DvOperator.NotEqual => "NotEqual",
+        DvOperator.GreaterThan => "GreaterThan",
+        DvOperator.LessThan => "LessThan",
+        DvOperator.GreaterThanOrEqual => "GreaterThanOrEqual",
+        DvOperator.LessThanOrEqual => "LessThanOrEqual",
+        _ => "Between"
+    };
+
+    private static string AlertStyleTag(DvAlertStyle style) => style switch
+    {
+        DvAlertStyle.Warning => "Warning",
+        DvAlertStyle.Information => "Information",
+        _ => "Stop"
+    };
 }

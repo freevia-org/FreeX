@@ -813,6 +813,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀x"));
+        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("x😀"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -1051,6 +1061,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Find_WithinTextError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -1084,6 +1105,15 @@ public class FunctionLibraryTests
         var sheet = MakeSheet();
         // "h*o" matches "hello"
         _eval.Evaluate("=SEARCH(\"h?llo\",\"hello\")", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Search_WildcardQuestionTreatsSurrogatePairAsSingleCharacter()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=SEARCH(\"?x\",\"😀x\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"??\",\"😀\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1145,6 +1175,17 @@ public class FunctionLibraryTests
     }
 
     // ── REPT ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Mid_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("x"));
+        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("y"));
+    }
 
     [Fact]
     public void Mid_StartNumError_PropagatesError()
@@ -4009,6 +4050,16 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("Hello Excel"));
 
     [Fact]
+    public void Replace_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Qx"));
+        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQy"));
+        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("😀Qx"));
+    }
+
+    [Fact]
     public void Replace_StartNumError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -4987,19 +5038,19 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Take_ZeroRows_ReturnsValueError()
+    public void Take_ZeroRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]
-    public void Drop_AllRows_ReturnsValueError()
+    public void Drop_AllRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=DROP(A1:A1,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A1,1)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]
@@ -5037,6 +5088,25 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Chooserows_AcceptsDynamicArrayRowIndexes()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(1)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(2)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(3)));
+
+        var result = _eval.Evaluate("=CHOOSEROWS(A1:B3,VSTACK(3,1))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new TextValue("C"));
+        rv.Cells[0, 1].Should().Be(new NumberValue(3));
+        rv.Cells[1, 0].Should().Be(new TextValue("A"));
+        rv.Cells[1, 1].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Choosecols_ReordersColumnsAndAllowsRepeats()
     {
         var sheet = MakeSheet(
@@ -5065,6 +5135,24 @@ public class FunctionLibraryTests
         rv.ColCount.Should().Be(2);
         rv.Cells[0, 0].Should().Be(new TextValue("C"));
         rv.Cells[0, 1].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
+    public void Choosecols_AcceptsDynamicArrayColumnIndexes()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new TextValue("B")), (1,3,new TextValue("C")),
+            (2,1,new NumberValue(1)), (2,2,new NumberValue(2)), (2,3,new NumberValue(3)));
+
+        var result = _eval.Evaluate("=CHOOSECOLS(A1:C2,HSTACK(1,3))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new TextValue("A"));
+        rv.Cells[0, 1].Should().Be(new TextValue("C"));
+        rv.Cells[1, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 1].Should().Be(new NumberValue(3));
     }
 
     [Fact]
@@ -5812,6 +5900,12 @@ public class FunctionLibraryTests
     [Fact]
     public void Unicode_BasicAscii_ReturnsCodePoint() =>
         _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
+
+    [Theory]
+    [InlineData("=UNICODE(65)", 54)]
+    [InlineData("=UNICODE(TRUE)", 84)]
+    public void Unicode_CoercesScalarArgumentsToText(string formula, double expected) =>
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
 
     [Fact]
     public void Unicode_EmptyText_ReturnsValueError() =>

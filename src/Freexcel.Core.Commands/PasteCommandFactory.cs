@@ -70,6 +70,24 @@ public static class PasteCommandFactory
             options.SkipBlanks ||
             options.ContentKind != PasteSpecialContentKind.Default)
         {
+            if (mode == PasteCellsMode.Formats && options.Operation == PasteSpecialOperation.None)
+            {
+                return new PasteFormatsCommand(
+                    targetSheetId,
+                    sourceCells
+                        .Where(c => !options.SkipBlanks || !IsBlank(c.Cell))
+                        .Select(c => (
+                            options.Transpose
+                                ? TransposeDestination(sourceRange, c.Source, targetSheetId, destination)
+                                : Shift(
+                                    c.Source,
+                                    targetSheetId,
+                                    (int)destination.Row - (int)sourceRange.Start.Row,
+                                    (int)destination.Col - (int)sourceRange.Start.Col),
+                            c.Cell.StyleId))
+                        .ToList());
+            }
+
             var specialCells = new List<(CellAddress Source, Cell Cell)>(sourceCells.Count);
             foreach (var (source, sourceCell) in sourceCells)
             {
@@ -80,10 +98,6 @@ public static class PasteCommandFactory
                 if (options.Operation != PasteSpecialOperation.None)
                 {
                     pastedCell = Cell.FromValue(sourceCell.Value);
-                }
-                else if (mode == PasteCellsMode.Formats)
-                {
-                    pastedCell = sourceCell.Clone();
                 }
                 else
                 {
@@ -176,6 +190,13 @@ public static class PasteCommandFactory
         {
             var valueCell = Cell.FromValue(sourceCell.Value);
             valueCell.StyleId = MergeNumberFormat(workbook, destinationStyle, sourceCell.StyleId);
+            return valueCell;
+        }
+
+        if (contentKind == PasteSpecialContentKind.ValuesAndSourceFormatting)
+        {
+            var valueCell = Cell.FromValue(sourceCell.Value);
+            valueCell.StyleId = sourceCell.StyleId;
             return valueCell;
         }
 

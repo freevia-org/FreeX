@@ -705,6 +705,16 @@ public static class FormulaAuditingService
                         result.Add(address);
                 break;
 
+            case StructuredReferenceNode structured:
+                if (StructuredReferenceResolver.ResolveDataBodyColumn(
+                        workbook,
+                        workbook.GetSheet(hostSheetId),
+                        structured.TableName,
+                        structured.ColumnName) is { } structuredRange)
+                    foreach (var address in structuredRange.AllCells())
+                        result.Add(address);
+                break;
+
             case BinaryOpNode binary:
                 CollectReferences(workbook, hostSheetId, binary.Left, result);
                 CollectReferences(workbook, hostSheetId, binary.Right, result);

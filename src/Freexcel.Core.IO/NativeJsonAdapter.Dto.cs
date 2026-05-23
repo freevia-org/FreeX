@@ -48,6 +48,8 @@ public sealed partial class NativeJsonAdapter
         public string? Name { get; set; }
         public string? SheetName { get; set; }
         public string? Range { get; set; }
+        public string? Scope { get; set; }
+        public string? Comment { get; set; }
     }
 
     private class WatchedCellDto
@@ -141,6 +143,12 @@ public sealed partial class NativeJsonAdapter
         public HeaderFooterDto? FirstPageFooter { get; set; }
         public HeaderFooterDto? EvenPageHeader { get; set; }
         public HeaderFooterDto? EvenPageFooter { get; set; }
+        public HeaderFooterPictureSetDto? PageHeaderPictures { get; set; }
+        public HeaderFooterPictureSetDto? PageFooterPictures { get; set; }
+        public HeaderFooterPictureSetDto? FirstPageHeaderPictures { get; set; }
+        public HeaderFooterPictureSetDto? FirstPageFooterPictures { get; set; }
+        public HeaderFooterPictureSetDto? EvenPageHeaderPictures { get; set; }
+        public HeaderFooterPictureSetDto? EvenPageFooterPictures { get; set; }
         public bool DifferentFirstPageHeaderFooter { get; set; }
         public bool DifferentOddEvenHeaderFooter { get; set; }
         public bool? HeaderFooterScaleWithDocument { get; set; }
@@ -249,6 +257,8 @@ public sealed partial class NativeJsonAdapter
         public bool Subscript { get; set; }
         public CellColor FontColor { get; set; } = CellColor.Black;
         public CellColor? FillColor { get; set; }
+        public CellFillPatternStyle FillPatternStyle { get; set; }
+        public CellColor? FillPatternColor { get; set; }
         public CellBorderDto? BorderTop { get; set; }
         public CellBorderDto? BorderRight { get; set; }
         public CellBorderDto? BorderBottom { get; set; }
@@ -283,6 +293,9 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Address { get; set; }
         public string? Target { get; set; }
+        public HyperlinkTargetKind? LinkType { get; set; }
+        public string? ScreenTip { get; set; }
+        public string? Bookmark { get; set; }
     }
 
     private class UIntDoubleDto
@@ -325,6 +338,22 @@ public sealed partial class NativeJsonAdapter
         public string? Right { get; set; }
     }
 
+    private class HeaderFooterPictureSetDto
+    {
+        public HeaderFooterPictureDto? Left { get; set; }
+        public HeaderFooterPictureDto? Center { get; set; }
+        public HeaderFooterPictureDto? Right { get; set; }
+    }
+
+    private class HeaderFooterPictureDto
+    {
+        public string ImageBase64 { get; set; } = "";
+        public string ContentType { get; set; } = "image/png";
+        public string? FileName { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+    }
+
     private class WorksheetBackgroundDto
     {
         public string ImageBase64 { get; set; } = "";
@@ -341,9 +370,33 @@ public sealed partial class NativeJsonAdapter
 
     private class ChartDto
     {
+        public string? Name { get; set; }
         public ChartType Type { get; set; } = ChartType.Column;
         public string? DataRange { get; set; }
         public bool IsVisible { get; set; } = true;
+        public bool IsPivotChart { get; set; }
+        public string? PivotSourceSheetName { get; set; }
+        public string? PivotTableName { get; set; }
+        public int? PivotCacheId { get; set; }
+        public int? ChartStyleId { get; set; }
+        public string? PivotFormatsXml { get; set; }
+        public bool Uses1904DateSystem { get; set; }
+        public string? Language { get; set; }
+        public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
+        public ChartExternalDataModel? ExternalData { get; set; }
+        public ChartManualLayoutModel? PlotAreaLayout { get; set; }
+        public ChartManualLayoutModel? LegendLayout { get; set; }
+        public bool RoundedCorners { get; set; }
+        public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
+        public bool ShowDataLabelsOverMaximum { get; set; }
+        public bool AutoTitleDeleted { get; set; }
+        public bool ShowDataInHiddenRowsAndColumns { get; set; }
+        public ChartProtectionModel? Protection { get; set; }
+        public ChartPrintSettingsModel? PrintSettings { get; set; }
+        public bool ShowPivotChartFieldButtons { get; set; } = true;
+        public bool ShowPivotChartReportFilterButtons { get; set; } = true;
+        public bool ShowPivotChartAxisFieldButtons { get; set; } = true;
+        public bool ShowPivotChartValueFieldButtons { get; set; } = true;
         public bool FirstRowIsHeader { get; set; } = true;
         public bool FirstColIsCategories { get; set; } = true;
         public string? Title { get; set; }
@@ -414,6 +467,7 @@ public sealed partial class NativeJsonAdapter
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
         public bool? VaryColorsByPoint { get; set; }
+        public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
         public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
         public bool LegendOverlay { get; set; }
         public bool ShowLegend { get; set; } = true;

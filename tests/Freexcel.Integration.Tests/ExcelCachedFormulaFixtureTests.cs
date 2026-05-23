@@ -150,6 +150,77 @@ public sealed class ExcelCachedFormulaFixtureTests
                     <row r="5">
                       <c r="C5" t="e"><f>NA()</f><v>#N/A</v></c>
                     </row>
+                    <row r="6">
+                      <c r="A6"><v>1</v></c>
+                      <c r="B6"><v>2</v></c>
+                      <c r="C6"><v>3</v></c>
+                      <c r="D6"><f>XLOOKUP(2,A6:C6,A6:C6)</f><v>2</v></c>
+                    </row>
+                    <row r="7">
+                      <c r="A7"><v>1</v></c>
+                      <c r="B7"><v>2</v></c>
+                      <c r="C7"><v>3</v></c>
+                      <c r="D7"><f>XMATCH(3,A7:C7)</f><v>3</v></c>
+                    </row>
+                    <row r="8">
+                      <c r="C8"><f>SUM(SEQUENCE(3))</f><v>6</v></c>
+                    </row>
+                    <row r="9">
+                      <c r="C9"><f>LET(x,5,x*2)</f><v>10</v></c>
+                    </row>
+                    <row r="10">
+                      <c r="C10" t="str"><f>TEXTJOIN("|",TRUE,"A","","B")</f><v>A|B</v></c>
+                    </row>
+                    <row r="11">
+                      <c r="A11" t="e"><v>#DIV/0!</v></c>
+                      <c r="A12"><v>4</v></c>
+                      <c r="A13"><v>6</v></c>
+                      <c r="B11" t="str"><v>error row</v></c>
+                      <c r="B12" t="str"><v>smaller</v></c>
+                      <c r="B13" t="str"><v>larger</v></c>
+                      <c r="D11" t="e"><f>XLOOKUP(5,A11:A13,B11:B13,"",-1)</f><v>#DIV/0!</v></c>
+                    </row>
+                    <row r="14">
+                      <c r="A14" t="e"><v>#DIV/0!</v></c>
+                      <c r="A15"><v>4</v></c>
+                      <c r="A16"><v>6</v></c>
+                      <c r="D14" t="e"><f>XMATCH(5,A14:A16,-1)</f><v>#DIV/0!</v></c>
+                    </row>
+                    <row r="17">
+                      <c r="A17"><v>1</v></c>
+                      <c r="D17" t="e"><f>TAKE(A17:A17,0)</f><v>#CALC!</v></c>
+                    </row>
+                    <row r="18">
+                      <c r="A18"><v>1</v></c>
+                      <c r="D18" t="e"><f>DROP(A18:A18,1)</f><v>#CALC!</v></c>
+                    </row>
+                    <row r="19">
+                      <c r="A19"><v>1</v></c>
+                      <c r="B19"><v>2</v></c>
+                      <c r="C19"><v>3</v></c>
+                      <c r="D19"><f>SUM(CHOOSECOLS(A19:C20,HSTACK(1,3)))</f><v>14</v></c>
+                    </row>
+                    <row r="20">
+                      <c r="A20"><v>4</v></c>
+                      <c r="B20"><v>5</v></c>
+                      <c r="C20"><v>6</v></c>
+                    </row>
+                    <row r="21">
+                      <c r="A21"><v>10</v></c>
+                      <c r="B21"><v>20</v></c>
+                      <c r="D21"><f>SUM(CHOOSEROWS(A21:B23,VSTACK(3,1)))</f><v>140</v></c>
+                    </row>
+                    <row r="22">
+                      <c r="A22"><v>30</v></c>
+                      <c r="B22"><v>40</v></c>
+                    </row>
+                    <row r="23">
+                      <c r="A23"><v>50</v></c>
+                      <c r="B23"><v>60</v></c>
+                    </row>
+                    <row r="24">
+                      <c r="D24" t="e"><f>DEC2BIN(10,NA())</f><v>#N/A</v></c>
+                    </row>
                   </sheetData>
                 </worksheet>
                 """);

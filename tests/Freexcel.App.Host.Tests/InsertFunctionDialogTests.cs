@@ -68,6 +68,8 @@ public sealed class InsertFunctionDialogTests
         source.Should().Contain("Content = \"Select a _function:\"");
         source.Should().Contain("Target = _listBox");
         source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("ShowFunctionHelp");
+        source.Should().NotContain("SystemSounds.Asterisk.Play");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
     }

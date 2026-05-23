@@ -72,18 +72,6 @@ public sealed class CellShiftDialog : Window
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
 
-        var hint = new TextBlock
-        {
-            Text = mode == CellShiftDialogMode.Insert
-                ? "Choose how Excel should make room for the inserted cells."
-                : "Choose how Excel should close the gap left by deleted cells.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush,
-            Margin = new Thickness(0, 0, 0, 10)
-        };
-        DockPanel.SetDock(hint, Dock.Top);
-        root.Children.Add(hint);
-
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);

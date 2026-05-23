@@ -124,6 +124,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.FirstPageFooter = ToHeaderFooter(sDto.FirstPageFooter);
             sheet.EvenPageHeader = ToHeaderFooter(sDto.EvenPageHeader);
             sheet.EvenPageFooter = ToHeaderFooter(sDto.EvenPageFooter);
+            sheet.PageHeaderPictures = ToHeaderFooterPictures(sDto.PageHeaderPictures);
+            sheet.PageFooterPictures = ToHeaderFooterPictures(sDto.PageFooterPictures);
+            sheet.FirstPageHeaderPictures = ToHeaderFooterPictures(sDto.FirstPageHeaderPictures);
+            sheet.FirstPageFooterPictures = ToHeaderFooterPictures(sDto.FirstPageFooterPictures);
+            sheet.EvenPageHeaderPictures = ToHeaderFooterPictures(sDto.EvenPageHeaderPictures);
+            sheet.EvenPageFooterPictures = ToHeaderFooterPictures(sDto.EvenPageFooterPictures);
             sheet.DifferentFirstPageHeaderFooter = sDto.DifferentFirstPageHeaderFooter;
             sheet.DifferentOddEvenHeaderFooter = sDto.DifferentOddEvenHeaderFooter;
             sheet.HeaderFooterScaleWithDocument = sDto.HeaderFooterScaleWithDocument ?? true;
@@ -171,7 +177,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var hyperlinkDto in sDto.Hyperlinks ?? [])
             {
                 if (TryLoadHyperlink(hyperlinkDto, sheet.Id) is { } hyperlink)
+                {
                     sheet.Hyperlinks[hyperlink.Address] = hyperlink.Target;
+                    sheet.HyperlinkMetadata[hyperlink.Address] = hyperlink.Metadata;
+                }
             }
             foreach (var allowEditRange in sDto.AllowEditRanges ?? [])
             {
@@ -309,7 +318,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             try
             {
-                workbook.DefineNamedRange(namedRangeDto.Name, GridRange.Parse(namedRangeDto.Range, sheet.Id));
+                workbook.DefineNamedRange(
+                    namedRangeDto.Name,
+                    GridRange.Parse(namedRangeDto.Range, sheet.Id),
+                    new NamedRangeMetadata(
+                        string.IsNullOrWhiteSpace(namedRangeDto.Scope) ? "Workbook" : namedRangeDto.Scope.Trim(),
+                        namedRangeDto.Comment?.Trim() ?? ""));
             }
             catch (ArgumentException) { /* skip invalid defined names */ }
             catch (FormatException) { /* skip unparseable named ranges */ }
@@ -397,13 +411,18 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 .Select(pair =>
                 {
                     var sheet = workbook.GetSheet(pair.Value.Start.Sheet);
+                    var metadata = workbook.TryGetNamedRangeMetadata(pair.Key, out var savedMetadata)
+                        ? savedMetadata
+                        : NamedRangeMetadata.WorkbookScope;
                     return sheet is null || pair.Value.End.Sheet != sheet.Id
                         ? null
                         : new NamedRangeDto
                         {
                             Name = pair.Key,
                             SheetName = sheet.Name,
-                            Range = pair.Value.ToString()
+                            Range = pair.Value.ToString(),
+                            Scope = metadata.Scope,
+                            Comment = metadata.Comment
                         };
                 })
                 .OfType<NamedRangeDto>()
@@ -510,6 +529,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 FirstPageFooter = FromHeaderFooter(s.FirstPageFooter),
                 EvenPageHeader = FromHeaderFooter(s.EvenPageHeader),
                 EvenPageFooter = FromHeaderFooter(s.EvenPageFooter),
+                PageHeaderPictures = FromHeaderFooterPictures(s.PageHeaderPictures),
+                PageFooterPictures = FromHeaderFooterPictures(s.PageFooterPictures),
+                FirstPageHeaderPictures = FromHeaderFooterPictures(s.FirstPageHeaderPictures),
+                FirstPageFooterPictures = FromHeaderFooterPictures(s.FirstPageFooterPictures),
+                EvenPageHeaderPictures = FromHeaderFooterPictures(s.EvenPageHeaderPictures),
+                EvenPageFooterPictures = FromHeaderFooterPictures(s.EvenPageFooterPictures),
                 DifferentFirstPageHeaderFooter = s.DifferentFirstPageHeaderFooter,
                 DifferentOddEvenHeaderFooter = s.DifferentOddEvenHeaderFooter,
                 HeaderFooterScaleWithDocument = s.HeaderFooterScaleWithDocument,
@@ -541,7 +566,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     .ToList(),
                 Hyperlinks = s.Hyperlinks
                     .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
-                    .Select(ToHyperlinkDto)
+                    .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
                 AllowEditRanges = s.AllowEditRanges
                     .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)

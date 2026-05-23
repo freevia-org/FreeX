@@ -50,60 +50,96 @@
                 <ColumnDefinition Width="152"/>
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="116"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="128"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Header" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                <Label Grid.Row="1" Grid.Column="0" Content="Header _left:" Target="{Binding ElementName=HeaderLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="HeaderLeftBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <Label Grid.Row="2" Grid.Column="0" Content="Header _center:" Target="{Binding ElementName=HeaderCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="HeaderCenterBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <Label Grid.Row="3" Grid.Column="0" Content="Header _right:" Target="{Binding ElementName=HeaderRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,16"/>
-                <TextBox x:Name="HeaderRightBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,16" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Header" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="Header _left:" Target="{Binding ElementName=HeaderLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="HeaderLeftBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="Header _center:" Target="{Binding ElementName=HeaderCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="HeaderCenterBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="3" Grid.Column="0" Content="Header _right:" Target="{Binding ElementName=HeaderRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,16"/>
+                    <TextBox x:Name="HeaderRightBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,16" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
 
-                <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="Footer" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                <Label Grid.Row="5" Grid.Column="0" Content="Footer l_eft:" Target="{Binding ElementName=FooterLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="FooterLeftBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <Label Grid.Row="6" Grid.Column="0" Content="Footer c_enter:" Target="{Binding ElementName=FooterCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="FooterCenterBox" Grid.Row="6" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <Label Grid.Row="7" Grid.Column="0" Content="Footer r_ight:" Target="{Binding ElementName=FooterRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox x:Name="FooterRightBox" Grid.Row="7" Grid.Column="1" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="Footer" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <Label Grid.Row="5" Grid.Column="0" Content="Footer l_eft:" Target="{Binding ElementName=FooterLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FooterLeftBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="6" Grid.Column="0" Content="Footer c_enter:" Target="{Binding ElementName=FooterCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FooterCenterBox" Grid.Row="6" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="7" Grid.Column="0" Content="Footer r_ight:" Target="{Binding ElementName=FooterRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="FooterRightBox" Grid.Row="7" Grid.Column="1" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
 
-                <CheckBox x:Name="DifferentFirstPageBox" Grid.Row="8" Grid.Column="1" Content="_Different first page" Margin="0,14,0,8"/>
-                <Label Grid.Row="9" Grid.Column="0" Content="First h_eader:" Target="{Binding ElementName=FirstHeaderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="FirstHeaderBox" Grid.Row="9" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <Label Grid.Row="10" Grid.Column="0" Content="First f_ooter:" Target="{Binding ElementName=FirstFooterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="FirstFooterBox" Grid.Row="10" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <CheckBox x:Name="DifferentFirstPageBox" Grid.Row="8" Grid.Column="1" Content="_Different first page" Margin="0,14,0,8"/>
+                    <TextBlock Grid.Row="9" Grid.ColumnSpan="2" Text="First page header" FontWeight="SemiBold" Margin="0,2,0,8"/>
+                    <Label Grid.Row="10" Grid.Column="0" Content="First header _left:" Target="{Binding ElementName=FirstHeaderLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FirstHeaderLeftBox" Grid.Row="10" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="11" Grid.Column="0" Content="First header _center:" Target="{Binding ElementName=FirstHeaderCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FirstHeaderCenterBox" Grid.Row="11" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="12" Grid.Column="0" Content="First header _right:" Target="{Binding ElementName=FirstHeaderRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,12"/>
+                    <TextBox x:Name="FirstHeaderRightBox" Grid.Row="12" Grid.Column="1" Margin="0,0,0,12" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
 
-                <CheckBox x:Name="DifferentOddEvenBox" Grid.Row="11" Grid.Column="1" Content="Different _odd and even pages" Margin="0,8,0,8"/>
-                <Label Grid.Row="12" Grid.Column="0" Content="Even hea_der:" Target="{Binding ElementName=EvenHeaderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                <TextBox x:Name="EvenHeaderBox" Grid.Row="12" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <Label Grid.Row="13" Grid.Column="0" Content="Even foot_er:" Target="{Binding ElementName=EvenFooterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox x:Name="EvenFooterBox" Grid.Row="13" Grid.Column="1" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
-                <CheckBox x:Name="ScaleWithDocumentBox" Grid.Row="14" Grid.Column="1" Content="_Scale with document" Margin="0,14,0,8"/>
-                <CheckBox x:Name="AlignWithMarginsBox" Grid.Row="15" Grid.Column="1" Content="_Align with page margins"/>
-            </Grid>
+                    <TextBlock Grid.Row="13" Grid.ColumnSpan="2" Text="First page footer" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <Label Grid.Row="14" Grid.Column="0" Content="First footer le_ft:" Target="{Binding ElementName=FirstFooterLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FirstFooterLeftBox" Grid.Row="14" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="15" Grid.Column="0" Content="First footer cent_er:" Target="{Binding ElementName=FirstFooterCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FirstFooterCenterBox" Grid.Row="15" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="16" Grid.Column="0" Content="First footer righ_t:" Target="{Binding ElementName=FirstFooterRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="FirstFooterRightBox" Grid.Row="16" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+
+                    <CheckBox x:Name="DifferentOddEvenBox" Grid.Row="17" Grid.Column="1" Content="Different _odd and even pages" Margin="0,8,0,8"/>
+                    <TextBlock Grid.Row="18" Grid.ColumnSpan="2" Text="Even page header" FontWeight="SemiBold" Margin="0,2,0,8"/>
+                    <Label Grid.Row="19" Grid.Column="0" Content="Even header le_ft:" Target="{Binding ElementName=EvenHeaderLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="EvenHeaderLeftBox" Grid.Row="19" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="20" Grid.Column="0" Content="Even header ce_nter:" Target="{Binding ElementName=EvenHeaderCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="EvenHeaderCenterBox" Grid.Row="20" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="21" Grid.Column="0" Content="Even header rig_ht:" Target="{Binding ElementName=EvenHeaderRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,12"/>
+                    <TextBox x:Name="EvenHeaderRightBox" Grid.Row="21" Grid.Column="1" Margin="0,0,0,12" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+
+                    <TextBlock Grid.Row="22" Grid.ColumnSpan="2" Text="Even page footer" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <Label Grid.Row="23" Grid.Column="0" Content="Even footer lef_t:" Target="{Binding ElementName=EvenFooterLeftBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="EvenFooterLeftBox" Grid.Row="23" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="24" Grid.Column="0" Content="Even footer cent_er:" Target="{Binding ElementName=EvenFooterCenterBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="EvenFooterCenterBox" Grid.Row="24" Grid.Column="1" Margin="0,0,0,8" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <Label Grid.Row="25" Grid.Column="0" Content="Even footer rig_ht:" Target="{Binding ElementName=EvenFooterRightBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="EvenFooterRightBox" Grid.Row="25" Grid.Column="1" GotKeyboardFocus="HeaderFooterBox_GotKeyboardFocus"/>
+                    <CheckBox x:Name="ScaleWithDocumentBox" Grid.Row="26" Grid.Column="1" Content="_Scale with document" Margin="0,14,0,8"/>
+                    <CheckBox x:Name="AlignWithMarginsBox" Grid.Row="27" Grid.Column="1" Content="_Align with page margins"/>
+                </Grid>
+            </ScrollViewer>
 
             <StackPanel Grid.Column="1" Margin="14,22,0,0">
                 <Button Content="_Page number" Tag="&amp;[Page]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
@@ -113,8 +149,8 @@
                 <Button Content="File _path" Tag="&amp;[Path]&amp;[File]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
                 <Button Content="File _name" Tag="&amp;[File]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
                 <Button Content="_Sheet name" Tag="&amp;[Tab]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
-                <Button Content="P_icture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
-                <Button Content="For_mat picture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="InsertTokenButton_Click"/>
+                <Button Content="P_icture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="PictureButton_Click"/>
+                <Button Content="For_mat picture" Tag="&amp;[Picture]" Margin="0,0,0,6" Click="FormatPictureButton_Click"/>
             </StackPanel>
         </Grid>
 

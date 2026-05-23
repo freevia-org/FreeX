@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#242424;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .r{fill:none;stroke:#242424;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .g{fill:#107c41}
+      .g2{fill:#dff6dd}
+      .b{fill:#0078d4}
+      .o{fill:#f7630c}
+      .y{fill:#ffb900}
+      .rd{fill:#d32f2f}
+      .p{fill:#8b5cf6}
+      .w{fill:#ffffff}
+      .k{fill:#242424}
+      .f{fill:#f3f2f1}
+      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
+</style>
+  </defs>
+  <path class="f s" d="M4.8 6.4 H27.2 L18.4 16.8 V25.6 L13.6 27.2 V16.8 Z" stroke-width="1.6"/>
+  <circle class="r" cx="22.4" cy="22.4" r="4" stroke-width="1.44"/>
+  <circle class="k" cx="22.4" cy="22.4" r="1.28"/>
+</svg>

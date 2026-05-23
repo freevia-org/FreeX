@@ -3,6 +3,7 @@ namespace Freexcel.Core.Model;
 public sealed class TextBoxModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
     public string Text { get; set; } = "";
     public string? AltText { get; set; }

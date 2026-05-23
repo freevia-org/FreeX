@@ -1,4 +1,6 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -136,8 +138,8 @@ public sealed class PivotWorkflowDialogTests
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Slicer _caption\", _nameBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Date field to connect\", _fieldBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Timeline _caption\", _nameBox",
-            "PivotDialogLayout.AddLabeledControl(allChartsPanel, \"Chart _type\", _chartTypeBox",
-            "PivotDialogLayout.AddLabeledControl(stylePanel, \"Chart _style ID\", _styleBox",
+            "InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery",
+            "AutomationProperties.SetName(_styleGallery, \"PivotChart style gallery\")",
             "AddCombo(selectionPanel, \"_Field\", _fieldBox",
             "AddCombo(groupingPanel, \"_Group by\", _groupingBox",
             "AddTextBox(rangePanel, \"_Starting at\", _startBox",
@@ -167,10 +169,10 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Choose fields");
-        source.Should().Contain("Slicers make it faster to filter a PivotTable");
         source.Should().Contain("_Field to connect");
         source.Should().Contain("Slicer _caption");
         source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().NotContain("Slicers make it faster to filter a PivotTable");
     }
 
     [Fact]
@@ -187,9 +189,9 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Choose date fields");
-        source.Should().Contain("Timelines filter PivotTables by date");
         source.Should().Contain("_Date field to connect");
         source.Should().Contain("Timeline _caption");
+        source.Should().NotContain("Timelines filter PivotTables by date");
     }
 
     [Fact]
@@ -207,14 +209,20 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotChartTypeDialog_ExposesPreviewAndRecommendedChartTypeCopy()
+    public void PivotChartTypeDialog_ExposesSelectableRecommendedPivotCharts()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Recommended PivotCharts");
         source.Should().Contain("All Charts");
-        source.Should().Contain("Chart preview");
-        source.Should().Contain("Pick a chart type for the selected PivotTable data");
+        source.Should().Contain("private readonly ListBox _recommendedGallery");
+        source.Should().Contain("CreateRecommendedChartsPanel(_recommendedGallery)");
+        source.Should().Contain("SelectedGalleryChoice()");
+        source.Should().NotContain("Pick a chart type for the selected PivotTable data");
+        source.Should().Contain("InsertChartDialog.CreateAllChartsPanel");
+        source.Should().Contain("Chart categories");
+        source.Should().Contain("Chart subtype gallery");
+        source.Should().NotContain("private readonly ComboBox _chartTypeBox");
     }
 
     [Fact]
@@ -232,7 +240,10 @@ public sealed class PivotWorkflowDialogTests
             showColumnHeaders: true,
             showRowStripes: true,
             showColumnStripes: false,
-            reportLayout: PivotReportLayout.Outline);
+            reportLayout: PivotReportLayout.Outline,
+            emptyValueText: "  N/A  ",
+            refreshOnOpen: true,
+            saveSourceData: false);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
             true,
@@ -246,7 +257,33 @@ public sealed class PivotWorkflowDialogTests
             true,
             true,
             false,
-            PivotReportLayout.Outline));
+            PivotReportLayout.Outline,
+            "N/A",
+            true,
+            false));
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesConnectedCacheDataOptions()
+    {
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 7,
+            StyleName = "PivotStyleMedium4"
+        };
+        var cache = new PivotCacheModel
+        {
+            CacheId = 7,
+            RefreshOnLoad = true,
+            SaveData = false
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
+            .Should()
+            .Match<PivotTableOptionsDialogResult>(result =>
+                result.RefreshOnOpen &&
+                !result.SaveSourceData);
     }
 
     [Fact]
@@ -270,7 +307,8 @@ public sealed class PivotWorkflowDialogTests
             ShowRowHeaders = true,
             ShowColumnHeaders = false,
             ShowRowStripes = true,
-            ShowColumnStripes = true
+            ShowColumnStripes = true,
+            EmptyValueText = "-"
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
@@ -287,7 +325,37 @@ public sealed class PivotWorkflowDialogTests
                 false,
                 true,
                 true,
-                PivotReportLayout.Compact));
+                PivotReportLayout.Compact,
+                "-"));
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesBroaderPivotStyleGalleryAndPreservesCurrentStyle()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            StyleName = "PivotStyleMedium10"
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableOptionsDialog(pivotTable);
+            var styleBox = (ComboBox)typeof(PivotTableOptionsDialog)
+                .GetField("_styleBox", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleBox.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().Contain(["PivotStyleLight16", "PivotStyleMedium10", "PivotStyleDark7"]);
+            styleNames.Should().HaveCountGreaterThan(12);
+            styleBox.SelectedItem.Should().Be("PivotStyleMedium10");
+
+            dialog.Close();
+        });
     }
 
     [Fact]
@@ -301,21 +369,29 @@ public sealed class PivotWorkflowDialogTests
             "Totals & Filters",
             "Display",
             "Data",
+            "Printing",
             "Alt Text",
             "_emptyCellsBox",
             "_autofitColumnsBox",
             "_preserveFormattingBox",
-            "_refreshOnOpenBox"
+            "_refreshOnOpenBox",
+            "_printTitlesBox",
+            "_printExpandCollapseBox",
+            "_altTextTitleBox",
+            "_altTextDescriptionBox"
         })
             source.Should().Contain(content);
+        source.Should().NotContain("Title and description metadata can be added in a future pass.");
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_HidesUnsupportedPrintingTab()
+    public void PivotTableOptionsDialog_ExposesPrintingTab()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
-        source.Should().NotContain("Header = \"Printing\"");
+        source.Should().Contain("Header = \"Printing\"");
+        source.Should().Contain("Set print _titles");
+        source.Should().Contain("Print expand/collapse _buttons when displayed on PivotTable");
         source.Should().NotContain("Print titles and print expand/collapse buttons are not yet available.");
     }
 
@@ -329,12 +405,15 @@ public sealed class PivotWorkflowDialogTests
             "Layout section",
             "Format section",
             "Grand totals",
-            "Field list and buttons",
             "PivotTable Style Options",
             "Data options",
+            "Print options",
+            "Alt Text",
             "Preserve source sort and _filter settings"
         })
             source.Should().Contain(content);
+
+        source.Should().NotContain("Field list and buttons remain available");
     }
 
     [Fact]
@@ -373,9 +452,41 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"Banded c_olumns\"",
             "Content = \"_Autofit column widths on update\"",
             "Content = \"_Preserve cell formatting on update\"",
-            "Content = \"_Refresh data when opening the file\""
+            "Content = \"_Refresh data when opening the file\"",
+            "Content = \"Set print _titles\"",
+            "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
         })
             source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ResultIncludesPrintingAndAltText()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            PivotSubtotalPlacement.Top,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            " PivotStyleMedium4 ",
+            showRowHeaders: true,
+            showColumnHeaders: true,
+            showRowStripes: false,
+            showColumnStripes: true,
+            PivotReportLayout.Outline,
+            emptyValueText: " - ",
+            refreshOnOpen: true,
+            saveSourceData: false,
+            printTitles: true,
+            printExpandCollapseButtons: true,
+            altTextTitle: "  Sales pivot ",
+            altTextDescription: " Quarterly sales summary ");
+
+        result.PrintTitles.Should().BeTrue();
+        result.PrintExpandCollapseButtons.Should().BeTrue();
+        result.AltTextTitle.Should().Be("Sales pivot");
+        result.AltTextDescription.Should().Be("Quarterly sales summary");
     }
 
     [Fact]
@@ -467,7 +578,7 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Selection");
         source.Should().Contain("Group by");
         source.Should().Contain("Range");
-        source.Should().Contain("Select the PivotTable field and grouping interval");
+        source.Should().NotContain("Select the PivotTable field and grouping interval");
     }
 
     [Fact]
@@ -486,8 +597,28 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Name and formula");
         source.Should().Contain("Formula:");
-        source.Should().Contain("Use field names in formulas");
-        source.Should().Contain("Calculated fields are added to the Values area");
+        source.Should().NotContain("Use field names in formulas");
+        source.Should().NotContain("Calculated fields are added to the Values area");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_ExposesFieldsListAndInsertFieldControl()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("private readonly ListBox _fieldList");
+        source.Should().Contain("Available _fields");
+        source.Should().Contain("Insert _Field");
+        source.Should().Contain("InsertSelectedField");
+        source.Should().Contain("InsertFormulaReference");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_InsertFormulaReference_InsertsQuotedFieldAtCaret()
+    {
+        PivotCalculatedFieldDialog.InsertFormulaReference("Sales+Cost", "[Region Name]", 6, 0)
+            .Should()
+            .Be("Sales+[Region Name]Cost");
     }
 
     [Fact]
@@ -509,9 +640,31 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Field and item");
-        source.Should().Contain("Calculated items are evaluated within the selected field");
+        source.Should().NotContain("Calculated items are evaluated within the selected field");
         source.Should().Contain("Source _field");
         source.Should().Contain("Item _formula");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_ExposesFieldItemListsAndInsertionControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("private readonly ListBox _fieldList");
+        source.Should().Contain("private readonly ListBox _itemList");
+        source.Should().Contain("Available _items");
+        source.Should().Contain("Insert _Field");
+        source.Should().Contain("Insert _Item");
+        source.Should().Contain("RefreshItemList");
+        source.Should().Contain("InsertSelectedItem");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_InsertFormulaReference_ReplacesSelectedFormulaText()
+    {
+        PivotCalculatedItemDialog.InsertFormulaReference("East+West", "North", 5, 4)
+            .Should()
+            .Be("East+North");
     }
 
     [Fact]
@@ -534,6 +687,15 @@ public sealed class PivotWorkflowDialogTests
                 showValueFieldButtons: false)
             .Should()
             .Be(new PivotChartOptionsDialogResult(null, true, false, true, false));
+
+        PivotChartOptionsDialog.CreateResult(
+                99,
+                showFieldButtons: true,
+                showReportFilterButtons: true,
+                showAxisFieldButtons: true,
+                showValueFieldButtons: true)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(48, true, true, true, true));
     }
 
     [Fact]
@@ -559,12 +721,42 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Chart style");
-        source.Should().Contain("Style IDs match the built-in Excel chart style gallery");
+        source.Should().Contain("_styleGallery");
+        source.Should().Contain("PivotChart style gallery");
+        source.Should().Contain("ChartStyleDialog.GetStyleOptions()");
+        source.Should().NotContain("Chart _style ID");
         source.Should().Contain("Field buttons");
         source.Should().Contain("_Show field buttons on chart");
         source.Should().Contain("Report _filter buttons");
         source.Should().Contain("_Axis field buttons");
         source.Should().Contain("_Value field buttons");
+        source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
+        source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_UsesVisualStyleGalleryAndPreservesCurrentStyle()
+    {
+        var chart = new ChartModel
+        {
+            IsPivotChart = true,
+            ChartStyleId = 12
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotChartOptionsDialog(chart);
+            var gallery = (ListBox)typeof(PivotChartOptionsDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleOptions = gallery.Items.Cast<ChartStyleOption>().ToList();
+
+            styleOptions.Should().HaveCount(49);
+            styleOptions[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
+            gallery.SelectedItem.Should().Be(styleOptions.Single(option => option.StyleId == 12));
+
+            dialog.Close();
+        });
     }
 
     [Fact]

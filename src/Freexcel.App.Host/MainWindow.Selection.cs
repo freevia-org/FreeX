@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -227,7 +228,7 @@ public partial class MainWindow
             {
                 _inlineEditor.Text = e.Text;
                 _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
-                _formulaRangeEntryMode = e.Text == "=";
+                _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(e.Text);
                 RefreshFormulaReferenceHighlights();
             }
         }
@@ -284,6 +285,13 @@ public partial class MainWindow
             if (Keyboard.Modifiers == ModifierKeys.Alt && IsStandaloneAltKey(keyTipKey))
             {
                 _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Alt && TryHandleDirectRibbonKeyTip(keyTipKey))
+            {
+                _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
@@ -360,6 +368,9 @@ public partial class MainWindow
                 return;
             }
         }
+
+        if (TryHandleFocusedRibbonKeyboardNavigation(e))
+            return;
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
         {
@@ -488,6 +499,54 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Value);
         e.Handled = true;
+    }
+
+    private bool TryHandleFocusedRibbonKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            !IsInsideRibbonSurface(focusedElement) ||
+            Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
+        {
+            return false;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End)
+        {
+            e.Handled = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsInsideRibbonSurface(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null; current = GetTreeParentForKeyboardFocus(current))
+        {
+            if (ReferenceEquals(current, RibbonTabs))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static DependencyObject? GetTreeParentForKeyboardFocus(DependencyObject element)
+    {
+        if (element is Visual)
+        {
+            var visualParent = VisualTreeHelper.GetParent(element);
+            if (visualParent is not null)
+                return visualParent;
+        }
+
+        return LogicalTreeHelper.GetParent(element);
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)

@@ -6,7 +6,7 @@ public sealed class RibbonCommandPresentationPlannerTests
 {
     [Theory]
     [InlineData("PivotTable", "PivotTable", RibbonCommandLayoutKind.Large)]
-    [InlineData("Column Chart", "Column Chart", RibbonCommandLayoutKind.Medium)]
+    [InlineData("Column Chart", "Column Chart", RibbonCommandLayoutKind.Small)]
     [InlineData("Bold", "Bold", RibbonCommandLayoutKind.Small)]
     [InlineData("Excluded Share", "Share", RibbonCommandLayoutKind.Large)]
     public void GetLayoutKind_ClassifiesRibbonCommands(string commandName, string label, RibbonCommandLayoutKind expected)

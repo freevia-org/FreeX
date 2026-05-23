@@ -305,13 +305,16 @@ public static class RibbonCommandPresentationPlanner
         name == "pivottable" ||
         name is "table" ||
         name.Contains("recommended chart") ||
-        name.Contains("picture") ||
-        name.Contains("link") ||
+        name == "insert picture" ||
+        name == "insert link" ||
         name.Contains("insert symbol") ||
         name.Contains("text box") ||
         name.Contains("rectangle") ||
         name.Contains("ellipse") ||
         name == "line" ||
+        name.Contains("bring forward") ||
+        name.Contains("send backward") ||
+        name.Contains("selection pane") ||
         name.Contains("themes") ||
         name.Contains("margins") ||
         name.Contains("orientation") ||
@@ -325,6 +328,12 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("name manager") ||
         name.Contains("watch window") ||
         name.Contains("calculation options") ||
+        name.Contains("calculate now") ||
+        name.Contains("calculate sheet") ||
+        name.Contains("trace precedent") ||
+        name.Contains("trace dependent") ||
+        name.Contains("error checking") ||
+        name.Contains("evaluate formula") ||
         name.Contains("get data") ||
         name.Contains("refresh all") ||
         name == "sort ascending" ||
@@ -372,14 +381,7 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("theme effects") ||
         name.Contains("line sparkline") ||
         name.Contains("column sparkline") ||
-        name.Contains("win/loss") ||
-        name.Contains("column chart") ||
-        name.Contains("line chart") ||
-        name.Contains("pie chart") ||
-        name.Contains("bar chart") ||
-        name.Contains("scatter chart") ||
-        name.Contains("area chart") ||
-        name.Contains("doughnut chart");
+        name.Contains("win/loss");
 }
 
 public enum RibbonCommandLayoutKind

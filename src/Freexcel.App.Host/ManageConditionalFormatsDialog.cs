@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -169,8 +170,9 @@ public sealed class ManageConditionalFormatsDialog : Window
         rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
         rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
         rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select range");
+        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select Applies To range text");
         rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
+        rangePickerFactory.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(RangePickerButton_Click));
         var appliesToFactory = new FrameworkElementFactory(typeof(TextBox));
         appliesToFactory.SetValue(Control.PaddingProperty, new Thickness(2, 0, 2, 0));
         appliesToFactory.SetValue(Control.VerticalContentAlignmentProperty, System.Windows.VerticalAlignment.Center);
@@ -249,7 +251,7 @@ public sealed class ManageConditionalFormatsDialog : Window
                 new CellAddress(_sheet.Id, 1, 1),
                 new CellAddress(_sheet.Id, 1, 1));
 
-        var dlg = new ConditionalFormatDialog("Greater Than", defaultRange);
+        var dlg = new NewConditionalFormatRuleDialog("Greater Than", defaultRange);
         dlg.Owner = this;
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
@@ -439,6 +441,29 @@ public sealed class ManageConditionalFormatsDialog : Window
             && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
     }
 
+    private static void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not DependencyObject current)
+            return;
+
+        while (current is not null)
+        {
+            if (current is DockPanel panel)
+            {
+                var rangeBox = panel.Children.OfType<TextBox>().FirstOrDefault();
+                if (rangeBox is not null)
+                {
+                    rangeBox.Focus();
+                    rangeBox.SelectAll();
+                }
+                return;
+            }
+
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current)
+                ?? LogicalTreeHelper.GetParent(current);
+        }
+    }
+
     // ── Public static helpers (usable by value converters below) ───────────────
 
     public static string DescribeRule(ConditionalFormat cf) => cf.RuleType switch
@@ -544,17 +569,29 @@ public sealed class ManageConditionalFormatsDialog : Window
 
     public static GridRange TryParseAppliesToText(string text, SheetId sheetId, GridRange fallback)
     {
+        return TryParseAppliesToText(text, sheetId, out var parsed)
+            ? parsed
+            : fallback;
+    }
+
+    public static bool TryParseAppliesToText(string text, SheetId sheetId, out GridRange range)
+    {
+        range = default;
         var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return false;
+
         if (!normalized.Contains(':', StringComparison.Ordinal))
             normalized = $"{normalized}:{normalized}";
 
         try
         {
-            return GridRange.Parse(normalized, sheetId);
+            range = GridRange.Parse(normalized, sheetId);
+            return true;
         }
         catch (FormatException)
         {
-            return fallback;
+            return false;
         }
     }
 
@@ -600,8 +637,9 @@ internal sealed class AppliesToRangeConverter(SheetId sheetId) : System.Windows.
         if (value is not string text)
             return Binding.DoNothing;
 
-        var fallback = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1));
-        return ManageConditionalFormatsDialog.TryParseAppliesToText(text, sheetId, fallback);
+        return ManageConditionalFormatsDialog.TryParseAppliesToText(text, sheetId, out var range)
+            ? range
+            : Binding.DoNothing;
     }
 }
 

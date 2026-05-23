@@ -23,7 +23,8 @@ public sealed class GoalSeekDialogXamlTests
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
             .Should()
-            .Contain("Collapse Dialog");
+            .Contain(["Select set cell reference", "Select changing cell reference"])
+            .And.NotContain("Collapse Dialog");
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("CommandParameter")?.Value)

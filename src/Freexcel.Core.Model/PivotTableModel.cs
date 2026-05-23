@@ -87,6 +87,10 @@ public sealed class PivotTableModel
     public bool ShowRowStripes { get; set; }
     public bool ShowColumnStripes { get; set; }
     public string? EmptyValueText { get; set; }
+    public bool PrintTitles { get; set; }
+    public bool PrintExpandCollapseButtons { get; set; }
+    public string? AltTextTitle { get; set; }
+    public string? AltTextDescription { get; set; }
     public List<PivotFieldModel> RowFields { get; } = [];
     public List<PivotFieldModel> ColumnFields { get; } = [];
     public List<PivotFieldModel> PageFields { get; } = [];

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Fill Color" shape-rendering="crispEdges">
 <rect width="20" height="20" fill="none"/>
-<rect x="2" y="2" width="16" height="15" rx="1" fill="#f7d14a"/>
-<path d="M3 2h14v1H3zm14 1h1v13h-1zM3 16h14v1H3zM2 3h1v13H2z" fill="#202124"/>
-<text x="10" y="15" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" fill="#202124">A</text>
+<rect x="2" y="2" width="16" height="15" rx="1" fill="#ffb900"/>
+<path d="M3 2h14v1H3zm14 1h1v13h-1zM3 16h14v1H3zM2 3h1v13H2z" fill="#242424"/>
+<text x="10" y="15" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" fill="#242424">A</text>
 </svg>

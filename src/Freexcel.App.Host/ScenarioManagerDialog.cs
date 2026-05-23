@@ -20,6 +20,8 @@ public sealed class ScenarioManagerDialog : Window
     public ScenarioManagerAction SelectedAction { get; private set; } = ScenarioManagerAction.Show;
     public string? SelectedScenarioName { get; private set; }
     public string? NewScenarioName { get; private set; }
+    public string? ChangingCellsText { get; private set; }
+    public string? CommentText { get; private set; }
 
     public ScenarioManagerDialog(Workbook workbook)
     {
@@ -80,7 +82,7 @@ public sealed class ScenarioManagerDialog : Window
         AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Add);
         _editButton = AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Edit, isEnabled: false);
         _deleteButton = AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.Delete, isEnabled: false);
-        AddActionButton(sideButtons, "_Merge...", ScenarioManagerAction.List, isEnabled: false);
+        AddActionButton(sideButtons, "_List...", ScenarioManagerAction.List);
         _showButton = AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null);
         AddActionButton(sideButtons, "S_ummary...", ScenarioManagerAction.Report);
         UpdateSelectionState();
@@ -145,9 +147,13 @@ public sealed class ScenarioManagerDialog : Window
     {
         var selected = _scenarioList.SelectedItem as ScenarioManagerItem;
         if (selected is not null)
+        {
             _newNameBox.Text = selected.Name;
+        }
         else if (string.IsNullOrWhiteSpace(_newNameBox.Text))
+        {
             _newNameBox.Text = _defaultScenarioName;
+        }
 
         var hasSelection = selected is not null;
         if (_editButton is not null) _editButton.IsEnabled = hasSelection;
@@ -160,6 +166,8 @@ public sealed class ScenarioManagerDialog : Window
         SelectedAction = action;
         SelectedScenarioName = (_scenarioList.SelectedItem as ScenarioManagerItem)?.Name;
         NewScenarioName = _newNameBox.Text;
+        ChangingCellsText = _changingCellsBox.Text;
+        CommentText = _commentBox.Text;
         DialogResult = true;
     }
 }

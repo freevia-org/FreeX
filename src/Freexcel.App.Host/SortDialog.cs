@@ -13,6 +13,8 @@ public sealed record SortDirectionChoice(string Label, bool Ascending);
 
 public sealed record SortOnChoice(string Label);
 
+public sealed record SortDialogOptions(bool CaseSensitive = false, bool LeftToRight = false);
+
 public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
 {
     public SortDialogLevel(uint columnOffset, bool ascending)
@@ -55,8 +57,10 @@ public sealed class SortDialog : Window
     private readonly ObservableCollection<SortDialogLevel> _levels;
     private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
     private readonly IReadOnlyList<SortColumnChoice> _genericColumnChoices;
+    private readonly IReadOnlyList<SortColumnChoice> _rowChoices;
     private readonly CheckBox _headerCheck;
     private readonly DataGridComboBoxColumn _sortByColumn;
+    private SortDialogOptions _options;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
 
@@ -64,17 +68,23 @@ public sealed class SortDialog : Window
 
     public bool ResultHasHeaders { get; private set; }
 
+    public SortDialogOptions ResultOptions { get; private set; }
+
     public SortDialog(
         IEnumerable<SortDialogLevel>? levels = null,
         IEnumerable<SortColumnChoice>? columnChoices = null,
         IEnumerable<SortColumnChoice>? genericColumnChoices = null,
+        IEnumerable<SortColumnChoice>? rowChoices = null,
         bool hasHeaders = true)
     {
         _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
         _columnChoices = NormalizeColumnChoices(columnChoices);
         _genericColumnChoices = NormalizeColumnChoices(genericColumnChoices ?? columnChoices);
+        _rowChoices = NormalizeColumnChoices(rowChoices);
+        _options = new SortDialogOptions();
         ResultSortKeys = BuildSortKeys(_levels);
         ResultHasHeaders = hasHeaders;
+        ResultOptions = _options;
 
         Title = "Custom Sort";
         Width = 640;
@@ -196,8 +206,12 @@ public sealed class SortDialog : Window
         };
         options.Click += (_, _) =>
         {
-            var dialog = new SortOptionsDialog { Owner = this };
-            dialog.ShowDialog();
+            var dialog = new SortOptionsDialog(_options) { Owner = this };
+            if (dialog.ShowDialog() == true)
+            {
+                _options = dialog.Result;
+                UpdateColumnChoices();
+            }
         };
         DockPanel.SetDock(options, Dock.Right);
         commandDock.Children.Add(options);
@@ -214,6 +228,7 @@ public sealed class SortDialog : Window
         {
             ResultSortKeys = BuildSortKeys(_levels);
             ResultHasHeaders = _headerCheck.IsChecked == true;
+            ResultOptions = _options;
             DialogResult = true;
         };
         var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
@@ -296,6 +311,15 @@ public sealed class SortDialog : Window
         return choices.Count == 0 ? [new SortColumnChoice("Column A", 0)] : choices;
     }
 
+    public static IReadOnlyList<SortColumnChoice> BuildRowChoices(GridRange range)
+    {
+        var choices = new List<SortColumnChoice>();
+        for (uint offset = 0; offset < range.RowCount; offset++)
+            choices.Add(new SortColumnChoice($"Row {range.Start.Row + offset}", offset));
+
+        return choices.Count == 0 ? [new SortColumnChoice("Row 1", 0)] : choices;
+    }
+
     public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
     {
         if (!hasHeaders || range.Start.Row >= range.End.Row)
@@ -320,7 +344,11 @@ public sealed class SortDialog : Window
 
     private void UpdateColumnChoices()
     {
-        _sortByColumn.ItemsSource = _headerCheck.IsChecked == true
+        _sortByColumn.Header = _options.LeftToRight ? "Sort by row" : "Sort by";
+        _headerCheck.IsEnabled = !_options.LeftToRight;
+        _sortByColumn.ItemsSource = _options.LeftToRight
+            ? _rowChoices
+            : _headerCheck.IsChecked == true
             ? _columnChoices
             : _genericColumnChoices;
     }
@@ -343,8 +371,16 @@ public sealed class SortDialog : Window
 
 public sealed class SortOptionsDialog : Window
 {
-    public SortOptionsDialog()
+    private readonly CheckBox _caseSensitiveBox;
+    private readonly RadioButton _topToBottomButton;
+    private readonly RadioButton _leftToRightButton;
+
+    public SortDialogOptions Result { get; private set; }
+
+    public SortOptionsDialog(SortDialogOptions? current = null)
     {
+        current ??= new SortDialogOptions();
+        Result = current;
         Title = "Sort Options";
         Width = 330;
         Height = 210;
@@ -357,13 +393,16 @@ public sealed class SortOptionsDialog : Window
         DockPanel.SetDock(body, Dock.Top);
         root.Children.Add(body);
 
-        body.Children.Add(new CheckBox
+        _caseSensitiveBox = new CheckBox
         {
-            Content = "Case _sensitive",
-            IsEnabled = false,
-            Margin = new Thickness(0, 0, 0, 10),
-            ToolTip = "Freexcel currently sorts cell values without case sensitivity."
-        });
+            Content = "_Case sensitive",
+            IsChecked = current.CaseSensitive,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
+        body.Children.Add(_caseSensitiveBox);
+
+        _topToBottomButton = new RadioButton { Content = "Sort top to _bottom", IsChecked = !current.LeftToRight };
+        _leftToRightButton = new RadioButton { Content = "Sort left to _right", IsChecked = current.LeftToRight };
 
         var orientation = new GroupBox
         {
@@ -374,26 +413,20 @@ public sealed class SortOptionsDialog : Window
             {
                 Children =
                 {
-                    new RadioButton { Content = "Sort top to _bottom", IsChecked = true },
-                    new RadioButton
-                    {
-                        Content = "Sort left to _right",
-                        IsEnabled = false,
-                        ToolTip = "Freexcel currently sorts selected rows from top to bottom."
-                    }
+                    _topToBottomButton,
+                    _leftToRightButton
                 }
             }
         };
         body.Children.Add(orientation);
 
-        body.Children.Add(new TextBlock
+        root.Children.Add(DialogButtonRowFactory.Create(() =>
         {
-            Text = "Unsupported Excel options are shown here but are not applied.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush
-        });
-
-        root.Children.Add(DialogButtonRowFactory.Create(() => DialogResult = true, buttonWidth: 72));
+            Result = new SortDialogOptions(
+                CaseSensitive: _caseSensitiveBox.IsChecked == true,
+                LeftToRight: _leftToRightButton.IsChecked == true);
+            DialogResult = true;
+        }, buttonWidth: 72));
         Content = root;
     }
 }

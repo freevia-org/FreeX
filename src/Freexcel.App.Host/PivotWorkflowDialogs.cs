@@ -2,6 +2,9 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Media;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -79,14 +82,6 @@ internal static class PivotDialogLayout
     public static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 76, rowMargin: new Thickness(0, 12, 0, 0));
 
-    public static TextBlock CreateHelpText(string text) => new()
-    {
-        Text = text,
-        TextWrapping = TextWrapping.Wrap,
-        Foreground = SystemColors.GrayTextBrush,
-        Margin = new Thickness(0, 0, 0, 10)
-    };
-
     public static GroupBox CreateGroupBox(string header, UIElement content, Thickness? margin = null) => new()
     {
         Header = header,
@@ -158,7 +153,6 @@ public sealed class InsertSlicerDialog : Window
     private StackPanel CreateFieldNameContent(IReadOnlyList<string> fields, string field, string name, Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(PivotDialogLayout.CreateHelpText("Slicers make it faster to filter a PivotTable by showing buttons for a selected field."));
 
         var fieldPanel = PivotDialogLayout.CreateGroupPanel();
         _fieldBox.ItemsSource = fields;
@@ -197,7 +191,6 @@ public sealed class InsertTimelineDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(PivotDialogLayout.CreateHelpText("Timelines filter PivotTables by date and keep the selected period visible."));
 
         var fieldPanel = PivotDialogLayout.CreateGroupPanel();
         _fieldBox.ItemsSource = fields;
@@ -225,7 +218,10 @@ public sealed record PivotChartTypeDialogResult(ChartType ChartType);
 
 public sealed class PivotChartTypeDialog : Window
 {
-    private readonly ComboBox _chartTypeBox = new();
+    private readonly TabControl _tabs = new();
+    private readonly ListBox _recommendedGallery = new();
+    private readonly ListBox _categoryList = new();
+    private readonly ListBox _subtypeGallery = new();
 
     public ChartType SelectedChartType { get; private set; }
     public PivotChartTypeDialogResult Result { get; private set; }
@@ -235,38 +231,34 @@ public sealed class PivotChartTypeDialog : Window
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
         Title = "Change PivotChart Type";
-        Width = 460;
-        Height = 340;
+        Width = 640;
+        Height = 410;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var options = ChartTypePickerPlanner.GetSupportedOptions();
-        _chartTypeBox.ItemsSource = options;
-        _chartTypeBox.DisplayMemberPath = nameof(ChartTypePickerOption.DisplayName);
-        _chartTypeBox.SelectedItem = options.FirstOrDefault(option => option.Type == currentType);
-
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(PivotDialogLayout.CreateHelpText("Pick a chart type for the selected PivotTable data."));
-        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 12), Height = 180 };
-        tabs.Items.Add(new TabItem
+        _tabs.Margin = new Thickness(0, 0, 0, 12);
+        _tabs.Height = 290;
+        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
+        _recommendedGallery.SelectedItem = ChartTypePickerPlanner.GetRecommendedGalleryChoices()
+            .FirstOrDefault(choice => choice.Type == currentType);
+        if (_recommendedGallery.SelectedItem is null)
+            _recommendedGallery.SelectedIndex = 0;
+        _tabs.Items.Add(new TabItem
         {
             Header = "Recommended PivotCharts",
-            Content = PivotDialogLayout.CreateGroupBox("Chart preview", new TextBlock
-            {
-                Text = "Preview uses the current PivotTable fields and keeps PivotChart field buttons available.",
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(10)
-            }, new Thickness(8))
+            Content = InsertChartDialog.CreateRecommendedChartsPanel(_recommendedGallery)
         });
 
-        var allChartsPanel = PivotDialogLayout.CreateGroupPanel();
-        PivotDialogLayout.AddLabeledControl(allChartsPanel, "Chart _type", _chartTypeBox);
-        tabs.Items.Add(new TabItem { Header = "All Charts", Content = allChartsPanel });
-        stack.Children.Add(tabs);
+        var allChartsPanel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
+        allChartsPanel.ToolTip = "Chart categories and Chart subtype gallery match the Insert Chart picker.";
+        _tabs.Items.Add(new TabItem { Header = "All Charts", Content = allChartsPanel });
+        stack.Children.Add(_tabs);
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
         {
-            if (_chartTypeBox.SelectedItem is ChartTypePickerOption option)
+            if (SelectedGalleryChoice() is { } option)
                 SelectedChartType = option.Type;
             Result = CreateResult(SelectedChartType);
             DialogResult = true;
@@ -275,6 +267,11 @@ public sealed class PivotChartTypeDialog : Window
     }
 
     public static PivotChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
+
+    private ChartTypeGalleryChoice? SelectedGalleryChoice() =>
+        _tabs.SelectedIndex == 0
+            ? _recommendedGallery.SelectedItem as ChartTypeGalleryChoice
+            : _subtypeGallery.SelectedItem as ChartTypeGalleryChoice;
 }
 
 public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptionsDialogResult>
@@ -325,7 +322,7 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
 
 public sealed class PivotChartOptionsDialog : Window
 {
-    private readonly TextBox _styleBox = new();
+    private readonly ListBox _styleGallery = new();
     private readonly CheckBox _showFieldButtonsBox = new() { Content = "_Show field buttons on chart" };
     private readonly CheckBox _showReportFilterButtonsBox = new() { Content = "Report _filter buttons" };
     private readonly CheckBox _showAxisFieldButtonsBox = new() { Content = "_Axis field buttons" };
@@ -343,7 +340,16 @@ public sealed class PivotChartOptionsDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _styleBox.Text = Result.ChartStyleId?.ToString() ?? "";
+        var styleOptions = ChartStyleDialog.GetStyleOptions();
+        _styleGallery.ItemsSource = styleOptions;
+        _styleGallery.ItemTemplate = CreateStyleGalleryTemplate();
+        var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "PivotChartStyleGalleryPanel");
+        itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
+        _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
+        _styleGallery.SelectedItem = styleOptions.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? styleOptions[0];
+        _styleGallery.Height = 126;
+        _styleGallery.Margin = new Thickness(0, 0, 0, 8);
+        AutomationProperties.SetName(_styleGallery, "PivotChart style gallery");
         _showFieldButtonsBox.IsChecked = Result.ShowFieldButtons;
         _showFieldButtonsBox.Margin = new Thickness(0, 0, 0, 8);
         _showReportFilterButtonsBox.IsChecked = Result.ShowReportFilterButtons;
@@ -355,8 +361,8 @@ public sealed class PivotChartOptionsDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        PivotDialogLayout.AddLabeledControl(stylePanel, "Chart _style ID", _styleBox);
-        stylePanel.Children.Add(PivotDialogLayout.CreateHelpText("Style IDs match the built-in Excel chart style gallery."));
+        stylePanel.Children.Add(new Label { Content = "Chart _style", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stylePanel.Children.Add(_styleGallery);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Chart style", stylePanel));
 
         var buttonPanel = PivotDialogLayout.CreateGroupPanel();
@@ -364,7 +370,6 @@ public sealed class PivotChartOptionsDialog : Window
         buttonPanel.Children.Add(_showReportFilterButtonsBox);
         buttonPanel.Children.Add(_showAxisFieldButtonsBox);
         buttonPanel.Children.Add(_showValueFieldButtonsBox);
-        buttonPanel.Children.Add(PivotDialogLayout.CreateHelpText("Field buttons let you filter and rearrange PivotChart data directly on the chart."));
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field buttons", buttonPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         Content = stack;
@@ -391,10 +396,26 @@ public sealed class PivotChartOptionsDialog : Window
             showAxisFieldButtons,
             showValueFieldButtons);
 
+    public static PivotChartOptionsDialogResult CreateResult(
+        int? chartStyleId,
+        bool showFieldButtons,
+        bool showReportFilterButtons = true,
+        bool showAxisFieldButtons = true,
+        bool showValueFieldButtons = true) =>
+        new(
+            NormalizeStyleId(chartStyleId),
+            showFieldButtons,
+            showReportFilterButtons,
+            showAxisFieldButtons,
+            showValueFieldButtons);
+
     private void Accept()
     {
+        var selectedStyleId = _styleGallery.SelectedItem is ChartStyleOption option
+            ? option.StyleId
+            : null;
         Result = CreateResult(
-            _styleBox.Text,
+            selectedStyleId,
             _showFieldButtonsBox.IsChecked == true,
             _showReportFilterButtonsBox.IsChecked == true,
             _showAxisFieldButtonsBox.IsChecked == true,
@@ -408,6 +429,47 @@ public sealed class PivotChartOptionsDialog : Window
             return null;
 
         return int.TryParse(text.Trim(), out var value) ? NormalizeStyleId(value) : null;
+    }
+
+    private static DataTemplate CreateStyleGalleryTemplate()
+    {
+        var root = new FrameworkElementFactory(typeof(StackPanel));
+        root.SetValue(StackPanel.MarginProperty, new Thickness(3));
+        root.SetValue(StackPanel.WidthProperty, 82.0);
+
+        var preview = new FrameworkElementFactory(typeof(Border));
+        preview.SetValue(Border.BorderBrushProperty, SystemColors.ControlDarkBrush);
+        preview.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        preview.SetValue(Border.HeightProperty, 28.0);
+        preview.SetValue(Border.BackgroundProperty, Brushes.White);
+
+        var bars = new FrameworkElementFactory(typeof(StackPanel));
+        bars.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        bars.SetValue(StackPanel.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        bars.SetValue(StackPanel.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Bottom);
+        bars.SetValue(StackPanel.MarginProperty, new Thickness(0, 0, 0, 4));
+        foreach (var height in new[] { 12.0, 19.0, 15.0 })
+        {
+            var bar = new FrameworkElementFactory(typeof(Border));
+            bar.SetValue(Border.WidthProperty, 8.0);
+            bar.SetValue(Border.HeightProperty, height);
+            bar.SetValue(Border.MarginProperty, new Thickness(2, 0, 2, 0));
+            bar.SetValue(Border.BackgroundProperty, SystemColors.HighlightBrush);
+            bars.AppendChild(bar);
+        }
+
+        preview.AppendChild(bars);
+        root.AppendChild(preview);
+
+        var label = new FrameworkElementFactory(typeof(TextBlock));
+        label.SetBinding(TextBlock.TextProperty, new Binding(nameof(ChartStyleOption.DisplayName)));
+        label.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        label.SetValue(TextBlock.FontSizeProperty, 10.0);
+        label.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        label.SetValue(TextBlock.MarginProperty, new Thickness(0, 3, 0, 0));
+        root.AppendChild(label);
+
+        return new DataTemplate { VisualTree = root };
     }
 
     private static int? NormalizeStyleId(int? value)
@@ -522,7 +584,6 @@ public sealed class PivotFieldGroupingDialog : Window
     private StackPanel CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(PivotDialogLayout.CreateHelpText("Select the PivotTable field and grouping interval."));
 
         var selectionPanel = PivotDialogLayout.CreateGroupPanel();
         AddCombo(selectionPanel, "_Field", _fieldBox, _fields);
@@ -607,35 +668,56 @@ public sealed class PivotCalculatedFieldDialog : Window
 {
     private readonly TextBox _nameBox = new();
     private readonly TextBox _formulaBox = new();
+    private readonly ListBox _fieldList = new() { Height = 92 };
+    private readonly IReadOnlyList<string> _fields;
 
     public PivotCalculatedFieldDialogResult Result { get; private set; }
 
-    public PivotCalculatedFieldDialog(string name = "", string formula = "")
+    public PivotCalculatedFieldDialog(string name = "", string formula = "", IEnumerable<string>? fieldNames = null)
     {
+        _fields = CreateFieldNames(fieldNames ?? []);
         Result = CreateResult(name, formula);
         Title = "Calculated Field";
-        Width = 430;
-        Height = 300;
+        Width = 480;
+        Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         Content = CreateContent();
         _nameBox.Text = Result.Name;
         _formulaBox.Text = Result.Formula;
+        _fieldList.ItemsSource = _fields;
+        if (_fields.Count > 0)
+            _fieldList.SelectedIndex = 0;
     }
 
     public static PivotCalculatedFieldDialogResult CreateResult(string name, string formula) =>
         new(name.Trim(), formula.Trim());
 
+    public static string InsertFormulaReference(string formula, string reference, int selectionStart, int selectionLength) =>
+        PivotFormulaInsertion.InsertFormulaToken(formula, reference, selectionStart, selectionLength);
+
     private StackPanel CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(PivotDialogLayout.CreateHelpText("Calculated fields are added to the Values area and can use other PivotTable fields."));
         var formulaPanel = PivotDialogLayout.CreateGroupPanel();
         AddTextBox(formulaPanel, "_Name", _nameBox);
         AddTextBox(formulaPanel, "_Formula:", _formulaBox);
-        formulaPanel.Children.Add(PivotDialogLayout.CreateHelpText("Use field names in formulas, for example Sales-Cost."));
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Name and formula", formulaPanel));
+
+        var fieldsPanel = PivotDialogLayout.CreateGroupPanel();
+        PivotDialogLayout.AddLabeledControl(fieldsPanel, "Available _fields", _fieldList);
+        var insertFieldButton = new Button
+        {
+            Content = "Insert _Field",
+            Width = 110,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left
+        };
+        insertFieldButton.Click += (_, _) => InsertSelectedField();
+        _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
+        fieldsPanel.Children.Add(insertFieldButton);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Fields", fieldsPanel));
+
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         return stack;
     }
@@ -645,6 +727,35 @@ public sealed class PivotCalculatedFieldDialog : Window
         Result = CreateResult(_nameBox.Text, _formulaBox.Text);
         DialogResult = true;
     }
+
+    private void InsertSelectedField()
+    {
+        if (_fieldList.SelectedItem is not string fieldName)
+            return;
+
+        InsertFormulaText(fieldName);
+    }
+
+    private void InsertFormulaText(string reference)
+    {
+        var inserted = InsertFormulaReference(
+            _formulaBox.Text,
+            reference,
+            _formulaBox.SelectionStart,
+            _formulaBox.SelectionLength);
+        var caretIndex = Math.Min(inserted.Length, _formulaBox.SelectionStart + reference.Length);
+        _formulaBox.Text = inserted;
+        _formulaBox.Focus();
+        _formulaBox.SelectionStart = caretIndex;
+        _formulaBox.SelectionLength = 0;
+    }
+
+    private static IReadOnlyList<string> CreateFieldNames(IEnumerable<string> fieldNames) =>
+        fieldNames
+            .Select(name => name.Trim())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {
@@ -664,22 +775,31 @@ public sealed record PivotCalculatedItemDialogResult(
 public sealed class PivotCalculatedItemDialog : Window
 {
     private readonly ComboBox _fieldBox = new();
+    private readonly ListBox _fieldList = new() { Height = 80 };
+    private readonly ListBox _itemList = new() { Height = 80 };
     private readonly TextBox _nameBox = new();
     private readonly TextBox _formulaBox = new();
     private readonly IReadOnlyList<PivotCalculatedItemSourceFieldOption> _fields;
+    private readonly IReadOnlyDictionary<int, IReadOnlyList<string>> _itemsBySourceFieldIndex;
 
     public PivotCalculatedItemDialogResult Result { get; private set; }
 
-    public PivotCalculatedItemDialog(IEnumerable<string> fieldNames, int selectedSourceFieldIndex = 0, string name = "", string formula = "")
+    public PivotCalculatedItemDialog(
+        IEnumerable<string> fieldNames,
+        int selectedSourceFieldIndex = 0,
+        string name = "",
+        string formula = "",
+        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex = null)
     {
         _fields = CreateFieldOptions(fieldNames);
+        _itemsBySourceFieldIndex = CreateItemOptions(itemNamesBySourceFieldIndex);
         var selectedField = _fields.FirstOrDefault(field => field.Index == Math.Max(0, selectedSourceFieldIndex))
             ?? _fields.FirstOrDefault();
         Result = CreateResult(selectedField?.Name ?? "", selectedField?.Index ?? 0, name, formula);
 
         Title = "Calculated Item";
-        Width = 430;
-        Height = 340;
+        Width = 500;
+        Height = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -694,17 +814,32 @@ public sealed class PivotCalculatedItemDialog : Window
         string formula) =>
         new(sourceFieldName.Trim(), Math.Max(0, sourceFieldIndex), name.Trim(), formula.Trim());
 
+    public static string InsertFormulaReference(string formula, string reference, int selectionStart, int selectionLength) =>
+        PivotFormulaInsertion.InsertFormulaToken(formula, reference, selectionStart, selectionLength);
+
     private StackPanel CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(PivotDialogLayout.CreateHelpText("Calculated items are evaluated within the selected field."));
         var itemPanel = PivotDialogLayout.CreateGroupPanel();
         _fieldBox.ItemsSource = _fields;
         _fieldBox.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
+        _fieldBox.SelectionChanged += (_, _) => RefreshItemList();
         PivotDialogLayout.AddLabeledControl(itemPanel, "Source _field", _fieldBox);
         AddTextBox(itemPanel, "_Name", _nameBox);
         AddTextBox(itemPanel, "Item _formula", _formulaBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field and item", itemPanel));
+
+        var insertPanel = PivotDialogLayout.CreateGroupPanel();
+        _fieldList.ItemsSource = _fields;
+        _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
+        _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
+        PivotDialogLayout.AddLabeledControl(insertPanel, "Available _fields", _fieldList);
+        insertPanel.Children.Add(CreateInsertButton("Insert _Field", InsertSelectedField));
+        PivotDialogLayout.AddLabeledControl(insertPanel, "Available _items", _itemList);
+        _itemList.MouseDoubleClick += (_, _) => InsertSelectedItem();
+        insertPanel.Children.Add(CreateInsertButton("Insert _Item", InsertSelectedItem));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Insert into formula", insertPanel));
+
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         return stack;
     }
@@ -715,6 +850,10 @@ public sealed class PivotCalculatedItemDialog : Window
             ?? _fields.FirstOrDefault();
         _nameBox.Text = result.Name;
         _formulaBox.Text = result.Formula;
+        _fieldList.SelectedItem = _fieldBox.SelectedItem;
+        if (_fieldList.SelectedItem is null && _fields.Count > 0)
+            _fieldList.SelectedIndex = 0;
+        RefreshItemList();
     }
 
     private void Accept()
@@ -728,11 +867,77 @@ public sealed class PivotCalculatedItemDialog : Window
         DialogResult = true;
     }
 
+    private void RefreshItemList()
+    {
+        var selectedField = _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
+        var items = selectedField is not null &&
+            _itemsBySourceFieldIndex.TryGetValue(selectedField.Index, out var sourceItems)
+                ? sourceItems
+                : [];
+        _itemList.ItemsSource = items;
+        _itemList.SelectedIndex = items.Count > 0 ? 0 : -1;
+    }
+
+    private void InsertSelectedField()
+    {
+        var selectedField = _fieldList.SelectedItem as PivotCalculatedItemSourceFieldOption
+            ?? _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
+        if (selectedField is null)
+            return;
+
+        InsertFormulaText(selectedField.Name);
+    }
+
+    private void InsertSelectedItem()
+    {
+        if (_itemList.SelectedItem is not string itemName)
+            return;
+
+        InsertFormulaText(itemName);
+    }
+
+    private void InsertFormulaText(string reference)
+    {
+        var inserted = InsertFormulaReference(
+            _formulaBox.Text,
+            reference,
+            _formulaBox.SelectionStart,
+            _formulaBox.SelectionLength);
+        var caretIndex = Math.Min(inserted.Length, _formulaBox.SelectionStart + reference.Length);
+        _formulaBox.Text = inserted;
+        _formulaBox.Focus();
+        _formulaBox.SelectionStart = caretIndex;
+        _formulaBox.SelectionLength = 0;
+    }
+
     private static IReadOnlyList<PivotCalculatedItemSourceFieldOption> CreateFieldOptions(IEnumerable<string> fieldNames) =>
         fieldNames
             .Select((name, index) => new PivotCalculatedItemSourceFieldOption(index, name.Trim()))
             .Where(field => !string.IsNullOrWhiteSpace(field.Name))
             .ToList();
+
+    private static IReadOnlyDictionary<int, IReadOnlyList<string>> CreateItemOptions(
+        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex) =>
+        itemNamesBySourceFieldIndex?.ToDictionary(
+            pair => Math.Max(0, pair.Key),
+            pair => (IReadOnlyList<string>)pair.Value
+                .Select(item => item.Trim())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList()) ?? new Dictionary<int, IReadOnlyList<string>>();
+
+    private static Button CreateInsertButton(string content, Action action)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Width = 110,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        button.Click += (_, _) => action();
+        return button;
+    }
 
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {
@@ -740,6 +945,18 @@ public sealed class PivotCalculatedItemDialog : Window
     }
 
     private sealed record PivotCalculatedItemSourceFieldOption(int Index, string Name);
+}
+
+file static class PivotFormulaInsertion
+{
+    public static string InsertFormulaToken(string formula, string reference, int selectionStart, int selectionLength)
+    {
+        var safeFormula = formula ?? "";
+        var safeReference = reference ?? "";
+        var start = Math.Clamp(selectionStart, 0, safeFormula.Length);
+        var length = Math.Clamp(selectionLength, 0, safeFormula.Length - start);
+        return safeFormula.Remove(start, length).Insert(start, safeReference);
+    }
 }
 
 public sealed record PivotTableOptionsDialogResult(
@@ -754,16 +971,22 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowColumnHeaders,
     bool ShowRowStripes,
     bool ShowColumnStripes,
-    PivotReportLayout ReportLayout);
+    PivotReportLayout ReportLayout,
+    string? EmptyValueText = null,
+    bool RefreshOnOpen = false,
+    bool SaveSourceData = true,
+    bool PrintTitles = false,
+    bool PrintExpandCollapseButtons = false,
+    string? AltTextTitle = null,
+    string? AltTextDescription = null);
 
 public sealed class PivotTableOptionsDialog : Window
 {
     private static readonly string[] StyleNames =
     [
-        "PivotStyleLight16",
-        "PivotStyleMedium2",
-        "PivotStyleMedium9",
-        "PivotStyleDark4"
+        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"),
+        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"),
+        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}")
     ];
 
     private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show _row grand totals" };
@@ -782,12 +1005,17 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _autofitColumnsBox = new() { Content = "_Autofit column widths on update", IsChecked = true };
     private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
+    private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
+    private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
+    private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
+    private readonly TextBox _altTextTitleBox = new();
+    private readonly TextBox _altTextDescriptionBox = new() { AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
-    public PivotTableOptionsDialog(PivotTableModel pivotTable)
+    public PivotTableOptionsDialog(PivotTableModel pivotTable, PivotCacheModel? cache = null)
     {
-        Result = FromPivotTable(pivotTable);
+        Result = FromPivotTable(pivotTable, cache);
         Title = "PivotTable Options";
         Width = 520;
         Height = 500;
@@ -798,7 +1026,7 @@ public sealed class PivotTableOptionsDialog : Window
         Load(Result);
     }
 
-    public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable) =>
+    public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable, PivotCacheModel? cache = null) =>
         CreateResult(
             pivotTable.ShowRowGrandTotals,
             pivotTable.ShowColumnGrandTotals,
@@ -811,7 +1039,14 @@ public sealed class PivotTableOptionsDialog : Window
             pivotTable.ShowColumnHeaders,
             pivotTable.ShowRowStripes,
             pivotTable.ShowColumnStripes,
-            pivotTable.ReportLayout);
+            pivotTable.ReportLayout,
+            pivotTable.EmptyValueText,
+            refreshOnOpen: cache?.RefreshOnLoad ?? false,
+            saveSourceData: cache?.SaveData ?? true,
+            printTitles: pivotTable.PrintTitles,
+            printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
+            altTextTitle: pivotTable.AltTextTitle,
+            altTextDescription: pivotTable.AltTextDescription);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -825,7 +1060,14 @@ public sealed class PivotTableOptionsDialog : Window
         bool showColumnHeaders,
         bool showRowStripes,
         bool showColumnStripes,
-        PivotReportLayout reportLayout) =>
+        PivotReportLayout reportLayout,
+        string? emptyValueText = null,
+        bool refreshOnOpen = false,
+        bool saveSourceData = true,
+        bool printTitles = false,
+        bool printExpandCollapseButtons = false,
+        string? altTextTitle = null,
+        string? altTextDescription = null) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -838,7 +1080,14 @@ public sealed class PivotTableOptionsDialog : Window
             showColumnHeaders,
             showRowStripes,
             showColumnStripes,
-            reportLayout);
+            reportLayout,
+            NormalizeEmptyValueText(emptyValueText),
+            refreshOnOpen,
+            saveSourceData,
+            printTitles,
+            printExpandCollapseButtons,
+            NormalizeOptionalText(altTextTitle),
+            NormalizeOptionalText(altTextDescription));
 
     private DockPanel CreateContent()
     {
@@ -849,8 +1098,9 @@ public sealed class PivotTableOptionsDialog : Window
         tabs.Items.Add(new TabItem { Header = "Layout & Format", Content = CreateLayoutAndFormatTab() });
         tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
         tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
+        tabs.Items.Add(new TabItem { Header = "Printing", Content = CreatePrintingTab() });
         tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
-        tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateSimpleTab("Title and description metadata can be added in a future pass.") });
+        tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateAltTextTab() });
 
         root.Children.Add(tabs);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
@@ -899,10 +1149,6 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("PivotTable Style Options", stylePanel));
-
-        var fieldButtonPanel = PivotDialogLayout.CreateGroupPanel();
-        fieldButtonPanel.Children.Add(PivotDialogLayout.CreateHelpText("Field list and buttons remain available from the PivotTable Analyze commands."));
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field list and buttons", fieldButtonPanel));
         return stack;
     }
 
@@ -911,6 +1157,7 @@ public sealed class PivotTableOptionsDialog : Window
         var stack = CreateTabPanel();
         var dataPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(dataPanel, _refreshOnOpenBox);
+        AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
         dataPanel.Children.Add(new TextBlock
         {
@@ -921,10 +1168,23 @@ public sealed class PivotTableOptionsDialog : Window
         return stack;
     }
 
-    private static StackPanel CreateSimpleTab(string message)
+    private StackPanel CreatePrintingTab()
     {
         var stack = CreateTabPanel();
-        stack.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        var printPanel = PivotDialogLayout.CreateGroupPanel();
+        AddCheckBox(printPanel, _printTitlesBox);
+        AddCheckBox(printPanel, _printExpandCollapseBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Print options", printPanel));
+        return stack;
+    }
+
+    private StackPanel CreateAltTextTab()
+    {
+        var stack = CreateTabPanel();
+        var altPanel = PivotDialogLayout.CreateGroupPanel();
+        AddLabeledControl(altPanel, "_Title:", _altTextTitleBox);
+        AddLabeledControl(altPanel, "_Description:", _altTextDescriptionBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Alt Text", altPanel));
         return stack;
     }
 
@@ -972,11 +1232,23 @@ public sealed class PivotTableOptionsDialog : Window
         _repeatItemLabelsBox.IsChecked = result.RepeatItemLabels;
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
-        _styleBox.SelectedItem = StyleNames.Contains(result.StyleName) ? result.StyleName : StyleNames[0];
+        var styleNames = StyleNames.Contains(result.StyleName, StringComparer.OrdinalIgnoreCase)
+            ? StyleNames
+            : [..StyleNames, result.StyleName];
+        _styleBox.ItemsSource = styleNames;
+        _styleBox.SelectedItem = styleNames.FirstOrDefault(styleName =>
+            string.Equals(styleName, result.StyleName, StringComparison.OrdinalIgnoreCase)) ?? StyleNames[0];
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
+        _emptyCellsBox.Text = result.EmptyValueText ?? "";
+        _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
+        _saveSourceDataBox.IsChecked = result.SaveSourceData;
+        _printTitlesBox.IsChecked = result.PrintTitles;
+        _printExpandCollapseBox.IsChecked = result.PrintExpandCollapseButtons;
+        _altTextTitleBox.Text = result.AltTextTitle ?? "";
+        _altTextDescriptionBox.Text = result.AltTextDescription ?? "";
     }
 
     private void Accept()
@@ -997,7 +1269,24 @@ public sealed class PivotTableOptionsDialog : Window
             _columnStripesBox.IsChecked == true,
             _reportLayoutBox.SelectedItem is PivotReportLayout reportLayout
                 ? reportLayout
-                : PivotReportLayout.Tabular);
+                : PivotReportLayout.Tabular,
+            _emptyCellsBox.Text,
+            _refreshOnOpenBox.IsChecked == true,
+            _saveSourceDataBox.IsChecked == true,
+            _printTitlesBox.IsChecked == true,
+            _printExpandCollapseBox.IsChecked == true,
+            _altTextTitleBox.Text,
+            _altTextDescriptionBox.Text);
         DialogResult = true;
+    }
+
+    private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
+
+    private static string? NormalizeOptionalText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return text.Trim();
     }
 }

@@ -25,6 +25,22 @@ public class NamedRangeTests
 
         wb.NamedRanges.Should().ContainKey("MyData");
         wb.NamedRanges["MyData"].Should().Be(range);
+        wb.NamedRangeMetadataByName["MyData"].Should().Be(NamedRangeMetadata.WorkbookScope);
+    }
+
+    [Fact]
+    public void DefineNamedRange_StoresScopeAndCommentMetadata()
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+
+        wb.DefineNamedRange("MyData", range, new NamedRangeMetadata("Sheet1", "Imported list"));
+
+        wb.TryGetNamedRangeMetadata("MYDATA", out var metadata).Should().BeTrue();
+        metadata.Should().Be(new NamedRangeMetadata("Sheet1", "Imported list"));
     }
 
     [Fact]
@@ -78,6 +94,7 @@ public class NamedRangeTests
 
         removed.Should().BeTrue();
         wb.NamedRanges.Should().NotContainKey("TestRange");
+        wb.NamedRangeMetadataByName.Should().NotContainKey("TestRange");
     }
 
     [Fact]
@@ -141,6 +158,26 @@ public class NamedRangeTests
 
         outcome.Success.Should().BeTrue();
         wb.NamedRanges.Should().ContainKey("Sales");
+        wb.NamedRangeMetadataByName["Sales"].Should().Be(NamedRangeMetadata.WorkbookScope);
+    }
+
+    [Fact]
+    public void DefineNamedRangeCommand_Apply_StoresMetadata()
+    {
+        var (wb, ctx) = CreateContext();
+        var sheet = wb.Sheets[0];
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+
+        var cmd = new DefineNamedRangeCommand(
+            "Sales",
+            range,
+            new NamedRangeMetadata("Sheet1", "Current period"));
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        wb.NamedRangeMetadataByName["Sales"].Should().Be(new NamedRangeMetadata("Sheet1", "Current period"));
     }
 
     [Fact]
@@ -157,6 +194,7 @@ public class NamedRangeTests
         cmd.Revert(ctx);
 
         wb.NamedRanges.Should().NotContainKey("Temp");
+        wb.NamedRangeMetadataByName.Should().NotContainKey("Temp");
     }
 
     [Fact]
@@ -172,7 +210,7 @@ public class NamedRangeTests
             new CellAddress(sheet.Id, 10, 10));
 
         // Define original first
-        wb.DefineNamedRange("Budget", original);
+        wb.DefineNamedRange("Budget", original, new NamedRangeMetadata("Sheet1", "Original"));
 
         // Replace via command
         var cmd = new DefineNamedRangeCommand("Budget", replacement);
@@ -181,6 +219,7 @@ public class NamedRangeTests
 
         wb.TryGetNamedRange("Budget", out var restored).Should().BeTrue();
         restored.Should().Be(original);
+        wb.NamedRangeMetadataByName["Budget"].Should().Be(new NamedRangeMetadata("Sheet1", "Original"));
     }
 
     [Fact]

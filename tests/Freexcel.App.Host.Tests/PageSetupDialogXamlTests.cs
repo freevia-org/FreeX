@@ -81,6 +81,19 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageTab_DisablesInactiveScalingInputsByMode()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+
+        xaml.Should().Contain("Checked=\"ScalingMode_Changed\"");
+        source.Should().Contain("UpdateScalingInputState");
+        source.Should().Contain("ScalePercentBox.IsEnabled = adjustTo");
+        source.Should().Contain("FitPagesWideBox.IsEnabled = fitTo");
+        source.Should().Contain("FitPagesTallBox.IsEnabled = fitTo");
+    }
+
+    [Fact]
     public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
@@ -109,35 +122,60 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
-    public void SheetTab_DoesNotExposeUnwiredRangePickerButtons()
+    public void SheetTab_ExposesCurrentSelectionRangePickerButtonsForPrintRanges()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        document.Descendants()
-            .Any(element => element.Attribute(x + "Name")?.Value == "PrintAreaBox")
-            .Should().BeTrue("print area remains editable as a text range");
-
-        foreach (var name in new[]
+        foreach (var (buttonName, targetName, automationName) in new[]
         {
-            "PrintAreaPickerButton",
-            "RowsRepeatPickerButton",
-            "ColumnsRepeatPickerButton"
+            ("PrintAreaPickerButton", "PrintAreaBox", "Insert current selection as print area"),
+            ("RowsRepeatPickerButton", "RowsRepeatBox", "Insert current selection rows"),
+            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Insert current selection columns")
         })
         {
-            document.Descendants()
-                .Any(element => element.Attribute(x + "Name")?.Value == name)
-                .Should().BeFalse($"{name} should not be shown until worksheet range-picking is wired");
+            var button = document.Descendants(presentation + "Button")
+                .SingleOrDefault(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+            button.Should().NotBeNull($"{buttonName} should expose Excel-like picker affordance");
+            button!.Attribute("Content")?.Value.Should().Be("...");
+            button.Attribute("Click")?.Value.Should().Be("RangePickerButton_Click");
+            button.Attribute("ToolTip")?.Value.Should().Contain("selection");
+            button.Attribute("Tag")?.Value.Should().Be(targetName);
+            button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
         }
+
+        source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("private readonly GridRange? _currentSelection");
+        source.Should().Contain("target.Text = targetName switch");
+        source.Should().Contain("selection.ToString()");
+        source.Should().Contain("CellAddress.NumberToColumnName(selection.Start.Col)");
+        source.Should().Contain("target.Focus()");
+        source.Should().Contain("target.SelectAll()");
     }
 
     [Fact]
-    public void Footer_DoesNotExposeUnwiredPrintActions()
+    public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
-            xaml.Should().NotContain($"Content=\"{content}\"");
+            xaml.Should().Contain($"Content=\"{content}\"");
+
+        xaml.Should().Contain("Click=\"OptionsButton_Click\"");
+        xaml.Should().NotContain("IsEnabled=\"False\"");
+        xaml.Should().NotContain("not available yet");
+        source.Should().Contain("PageSetupDialogAction.Options");
+        source.Should().Contain("PageSetupDialogAction.PrintPreview");
+        source.Should().Contain("PageSetupDialogAction.Print");
+        handlerSource.Should().Contain("PageSetupDialogAction.Options");
+        handlerSource.Should().Contain("ShowPageSetupPrinterOptions()");
+        handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
     }
 
     [Fact]
@@ -146,6 +184,7 @@ public sealed class PageSetupDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
 
         source.Should().Contain("new CompositeWorkbookCommand(");
+        source.Should().Contain("new PageSetupDialog(sheet, SheetGrid.SelectedRange)");
         source.Should().Contain("new SetHeaderFooterCommand(");
         source.Should().Contain("dialog.FirstPageHeader");
         source.Should().Contain("dialog.EvenPageFooter");

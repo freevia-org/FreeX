@@ -196,6 +196,18 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ReviewDeleteThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Threaded Comment",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new DeleteThreadedCommentCommand(_currentSheetId, currentRange.Start)))
+            return;
+
+        UpdateViewport();
+    }
+
     private void ReviewPrevCommentBtn_Click(object sender, RoutedEventArgs e)
     {
         NavigateComment(previous: true);
@@ -242,15 +254,18 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        string? pwd = null;
+        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: null);
         if (!sheet.IsProtected)
         {
             var dialog = new PasswordProtectionDialog("Protect Sheet", "Password (optional):") { Owner = this };
             if (dialog.ShowDialog() != true) return;
-            pwd = dialog.Password;
+            result = ProtectionDialogPlanner.CreateSheetResult(
+                sheet,
+                dialog.Password,
+                dialog.SelectedSheetPermissions);
         }
 
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, pwd);
+        var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
         var outcome = _commandBus.Execute(_workbook.Id, action.Command);
         if (!outcome.Success)
         {

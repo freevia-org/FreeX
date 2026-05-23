@@ -1,11 +1,20 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Themes">
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Themes">
   <defs>
     <style>
-      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
-      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
-    </style>
+      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
+      .green{fill:#107c41}
+      .green2{fill:#dff6dd}
+      .blue{fill:#0078d4}
+      .yellow{fill:#ffb900}
+      .orange{fill:#f7630c}
+      .red{fill:#d32f2f}
+      .purple{fill:#8b5cf6}
+      .gray{fill:#5c5c5c}
+      .paper{fill:#ffffff}
+      .none{fill:none}
+</style>
   </defs>
   <rect width="54" height="54" fill="none"/>
   <g><rect class="green2" x="9.72" y="11.88" width="11.88" height="11.88"/><rect class="blue" x="23.76" y="11.88" width="11.88" height="11.88"/><rect class="orange" x="9.72" y="25.92" width="11.88" height="11.88"/><text class="t" x="35.64" y="37.8" text-anchor="middle" font-size="22.68">A</text>  </g>

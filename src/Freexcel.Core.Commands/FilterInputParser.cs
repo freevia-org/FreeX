@@ -69,15 +69,16 @@ public static class FilterInputParser
     public static bool TryParseAverage(string input, out bool above)
     {
         var trimmed = input.Trim();
-        if (trimmed.Equals("aboveavg", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("aboveaverage", StringComparison.OrdinalIgnoreCase))
+        var compact = trimmed.Replace(" ", "", StringComparison.Ordinal);
+        if (compact.Equals("aboveavg", StringComparison.OrdinalIgnoreCase) ||
+            compact.Equals("aboveaverage", StringComparison.OrdinalIgnoreCase))
         {
             above = true;
             return true;
         }
 
-        if (trimmed.Equals("belowavg", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("belowaverage", StringComparison.OrdinalIgnoreCase))
+        if (compact.Equals("belowavg", StringComparison.OrdinalIgnoreCase) ||
+            compact.Equals("belowaverage", StringComparison.OrdinalIgnoreCase))
         {
             above = false;
             return true;
@@ -92,6 +93,30 @@ public static class FilterInputParser
         criterion = null;
         error = null;
         var trimmed = input.Trim();
+        if (trimmed.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("or:", StringComparison.OrdinalIgnoreCase))
+        {
+            var useAnd = trimmed.StartsWith("and:", StringComparison.OrdinalIgnoreCase);
+            var compositeText = trimmed[(useAnd ? "and:" : "or:").Length..];
+            var parts = compositeText.Split('|', StringSplitOptions.TrimEntries);
+            if (parts.Length != 2 ||
+                string.IsNullOrWhiteSpace(parts[0]) ||
+                string.IsNullOrWhiteSpace(parts[1]))
+            {
+                error = "Enter a composite filter as and:criterion1|criterion2 or or:criterion1|criterion2.";
+                return false;
+            }
+
+            if (!TryParseCriterion(parts[0], out var first, out error) || first is null)
+                return false;
+
+            if (!TryParseCriterion(parts[1], out var second, out error) || second is null)
+                return false;
+
+            criterion = new CompositeFilterCriterion(first, second, useAnd);
+            return true;
+        }
+
         if (trimmed.Equals("blank", StringComparison.OrdinalIgnoreCase))
         {
             criterion = new BlankFilterCriterion();
@@ -223,6 +248,7 @@ public static class FilterInputParser
         const string endsPrefix = "ends:";
         const string textNotEqualsPrefix = "text<>";
         const string textEqualsPrefix = "text=";
+        const string equalsPrefix = "equals:";
 
         if (trimmed.StartsWith(notContainsPrefix, StringComparison.OrdinalIgnoreCase))
         {
@@ -273,6 +299,15 @@ public static class FilterInputParser
         {
             return TryParseTextCriterion(
                 trimmed[textEqualsPrefix.Length..],
+                text => new TextEqualsFilterCriterion(text),
+                out criterion,
+                out error);
+        }
+
+        if (trimmed.StartsWith(equalsPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryParseTextCriterion(
+                trimmed[equalsPrefix.Length..],
                 text => new TextEqualsFilterCriterion(text),
                 out criterion,
                 out error);
