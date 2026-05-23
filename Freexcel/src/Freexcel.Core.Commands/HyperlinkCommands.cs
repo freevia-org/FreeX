@@ -35,7 +35,7 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.InsertHyperlinks) is { } protectedOutcome)
             return protectedOutcome;
 
         _oldCell = sheet.GetCell(_address)?.Clone();
