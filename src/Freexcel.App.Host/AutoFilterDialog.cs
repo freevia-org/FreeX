@@ -58,7 +58,22 @@ public sealed class AutoFilterDialog : Window
     {
         Visibility = Visibility.Collapsed,
         Width = 150,
-        ItemsSource = new[] { "Custom", "Today", "Yesterday", "Tomorrow", "This Month", "Last Month", "Next Month" },
+        ItemsSource = new[]
+        {
+            "Custom",
+            "Today",
+            "Yesterday",
+            "Tomorrow",
+            "This Week",
+            "Last Week",
+            "Next Week",
+            "This Month",
+            "Last Month",
+            "Next Month",
+            "This Year",
+            "Last Year",
+            "Next Year"
+        },
         SelectedIndex = 0
     };
     private readonly ComboBox _criteriaConnectorBox = new()
@@ -437,18 +452,36 @@ public sealed class AutoFilterDialog : Window
             "Today" => $"date={date:yyyy-MM-dd}",
             "Yesterday" => $"date={date.AddDays(-1):yyyy-MM-dd}",
             "Tomorrow" => $"date={date.AddDays(1):yyyy-MM-dd}",
-            "This Month" => BuildDateBetweenCriteria(new DateTime(date.Year, date.Month, 1)),
-            "Last Month" => BuildDateBetweenCriteria(new DateTime(date.Year, date.Month, 1).AddMonths(-1)),
-            "Next Month" => BuildDateBetweenCriteria(new DateTime(date.Year, date.Month, 1).AddMonths(1)),
+            "This Week" => BuildDateBetweenCriteria(StartOfWeek(date)),
+            "Last Week" => BuildDateBetweenCriteria(StartOfWeek(date).AddDays(-7), days: 7),
+            "Next Week" => BuildDateBetweenCriteria(StartOfWeek(date).AddDays(7), days: 7),
+            "This Month" => BuildMonthCriteria(new DateTime(date.Year, date.Month, 1)),
+            "Last Month" => BuildMonthCriteria(new DateTime(date.Year, date.Month, 1).AddMonths(-1)),
+            "Next Month" => BuildMonthCriteria(new DateTime(date.Year, date.Month, 1).AddMonths(1)),
+            "This Year" => BuildYearCriteria(date.Year),
+            "Last Year" => BuildYearCriteria(date.Year - 1),
+            "Next Year" => BuildYearCriteria(date.Year + 1),
             _ => string.Empty
         };
     }
 
-    private static string BuildDateBetweenCriteria(DateTime firstDayOfMonth)
+    private static string BuildMonthCriteria(DateTime firstDayOfMonth)
     {
         var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
-        return $"datebetween:{firstDayOfMonth:yyyy-MM-dd}:{lastDayOfMonth:yyyy-MM-dd}";
+        return BuildDateBetweenCriteria(firstDayOfMonth, lastDayOfMonth);
     }
+
+    private static string BuildYearCriteria(int year) =>
+        BuildDateBetweenCriteria(new DateTime(year, 1, 1), new DateTime(year, 12, 31));
+
+    private static string BuildDateBetweenCriteria(DateTime firstDay, int days = 7) =>
+        BuildDateBetweenCriteria(firstDay, firstDay.AddDays(days - 1));
+
+    private static string BuildDateBetweenCriteria(DateTime firstDay, DateTime lastDay) =>
+        $"datebetween:{firstDay:yyyy-MM-dd}:{lastDay:yyyy-MM-dd}";
+
+    private static DateTime StartOfWeek(DateTime date) =>
+        date.AddDays(-(int)date.DayOfWeek);
 
     public static string BuildCompositeCriteriaText(string? firstCriteria, string? connector, string? secondCriteria)
     {
