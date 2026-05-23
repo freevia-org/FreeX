@@ -4490,6 +4490,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sequence_HugeFiniteDimensions_ReturnsValueError()
+    {
+        _eval.Evaluate("=SEQUENCE(2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(1,2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(-2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(1,-2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sequence_NonFiniteStart_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
