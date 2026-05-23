@@ -98,6 +98,8 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("ZoomPresets");
+        source.Should().Contain("[400, 200, 100, 75, 50, 25]");
+        source.Should().Contain("400");
         source.Should().Contain("200");
         source.Should().Contain("100");
         source.Should().Contain("75");
