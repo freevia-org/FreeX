@@ -3245,6 +3245,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Workday_ResultOutsideExcelDateRange_ReturnsNumError()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=WORKDAY(2958465,1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WORKDAY.INTL(2958465,1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void Workday_DateTimeHolidayRange_SkipsHoliday()
     {
         double mon = new DateTime(2024, 1, 8).ToOADate();
