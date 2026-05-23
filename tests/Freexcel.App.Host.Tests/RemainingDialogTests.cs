@@ -3,6 +3,8 @@ using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
 using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -286,6 +288,32 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_CreateRangeSelectionRequest_TrimsCurrentTextAndRequestsCollapse()
+    {
+        SparklineDialog.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
+            .Should()
+            .Be(new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void SparklineDialog_RangePickerButtonsTriggerWorksheetSelectionIntent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<SparklineRangeSelectionRequest>();
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, requests.Add);
+
+            GetField<Button>(dialog, "_dataRangePickerButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            GetField<Button>(dialog, "_locationPickerButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            requests.Should().Equal(
+                new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true),
+                new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.Location, "F1", CollapseDialog: true));
+            dialog.RangeSelectionRequest.Should().Be(requests[^1]);
+        });
+    }
+
+    [Fact]
     public void SparklineDialog_ExposesRangePickerButtonsForDataAndLocation()
     {
         var source = ReadRemainingDialogSources();
@@ -294,6 +322,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_locationPickerButton");
         source.Should().Contain("Select Data Range");
         source.Should().Contain("Select Location Range");
+        source.Should().Contain("RequestRangeSelection");
     }
 
     [Fact]
