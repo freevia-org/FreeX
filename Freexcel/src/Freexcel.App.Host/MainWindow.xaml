@@ -1216,9 +1216,12 @@
                                     <Button Content="Hole Size"    Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutHoleSizeBtn_Click"
                                             local:RibbonTooltip.Title="Doughnut Hole Size" local:RibbonTooltip.KeyTip="DH"
                                             local:RibbonTooltip.Description="Cycle the current doughnut chart hole size."/>
-                                    <Button Content="Surface"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Surface"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSurfaceMenuItem_Click"
                                             local:RibbonTooltip.Title="Surface Chart" local:RibbonTooltip.KeyTip="SF"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a surface chart rendered as a category-value matrix."/>
+                                    <Button Content="3D Surface"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DSurfaceMenuItem_Click"
+                                            local:RibbonTooltip.Title="3D Surface Chart" local:RibbonTooltip.KeyTip="3S"
+                                            local:RibbonTooltip.Description="Insert a 3D surface chart using the same matrix renderer."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Treemap"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"

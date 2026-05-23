@@ -9,7 +9,8 @@ public sealed record AdvancedFilterDialogResult(
     GridRange ListRange,
     GridRange CriteriaRange,
     CellAddress? CopyToCell,
-    bool UniqueRecordsOnly);
+    bool UniqueRecordsOnly,
+    GridRange? CopyToRange = null);
 
 public sealed class AdvancedFilterDialog : Window
 {
@@ -116,13 +117,13 @@ public sealed class AdvancedFilterDialog : Window
             return false;
         }
 
-        if (!AdvancedFilterInputParser.TryParseCopyDestination(copyToCellText ?? "", currentSheetId, out var copyToCell))
+        if (!AdvancedFilterInputParser.TryParseCopyDestinationRange(copyToCellText ?? "", currentSheetId, out var copyToRange))
         {
-            error = "Enter a valid copy-to cell.";
+            error = "Enter a valid copy-to cell or one-row header range.";
             return false;
         }
 
-        result = new AdvancedFilterDialogResult(listRange, criteriaRange, copyToCell, uniqueRecordsOnly);
+        result = new AdvancedFilterDialogResult(listRange, criteriaRange, copyToRange?.Start, uniqueRecordsOnly, copyToRange);
         return true;
     }
 

@@ -1067,6 +1067,7 @@ public sealed record PivotTableOptionsDialogResult(
     bool RefreshOnOpen = false,
     bool SaveSourceData = true,
     bool EnableRefresh = true,
+    int? MissingItemsLimit = null,
     bool PrintTitles = false,
     bool PrintExpandCollapseButtons = false,
     string? AltTextTitle = null,
@@ -1104,6 +1105,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
     private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
+    private readonly ComboBox _missingItemsLimitBox = new();
     private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
     private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
     private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
@@ -1143,6 +1145,7 @@ public sealed class PivotTableOptionsDialog : Window
             refreshOnOpen: cache?.RefreshOnLoad ?? false,
             saveSourceData: cache?.SaveData ?? true,
             enableRefresh: cache?.EnableRefresh ?? true,
+            missingItemsLimit: cache?.MissingItemsLimit,
             printTitles: pivotTable.PrintTitles,
             printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
             altTextTitle: pivotTable.AltTextTitle,
@@ -1169,6 +1172,7 @@ public sealed class PivotTableOptionsDialog : Window
         bool refreshOnOpen = false,
         bool saveSourceData = true,
         bool enableRefresh = true,
+        int? missingItemsLimit = null,
         bool printTitles = false,
         bool printExpandCollapseButtons = false,
         string? altTextTitle = null,
@@ -1194,6 +1198,7 @@ public sealed class PivotTableOptionsDialog : Window
             refreshOnOpen,
             saveSourceData,
             enableRefresh,
+            NormalizeMissingItemsLimit(missingItemsLimit),
             printTitles,
             printExpandCollapseButtons,
             NormalizeOptionalText(altTextTitle),
@@ -1276,11 +1281,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, _enableRefreshBox);
         AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
-        dataPanel.Children.Add(new TextBlock
-        {
-            Text = "Retain items deleted from the data source: Automatic",
-            Margin = new Thickness(0, 8, 0, 0)
-        });
+        AddLabeledControl(dataPanel, "Retain items _deleted from the data source", _missingItemsLimitBox, MissingItemsLimitLabels);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Data options", dataPanel));
         return stack;
     }
@@ -1366,6 +1367,7 @@ public sealed class PivotTableOptionsDialog : Window
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
         _enableRefreshBox.IsChecked = result.EnableRefresh;
+        _missingItemsLimitBox.SelectedItem = LabelForMissingItemsLimit(result.MissingItemsLimit);
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
         _printTitlesBox.IsChecked = result.PrintTitles;
         _printExpandCollapseBox.IsChecked = result.PrintExpandCollapseButtons;
@@ -1396,6 +1398,7 @@ public sealed class PivotTableOptionsDialog : Window
             _refreshOnOpenBox.IsChecked == true,
             _saveSourceDataBox.IsChecked == true,
             _enableRefreshBox.IsChecked == true,
+            MissingItemsLimitForLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
             _printTitlesBox.IsChecked == true,
             _printExpandCollapseBox.IsChecked == true,
             _altTextTitleBox.Text,
@@ -1415,6 +1418,35 @@ public sealed class PivotTableOptionsDialog : Window
             : 1;
 
     private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+
+    private const int MaximumMissingItemsLimit = 1_048_576;
+    private const string MissingItemsAutomatic = "Automatic";
+    private const string MissingItemsNone = "None";
+    private const string MissingItemsMaximum = "Maximum";
+    private static readonly string[] MissingItemsLimitLabels = [MissingItemsAutomatic, MissingItemsNone, MissingItemsMaximum];
+
+    private static int? NormalizeMissingItemsLimit(int? value) =>
+        value switch
+        {
+            null => null,
+            <= 0 => 0,
+            _ => MaximumMissingItemsLimit
+        };
+
+    private static string LabelForMissingItemsLimit(int? value) =>
+        value switch
+        {
+            null => MissingItemsAutomatic,
+            <= 0 => MissingItemsNone,
+            _ => MissingItemsMaximum
+        };
+
+    private static int? MissingItemsLimitForLabel(string? label) =>
+        string.Equals(label, MissingItemsNone, StringComparison.OrdinalIgnoreCase)
+            ? 0
+            : string.Equals(label, MissingItemsMaximum, StringComparison.OrdinalIgnoreCase)
+                ? MaximumMissingItemsLimit
+                : null;
 
     private static string? NormalizeOptionalText(string? text)
     {

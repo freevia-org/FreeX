@@ -24,6 +24,22 @@ public static class AdvancedFilterInputParser
         return true;
     }
 
+    public static bool TryParseCopyDestinationRange(string input, SheetId sheetId, out GridRange? destination)
+    {
+        destination = null;
+        if (string.IsNullOrWhiteSpace(input))
+            return true;
+
+        if (!WorkbookRangeTextCodec.TryParse(sheetId, input, _ => null, out var parsed))
+            return false;
+
+        if (parsed.Start.Row != parsed.End.Row)
+            return false;
+
+        destination = parsed;
+        return true;
+    }
+
     public static bool ParseUniqueOnly(string input)
     {
         var normalized = input.Trim();

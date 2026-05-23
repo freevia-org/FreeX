@@ -947,7 +947,8 @@ public sealed class PivotTableCommandTests
             SourceReference = "A1:B2",
             RefreshOnLoad = false,
             SaveData = true,
-            EnableRefresh = true
+            EnableRefresh = true,
+            MissingItemsLimit = null
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region"));
         cache.Fields.Add(new PivotCacheFieldModel("Amount"));
@@ -976,19 +977,23 @@ public sealed class PivotTableCommandTests
             styleName: "PivotStyleLight16",
             refreshOnOpen: true,
             saveSourceData: false,
-            enableRefresh: false);
+            enableRefresh: false,
+            missingItemsLimit: 0,
+            updateMissingItemsLimit: true);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         cache.RefreshOnLoad.Should().BeTrue();
         cache.SaveData.Should().BeFalse();
         cache.EnableRefresh.Should().BeFalse();
+        cache.MissingItemsLimit.Should().Be(0);
 
         command.Revert(ctx);
 
         cache.RefreshOnLoad.Should().BeFalse();
         cache.SaveData.Should().BeTrue();
         cache.EnableRefresh.Should().BeTrue();
+        cache.MissingItemsLimit.Should().BeNull();
     }
 
     [Fact]

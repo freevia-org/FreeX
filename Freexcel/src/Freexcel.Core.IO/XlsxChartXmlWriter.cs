@@ -9,6 +9,7 @@ internal static partial class XlsxChartXmlWriter
     private const int CategoryAxisId = 48650112;
     private const int ValueAxisId = 48672768;
     private const int SecondaryValueAxisId = 48672769;
+    private const int SeriesAxisId = 48672770;
 
     public static XDocument ToChartXml(ChartModel chart, Sheet sheet)
     {
@@ -156,6 +157,10 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
             ChartType.Stock => CreateStockPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Surface => new XElement(chartNs + "surfaceChart",
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+            ChartType.ThreeDSurface => new XElement(chartNs + "surface3DChart",
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
@@ -286,7 +291,10 @@ internal static partial class XlsxChartXmlWriter
 
         plotChart.Add(
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
-            new XElement(chartNs + "axId", new XAttribute("val", usesSecondaryAxis ? SecondaryValueAxisId : ValueAxisId)));
+            new XElement(chartNs + "axId", new XAttribute("val", usesSecondaryAxis ? SecondaryValueAxisId : ValueAxisId)),
+            chart.Type is ChartType.Surface or ChartType.ThreeDSurface
+                ? new XElement(chartNs + "axId", new XAttribute("val", SeriesAxisId))
+                : null);
     }
 
     private static XElement ToChartTitleXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
@@ -599,6 +607,8 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Doughnut
                 or ChartType.Radar
                 or ChartType.Stock
+                or ChartType.Surface
+                or ChartType.ThreeDSurface
                 or ChartType.ThreeDColumn
                 or ChartType.ThreeDBar);
 

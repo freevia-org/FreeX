@@ -9,7 +9,7 @@ public enum SortOn
     FontColor
 }
 
-public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues);
+public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues, CellColor? TargetColor = null);
 
 public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
@@ -72,7 +72,7 @@ public sealed class SortCommand : IWorkbookCommand
         if (_sortKeys.Any(key => key.ColumnOffset >= keyLimit))
             return new CommandOutcome(false, "Sort key offset is outside the sort range.");
         var keyColIndexes = _sortKeys
-            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn))
+            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn, key.TargetColor))
             .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);
@@ -124,9 +124,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         rows.Sort((a, b) =>
         {
-            foreach (var (index, ascending, sortOn) in keyColIndexes)
+            foreach (var (index, ascending, sortOn, targetColor) in keyColIndexes)
             {
-                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, _options.CaseSensitive);
+                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -180,7 +180,7 @@ public sealed class SortCommand : IWorkbookCommand
         uint endRow,
         uint startCol,
         uint endCol,
-        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn)> keyRowIndexes,
+        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn, CellColor? TargetColor)> keyRowIndexes,
         int rowCount,
         int colCount)
     {
@@ -231,9 +231,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         columns.Sort((a, b) =>
         {
-            foreach (var (index, ascending, sortOn) in keyRowIndexes)
+            foreach (var (index, ascending, sortOn, targetColor) in keyRowIndexes)
             {
-                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, _options.CaseSensitive);
+                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -310,13 +310,22 @@ public sealed class SortCommand : IWorkbookCommand
         InsertRowsCommand.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
     }
 
-    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, bool caseSensitive) =>
-        sortOn switch
+    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, bool caseSensitive)
+    {
+        if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
+        {
+            var aColor = sortOn == SortOn.CellColor ? GetStyle(workbook, a).FillColor : GetStyle(workbook, a).FontColor;
+            var bColor = sortOn == SortOn.CellColor ? GetStyle(workbook, b).FillColor : GetStyle(workbook, b).FontColor;
+            return CompareTargetColor(aColor, bColor, targetColor.Value);
+        }
+
+        return sortOn switch
         {
             SortOn.CellColor => CompareNullableColor(GetStyle(workbook, a).FillColor, GetStyle(workbook, b).FillColor),
             SortOn.FontColor => CompareNullableColor(GetStyle(workbook, a).FontColor, GetStyle(workbook, b).FontColor),
             _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, caseSensitive)
         };
+    }
 
     private static CellStyle GetStyle(Workbook workbook, Cell? cell) =>
         workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
@@ -335,6 +344,16 @@ public sealed class SortCommand : IWorkbookCommand
             return red;
         var green = a.Value.G.CompareTo(b.Value.G);
         return green != 0 ? green : a.Value.B.CompareTo(b.Value.B);
+    }
+
+    private static int CompareTargetColor(CellColor? a, CellColor? b, CellColor targetColor)
+    {
+        var aMatches = a == targetColor;
+        var bMatches = b == targetColor;
+        if (aMatches == bMatches)
+            return 0;
+
+        return aMatches ? -1 : 1;
     }
 
     /// <summary>

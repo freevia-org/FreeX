@@ -65,6 +65,17 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
+    public void OptionsSecondaryMessages_NameHonestUnsupportedBoundaries()
+    {
+        DeferredCommandMessages.AutoCorrectOptions().Body.Should().Contain("AutoCorrect replacement dictionaries");
+        DeferredCommandMessages.EditingLanguages().Body.Should().Contain("language packs");
+        DeferredCommandMessages.RibbonCustomizationImportExport().Body.Should().Contain("Custom Ribbon UI");
+        DeferredCommandMessages.QuickAccessToolbarReset().Body.Should().Contain("no custom toolbar state to reset");
+        DeferredCommandMessages.OfficeAddIns().Body.Should().Contain("not installed, loaded, or executed");
+        DeferredCommandMessages.TrustCenterSettings().Body.Should().Contain("does not execute VBA macros");
+    }
+
+    [Fact]
     public void UnsupportedXlsxFeatureSaveWarning_UsesRetainedOpaqueFeatureLanguage()
     {
         var report = new XlsxFeatureReport([

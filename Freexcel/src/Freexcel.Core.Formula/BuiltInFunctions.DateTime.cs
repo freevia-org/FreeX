@@ -351,11 +351,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
         int days = (int)rawDays;
-        var holidays = new HashSet<DateTime>();
-        if (args.Count > 2 && args[2] is RangeValue hRange)
-            foreach (var v in hRange.Flatten())
-                if (TryCellNumber(v, out double holidaySerial))
-                    holidays.Add(SerialToDate(holidaySerial).Date);
+        if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
+            return holidayError!;
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
@@ -384,11 +381,8 @@ public static partial class BuiltInFunctions
         if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        var holidays = new HashSet<DateTime>();
-        if (args.Count > 2 && args[2] is RangeValue hRange)
-            foreach (var v in hRange.Flatten())
-                if (TryCellNumber(v, out double holidaySerial))
-                    holidays.Add(DateTime.FromOADate(holidaySerial).Date);
+        if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
+            return holidayError!;
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
@@ -536,19 +530,39 @@ public static partial class BuiltInFunctions
         return (serial - week1MondaySerial) / 7 + 1;
     }
 
-    private static HashSet<DateTime> CollectHolidays(ScalarValue? arg)
+    private static bool TryCollectHolidays(ScalarValue? arg, out HashSet<DateTime> holidays, out ErrorValue? error)
     {
-        var holidays = new HashSet<DateTime>();
+        holidays = new HashSet<DateTime>();
+        error = null;
         if (arg is RangeValue rv)
         {
             foreach (var v in rv.Flatten())
+            {
+                if (v is ErrorValue rangeError)
+                {
+                    error = rangeError;
+                    return false;
+                }
                 if (TryCellNumber(v, out double serial))
-                    holidays.Add(SerialToDate(serial).Date);
+                {
+                    if (!TryOADateToDateTime(new NumberValue(serial), out var holiday))
+                    {
+                        error = ErrorValue.Num;
+                        return false;
+                    }
+                    holidays.Add(holiday.Date);
+                }
+            }
         }
         else if (arg is not null && TryCellNumber(arg, out double s))
         {
-            holidays.Add(SerialToDate(s).Date);
+            if (!TryOADateToDateTime(new NumberValue(s), out var holiday))
+            {
+                error = ErrorValue.Num;
+                return false;
+            }
+            holidays.Add(holiday.Date);
         }
-        return holidays;
+        return true;
     }
 }

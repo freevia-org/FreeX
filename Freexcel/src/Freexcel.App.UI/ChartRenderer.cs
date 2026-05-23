@@ -133,6 +133,7 @@ public static partial class ChartRenderer
         {
             var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme);
             ApplyAxisBounds(stackedColumnModel, chart);
+            AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedColumnModel;
         }
 
@@ -140,6 +141,7 @@ public static partial class ChartRenderer
         {
             var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme);
             ApplyAxisBounds(stackedBarModel, chart);
+            AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedBarModel;
         }
 
@@ -148,14 +150,30 @@ public static partial class ChartRenderer
             var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, out var trendPoints);
             AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
             ApplyAxisBounds(bubbleModel, chart);
+            AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return bubbleModel;
         }
 
         if (chart.Type == ChartType.Radar)
-            return BuildRadarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+        {
+            var radarModel = BuildRadarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+            AddChartDataTableAnnotations(radarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            return radarModel;
+        }
 
         if (chart.Type == ChartType.Stock)
-            return BuildStockModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+        {
+            var stockModel = BuildStockModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+            AddChartDataTableAnnotations(stockModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            return stockModel;
+        }
+
+        if (chart.Type is ChartType.Surface or ChartType.ThreeDSurface)
+        {
+            var surfaceModel = BuildSurfaceModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+            AddChartDataTableAnnotations(surfaceModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
+            return surfaceModel;
+        }
 
         // Column / Line: one series per data column
         List<DataPoint>? firstSeriesPoints = null;
@@ -427,6 +445,7 @@ public static partial class ChartRenderer
 
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart);
+        AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
         return model;
     }
 
@@ -566,6 +585,172 @@ public static partial class ChartRenderer
                 Padding = new OxyThickness(4, 2, 4, 2)
             });
         }
+    }
+
+    private static void AddChartDataTableAnnotations(
+        PlotModel model,
+        ChartModel chart,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyList<string> categories,
+        uint dataStartRow,
+        uint endRow,
+        uint dataStartCol,
+        uint endCol,
+        uint headerRow)
+    {
+        if (chart.DataTable is null || model.Axes.Count == 0)
+            return;
+
+        var rows = new List<string>();
+        if (chart.FirstRowIsHeader)
+        {
+            var headers = new List<string>();
+            for (uint col = dataStartCol; col <= endCol; col++)
+            {
+                if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
+                    continue;
+
+                var header = cellLookup.TryGetValue((headerRow, col), out var cell) && !string.IsNullOrWhiteSpace(cell.DisplayText)
+                    ? cell.DisplayText
+                    : $"Series {headers.Count + 1}";
+                headers.Add(chart.DataTable.ShowLegendKeys == true ? $"* {header}" : header);
+            }
+
+            if (headers.Count > 0)
+                rows.Add(string.Join(" | ", headers));
+        }
+
+        var categoryIndex = 0;
+        for (uint row = dataStartRow; row <= endRow; row++, categoryIndex++)
+        {
+            var values = new List<string>
+            {
+                categories.Count > categoryIndex ? categories[categoryIndex] : ""
+            };
+
+            for (uint col = dataStartCol; col <= endCol; col++)
+            {
+                if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
+                    continue;
+                values.Add(cellLookup.TryGetValue((row, col), out var cell) ? cell.DisplayText : "");
+            }
+
+            rows.Add(string.Join(" | ", values));
+        }
+
+        if (rows.Count == 0)
+            return;
+
+        var outline = chart.DataTable.ShowOutline == true;
+        var showHorizontal = chart.DataTable.ShowHorizontalBorder != false;
+        for (var index = 0; index < rows.Count; index++)
+        {
+            model.Annotations.Add(new TextAnnotation
+            {
+                Text = rows[index],
+                TextPosition = new DataPoint(0, -1 - index),
+                TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Left,
+                TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
+                Stroke = outline || showHorizontal ? OxyColor.FromRgb(166, 166, 166) : OxyColors.Transparent,
+                StrokeThickness = outline || showHorizontal ? 1 : 0,
+                Background = OxyColor.FromAColor(225, OxyColors.White),
+                TextColor = OxyColor.FromRgb(64, 64, 64),
+                FontSize = 9,
+                Padding = new OxyThickness(4, 2, 4, 2)
+            });
+        }
+    }
+
+    private static PlotModel BuildSurfaceModel(
+        ChartModel chart,
+        PlotModel model,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyList<string> categories,
+        uint dataStartRow,
+        uint endRow,
+        uint dataStartCol,
+        uint endCol,
+        uint headerRow,
+        WorkbookTheme theme)
+    {
+        var seriesNames = new List<string>();
+        for (uint col = dataStartCol; col <= endCol; col++)
+        {
+            seriesNames.Add(chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var header)
+                ? header.DisplayText
+                : $"Series {seriesNames.Count + 1}");
+        }
+
+        model.Axes.Add(new LinearAxis
+        {
+            Position = AxisPosition.Bottom,
+            Title = chart.XAxisTitle,
+            Minimum = -0.5,
+            Maximum = Math.Max(0.5, categories.Count - 0.5),
+            MajorStep = 1,
+            MinorStep = 1,
+            LabelFormatter = value =>
+            {
+                var index = (int)Math.Round(value);
+                return index >= 0 && index < categories.Count ? categories[index] : "";
+            }
+        });
+        model.Axes.Add(new LinearAxis
+        {
+            Position = AxisPosition.Left,
+            Title = chart.YAxisTitle,
+            Minimum = -0.5,
+            Maximum = Math.Max(0.5, seriesNames.Count - 0.5),
+            MajorStep = 1,
+            MinorStep = 1,
+            LabelFormatter = value =>
+            {
+                var index = (int)Math.Round(value);
+                return index >= 0 && index < seriesNames.Count ? seriesNames[index] : "";
+            }
+        });
+
+        var surfaceValues = new List<(int CategoryIndex, int SeriesIndex, double Value)>();
+        var scanSeriesIndex = 0;
+        for (uint col = dataStartCol; col <= endCol; col++, scanSeriesIndex++)
+        {
+            var categoryIndex = 0;
+            for (uint row = dataStartRow; row <= endRow; row++, categoryIndex++)
+            {
+                if (cellLookup.TryGetValue((row, col), out var cell) &&
+                    double.TryParse(cell.DisplayText, out var value))
+                    surfaceValues.Add((categoryIndex, scanSeriesIndex, value));
+            }
+        }
+
+        var minValue = surfaceValues.Count == 0 ? 0 : surfaceValues.Min(item => item.Value);
+        var maxValue = surfaceValues.Count == 0 ? 0 : surfaceValues.Max(item => item.Value);
+        var surfaceSeries = new RectangleBarSeries { Title = chart.Title ?? "Surface" };
+        ApplyRectangleBarFormat(surfaceSeries, GetSeriesFormat(chart, 0), theme);
+
+        foreach (var (categoryIndex, seriesIndex, value) in surfaceValues)
+        {
+            surfaceSeries.Items.Add(new RectangleBarItem(
+                categoryIndex - 0.45,
+                seriesIndex - 0.45,
+                categoryIndex + 0.45,
+                seriesIndex + 0.45)
+            {
+                Color = GetSurfaceCellColor(value, minValue, maxValue)
+            });
+        }
+
+        model.Series.Add(surfaceSeries);
+        return model;
+    }
+
+    private static OxyColor GetSurfaceCellColor(double value, double minValue, double maxValue)
+    {
+        var t = maxValue <= minValue ? 0.5 : Math.Clamp((value - minValue) / (maxValue - minValue), 0, 1);
+        var red = (byte)Math.Round(68 + (255 - 68) * t);
+        var green = (byte)Math.Round(114 + (192 - 114) * t);
+        var blue = (byte)Math.Round(196 + (0 - 196) * t);
+        return OxyColor.FromRgb(red, green, blue);
     }
 
     private static PlotModel BuildStackedBarModel(

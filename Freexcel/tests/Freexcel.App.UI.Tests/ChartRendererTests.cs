@@ -13,7 +13,6 @@ namespace Freexcel.App.UI.Tests;
 public sealed class ChartRendererTests
 {
     [Theory]
-    [InlineData(ChartType.Surface)]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
     [InlineData(ChartType.Histogram)]
@@ -123,6 +122,38 @@ public sealed class ChartRendererTests
             []));
 
         model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>();
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
+    }
+
+    [Fact]
+    public void SurfaceRenderer_UsesMatrixRectangleSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.ThreeDSurface,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "20"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "40")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.Items.Should().HaveCount(4);
+        series.Items.Select(item => item.Color).Should().OnlyHaveUniqueItems();
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
     }
@@ -261,6 +292,77 @@ public sealed class ChartRendererTests
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
         series.Items.Should().HaveCount(3);
         series.Items.Should().Contain(item => item.Value == 0);
+    }
+
+    [Fact]
+    public void ColumnRenderer_AddsChartDataTableAnnotations()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            DataTable = new ChartDataTableModel
+            {
+                ShowHorizontalBorder = true,
+                ShowVerticalBorder = true,
+                ShowOutline = true
+            }
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "20"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "40")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .Contain(["North | South", "Q1 | 10 | 20", "Q2 | 30 | 40"]);
+    }
+
+    [Fact]
+    public void ColumnRenderer_AddsLegendKeysToChartDataTableWhenRequested()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+            DataTable = new ChartDataTableModel
+            {
+                ShowLegendKeys = true
+            }
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "20")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .Contain("* North | * South");
     }
 
     [Fact]

@@ -33,7 +33,9 @@ public sealed class ChartDialogTests
             ChartType.Area,
             ChartType.ThreeDArea,
             ChartType.Radar,
-            ChartType.Stock);
+            ChartType.Stock,
+            ChartType.Surface,
+            ChartType.ThreeDSurface);
         options.Should().NotContain(option => !ChartTypeSupport.IsRenderable(option.Type));
         options.Single(option => option.Type == ChartType.PercentStackedColumn).DisplayName
             .Should()
@@ -67,7 +69,8 @@ public sealed class ChartDialogTests
             "Area",
             "X Y (Scatter)",
             "Stock",
-            "Radar");
+            "Radar",
+            "Surface");
         categories.Should().OnlyContain(category => category.Options.All(option => ChartTypeSupport.IsRenderable(option.Type)));
         categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
@@ -89,6 +92,9 @@ public sealed class ChartDialogTests
         categories.Single(category => category.Name == "Area").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Area,
             ChartType.ThreeDArea);
+        categories.Single(category => category.Name == "Surface").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Surface,
+            ChartType.ThreeDSurface);
     }
 
     [Fact]
@@ -160,6 +166,17 @@ public sealed class ChartDialogTests
             Title: "Revenue",
             XAxisTitle: "Quarter",
             YAxisTitle: "Amount"));
+    }
+
+    [Fact]
+    public void ChartTitlesDialog_LabelsTitleEditorsWithExcelAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("AddInput(stack, \"_Chart title:\", _chartTitleBox)");
+        source.Should().Contain("AddInput(stack, \"_Primary horizontal axis title:\", _xAxisTitleBox)");
+        source.Should().Contain("AddInput(stack, \"Primary _vertical axis title:\", _yAxisTitleBox)");
+        source.Should().Contain("new Label { Content = label, Target = box");
     }
 
     [Fact]

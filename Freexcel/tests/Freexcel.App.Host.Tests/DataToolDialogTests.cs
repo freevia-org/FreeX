@@ -107,14 +107,20 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
-        source.Should().Contain("Step 2 of 3");
+        source.Should().Contain("Step {_wizardStep} of 3");
         source.Should().Contain("CreateWizardButtonRow");
         source.Should().Contain("Content = \"< _Back\"");
         source.Should().Contain("Content = \"_Next >\"");
         source.Should().Contain("Content = \"_Finish\"");
+        source.Should().Contain("MoveWizardStep");
+        source.Should().Contain("UpdateWizardStep");
+        source.Should().Contain("_backButton.IsEnabled = _wizardStep > 1");
+        source.Should().Contain("_nextButton.IsEnabled = _wizardStep < 3");
+        source.Should().Contain("Choose the file type that best describes your data.");
         source.Should().Contain("IsDefault = true");
         source.Should().Contain("Accept()");
         source.Should().NotContain("Additional wizard steps are not supported yet.");
+        source.Should().NotContain("This dialog opens on the split-options step.");
     }
 
     [Fact]
@@ -415,7 +421,27 @@ public sealed class DataToolDialogTests
         result.ListRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 20, 4)));
         result.CriteriaRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 6), new CellAddress(sheetId, 2, 7)));
         result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
+        result.CopyToRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 10), new CellAddress(sheetId, 1, 10)));
         result.UniqueRecordsOnly.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_ParsesCopyToHeaderRange()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToCellText: "J1:L1",
+            uniqueRecordsOnly: true,
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
+        result.CopyToRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 10), new CellAddress(sheetId, 1, 12)));
     }
 
     [Fact]
@@ -481,7 +507,7 @@ public sealed class DataToolDialogTests
             out var error);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid copy-to cell.");
+        error.Should().Be("Enter a valid copy-to cell or one-row header range.");
     }
 
     [Fact]
@@ -635,11 +661,12 @@ public sealed class DataToolDialogTests
         source.Should().NotContain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
         source.Should().NotContain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
         source.Should().NotContain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
-        source.Should().Contain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
+        source.Should().NotContain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
+        source.Should().NotContain("Source links are not available yet");
         source.Should().Contain("UseTopRowLabels");
         source.Should().Contain("UseLeftColumnLabels");
-        source.Should().Contain("consolidated values are written as results");
-        source.Should().Contain("AutomationProperties.SetHelpText(control, helpText)");
+        source.Should().Contain("CreateLinksToSourceData");
+        source.Should().Contain("Write formulas that reference the source cells");
     }
 
     [Fact]

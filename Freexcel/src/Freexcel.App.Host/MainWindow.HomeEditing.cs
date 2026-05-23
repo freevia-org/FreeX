@@ -199,6 +199,22 @@ public partial class MainWindow
             return;
         }
 
+        if (dialog.SelectedRange is { } selectedRange)
+        {
+            SheetGrid.SelectedRange = selectedRange;
+            SheetGrid.SelectedRanges = null;
+            _selectionAnchor = selectedRange.Start;
+            _selectionCursor = selectedRange.End;
+            CellAddressBox.Text = FormatRangeReference(selectedRange.Start, selectedRange.End);
+            FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(selectedRange.Start), selectedRange.Start);
+            EnsureCellVisible(selectedRange.Start);
+            FocusSheetGridIfNeeded();
+            RefreshToolbar();
+            RefreshStatusBar();
+            RefreshValidationDropdown();
+            return;
+        }
+
         SetActiveCell(dialog.SelectedAddress);
         EnsureCellVisible(dialog.SelectedAddress);
     }

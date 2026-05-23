@@ -243,6 +243,17 @@ public sealed class AllowEditRangeDialog : Window
         var group = new GroupBox { Header = "Range", Margin = new Thickness(0, 0, 0, 10) };
         var rangePanel = new DockPanel { Margin = new Thickness(8) };
         rangePanel.Children.Add(new Label { Content = "_Range:", Target = _rangeBox, Margin = new Thickness(0, 0, 8, 0) });
+        var rangePicker = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            ToolTip = "Select editable range"
+        };
+        System.Windows.Automation.AutomationProperties.SetName(rangePicker, "Select editable range");
+        rangePicker.Click += RangePicker_Click;
+        DockPanel.SetDock(rangePicker, Dock.Right);
+        rangePanel.Children.Add(rangePicker);
         _rangeBox.Text = defaultRange;
         rangePanel.Children.Add(_rangeBox);
         group.Content = rangePanel;
@@ -256,6 +267,12 @@ public sealed class AllowEditRangeDialog : Window
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72));
 
         Content = root;
+    }
+
+    private void RangePicker_Click(object sender, RoutedEventArgs e)
+    {
+        _rangeBox.Focus();
+        _rangeBox.SelectAll();
     }
 
     private void Accept()

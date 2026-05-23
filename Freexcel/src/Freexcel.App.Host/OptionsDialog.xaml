@@ -219,8 +219,8 @@
                                   FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox Content="Flag repeated _words"
                                   FontSize="12" Margin="0,0,0,12"/>
-                        <Button Content="AutoCorrect _Options..." Width="150" Height="26"
-                                HorizontalAlignment="Left"/>
+                        <Button x:Name="AutoCorrectOptionsButton" Content="AutoCorrect _Options..." Width="150" Height="26"
+                                HorizontalAlignment="Left" Click="AutoCorrectOptionsButton_Click"/>
                     </StackPanel>
 
                     <!-- VIEW -->
@@ -245,8 +245,8 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <TextBlock Text="Editing language: English (United States)"
                                    FontSize="12" Margin="0,0,0,8"/>
-                        <Button Content="_Add a Language..." Width="150" Height="26"
-                                HorizontalAlignment="Left"/>
+                        <Button x:Name="AddLanguageButton" Content="_Add a Language..." Width="150" Height="26"
+                                HorizontalAlignment="Left" Click="AddLanguageButton_Click"/>
                     </StackPanel>
 
                     <!-- EASE OF ACCESS -->
@@ -357,8 +357,8 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <TextBlock Text="Choose commands from: Popular Commands"
                                    FontSize="12" Margin="0,0,0,8"/>
-                        <Button Content="_Import/Export..." Width="130" Height="26"
-                                HorizontalAlignment="Left"/>
+                        <Button x:Name="RibbonImportExportButton" Content="_Import/Export..." Width="130" Height="26"
+                                HorizontalAlignment="Left" Click="RibbonImportExportButton_Click"/>
                     </StackPanel>
 
                     <!-- QUICK ACCESS TOOLBAR -->
@@ -368,8 +368,8 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <CheckBox Content="Show Quick Access Toolbar _below the Ribbon"
                                   FontSize="12" Margin="0,0,0,8"/>
-                        <Button Content="_Reset..." Width="90" Height="26"
-                                HorizontalAlignment="Left"/>
+                        <Button x:Name="QuickAccessResetButton" Content="_Reset..." Width="90" Height="26"
+                                HorizontalAlignment="Left" Click="QuickAccessResetButton_Click"/>
                     </StackPanel>
 
                     <!-- ADD-INS -->
@@ -379,8 +379,8 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <TextBlock Text="Active Application Add-ins"
                                    FontSize="12" Margin="0,0,0,8"/>
-                        <Button Content="_Go..." Width="70" Height="26"
-                                HorizontalAlignment="Left"/>
+                        <Button x:Name="AddInsGoButton" Content="_Go..." Width="70" Height="26"
+                                HorizontalAlignment="Left" Click="AddInsGoButton_Click"/>
                     </StackPanel>
 
                     <!-- TRUST CENTER -->
@@ -390,8 +390,8 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <TextBlock Text="Security and privacy settings for Freexcel."
                                    FontSize="12" Foreground="#555" Margin="0,0,0,12"/>
-                        <Button Content="Trust Center _Settings..." Width="170" Height="26"
-                                HorizontalAlignment="Left"/>
+                        <Button x:Name="TrustCenterSettingsButton" Content="Trust Center _Settings..." Width="170" Height="26"
+                                HorizontalAlignment="Left" Click="TrustCenterSettingsButton_Click"/>
                     </StackPanel>
 
                 </Grid>

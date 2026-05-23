@@ -28,6 +28,8 @@ public sealed class RibbonCommandPresentationPlannerTests
 
     [Theory]
     [InlineData("Column Chart", true)]
+    [InlineData("Surface Chart", true)]
+    [InlineData("3D Surface Chart", true)]
     [InlineData("Column", true)]
     [InlineData("Trend Order", false)]
     [InlineData("R-squared", false)]

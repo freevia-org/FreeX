@@ -32,6 +32,8 @@ public sealed class SparklineDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        _dataRangePickerButton.Click += (_, _) => FocusRangeBox(_dataRangeBox);
+        _locationPickerButton.Click += (_, _) => FocusRangeBox(_locationBox);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
@@ -70,5 +72,11 @@ public sealed class SparklineDialog : Window
         pickerButton.Margin = new Thickness(6, 0, 0, 0);
         row.Children.Add(pickerButton);
         return row;
+    }
+
+    private static void FocusRangeBox(TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
     }
 }

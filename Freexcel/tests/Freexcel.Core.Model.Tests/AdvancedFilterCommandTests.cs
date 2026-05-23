@@ -65,6 +65,39 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_CopyToHeaderRange_CopiesOnlySelectedColumnsInHeaderOrder()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+        Set(sheet, 8, 1, "Rep");
+        Set(sheet, 8, 2, "Region");
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: Addr(sheet, 8, 1),
+            UniqueRecordsOnly: false,
+            CopyToRange: ListRange(sheet, 8, 1, 8, 2));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(8, 1).Should().Be(new TextValue("Rep"));
+        sheet.GetValue(8, 2).Should().Be(new TextValue("Region"));
+        sheet.GetValue(9, 1).Should().Be(new TextValue("Ana"));
+        sheet.GetValue(9, 2).Should().Be(new TextValue("East"));
+        sheet.GetValue(10, 1).Should().Be(new TextValue("Ana"));
+        sheet.GetValue(10, 2).Should().Be(new TextValue("East"));
+        sheet.GetCell(9, 3).Should().BeNull();
+
+        command.Revert(ctx);
+        sheet.GetValue(8, 1).Should().Be(new TextValue("Rep"));
+        sheet.GetValue(8, 2).Should().Be(new TextValue("Region"));
+        sheet.GetCell(9, 1).Should().BeNull();
+    }
+
+    [Fact]
     public void AdvancedFilter_AllowsCriteriaRangeOnAnotherSheet()
     {
         var (wb, sheet, ctx) = Setup();
