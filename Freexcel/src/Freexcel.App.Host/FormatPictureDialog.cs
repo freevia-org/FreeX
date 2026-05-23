@@ -9,6 +9,7 @@ public sealed record FormatPictureDialogResult(
     double Width,
     double Height,
     double RotationDegrees,
+    bool LockAspectRatio,
     double CropLeft,
     double CropTop,
     double CropRight,
@@ -39,6 +40,7 @@ public sealed class FormatPictureDialog : Window
             picture.Width,
             picture.Height,
             picture.RotationDegrees,
+            picture.LockAspectRatio,
             picture.CropLeft,
             picture.CropTop,
             picture.CropRight,
@@ -56,6 +58,7 @@ public sealed class FormatPictureDialog : Window
         _widthBox.Text = picture.Width.ToString(CultureInfo.InvariantCulture);
         _heightBox.Text = picture.Height.ToString(CultureInfo.InvariantCulture);
         _rotationBox.Text = picture.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _lockAspectRatioBox.IsChecked = picture.LockAspectRatio;
         _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
         _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
         _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
@@ -75,12 +78,13 @@ public sealed class FormatPictureDialog : Window
     public static bool TryCreateResult(
         string sizeInput,
         string rotationInput,
+        bool lockAspectRatio,
         string cropInput,
         string? altText,
         out FormatPictureDialogResult result,
         out string? error)
     {
-        result = new FormatPictureDialogResult(0, 0, 0, 0, 0, 0, 0, null);
+        result = new FormatPictureDialogResult(0, 0, 0, true, 0, 0, 0, 0, null);
         error = null;
         if (!ObjectSizeDialog.TryParseSize(sizeInput, out var size))
         {
@@ -101,6 +105,7 @@ public sealed class FormatPictureDialog : Window
             size.Width,
             size.Height,
             rotation.Degrees,
+            lockAspectRatio,
             crop.Left,
             crop.Top,
             crop.Right,
@@ -112,7 +117,14 @@ public sealed class FormatPictureDialog : Window
     private void Accept()
     {
         var cropInput = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
-        if (!TryCreateResult($"{_widthBox.Text}x{_heightBox.Text}", _rotationBox.Text, cropInput, _altTextBox.Text, out var result, out var error))
+        if (!TryCreateResult(
+                $"{_widthBox.Text}x{_heightBox.Text}",
+                _rotationBox.Text,
+                _lockAspectRatioBox.IsChecked == true,
+                cropInput,
+                _altTextBox.Text,
+                out var result,
+                out var error))
         {
             MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -227,6 +239,7 @@ public sealed class FormatPictureDialog : Window
         _widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture);
         _heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture);
         _rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _lockAspectRatioBox.IsChecked = _initialResult.LockAspectRatio;
         _updatingAspect = false;
     }
 

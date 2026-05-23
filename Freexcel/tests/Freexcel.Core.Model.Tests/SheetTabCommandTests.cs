@@ -44,6 +44,7 @@ public class SheetTabCommandTests
             ContentType = "image/png",
             Width = 90,
             Height = 60,
+            LockAspectRatio = false,
             RotationDegrees = 45,
             AltText = "Embedded image"
         });
@@ -135,6 +136,7 @@ public class SheetTabCommandTests
         copiedImage.Anchor.Should().Be(new CellAddress(copy.Id, 2, 2));
         copiedImage.Kind.Should().Be(PictureKind.Image);
         copiedImage.ImageBytes.Should().Equal(1, 2, 3);
+        copiedImage.LockAspectRatio.Should().BeFalse();
         copiedImage.RotationDegrees.Should().Be(45);
         copiedImage.AltText.Should().Be("Embedded image");
         var copiedChart = copy.Charts.Should().ContainSingle().Subject;
