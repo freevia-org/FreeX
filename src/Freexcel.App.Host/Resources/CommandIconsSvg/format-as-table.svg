@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Format as Table">
-
-<rect width="32" height="32" fill="none"/>
-<g transform="translate(16 16) scale(1.25) translate(-16 -16)">
-<rect x="6" y="7" width="20" height="18" rx="1.5" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="7" width="20" height="5" rx="1.5" fill="#107c41"/><path d="M6 12h20M6 18h20M13 12v13M20 12v13" fill="none" stroke="#5c5c5c" stroke-width="1.0" stroke-linecap="square"/>
-</g>
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="7.5" width="21" height="19" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1"/>
+  <rect x="6.5" y="8.5" width="19" height="5" fill="#107c41"/>
+  <path d="M5.5 14.5H26.5M5.5 20.5H26.5M12.5 7.5V26.5M19.5 7.5V26.5" fill="none" stroke="#242424" stroke-width="1"/>
+  <path d="M21.5 4.5L27.5 4.5L25.5 6.5L27.5 8.5L21.5 8.5Z" fill="#9fd89f" stroke="#242424" stroke-width="1" stroke-linejoin="miter"/>
 </svg>

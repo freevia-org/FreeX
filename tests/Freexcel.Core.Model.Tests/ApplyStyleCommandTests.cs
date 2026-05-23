@@ -214,6 +214,21 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void ApplyHiddenTrue_HidesFormulaForSheetProtection()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(addr, "A2*2");
+
+        new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(Hidden: true)).Apply(ctx);
+
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).Hidden.Should().BeTrue();
+    }
+
+    [Fact]
     public void ApplyStyleCommand_AppliesDistributedJustifyAndShrinkToFit_AndUndoRestoresOriginalStyle()
     {
         var (wb, sheet, ctx) = Setup();

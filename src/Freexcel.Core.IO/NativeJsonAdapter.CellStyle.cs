@@ -36,6 +36,7 @@ public sealed partial class NativeJsonAdapter
             IndentLevel = Math.Clamp(dto.IndentLevel, 0, 15),
             TextRotation = NativeJsonValueSanitizer.ValidTextRotationOrDefault(dto.TextRotation),
             Locked = dto.Locked,
+            Hidden = dto.Hidden,
             NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls,
             NativeDifferentialElementXmls = dto.NativeDifferentialElementXmls
@@ -74,6 +75,7 @@ public sealed partial class NativeJsonAdapter
             IndentLevel = style.IndentLevel,
             TextRotation = style.TextRotation,
             Locked = style.Locked,
+            Hidden = style.Hidden,
             NativeDifferentialAttributes = style.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = style.NativeDifferentialChildXmls,
             NativeDifferentialElementXmls = style.NativeDifferentialElementXmls
@@ -106,6 +108,7 @@ public sealed partial class NativeJsonAdapter
             IndentLevel = safeStyle.IndentLevel,
             TextRotation = safeStyle.TextRotation,
             Locked = safeStyle.Locked,
+            Hidden = safeStyle.Hidden,
             NativeDifferentialAttributes = safeStyle.NativeDifferentialAttributes,
             NativeDifferentialChildXmls = safeStyle.NativeDifferentialChildXmls,
             NativeDifferentialElementXmls = safeStyle.NativeDifferentialElementXmls
