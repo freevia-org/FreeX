@@ -56,14 +56,15 @@ public sealed class ManageConditionalFormatsDialog : Window
         };
         DockPanel.SetDock(topBar, Dock.Top);
 
+        _scopeBox = new ComboBox { MinWidth = 160, VerticalAlignment = System.Windows.VerticalAlignment.Center };
         topBar.Children.Add(new Label
         {
             Content = "Show formatting _rules for:",
+            Target = _scopeBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0, 0, 6, 0)
         });
 
-        _scopeBox = new ComboBox { MinWidth = 160, VerticalAlignment = System.Windows.VerticalAlignment.Center };
         _scopeBox.Items.Add(ScopeSheet);
         if (selection.HasValue) _scopeBox.Items.Add(ScopeSelection);
         _scopeBox.SelectedItem = selection.HasValue ? ScopeSelection : ScopeSheet;
@@ -102,8 +103,10 @@ public sealed class ManageConditionalFormatsDialog : Window
         var newBtn   = new Button { Content = "_New Rule...", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
         _editBtn     = new Button { Content = "_Edit Rule",   Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         _deleteBtn   = new Button { Content = "_Delete Rule", Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
-        _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
-        _moveDownBtn = new Button { Content = "▼", Width = 32, IsEnabled = false };
+        _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Move selected rule up", IsEnabled = false };
+        _moveDownBtn = new Button { Content = "▼", Width = 32, ToolTip = "Move selected rule down", IsEnabled = false };
+        System.Windows.Automation.AutomationProperties.SetName(_moveUpBtn, "Move Up");
+        System.Windows.Automation.AutomationProperties.SetName(_moveDownBtn, "Move Down");
 
         newBtn.Click       += NewRule_Click;
         _editBtn.Click     += EditRule_Click;
