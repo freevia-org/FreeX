@@ -28,16 +28,16 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         if (_listRange.Start.Sheet != _listRange.End.Sheet ||
-            _criteriaRange.Start.Sheet != _criteriaRange.End.Sheet ||
-            _listRange.Start.Sheet != _criteriaRange.Start.Sheet)
-            return new CommandOutcome(false, "Advanced Filter ranges must be on one sheet.");
+            _criteriaRange.Start.Sheet != _criteriaRange.End.Sheet)
+            return new CommandOutcome(false, "Advanced Filter list and criteria ranges must each stay on one sheet.");
 
         var sheet = ctx.GetSheet(_listRange.Start.Sheet);
+        var criteriaSheet = ctx.GetSheet(_criteriaRange.Start.Sheet);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
         var headers = BuildHeaderMap(sheet, _listRange);
-        var criteria = BuildCriteriaRows(sheet, _criteriaRange, headers);
+        var criteria = BuildCriteriaRows(criteriaSheet, _criteriaRange, headers);
         if (criteria.Error is not null)
             return new CommandOutcome(false, criteria.Error);
         if (criteria.Rows.Count == 0)

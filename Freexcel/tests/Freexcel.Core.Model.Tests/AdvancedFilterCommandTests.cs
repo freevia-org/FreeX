@@ -65,6 +65,26 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_AllowsCriteriaRangeOnAnotherSheet()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var criteriaSheet = wb.AddSheet("Criteria");
+        SeedList(sheet);
+        Set(criteriaSheet, 1, 1, "Region");
+        Set(criteriaSheet, 2, 1, "East");
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(criteriaSheet, 1, 1, 2, 1),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
+    }
+
+    [Fact]
     public void AdvancedFilter_CopyUnique_RemovesDuplicateOutputRows()
     {
         var (wb, sheet, ctx) = Setup();
