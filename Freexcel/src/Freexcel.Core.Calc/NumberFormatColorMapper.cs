@@ -78,6 +78,8 @@ internal static class NumberFormatColorMapper
 
     public static bool TryMapColor(string token, out string? color)
     {
+        token = token.Trim();
+
         if (TryMapIndexedColor(token, out color))
             return true;
 
