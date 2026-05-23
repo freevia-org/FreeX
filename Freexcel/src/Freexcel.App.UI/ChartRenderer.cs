@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using OxyPlot;
@@ -471,20 +472,29 @@ public static partial class ChartRenderer
         uint headerRow,
         WorkbookTheme theme)
     {
-        model.Axes.Add(new LinearAxis
+        var xValues = GetStockXValues(categories, out var dateAxis);
+        if (dateAxis is not null)
         {
-            Position = AxisPosition.Bottom,
-            Title = chart.XAxisTitle,
-            Minimum = -0.5,
-            Maximum = Math.Max(0.5, categories.Count - 0.5),
-            MajorStep = 1,
-            MinorStep = 1,
-            LabelFormatter = value =>
+            dateAxis.Title = chart.XAxisTitle;
+            model.Axes.Add(dateAxis);
+        }
+        else
+        {
+            model.Axes.Add(new LinearAxis
             {
-                var index = (int)Math.Round(value);
-                return index >= 0 && index < categories.Count ? categories[index] : "";
-            }
-        });
+                Position = AxisPosition.Bottom,
+                Title = chart.XAxisTitle,
+                Minimum = -0.5,
+                Maximum = Math.Max(0.5, categories.Count - 0.5),
+                MajorStep = 1,
+                MinorStep = 1,
+                LabelFormatter = value =>
+                {
+                    var index = (int)Math.Round(value);
+                    return index >= 0 && index < categories.Count ? categories[index] : "";
+                }
+            });
+        }
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
         var valueColumnCount = endCol >= dataStartCol ? endCol - dataStartCol + 1 : 0;
@@ -497,7 +507,7 @@ public static partial class ChartRenderer
             return model;
 
         if (hasVolumeColumn)
-            AddStockVolumeSeries(model, cellLookup, dataStartRow, endRow, dataStartCol);
+            AddStockVolumeSeries(model, cellLookup, dataStartRow, endRow, dataStartCol, xValues);
 
         var openCol = hasOpenColumn ? dataStartCol + volumeOffset : (uint?)null;
         var highCol = dataStartCol + volumeOffset + (hasOpenColumn ? 1u : 0u);
@@ -516,6 +526,9 @@ public static partial class ChartRenderer
         for (uint row = dataStartRow; row <= endRow; row++)
         {
             var index = row - dataStartRow;
+            if (index >= xValues.Count)
+                break;
+
             if (!TryGetNumericCell(cellLookup, row, highCol, out var high) ||
                 !TryGetNumericCell(cellLookup, row, lowCol, out var low) ||
                 !TryGetNumericCell(cellLookup, row, closeCol, out var close))
@@ -524,7 +537,7 @@ public static partial class ChartRenderer
             var open = openCol is { } parsedOpenCol && TryGetNumericCell(cellLookup, row, parsedOpenCol, out var parsedOpen)
                 ? parsedOpen
                 : close;
-            series.Items.Add(new HighLowItem(index, high, low, open, close));
+            series.Items.Add(new HighLowItem(xValues[(int)index], high, low, open, close));
         }
 
         model.Series.Add(series);
@@ -536,7 +549,8 @@ public static partial class ChartRenderer
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
         uint dataStartRow,
         uint endRow,
-        uint volumeCol)
+        uint volumeCol,
+        IReadOnlyList<double> xValues)
     {
         var series = new RectangleBarSeries
         {
@@ -549,12 +563,54 @@ public static partial class ChartRenderer
         var i = 0;
         for (uint row = dataStartRow; row <= endRow; row++, i++)
         {
+            if (i >= xValues.Count)
+                break;
+
             if (TryGetNumericCell(cellLookup, row, volumeCol, out var volume))
-                series.Items.Add(new RectangleBarItem(i - 0.35, 0, i + 0.35, volume));
+                series.Items.Add(new RectangleBarItem(xValues[i] - 0.35, 0, xValues[i] + 0.35, volume));
         }
 
         model.Series.Add(series);
     }
+
+    private static IReadOnlyList<double> GetStockXValues(IReadOnlyList<string> categories, out DateTimeAxis? dateAxis)
+    {
+        dateAxis = null;
+        if (categories.Count == 0)
+            return [];
+
+        var parsedDates = new List<DateTime>(categories.Count);
+        foreach (var category in categories)
+        {
+            if (!TryParseStockDateCategory(category, out var parsed))
+                return Enumerable.Range(0, categories.Count).Select(static index => (double)index).ToArray();
+
+            parsedDates.Add(parsed.Date);
+        }
+
+        var values = parsedDates.Select(DateTimeAxis.ToDouble).ToArray();
+        dateAxis = new DateTimeAxis
+        {
+            Position = AxisPosition.Bottom,
+            StringFormat = "d",
+            IntervalType = DateTimeIntervalType.Days,
+            Minimum = values.Min() - 0.5,
+            Maximum = values.Max() + 0.5
+        };
+        return values;
+    }
+
+    private static bool TryParseStockDateCategory(string category, out DateTime value) =>
+        DateTime.TryParse(
+            category,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out value) ||
+        DateTime.TryParse(
+            category,
+            CultureInfo.CurrentCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out value);
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)
     {
