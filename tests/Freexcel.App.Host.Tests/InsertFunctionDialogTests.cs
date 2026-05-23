@@ -68,6 +68,21 @@ public sealed class InsertFunctionDialogTests
             .Select(argument => argument.Name)
             .Should()
             .StartWith(["Lookup_value", "Lookup_array", "Return_array"]);
+
+        FunctionArgumentsDialog.GetArgumentSpecs("COUNTIF")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Range", "Criteria");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("INDEX")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Array", "Row_num", "Column_num");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("TEXT")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Value", "Format_text");
     }
 
     [Fact]
