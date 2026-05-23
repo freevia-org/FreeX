@@ -490,6 +490,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _printTitles;
     private readonly bool? _printExpandCollapseButtons;
     private readonly bool? _showExpandCollapseButtons;
+    private readonly bool? _autofitColumnsOnUpdate;
+    private readonly bool? _preserveFormattingOnUpdate;
     private readonly string? _altTextTitle;
     private readonly string? _altTextDescription;
     private readonly bool _updateAltText;
@@ -521,7 +523,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         string? altTextDescription = null,
         int? compactRowLabelIndent = null,
         bool updateAltText = false,
-        bool? showExpandCollapseButtons = null)
+        bool? showExpandCollapseButtons = null,
+        bool? autofitColumnsOnUpdate = null,
+        bool? preserveFormattingOnUpdate = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -547,6 +551,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _printTitles = printTitles;
         _printExpandCollapseButtons = printExpandCollapseButtons;
         _showExpandCollapseButtons = showExpandCollapseButtons;
+        _autofitColumnsOnUpdate = autofitColumnsOnUpdate;
+        _preserveFormattingOnUpdate = preserveFormattingOnUpdate;
         _altTextTitle = NormalizeEmptyValueText(altTextTitle);
         _altTextDescription = NormalizeEmptyValueText(altTextDescription);
         _updateAltText = updateAltText || _altTextTitle is not null || _altTextDescription is not null;
@@ -588,6 +594,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.PrintExpandCollapseButtons = printExpandCollapseButtons;
         if (_showExpandCollapseButtons is { } showExpandCollapseButtons)
             pivotTable.ShowExpandCollapseButtons = showExpandCollapseButtons;
+        if (_autofitColumnsOnUpdate is { } autofitColumnsOnUpdate)
+            pivotTable.AutofitColumnsOnUpdate = autofitColumnsOnUpdate;
+        if (_preserveFormattingOnUpdate is { } preserveFormattingOnUpdate)
+            pivotTable.PreserveFormattingOnUpdate = preserveFormattingOnUpdate;
         if (_updateAltText)
         {
             pivotTable.AltTextTitle = _altTextTitle;
@@ -641,6 +651,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
         bool ShowExpandCollapseButtons,
+        bool AutofitColumnsOnUpdate,
+        bool PreserveFormattingOnUpdate,
         string? AltTextTitle,
         string? AltTextDescription)
     {
@@ -666,6 +678,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.PrintTitles,
                 pivotTable.PrintExpandCollapseButtons,
                 pivotTable.ShowExpandCollapseButtons,
+                pivotTable.AutofitColumnsOnUpdate,
+                pivotTable.PreserveFormattingOnUpdate,
                 pivotTable.AltTextTitle,
                 pivotTable.AltTextDescription);
 
@@ -688,6 +702,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
             pivotTable.ShowExpandCollapseButtons = ShowExpandCollapseButtons;
+            pivotTable.AutofitColumnsOnUpdate = AutofitColumnsOnUpdate;
+            pivotTable.PreserveFormattingOnUpdate = PreserveFormattingOnUpdate;
             pivotTable.AltTextTitle = AltTextTitle;
             pivotTable.AltTextDescription = AltTextDescription;
             if (cache is not null)

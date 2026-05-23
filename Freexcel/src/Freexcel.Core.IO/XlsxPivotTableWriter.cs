@@ -237,6 +237,8 @@ internal static class XlsxPivotTableWriter
             new XAttribute("applyBorderFormats", "1"),
             new XAttribute("applyFontFormats", "1"),
             new XAttribute("applyPatternFormats", "1"),
+            new XAttribute("applyWidthHeightFormats", pivot.AutofitColumnsOnUpdate ? "1" : "0"),
+            new XAttribute("preserveFormatting", pivot.PreserveFormattingOnUpdate ? "1" : "0"),
             new XAttribute("updatedVersion", "8"),
             new XAttribute("minRefreshableVersion", "3"),
             new XAttribute("showGrandTotals", pivot.ShowGrandTotals ? "1" : "0"),
