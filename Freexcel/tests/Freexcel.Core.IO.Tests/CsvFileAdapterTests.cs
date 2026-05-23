@@ -140,6 +140,19 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForSpaceSeparatedMonthNameDates()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("17 May 2026,May 17 26\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+    }
+
+    [Fact]
     public void Save_WritesDateTimeValuesAsInvariantText()
     {
         var workbook = new Workbook("Book1");
