@@ -292,7 +292,12 @@ public sealed record NamedRangeMetadata(string Scope, string Comment)
     public static NamedRangeMetadata WorkbookScope { get; } = new("Workbook", "");
 }
 
-public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets, string? Id = null);
+public sealed record WorkbookCustomView(
+    string Name,
+    IReadOnlyList<WorksheetCustomViewState> Sheets,
+    string? Id = null,
+    bool IncludePrintSettings = true,
+    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
 
 public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells, string? Comment = null);
 
