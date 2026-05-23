@@ -744,7 +744,9 @@ public partial class MainWindow
         bool? showExpandCollapseButtons = null,
         bool? autofitColumnsOnUpdate = null,
         bool? preserveFormattingOnUpdate = null,
-        bool? showFieldHeaders = null)
+        bool? showFieldHeaders = null,
+        bool? showContextualTooltips = null,
+        bool? showPropertiesInTooltips = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -778,7 +780,9 @@ public partial class MainWindow
                     showExpandCollapseButtons,
                     autofitColumnsOnUpdate,
                     preserveFormattingOnUpdate,
-                    showFieldHeaders),
+                    showFieldHeaders,
+                    showContextualTooltips,
+                    showPropertiesInTooltips),
                 "PivotTable Options"))
             return;
 
@@ -996,7 +1000,9 @@ public partial class MainWindow
             showExpandCollapseButtons: result.ShowExpandCollapseButtons,
             autofitColumnsOnUpdate: result.AutofitColumnsOnUpdate,
             preserveFormattingOnUpdate: result.PreserveFormattingOnUpdate,
-            showFieldHeaders: result.ShowFieldHeaders);
+            showFieldHeaders: result.ShowFieldHeaders,
+            showContextualTooltips: result.ShowContextualTooltips,
+            showPropertiesInTooltips: result.ShowPropertiesInTooltips);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {

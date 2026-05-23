@@ -20,6 +20,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _showRowStripes;
     private readonly bool _showColumnStripes;
     private readonly bool? _showFieldHeaders;
+    private readonly bool? _showContextualTooltips;
+    private readonly bool? _showPropertiesInTooltips;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
@@ -69,7 +71,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? showExpandCollapseButtons = null,
         bool? autofitColumnsOnUpdate = null,
         bool? preserveFormattingOnUpdate = null,
-        bool? showFieldHeaders = null)
+        bool? showFieldHeaders = null,
+        bool? showContextualTooltips = null,
+        bool? showPropertiesInTooltips = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -89,6 +93,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showRowStripes = showRowStripes;
         _showColumnStripes = showColumnStripes;
         _showFieldHeaders = showFieldHeaders;
+        _showContextualTooltips = showContextualTooltips;
+        _showPropertiesInTooltips = showPropertiesInTooltips;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
@@ -136,6 +142,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         pivotTable.ShowColumnStripes = _showColumnStripes;
         if (_showFieldHeaders is { } showFieldHeaders)
             pivotTable.ShowFieldHeaders = showFieldHeaders;
+        if (_showContextualTooltips is { } showContextualTooltips)
+            pivotTable.ShowContextualTooltips = showContextualTooltips;
+        if (_showPropertiesInTooltips is { } showPropertiesInTooltips)
+            pivotTable.ShowPropertiesInTooltips = showPropertiesInTooltips;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
         if (_printTitles is { } printTitles)
@@ -199,6 +209,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowRowStripes,
         bool ShowColumnStripes,
         bool ShowFieldHeaders,
+        bool ShowContextualTooltips,
+        bool ShowPropertiesInTooltips,
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
@@ -228,6 +240,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowRowStripes,
                 pivotTable.ShowColumnStripes,
                 pivotTable.ShowFieldHeaders,
+                pivotTable.ShowContextualTooltips,
+                pivotTable.ShowPropertiesInTooltips,
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
@@ -257,6 +271,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowRowStripes = ShowRowStripes;
             pivotTable.ShowColumnStripes = ShowColumnStripes;
             pivotTable.ShowFieldHeaders = ShowFieldHeaders;
+            pivotTable.ShowContextualTooltips = ShowContextualTooltips;
+            pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
             pivotTable.EmptyValueText = EmptyValueText;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
