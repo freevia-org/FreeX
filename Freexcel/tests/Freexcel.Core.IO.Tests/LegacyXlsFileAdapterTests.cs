@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
+using System.Reflection;
 
 namespace Freexcel.Core.IO.Tests;
 
@@ -37,6 +38,14 @@ public sealed class LegacyXlsFileAdapterTests
     }
 
     [Fact]
+    public void Load_MapsLegacyDateCellsToDateTimeValues()
+    {
+        var value = MapLegacyXlsValue(new DateTime(2026, 5, 17, 9, 30, 0));
+
+        value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+    }
+
+    [Fact]
     public void Save_IsNotSupported()
     {
         var adapter = new LegacyXlsFileAdapter();
@@ -44,5 +53,12 @@ public sealed class LegacyXlsFileAdapterTests
         var act = () => adapter.Save(new Workbook("Book1"), new MemoryStream());
 
         act.Should().Throw<NotSupportedException>();
+    }
+
+    private static ScalarValue MapLegacyXlsValue(object? value)
+    {
+        var method = typeof(LegacyXlsFileAdapter).GetMethod("MapValue", BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+        return (ScalarValue)method!.Invoke(null, [value])!;
     }
 }

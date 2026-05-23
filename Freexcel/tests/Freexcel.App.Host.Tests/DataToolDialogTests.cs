@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FluentAssertions;
@@ -858,15 +859,65 @@ public sealed class DataToolDialogTests
         source.Should().NotContain("_formulaBox");
         source.Should().NotContain("_modeBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
-        source.Should().Contain("DialogReferencePicker.CreateEditor(textBox, automationName, new Thickness(6, 0, 0, 0), Dock.Right)");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
         source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
+    }
+
+    [Fact]
+    public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
+            .Should()
+            .Be(new DataTableRangeSelectionRequest(
+                DataTableRangeSelectionTarget.ColumnInputCell,
+                "$C$1",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select row input cell", DataTableRangeSelectionTarget.RowInputCell, "A1")]
+    [InlineData("Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell, "C1")]
+    public void DataTableDialogReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        DataTableRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var requests = new List<DataTableRangeSelectionRequest>();
+            var dialog = new DataTableDialog(sheetId, range, requests.Add);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                textBoxes[0].Text = " A1 ";
+                textBoxes[1].Text = " C1 ";
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new DataTableRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
