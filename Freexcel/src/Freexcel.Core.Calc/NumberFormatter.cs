@@ -509,6 +509,15 @@ public static partial class NumberFormatter
                 continue;
             }
 
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                var escaped = format[++i];
+                if (!IsNumericPlaceholder(escaped))
+                    unquotedBuilder.Append('\\');
+                unquotedBuilder.Append(escaped);
+                continue;
+            }
+
             int outputIndex = unquotedBuilder.Length;
             unquotedBuilder.Append(c);
 
