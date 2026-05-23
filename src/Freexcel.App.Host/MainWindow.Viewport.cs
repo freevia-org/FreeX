@@ -305,8 +305,12 @@ public partial class MainWindow
         {
             if (ViewGridlinesChk is not null)
                 ViewGridlinesChk.IsChecked = SheetGrid.ShowGridLines;
+            if (PageLayoutViewGridlinesChk is not null)
+                PageLayoutViewGridlinesChk.IsChecked = SheetGrid.ShowGridLines;
             if (ViewHeadersChk is not null)
                 ViewHeadersChk.IsChecked = SheetGrid.ShowHeaders;
+            if (PageLayoutViewHeadingsChk is not null)
+                PageLayoutViewHeadingsChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
             if (SplitViewBtn is not null)
@@ -316,6 +320,10 @@ public partial class MainWindow
         {
             _suppressViewOptionSync = false;
         }
+        if (PageLayoutPrintGridlinesChk is not null)
+            PageLayoutPrintGridlinesChk.IsChecked = sheet?.PrintGridlines ?? false;
+        if (PageLayoutPrintHeadingsChk is not null)
+            PageLayoutPrintHeadingsChk.IsChecked = sheet?.PrintHeadings ?? false;
         SheetGrid.RowPageBreaks = sheet?.RowPageBreaks;
         SheetGrid.ColumnPageBreaks = sheet?.ColumnPageBreaks;
         SheetGrid.PrintArea = sheet?.PrintArea;

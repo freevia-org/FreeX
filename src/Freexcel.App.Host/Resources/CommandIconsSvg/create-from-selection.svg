@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Create from Selection">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.7" x="8.64" y="14.04" width="31.32" height="17.28"/><rect class="green2" x="9.72" y="15.12" width="9.72" height="15.12"/><text class="tm" x="25.92" y="26.46" font-size="8.64">Name</text>  </g>
+  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.7" x="8.64" y="14.04" width="31.32" height="17.28"/><rect x="9.72" y="15.12" width="9.72" height="15.12" fill="#dff6dd"/><text x="25.92" y="26.46" font-size="8.64" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">Name</text>  </g>
 </svg>
 
