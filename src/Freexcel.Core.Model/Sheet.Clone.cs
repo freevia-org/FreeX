@@ -158,7 +158,12 @@ public sealed partial class Sheet
                 ShowColumnHeaders = pt.ShowColumnHeaders,
                 ShowRowStripes = pt.ShowRowStripes,
                 ShowColumnStripes = pt.ShowColumnStripes,
-                EmptyValueText = pt.EmptyValueText
+                EmptyValueText = pt.EmptyValueText,
+                ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
+                PrintTitles = pt.PrintTitles,
+                PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
+                AltTextTitle = pt.AltTextTitle,
+                AltTextDescription = pt.AltTextDescription
             };
             clonedPt.RowFields.AddRange(pt.RowFields);
             clonedPt.ColumnFields.AddRange(pt.ColumnFields);
