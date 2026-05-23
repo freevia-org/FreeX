@@ -20,22 +20,39 @@ public enum GoToSpecialKind
     Dependents
 }
 
+[Flags]
+public enum GoToSpecialValueTypes
+{
+    None = 0,
+    Numbers = 1,
+    Text = 2,
+    Logicals = 4,
+    Errors = 8,
+    All = Numbers | Text | Logicals | Errors
+}
+
+public sealed record GoToSpecialOptions(GoToSpecialValueTypes ValueTypes = GoToSpecialValueTypes.All);
+
 public static class GoToSpecialService
 {
     public static IReadOnlyList<CellAddress> Find(
         Sheet sheet,
         GridRange range,
         GoToSpecialKind kind,
-        CellAddress? activeCell = null)
-        => Find(null, sheet, range, kind, activeCell);
+        CellAddress? activeCell = null,
+        GoToSpecialOptions? options = null)
+        => Find(null, sheet, range, kind, activeCell, options);
 
     public static IReadOnlyList<CellAddress> Find(
         Workbook? workbook,
         Sheet sheet,
         GridRange range,
         GoToSpecialKind kind,
-        CellAddress? activeCell = null)
+        CellAddress? activeCell = null,
+        GoToSpecialOptions? options = null)
     {
+        options ??= new GoToSpecialOptions();
+
         if (kind == GoToSpecialKind.CurrentRegion)
             return SelectionRangeService.GetCurrentRegion(sheet, activeCell ?? range.Start)?.AllCells().ToList() ?? [];
 
@@ -75,10 +92,13 @@ public static class GoToSpecialService
                 case GoToSpecialKind.Blanks when cell is null || cell.Value is BlankValue:
                     result.Add(address);
                     break;
-                case GoToSpecialKind.Constants when cell is { HasFormula: false } && cell.Value is not BlankValue:
+                case GoToSpecialKind.Constants when cell is { HasFormula: false } &&
+                    cell.Value is not BlankValue &&
+                    MatchesValueType(cell.Value, options.ValueTypes):
                     result.Add(address);
                     break;
-                case GoToSpecialKind.Formulas when cell?.HasFormula == true:
+                case GoToSpecialKind.Formulas when cell?.HasFormula == true &&
+                    MatchesValueType(cell.Value, options.ValueTypes):
                     result.Add(address);
                     break;
                 case GoToSpecialKind.Comments when sheet.Comments.ContainsKey(address) || sheet.ThreadedComments.ContainsKey(address):
@@ -95,6 +115,16 @@ public static class GoToSpecialService
 
         return result;
     }
+
+    private static bool MatchesValueType(ScalarValue value, GoToSpecialValueTypes valueTypes) =>
+        value switch
+        {
+            NumberValue or DateTimeValue => valueTypes.HasFlag(GoToSpecialValueTypes.Numbers),
+            TextValue => valueTypes.HasFlag(GoToSpecialValueTypes.Text),
+            BoolValue => valueTypes.HasFlag(GoToSpecialValueTypes.Logicals),
+            ErrorValue => valueTypes.HasFlag(GoToSpecialValueTypes.Errors),
+            _ => false
+        };
 
     private static IReadOnlyList<CellAddress> FindObjects(Sheet sheet, GridRange range)
     {
