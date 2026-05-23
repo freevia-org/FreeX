@@ -327,17 +327,28 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue MidTextWithSurrogatePairs(string text, int startNum, int numChars)
     {
-        int start = 0;
-        for (int current = 1; current < startNum && start < text.Length; current++)
-            start += IsSurrogatePairAt(text, start) ? 2 : 1;
-
+        int start = TextElementIndexFromOneBasedPosition(text, startNum);
         if (start >= text.Length) return new TextValue("");
 
-        int end = start;
-        for (int taken = 0; taken < numChars && end < text.Length; taken++)
-            end += IsSurrogatePairAt(text, end) ? 2 : 1;
-
+        int end = AdvanceTextElements(text, start, numChars);
         return TextResult(text[start..end]);
+    }
+
+    private static int TextElementIndexFromOneBasedPosition(string text, int position)
+    {
+        int index = 0;
+        for (int current = 1; current < position && index < text.Length; current++)
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+
+        return index;
+    }
+
+    private static int AdvanceTextElements(string text, int index, int count)
+    {
+        for (int taken = 0; taken < count && index < text.Length; taken++)
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+
+        return index;
     }
 
     private static bool IsSurrogatePairAt(string text, int index) =>
