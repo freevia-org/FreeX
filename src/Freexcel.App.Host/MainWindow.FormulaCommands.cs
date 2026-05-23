@@ -327,6 +327,9 @@ public partial class MainWindow
                     return WatchWindowService.GetEntries(_workbook);
                 },
                 () => AddWatchFromSelection(showMessage: false),
+                () => SheetGrid.SelectedRange is { } range
+                    ? FormatRangeReference(range.Start, range.End)
+                    : "",
                 address =>
                 {
                     NavigateToCell(address);
