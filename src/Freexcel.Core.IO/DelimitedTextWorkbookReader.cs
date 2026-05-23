@@ -218,11 +218,28 @@ internal static class DelimitedTextWorkbookReader
 
     private static bool TryParseTime(string field, out TimeSpan time)
     {
-        return TimeSpan.TryParseExact(
-            field.Trim(),
+        var trimmed = field.Trim();
+        if (TimeSpan.TryParseExact(
+            trimmed,
             ["h\\:mm", "hh\\:mm", "h\\:mm\\:ss", "hh\\:mm\\:ss"],
             CultureInfo.InvariantCulture,
-            out time);
+            out time))
+        {
+            return true;
+        }
+
+        if (DateTime.TryParseExact(
+            trimmed,
+            ["h:mm tt", "hh:mm tt", "h:mm:ss tt", "hh:mm:ss tt"],
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.NoCurrentDateDefault,
+            out var dateTime))
+        {
+            time = dateTime.TimeOfDay;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryReadFormula(string field, out string formulaText)
