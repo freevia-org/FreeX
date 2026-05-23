@@ -26,6 +26,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         source.Should().Contain("Evaluation:");
         source.Should().Contain("Step _In");
         source.Should().Contain("Step _Out");
+        source.Should().Contain("_session.StepOut()");
         source.Should().Contain("_Restart");
         source.Should().Contain("_Help on this formula");
         source.Should().Contain("ShowFormulaHelp");
