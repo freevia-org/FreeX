@@ -72,8 +72,9 @@ internal static class NumberFormatColorMapper
         if (!match.Success)
             return (null, section);
 
-        TryMapColor(match.Groups[1].Value, out var hex);
-        return (hex, section[match.Length..]);
+        return TryMapColor(match.Groups[1].Value, out var hex)
+            ? (hex, section[match.Length..])
+            : (null, section);
     }
 
     public static bool TryMapColor(string token, out string? color)

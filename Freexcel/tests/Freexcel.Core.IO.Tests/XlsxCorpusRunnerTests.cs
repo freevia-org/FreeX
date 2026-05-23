@@ -395,7 +395,7 @@ public class XlsxCorpusRunnerTests
             CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
                 before,
                 options => options
-                    .Using<double>(context => context.Subject.Should().BeApproximately(context.Expectation, 0.0001))
+                    .Using<double>(ctx => ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.0001))
                     .WhenTypeIs<double>()
                     .WithStrictOrdering(),
                 row.Id);
@@ -674,7 +674,17 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
+            sheet.Comments
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new CommentSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Comments.Count,
+            sheet.Hyperlinks
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
@@ -706,7 +716,9 @@ public class XlsxCorpusRunnerTests
             sheet.PrintHeadings,
             !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
             !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
+            sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
+            sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
             sheet.ColumnPageBreaks.Count,
             sheet.FrozenRows,
             sheet.FrozenCols,
@@ -1229,7 +1241,9 @@ public class XlsxCorpusRunnerTests
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
         int IconSetConditionalFormatCount,
+        IReadOnlyList<CommentSummary> Comments,
         int CommentCount,
+        IReadOnlyList<HyperlinkSummary> Hyperlinks,
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
@@ -1261,7 +1275,9 @@ public class XlsxCorpusRunnerTests
         bool PrintHeadings,
         bool HasPageHeader,
         bool HasPageFooter,
+        IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
+        IReadOnlyList<uint> ColumnPageBreaks,
         int ColumnPageBreakCount,
         uint FrozenRows,
         uint FrozenCols,
@@ -1279,6 +1295,10 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenRowCount,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
+
+    private sealed record CommentSummary(uint Row, uint Column, string Text);
+
+    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
 
     private sealed record ChartSummary(
         ChartType Type,
