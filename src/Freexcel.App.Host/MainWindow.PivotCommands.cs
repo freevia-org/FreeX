@@ -629,7 +629,9 @@ public partial class MainWindow
         bool? showContextualTooltips = null,
         bool? showPropertiesInTooltips = null,
         bool? showClassicLayout = null,
-        bool? mergeAndCenterLabels = null)
+        bool? mergeAndCenterLabels = null,
+        bool? pageOverThenDown = null,
+        int? pageWrap = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -667,7 +669,9 @@ public partial class MainWindow
                     showContextualTooltips,
                     showPropertiesInTooltips,
                     showClassicLayout,
-                    mergeAndCenterLabels),
+                    mergeAndCenterLabels,
+                    pageOverThenDown,
+                    pageWrap),
                 "PivotTable Options"))
             return;
 
@@ -889,7 +893,9 @@ public partial class MainWindow
             showContextualTooltips: result.ShowContextualTooltips,
             showPropertiesInTooltips: result.ShowPropertiesInTooltips,
             showClassicLayout: result.ShowClassicLayout,
-            mergeAndCenterLabels: result.MergeAndCenterLabels);
+            mergeAndCenterLabels: result.MergeAndCenterLabels,
+            pageOverThenDown: result.PageOverThenDown,
+            pageWrap: result.PageWrap);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
