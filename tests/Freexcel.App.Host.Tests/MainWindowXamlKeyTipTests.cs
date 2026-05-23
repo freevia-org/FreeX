@@ -68,6 +68,41 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageSidebarButtons_RenderAccessKeyMarkersAsMnemonics()
+    {
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var sidebarButtonStyle = resources
+            .Descendants(presentation + "Style")
+            .Single(element => element.Attribute(x + "Key")?.Value == "SsNavBtn");
+
+        sidebarButtonStyle
+            .Descendants(presentation + "ContentPresenter")
+            .Single()
+            .Attribute("RecognizesAccessKey")
+            ?.Value
+            .Should()
+            .Be("True");
+    }
+
+    [Fact]
+    public void BackstageSaveAsButton_UsesAccessKeyMatchingKeyTip()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var saveAsButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "SaveAsButton_Click");
+
+        saveAsButton.Attribute("Content")?.Value.Should().Be("Save _As");
+        saveAsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("A");
+    }
+
+    [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

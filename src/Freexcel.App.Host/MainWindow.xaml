@@ -3418,7 +3418,7 @@
                             Click="SaveButton_Click"
                             local:RibbonTooltip.Title="Save"
                             local:RibbonTooltip.KeyTip="S"/>
-                    <Button Content="_Save As" HorizontalAlignment="Stretch"
+                    <Button Content="Save _As" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveAsButton_Click"
                             local:RibbonTooltip.Title="Save As"
