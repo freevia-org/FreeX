@@ -1098,8 +1098,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
         source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
         source.Should().NotContain("InsertChartOfType(ChartType.Map)");
-        source.Should().NotContain("InsertChartOfType(ChartType.ThreeDColumn)");
+        source.Should().Contain("InsertChartOfType(ChartType.ThreeDColumn)");
         xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"Chart3DColumnMenuItem_Click\"");
         xaml.Should().Contain("Surface");
         xaml.Should().Contain("Treemap");
         xaml.Should().Contain("Sunburst");

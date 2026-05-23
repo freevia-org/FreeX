@@ -22,7 +22,6 @@ public sealed class ChartRendererTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void ChartRenderer_DoesNotRenderDeferredAdvancedChartFamiliesAsLineCharts(ChartType type)
     {
         var sheetId = SheetId.New();
@@ -45,6 +44,33 @@ public sealed class ChartRendererTests
             []));
 
         model.Should().BeNull();
+    }
+
+    [Fact]
+    public void ThreeDColumnRenderer_UsesColumnSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.ThreeDColumn,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>();
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
+        model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
     }
 
     [Fact]

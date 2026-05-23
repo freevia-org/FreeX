@@ -31,6 +31,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Area)]
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.ThreeDColumn)]
     public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -47,7 +48,6 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void AdvancedChartTypes_AreRecognizedButNotRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -352,7 +352,6 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void AddChartCommand_RejectsDeferredChartFamilies(ChartType type)
     {
         var wb = new Workbook("test");

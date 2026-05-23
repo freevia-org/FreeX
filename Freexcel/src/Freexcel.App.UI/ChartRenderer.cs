@@ -168,7 +168,7 @@ public static partial class ChartRenderer
             string seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((startRow, col), out var hdr)
                 ? hdr.DisplayText : $"Series {seriesIndex + 1}";
 
-            if (chart.Type == ChartType.Column)
+            if (chart.Type is ChartType.Column or ChartType.ThreeDColumn)
             {
                 if (!model.Axes.Any())
                 {
