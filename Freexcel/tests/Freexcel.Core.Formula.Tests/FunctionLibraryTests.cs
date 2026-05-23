@@ -5062,8 +5062,10 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
 
         _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 
