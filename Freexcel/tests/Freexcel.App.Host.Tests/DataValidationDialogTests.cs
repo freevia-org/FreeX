@@ -179,6 +179,54 @@ public sealed class DataValidationDialogTests
         codeBehind.Should().NotContain("Formula1Label.Text =");
     }
 
+    [Theory]
+    [InlineData("List", "Between", "", "", "Source")]
+    [InlineData("Custom", "Between", "", "", "Formula")]
+    [InlineData("WholeNumber", "Between", "1", "", "Maximum")]
+    [InlineData("WholeNumber", "Equal", "", "", "Value")]
+    public void ValidateCriteriaInputs_RejectsIncompleteValidationCriteria(
+        string typeTag,
+        string operatorTag,
+        string formula1,
+        string formula2,
+        string expectedMessageFragment)
+    {
+        DataValidationDialog.TryValidateCriteriaInputs(
+                typeTag,
+                operatorTag,
+                formula1,
+                formula2,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Contain(expectedMessageFragment);
+    }
+
+    [Fact]
+    public void ValidateCriteriaInputs_AllowsAnyValueAndCompleteBetweenCriteria()
+    {
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "Any",
+                "Between",
+                "",
+                "",
+                out var anyError)
+            .Should()
+            .BeTrue();
+        anyError.Should().BeNull();
+
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "Decimal",
+                "Between",
+                "1.5",
+                "2.5",
+                out var betweenError)
+            .Should()
+            .BeTrue();
+        betweenError.Should().BeNull();
+    }
+
     [Fact]
     public void MainWindow_AppliesDataValidationToMatchingSettingsWhenRequested()
     {
