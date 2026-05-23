@@ -1224,13 +1224,15 @@ public sealed class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
-        Text(sheet, "E2").Should().Be("Region");
-        Text(sheet, "E3").Should().Be("East");
-        Number(sheet, "F3").Should().Be(10);
-        Text(sheet, "E4").Should().Be("West");
-        Number(sheet, "F4").Should().Be(20);
-        Text(sheet, "E5").Should().Be("Grand Total");
-        Number(sheet, "F5").Should().Be(30);
+        Text(sheet, "E2").Should().Be("Quarter");
+        Text(sheet, "F2").Should().Be("Q1");
+        Text(sheet, "E4").Should().Be("Region");
+        Text(sheet, "E5").Should().Be("East");
+        Number(sheet, "F5").Should().Be(10);
+        Text(sheet, "E6").Should().Be("West");
+        Number(sheet, "F6").Should().Be(20);
+        Text(sheet, "E7").Should().Be("Grand Total");
+        Number(sheet, "F7").Should().Be(30);
     }
 
     [Fact]
@@ -1255,12 +1257,44 @@ public sealed class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
-        Text(sheet, "E3").Should().Be("Q1");
-        Number(sheet, "F3").Should().Be(60);
-        Text(sheet, "E4").Should().Be("Q2");
-        Number(sheet, "F4").Should().Be(15);
-        Text(sheet, "E5").Should().Be("Grand Total");
-        Number(sheet, "F5").Should().Be(75);
+        Text(sheet, "E2").Should().Be("Region");
+        Text(sheet, "F2").Should().Be("(Multiple Items)");
+        Text(sheet, "E5").Should().Be("Q1");
+        Number(sheet, "F5").Should().Be(60);
+        Text(sheet, "E6").Should().Be("Q2");
+        Number(sheet, "F6").Should().Be(15);
+        Text(sheet, "E7").Should().Be("Grand Total");
+        Number(sheet, "F7").Should().Be(75);
+    }
+
+    [Fact]
+    public void Refresh_MaterializesPageFieldsUsingReportFilterLayout()
+    {
+        var workbook = new Workbook("PivotRefreshPageFieldLayoutTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "J8"),
+            PageOverThenDown = true,
+            PageWrap = 2
+        };
+        pivot.PageFields.Add(new PivotFieldModel(0, SelectedItems: ["East", "West"]));
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Q1"));
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Region");
+        Text(sheet, "F2").Should().Be("(Multiple Items)");
+        Text(sheet, "G2").Should().Be("Quarter");
+        Text(sheet, "H2").Should().Be("Q1");
+        Text(sheet, "E4").Should().Be("Region");
+        Number(sheet, "F5").Should().Be(10);
     }
 
     [Fact]
