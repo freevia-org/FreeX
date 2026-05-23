@@ -2,7 +2,14 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
 
-public sealed record SortKey(uint ColumnOffset, bool Ascending);
+public enum SortOn
+{
+    CellValues,
+    CellColor,
+    FontColor
+}
+
+public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues);
 
 public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
@@ -65,14 +72,14 @@ public sealed class SortCommand : IWorkbookCommand
         if (_sortKeys.Any(key => key.ColumnOffset >= keyLimit))
             return new CommandOutcome(false, "Sort key offset is outside the sort range.");
         var keyColIndexes = _sortKeys
-            .Select(key => ((int)key.ColumnOffset, key.Ascending))
+            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn))
             .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);
         int colCount = (int)(endCol - startCol + 1);
 
         if (_options.LeftToRight)
-            return ApplyLeftToRight(sheet, startRow, endRow, startCol, endCol, keyColIndexes, rowCount, colCount);
+            return ApplyLeftToRight(ctx.Workbook, sheet, startRow, endRow, startCol, endCol, keyColIndexes, rowCount, colCount);
 
         // Read current state and save snapshot. Redo replays Apply after Revert,
         // so the snapshot must describe the current pre-sort state each time.
@@ -117,11 +124,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         rows.Sort((a, b) =>
         {
-            foreach (var (index, ascending) in keyColIndexes)
+            foreach (var (index, ascending, sortOn) in keyColIndexes)
             {
-                var va = a.Cells[index]?.Value ?? BlankValue.Instance;
-                var vb = b.Cells[index]?.Value ?? BlankValue.Instance;
-                int cmp = CompareScalar(va, vb, _options.CaseSensitive);
+                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -169,12 +174,13 @@ public sealed class SortCommand : IWorkbookCommand
     }
 
     private CommandOutcome ApplyLeftToRight(
+        Workbook workbook,
         Sheet sheet,
         uint startRow,
         uint endRow,
         uint startCol,
         uint endCol,
-        IReadOnlyList<(int RowIndex, bool Ascending)> keyRowIndexes,
+        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn)> keyRowIndexes,
         int rowCount,
         int colCount)
     {
@@ -225,11 +231,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         columns.Sort((a, b) =>
         {
-            foreach (var (index, ascending) in keyRowIndexes)
+            foreach (var (index, ascending, sortOn) in keyRowIndexes)
             {
-                var va = a.Cells[index]?.Value ?? BlankValue.Instance;
-                var vb = b.Cells[index]?.Value ?? BlankValue.Instance;
-                int cmp = CompareScalar(va, vb, _options.CaseSensitive);
+                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -304,6 +308,33 @@ public sealed class SortCommand : IWorkbookCommand
 
         InsertRowsCommand.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
         InsertRowsCommand.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
+    }
+
+    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, bool caseSensitive) =>
+        sortOn switch
+        {
+            SortOn.CellColor => CompareNullableColor(GetStyle(workbook, a).FillColor, GetStyle(workbook, b).FillColor),
+            SortOn.FontColor => CompareNullableColor(GetStyle(workbook, a).FontColor, GetStyle(workbook, b).FontColor),
+            _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, caseSensitive)
+        };
+
+    private static CellStyle GetStyle(Workbook workbook, Cell? cell) =>
+        workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+
+    private static int CompareNullableColor(CellColor? a, CellColor? b)
+    {
+        if (a is null && b is null)
+            return 0;
+        if (a is null)
+            return 1;
+        if (b is null)
+            return -1;
+
+        var red = a.Value.R.CompareTo(b.Value.R);
+        if (red != 0)
+            return red;
+        var green = a.Value.G.CompareTo(b.Value.G);
+        return green != 0 ? green : a.Value.B.CompareTo(b.Value.B);
     }
 
     /// <summary>
