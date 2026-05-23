@@ -6822,9 +6822,10 @@ public partial class FileAdapterSmokeTests
     }
 
     [Theory]
-    [InlineData(ChartType.Pie)]
-    [InlineData(ChartType.Doughnut)]
-    public void XlsxAdapter_Save_WritesEmbeddedPieFamilyChartPackagePart(ChartType chartType)
+    [InlineData(ChartType.Pie, "pieChart")]
+    [InlineData(ChartType.ThreeDPie, "pie3DChart")]
+    [InlineData(ChartType.Doughnut, "doughnutChart")]
+    public void XlsxAdapter_Save_WritesEmbeddedPieFamilyChartPackagePart(ChartType chartType, string expectedElementName)
     {
         var workbook = new Workbook("PieChartPackageSave");
         var sheet = workbook.AddSheet("Sheet1");
@@ -6862,7 +6863,9 @@ public partial class FileAdapterSmokeTests
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
         {
             archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
-            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle();
         }
 
         saved.Position = 0;
