@@ -147,6 +147,28 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonMenuItems_RefreshSourceButtonEnabledStateWhenOpened()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(220);
+            var sourceButton = harness.VisibleOrCollapsedRibbonButton("Find & Select");
+            var menu = harness.CollapsedMenu("Editing");
+            var item = harness.CollapsedMenuItem("Editing", "Find & Select");
+
+            sourceButton.Should().NotBeNull(harness.DebugRibbonChildren);
+            item.Should().NotBeNull(harness.DebugRibbonChildren);
+
+            sourceButton!.IsEnabled = false;
+            menu!.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
+
+            item!.IsEnabled.Should().BeFalse("collapsed overflow commands should use the current enabled state of their source ribbon controls");
+        });
+    }
+
+    [Fact]
     public void DenseRibbonCommandColumns_UseShortRowButtons()
     {
         StaTestRunner.Run(() =>
@@ -279,6 +301,28 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
                 .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+
+        public ContextMenu? CollapsedMenu(string groupName) =>
+            HomeRibbonChildren
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
+                .Select(button => button.ContextMenu)
+                .FirstOrDefault(menu => menu is not null);
+
+        public MenuItem? CollapsedMenuItem(string groupName, string header) =>
+            CollapsedMenu(groupName)?.Items
+                .OfType<MenuItem>()
+                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+
+        public Button? VisibleOrCollapsedRibbonButton(string title) =>
+            HomeRibbonChildren
+                .OfType<DependencyObject>()
+                .SelectMany(EnumerateSelfAndVisualDescendants)
+                .Concat(HomeRibbonChildren.OfType<DependencyObject>().SelectMany(EnumerateLogicalDescendants))
+                .OfType<Button>()
+                .Distinct()
+                .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
 
         private IEnumerable<UIElement> HomeRibbonChildren =>
             (_window.FindName("HomeRibbonPanel") as StackPanel)?.Children.Cast<UIElement>() ?? [];
