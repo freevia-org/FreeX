@@ -729,6 +729,52 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceButton_Click");
         source.Should().Contain("DeleteReferenceButton_Click");
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
+            .Should()
+            .Be(new ConsolidateRangeSelectionRequest(
+                ConsolidateRangeSelectionTarget.Reference,
+                "A1:B3",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select reference range", ConsolidateRangeSelectionTarget.Reference, "A1:B3")]
+    [InlineData("Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell, "G10")]
+    public void ConsolidateReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        ConsolidateRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<ConsolidateRangeSelectionRequest>();
+            var dialog = new ConsolidateDialog(SheetId.New(), " A1:B3 ", " G10 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new ConsolidateRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
