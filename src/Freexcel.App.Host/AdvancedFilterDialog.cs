@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -108,6 +109,7 @@ public sealed class AdvancedFilterDialog : Window
         content.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 14, 0, 0)));
         Content = root;
         UpdateCopyToState();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryParse(
@@ -249,6 +251,12 @@ public sealed class AdvancedFilterDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _filterInPlaceButton.Focus();
+        Keyboard.Focus(_filterInPlaceButton);
     }
 
     private void UpdateCopyToState()
