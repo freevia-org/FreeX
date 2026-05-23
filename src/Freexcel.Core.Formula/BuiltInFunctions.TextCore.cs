@@ -213,7 +213,7 @@ public static partial class BuiltInFunctions
 
         if (oldText.Length == 0) return TextResult(text);
 
-        if (args.Count > 3)
+        if (args.Count > 3 && args[3] is not BlankValue)
         {
             // Replace the Nth occurrence only
             if (args[3] is ErrorValue e3) return e3;

@@ -1025,6 +1025,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Substitute_OmittedInstanceNum_ReplacesAll()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SUBSTITUTE(\"aababc\",\"ab\",\"X\",)", sheet).Should().Be(new TextValue("aXXc"));
+    }
+
+    [Fact]
     public void Substitute_ReplacesSpecificInstance()
     {
         var sheet = MakeSheet();
