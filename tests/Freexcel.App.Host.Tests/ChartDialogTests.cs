@@ -396,6 +396,7 @@ public sealed class ChartDialogTests
             new[]
             {
                 "ChartFormatDialogs.cs",
+                "ChartErrorBarsDialog.cs",
                 "ChartSeriesFormatDialog.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
