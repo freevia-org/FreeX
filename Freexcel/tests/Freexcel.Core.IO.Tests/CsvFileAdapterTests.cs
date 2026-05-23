@@ -56,6 +56,16 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_AppliesExcelSeparatorDirectiveOnlyToFirstPhysicalRecord()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nsep=x\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("sep=x"));
+    }
+
+    [Fact]
     public void Load_ImportsExcelStyleFormulaFieldsAsFormulas()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2,=A1*2\r\n"));

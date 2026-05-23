@@ -13,16 +13,19 @@ internal static class DelimitedTextWorkbookReader
 
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         uint row = 1;
+        var canReadSeparatorDirective = allowSeparatorDirective;
         while (TryReadRecord(reader, delimiter, out var fields))
         {
             if (row > CellAddress.MaxRow)
                 break;
 
-            if (row == 1 && allowSeparatorDirective && TryReadSeparatorDirective(fields, out var directiveDelimiter))
+            if (canReadSeparatorDirective && TryReadSeparatorDirective(fields, out var directiveDelimiter))
             {
                 delimiter = directiveDelimiter;
+                canReadSeparatorDirective = false;
                 continue;
             }
+            canReadSeparatorDirective = false;
 
             for (var i = 0; i < fields.Count; i++)
             {
