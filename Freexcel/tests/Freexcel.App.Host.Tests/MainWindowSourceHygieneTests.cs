@@ -1244,6 +1244,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FocusedSheetTabs_HandleArrowNavigationBeforeWorksheetNavigation()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedSheetTabKeyboardNavigation(e))");
+        sheetTabsSource.Should().Contain("private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        sheetTabsSource.Should().Contain("Keyboard.Modifiers != ModifierKeys.None");
+        sheetTabsSource.Should().Contain("Key.Left => FocusAdjacentVisibleSheetTab(-1)");
+        sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
+        sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");
+        sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
+        sheetTabsSource.Should().Contain("FocusSheetTab(tab.Id);");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));

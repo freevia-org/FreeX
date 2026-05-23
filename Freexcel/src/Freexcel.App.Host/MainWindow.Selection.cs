@@ -375,6 +375,9 @@ public partial class MainWindow
         if (TryHandleFocusedRibbonKeyboardNavigation(e))
             return;
 
+        if (TryHandleFocusedSheetTabKeyboardNavigation(e))
+            return;
+
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
         {
             var button = fontToggleShortcut switch

@@ -249,6 +249,64 @@ public partial class MainWindow
         return true;
     }
 
+    private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None ||
+            Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            (!ReferenceEquals(focusedElement, SheetTabsScroller) && !IsDescendantOf(focusedElement, SheetTabsScroller)))
+        {
+            return false;
+        }
+
+        var handled = e.Key switch
+        {
+            Key.Left => FocusAdjacentVisibleSheetTab(-1),
+            Key.Right => FocusAdjacentVisibleSheetTab(1),
+            Key.Home => FocusEdgeVisibleSheetTab(first: true),
+            Key.End => FocusEdgeVisibleSheetTab(first: false),
+            _ => false
+        };
+
+        e.Handled = handled;
+        return handled;
+    }
+
+    private bool FocusAdjacentVisibleSheetTab(int direction)
+    {
+        var visibleTabs = _sheetTabs.ToList();
+        if (visibleTabs.Count == 0)
+            return false;
+
+        var index = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
+        if (index < 0)
+            index = direction < 0 ? visibleTabs.Count : -1;
+
+        var nextIndex = Math.Clamp(index + direction, 0, visibleTabs.Count - 1);
+        FocusSheetTab(visibleTabs[nextIndex].Id);
+        return true;
+    }
+
+    private bool FocusEdgeVisibleSheetTab(bool first)
+    {
+        var tab = first ? _sheetTabs.FirstOrDefault() : _sheetTabs.LastOrDefault();
+        if (tab is null)
+            return false;
+
+        FocusSheetTab(tab.Id);
+        return true;
+    }
+
+    private void FocusSheetTab(SheetId sheetId)
+    {
+        _currentSheetId = sheetId;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(sheetId);
+        _sheetGroupAnchor = sheetId;
+        UpdateViewport();
+        RefreshSheetTabs();
+        Dispatcher.BeginInvoke(() => TryFocusCurrentSheetTab(), DispatcherPriority.Loaded);
+    }
+
     private FrameworkElement? FindSheetTabContextMenuTarget(SheetTabViewModel tab)
     {
         if (SheetTabsControl.ItemContainerGenerator.ContainerFromItem(tab) is not DependencyObject container)
