@@ -70,6 +70,32 @@ public sealed class ConsolidateCommandTests
     }
 
     [Fact]
+    public void ConsolidateCommand_CreateLinksWritesSourceFormulaByPosition()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var source2 = new GridRange(new CellAddress(sheet.Id, 1, 4), new CellAddress(sheet.Id, 1, 4));
+        var destination = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new NumberValue(30));
+
+        var command = new ConsolidateCommand(
+            [source1, source2],
+            destination,
+            ConsolidateFunction.Average,
+            createLinksToSourceData: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var cell = sheet.GetCell(destination);
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new NumberValue(20));
+        cell.FormulaText.Should().Be("AVERAGE(A1,D1)");
+    }
+
+    [Fact]
     public void ConsolidateCommand_RejectsDifferentSizedSourceRanges()
     {
         var wb = new Workbook("test");
@@ -129,6 +155,37 @@ public sealed class ConsolidateCommandTests
         sheet.GetValue(7, 3).Should().Be(new NumberValue(31));
         sheet.GetValue(8, 2).Should().Be(new NumberValue(37));
         sheet.GetValue(8, 3).Should().Be(new NumberValue(45));
+    }
+
+    [Fact]
+    public void ConsolidateCommand_CreateLinksWritesSourceFormulaByLabels()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
+        var source2 = new GridRange(new CellAddress(sheet.Id, 1, 4), new CellAddress(sheet.Id, 2, 5));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 4), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new NumberValue(7));
+
+        var command = new ConsolidateCommand(
+            [source1, source2],
+            new CellAddress(sheet.Id, 5, 1),
+            ConsolidateFunction.Sum,
+            useTopRowLabels: true,
+            useLeftColumnLabels: true,
+            createLinksToSourceData: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var cell = sheet.GetCell(6, 2);
+        cell.Should().NotBeNull();
+        cell!.Value.Should().Be(new NumberValue(17));
+        cell.FormulaText.Should().Be("SUM(B2,E2)");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
