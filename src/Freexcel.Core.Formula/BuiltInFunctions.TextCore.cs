@@ -263,7 +263,9 @@ public static partial class BuiltInFunctions
             ? TextElementIndexFromOneBasedPosition(withinText, startNum)
             : startNum - 1;
         if (findText.Length == 0)
-            return startIdx <= withinText.Length ? new NumberValue(startNum) : ErrorValue.Value;
+            return startNum <= (hasSurrogatePair ? CountTextElements(withinText) : withinText.Length) + 1
+                ? new NumberValue(startNum)
+                : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
         int pos = withinText.IndexOf(findText, startIdx, StringComparison.Ordinal);
         if (pos < 0) return ErrorValue.Value;
@@ -292,7 +294,9 @@ public static partial class BuiltInFunctions
             ? TextElementIndexFromOneBasedPosition(withinText, startNum)
             : startNum - 1;
         if (findText.Length == 0)
-            return startIdx <= withinText.Length ? new NumberValue(startNum) : ErrorValue.Value;
+            return startNum <= (hasSurrogatePair ? CountTextElements(withinText) : withinText.Length) + 1
+                ? new NumberValue(startNum)
+                : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
 
         var regex = SearchCache.GetOrAdd(findText, pattern =>

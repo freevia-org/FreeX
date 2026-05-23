@@ -1061,6 +1061,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_EmptyFindTextUseScalarEndBoundary()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
     {
         var sheet = MakeSheet();
@@ -5043,6 +5054,17 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
         _eval.Evaluate("=TAKE(A1:A1,0)", sheet).Should().Be(ErrorValue.Calc);
+    }
+
+    [Fact]
+    public void TakeAndDrop_HugeFiniteSliceCount_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+
+        _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
