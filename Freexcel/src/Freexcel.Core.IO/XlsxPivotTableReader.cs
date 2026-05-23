@@ -112,7 +112,7 @@ internal static class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, false, false, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -161,6 +161,7 @@ internal static class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showColHeaders", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showRowStripes"),
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showColStripes"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDrill", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "itemPrintTitles") || XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldPrintTitles"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "printDrill"),
             root.Attribute("altText")?.Value,
@@ -659,6 +660,7 @@ internal static class XlsxPivotTableReader
             ShowColumnHeaders = pending.ShowColumnHeaders,
             ShowRowStripes = pending.ShowRowStripes,
             ShowColumnStripes = pending.ShowColumnStripes,
+            ShowExpandCollapseButtons = pending.ShowExpandCollapseButtons,
             PrintTitles = pending.PrintTitles,
             PrintExpandCollapseButtons = pending.PrintExpandCollapseButtons,
             AltTextTitle = string.IsNullOrWhiteSpace(pending.AltTextTitle) ? null : pending.AltTextTitle,
@@ -706,6 +708,7 @@ internal static class XlsxPivotTableReader
         bool ShowColumnHeaders,
         bool ShowRowStripes,
         bool ShowColumnStripes,
+        bool ShowExpandCollapseButtons,
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
         string? AltTextTitle,
