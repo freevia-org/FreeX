@@ -16,6 +16,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
     public string Extension => ".xlsx";
     public string FormatName => "Excel Workbook";
+    public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+    [
+        new(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
+        new(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false),
+        new(".xltx", "Excel Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
+        new(".xltm", "Excel Macro-Enabled Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
+    ];
 
     public Workbook Load(Stream stream)
     {
