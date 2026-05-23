@@ -22,6 +22,7 @@ public partial class DataValidationDialog : Window
 {
     /// <summary>Set to the resulting rule when the user clicks OK.</summary>
     public DataValidation? Result { get; private set; }
+    public string? LastValidationError { get; private set; }
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
     public string? SelectionSource { get; set; }
@@ -147,6 +148,18 @@ public partial class DataValidationDialog : Window
         var opTag   = (OperatorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
         var alertTag = (AlertStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Stop";
 
+        if (!TryValidateCriteriaInputs(typeTag, opTag, Formula1Box.Text, Formula2Box.Text, out var criteriaError))
+        {
+            LastValidationError = criteriaError;
+            MessageBox.Show(this, criteriaError, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            var target = RequiresSecondFormula(typeTag, opTag) && string.IsNullOrWhiteSpace(Formula2Box.Text)
+                ? Formula2Box
+                : Formula1Box;
+            target.Focus();
+            target.SelectAll();
+            return;
+        }
+
         var dvType = typeTag switch
         {
             "List"        => DvType.List,
@@ -197,10 +210,48 @@ public partial class DataValidationDialog : Window
         };
         ApplyToSameSettings = SameSettingsBox.IsChecked == true;
         ClearRequested = ClearRequested && IsClearAllState(typeTag, opTag, alertTag);
+        LastValidationError = null;
 
         DialogResult = true;
         Close();
     }
+
+    public static bool TryValidateCriteriaInputs(
+        string typeTag,
+        string operatorTag,
+        string? formula1,
+        string? formula2,
+        out string? error)
+    {
+        error = null;
+        if (string.Equals(typeTag, "Any", StringComparison.Ordinal))
+            return true;
+
+        var first = formula1?.Trim() ?? "";
+        var second = formula2?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(first))
+        {
+            error = typeTag switch
+            {
+                "List" => "Source is required.",
+                "Custom" => "Formula is required.",
+                _ => "Value is required."
+            };
+            return false;
+        }
+
+        if (RequiresSecondFormula(typeTag, operatorTag) && string.IsNullOrWhiteSpace(second))
+        {
+            error = "Maximum is required.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool RequiresSecondFormula(string typeTag, string operatorTag) =>
+        typeTag is not "Any" and not "List" and not "Custom"
+        && operatorTag is "Between" or "NotBetween";
 
     private bool IsClearAllState(string typeTag, string opTag, string alertTag) =>
         typeTag == "Any"
