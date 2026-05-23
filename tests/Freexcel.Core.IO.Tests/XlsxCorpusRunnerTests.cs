@@ -590,6 +590,7 @@ public class XlsxCorpusRunnerTests
             workbook.SheetCount,
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
+            workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
             workbook.PivotTableStyles.Count,
@@ -665,6 +666,41 @@ public class XlsxCorpusRunnerTests
                 chart.DataRange.Start.Col,
                 chart.DataRange.End.Row,
                 chart.DataRange.End.Col));
+
+    private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
+        new(
+            cache.CacheId,
+            cache.SourceType,
+            cache.SourceSheetName ?? "",
+            cache.SourceReference ?? "",
+            cache.SourceTableName ?? "",
+            cache.ConnectionId,
+            cache.IsOlap,
+            cache.RefreshOnLoad,
+            cache.SaveData,
+            cache.EnableRefresh,
+            cache.MissingItemsLimit,
+            cache.RefreshedVersion,
+            cache.Fields
+                .Select(field => new PivotCacheFieldSummary(
+                    field.Name,
+                    field.NumberFormatId,
+                    field.SharedItemCount,
+                    field.ContainsBlank,
+                    field.ContainsString,
+                    field.ContainsNumber,
+                    field.ContainsDate,
+                    field.ContainsMixedTypes,
+                    field.ContainsSemiMixedTypes,
+                    field.ContainsNonDate,
+                    field.ContainsInteger,
+                    field.ContainsLongText,
+                    field.MinValue,
+                    field.MaxValue,
+                    field.MinDate ?? "",
+                    field.MaxDate ?? "",
+                    field.SharedItems?.ToArray() ?? []))
+                .ToArray());
 
     private static StructuredTableSummary CaptureStructuredTableSummary(StructuredTableModel table) =>
         new(
@@ -969,6 +1005,7 @@ public class XlsxCorpusRunnerTests
         int SheetCount,
         int NamedRangeCount,
         bool IsStructureProtected,
+        IReadOnlyList<PivotCacheSummary> PivotCaches,
         int PivotCacheCount,
         int PivotCacheFieldCount,
         int PivotTableStyleCount,
@@ -1094,6 +1131,40 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<PivotFieldSummary> ColumnFields,
         IReadOnlyList<PivotFieldSummary> PageFields,
         IReadOnlyList<PivotDataFieldSummary> DataFields);
+
+    private sealed record PivotCacheSummary(
+        int CacheId,
+        PivotCacheSourceType SourceType,
+        string SourceSheetName,
+        string SourceReference,
+        string SourceTableName,
+        int? ConnectionId,
+        bool IsOlap,
+        bool RefreshOnLoad,
+        bool SaveData,
+        bool EnableRefresh,
+        int? MissingItemsLimit,
+        int? RefreshedVersion,
+        IReadOnlyList<PivotCacheFieldSummary> Fields);
+
+    private sealed record PivotCacheFieldSummary(
+        string Name,
+        int? NumberFormatId,
+        int? SharedItemCount,
+        bool ContainsBlank,
+        bool ContainsString,
+        bool ContainsNumber,
+        bool ContainsDate,
+        bool ContainsMixedTypes,
+        bool ContainsSemiMixedTypes,
+        bool ContainsNonDate,
+        bool ContainsInteger,
+        bool ContainsLongText,
+        double? MinValue,
+        double? MaxValue,
+        string MinDate,
+        string MaxDate,
+        IReadOnlyList<string> SharedItems);
 
     private sealed record PivotFieldSummary(
         int SourceFieldIndex,
