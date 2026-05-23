@@ -5627,6 +5627,37 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Load_ReadsStandaloneChartExChartPackagePart()
+    {
+        var workbook = new Workbook("ChartExPackageLoad");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: MinimalChartExTreemapXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Treemap);
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 2)));
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_ReadsEmbeddedColumnChartOneCellAnchorPackagePart()
     {
         var workbook = new Workbook("ChartPackageLoad");
@@ -16737,6 +16768,23 @@ public partial class FileAdapterSmokeTests
             </c:plotArea>
           </c:chart>
         </c:chartSpace>
+        """;
+
+    private const string MinimalChartExTreemapXml = """
+        <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
+                       xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+          <cx:chart>
+            <cx:plotArea>
+              <cx:treemapChart>
+                <cx:ser>
+                  <cx:tx><cx:strRef><cx:f>Sheet1!$B$1</cx:f></cx:strRef></cx:tx>
+                  <cx:cat><cx:strRef><cx:f>Sheet1!$A$2:$A$4</cx:f></cx:strRef></cx:cat>
+                  <cx:val><cx:numRef><cx:f>Sheet1!$B$2:$B$4</cx:f></cx:numRef></cx:val>
+                </cx:ser>
+              </cx:treemapChart>
+            </cx:plotArea>
+          </cx:chart>
+        </cx:chartSpace>
         """;
 
     private const string MinimalPivotChartXml = """
