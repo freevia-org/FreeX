@@ -283,6 +283,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_UsesExcelWinLossLabel()
+    {
+        SparklineDialog.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
+        SparklineDialog.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
+        SparklineDialog.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
+
+        var source = ReadRemainingDialogSources();
+        source.Should().Contain("GetKindLabel(choice)");
+        source.Should().Contain("Tag = choice");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
