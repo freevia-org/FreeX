@@ -118,6 +118,8 @@ public static class ChartOptionCycler
             "bubble" => ChartType.Bubble,
             "area" => ChartType.Area,
             "3d area" or "three d area" or "three-dimensional area" => ChartType.ThreeDArea,
+            "surface" or "surface chart" => ChartType.Surface,
+            "3d surface" or "3d surface chart" or "three d surface" or "three-dimensional surface" => ChartType.ThreeDSurface,
             "radar" => ChartType.Radar,
             "stock" => ChartType.Stock,
             _ => ChartType.Column
