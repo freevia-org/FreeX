@@ -76,6 +76,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("StartScreenOverlay.Visibility = Visibility.Visible;");
+        backstageSource.Should().Contain("FocusBackstageHomeNavigation();");
+        backstageSource.Should().Contain("private void FocusBackstageHomeNavigation()");
+        backstageSource.Should().Contain("SsHomeNavBtn.Focus();");
+        backstageSource.Should().Contain("Keyboard.Focus(SsHomeNavBtn);");
+    }
+
+    [Fact]
     public void GetData_IncludesDelimitedTextAdapters()
     {
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
