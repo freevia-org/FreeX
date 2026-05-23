@@ -23,6 +23,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _showContextualTooltips;
     private readonly bool? _showPropertiesInTooltips;
     private readonly bool? _showClassicLayout;
+    private readonly bool? _mergeAndCenterLabels;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
@@ -75,7 +76,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? showFieldHeaders = null,
         bool? showContextualTooltips = null,
         bool? showPropertiesInTooltips = null,
-        bool? showClassicLayout = null)
+        bool? showClassicLayout = null,
+        bool? mergeAndCenterLabels = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -98,6 +100,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showContextualTooltips = showContextualTooltips;
         _showPropertiesInTooltips = showPropertiesInTooltips;
         _showClassicLayout = showClassicLayout;
+        _mergeAndCenterLabels = mergeAndCenterLabels;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
@@ -151,6 +154,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowPropertiesInTooltips = showPropertiesInTooltips;
         if (_showClassicLayout is { } showClassicLayout)
             pivotTable.ShowClassicLayout = showClassicLayout;
+        if (_mergeAndCenterLabels is { } mergeAndCenterLabels)
+            pivotTable.MergeAndCenterLabels = mergeAndCenterLabels;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
         if (_printTitles is { } printTitles)
@@ -217,6 +222,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowContextualTooltips,
         bool ShowPropertiesInTooltips,
         bool ShowClassicLayout,
+        bool MergeAndCenterLabels,
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
@@ -249,6 +255,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowContextualTooltips,
                 pivotTable.ShowPropertiesInTooltips,
                 pivotTable.ShowClassicLayout,
+                pivotTable.MergeAndCenterLabels,
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
@@ -281,6 +288,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowContextualTooltips = ShowContextualTooltips;
             pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
             pivotTable.ShowClassicLayout = ShowClassicLayout;
+            pivotTable.MergeAndCenterLabels = MergeAndCenterLabels;
             pivotTable.EmptyValueText = EmptyValueText;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
