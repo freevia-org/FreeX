@@ -111,6 +111,7 @@ internal static class XlsxClosedXmlCellMapper
                 ? xlStyle.Alignment.TextRotation
                 : 0,
             Locked = xlStyle.Protection.Locked,
+            Hidden = xlStyle.Protection.Hidden,
         };
     }
 
@@ -200,6 +201,9 @@ internal static class XlsxClosedXmlCellMapper
 
         if (style.Locked != def.Locked)
             xlCell.Style.Protection.Locked = style.Locked;
+
+        if (style.Hidden != def.Hidden)
+            xlCell.Style.Protection.Hidden = style.Hidden;
     }
 
     private static bool TryGetUnifiedNumber(XLCellValue value, out double number)
