@@ -203,7 +203,8 @@ public partial class MainWindow
                 dialog.Result.DestinationCell,
                 dialog.Result.Function,
                 dialog.Result.UseTopRowLabels,
-                dialog.Result.UseLeftColumnLabels));
+                dialog.Result.UseLeftColumnLabels,
+                dialog.Result.CreateLinksToSourceData));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Consolidate");

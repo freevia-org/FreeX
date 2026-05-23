@@ -635,11 +635,12 @@ public sealed class DataToolDialogTests
         source.Should().NotContain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
         source.Should().NotContain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
         source.Should().NotContain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
-        source.Should().Contain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
+        source.Should().NotContain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
+        source.Should().NotContain("Source links are not available yet");
         source.Should().Contain("UseTopRowLabels");
         source.Should().Contain("UseLeftColumnLabels");
-        source.Should().Contain("consolidated values are written as results");
-        source.Should().Contain("AutomationProperties.SetHelpText(control, helpText)");
+        source.Should().Contain("CreateLinksToSourceData");
+        source.Should().Contain("Write formulas that reference the source cells");
     }
 
     [Fact]
