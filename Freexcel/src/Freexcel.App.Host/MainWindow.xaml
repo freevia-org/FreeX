@@ -1135,6 +1135,10 @@
                                         local:RibbonTooltip.Title="PivotTable"
                                         local:RibbonTooltip.KeyTip="P"
                                         local:RibbonTooltip.Description="Create a PivotTable from the selected range."/>
+                                <Button Content="Recommended PivotTables" Width="148" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
+                                        local:RibbonTooltip.Title="Recommended PivotTables"
+                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.Description="Create a PivotTable from the selected range using the current PivotTable workflow."/>
                                 <Button Content="Table" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"
@@ -1144,10 +1148,56 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Illustrations ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Pictures" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
+                                        local:RibbonTooltip.Title="Insert Picture"
+                                        local:RibbonTooltip.KeyTip="P"
+                                        local:RibbonTooltip.Description="Insert a picture from a local image file."/>
+                                <Button Content="Shapes" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
+                                        local:RibbonTooltip.Title="Shapes"
+                                        local:RibbonTooltip.KeyTip="SH"
+                                        local:RibbonTooltip.Description="Insert a drawing shape on the sheet.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Rectangle" local:RibbonTooltip.KeyTip="R" Click="DrawRectBtn_Click"/>
+                                            <MenuItem Header="Ellipse" local:RibbonTooltip.KeyTip="E" Click="DrawEllipseBtn_Click"/>
+                                            <MenuItem Header="Line" local:RibbonTooltip.KeyTip="L" Click="DrawLineBtn_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Illustrations" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Add-ins ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Get Add-ins" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Get Add-ins"
+                                        local:RibbonTooltip.KeyTip="G"
+                                        local:RibbonTooltip.Description="Office add-in discovery is deferred in Freexcel."/>
+                                <Button Content="My Add-ins" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="My Add-ins"
+                                        local:RibbonTooltip.KeyTip="M"
+                                        local:RibbonTooltip.Description="Office add-in management is deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Add-ins" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Charts ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Recommended Charts" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertChartPickerBtn_Click"
+                                        local:RibbonTooltip.Title="Recommended Charts"
+                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.Description="Open the chart picker and choose a chart for the selected data."/>
                                 <!-- Column chart family -->
                                 <StackPanel Margin="1,0">
                                     <Button Content="Column"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartColumnMenuItem_Click"
@@ -1535,6 +1585,19 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Tours ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="3D Map" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="3D Map"
+                                        local:RibbonTooltip.KeyTip="M"
+                                        local:RibbonTooltip.Description="3D Map tours are deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tours" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Sparklines ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -1556,28 +1619,71 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Links / Text / Symbols ▌ -->
+                        <!-- ▌Filters ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Link"      Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
+                                <Button Content="Slicer" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
+                                        local:RibbonTooltip.Title="Insert Slicer"
+                                        local:RibbonTooltip.KeyTip="SF"
+                                        local:RibbonTooltip.Description="Create a slicer connected to the selected PivotTable field."/>
+                                <Button Content="Timeline" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertTimelineBtn_Click"
+                                        local:RibbonTooltip.Title="Insert Timeline"
+                                        local:RibbonTooltip.KeyTip="TL"
+                                        local:RibbonTooltip.Description="Create a timeline connected to the selected PivotTable date field."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Filters" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Links ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Link" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
                                         local:RibbonTooltip.Title="Insert Link"
                                         local:RibbonTooltip.KeyTip="K"
                                         local:RibbonTooltip.Description="Insert a hyperlink to a web page, file, or location in the workbook."/>
-                                <Button Content="Comment"   Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
-                                        local:RibbonTooltip.Title="New Comment"
-                                        local:RibbonTooltip.KeyTip="NC"
-                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
-                                <Button Content="Symbol"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Text ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Text Box" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawTextBtn_Click"
+                                        local:RibbonTooltip.Title="Text Box"
+                                        local:RibbonTooltip.KeyTip="X"
+                                        local:RibbonTooltip.Description="Insert a text box you can position and resize anywhere on the sheet."/>
+                                <Button Content="Header &amp; Footer" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HeaderFooterBtn_Click"
+                                        local:RibbonTooltip.Title="Header &amp; Footer"
+                                        local:RibbonTooltip.KeyTip="H"
+                                        local:RibbonTooltip.Description="Edit printed page headers and footers."/>
+                                <Button Content="Object" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Object"
+                                        local:RibbonTooltip.KeyTip="O"
+                                        local:RibbonTooltip.Description="Embedded object authoring is deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Text" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Symbols ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Equation" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Equation"
+                                        local:RibbonTooltip.KeyTip="E"
+                                        local:RibbonTooltip.Description="Equation authoring is deferred in Freexcel."/>
+                                <Button Content="Symbol" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert Symbol"
                                         local:RibbonTooltip.KeyTip="SY"
                                         local:RibbonTooltip.Description="Insert a special character or symbol at the cursor position."/>
-                                <Button Content="Picture"   Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Picture"
-                                        local:RibbonTooltip.KeyTip="IP"
-                                        local:RibbonTooltip.Description="Insert a picture from a local image file."/>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Objects" Style="{StaticResource GroupLbl}"/></Border>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Symbols" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -1902,6 +2008,40 @@
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sheet Options" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Arrange ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                        Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
+                                        local:RibbonTooltip.Title="Bring Forward"
+                                        local:RibbonTooltip.KeyTip="BF"
+                                        local:RibbonTooltip.Description="Move the selected shape one step closer to the front."/>
+                                <Button Content="Send Backward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                        Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
+                                        local:RibbonTooltip.Title="Send Backward"
+                                        local:RibbonTooltip.KeyTip="SB"
+                                        local:RibbonTooltip.Description="Move the selected shape one step closer to the back."/>
+                                <Button Content="Selection Pane" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                        Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
+                                        local:RibbonTooltip.Title="Selection Pane"
+                                        local:RibbonTooltip.KeyTip="SP"
+                                        local:RibbonTooltip.Description="List sheet objects and control visibility or stacking order."/>
+                                <StackPanel VerticalAlignment="Center" Margin="2,0">
+                                    <Button Content="Rotate" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                            local:RibbonTooltip.Title="Rotate Object"
+                                            local:RibbonTooltip.KeyTip="RO"
+                                            local:RibbonTooltip.Description="Rotate the selected or most recent drawing object."/>
+                                    <Button Content="Size" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Object Size"
+                                            local:RibbonTooltip.KeyTip="SZ"
+                                            local:RibbonTooltip.Description="Resize the selected or most recent drawing object."/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Arrange" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
 
                     </StackPanel>
                     </ScrollViewer>
@@ -2102,7 +2242,7 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Get &amp; Transform ▌ -->
+                        <!-- ▌Get &amp; Transform Data ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2110,12 +2250,25 @@
                                         local:RibbonTooltip.Title="Get Data"
                                         local:RibbonTooltip.KeyTip="D"
                                         local:RibbonTooltip.Description="Import data from a local CSV file. Database, web, and Power Query connectors are excluded."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Get &amp; Transform Data" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Queries &amp; Connections ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Refresh All" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshAllBtn_Click"
                                         local:RibbonTooltip.Title="Refresh All"
                                         local:RibbonTooltip.KeyTip="R"
                                         local:RibbonTooltip.Description="Recalculate formulas and refresh Freexcel-managed workbook data. External data connections and Power Query are excluded."/>
+                                <Button Content="Queries" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Queries &amp; Connections"
+                                        local:RibbonTooltip.KeyTip="Q"
+                                        local:RibbonTooltip.Description="External workbook queries and connection management are deferred in Freexcel."/>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Get &amp; Transform" Style="{StaticResource GroupLbl}"/></Border>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Queries &amp; Connections" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
@@ -2207,33 +2360,31 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌What-If Analysis ▌ -->
+                        <!-- ▌Forecast ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Goal Seek" Width="90" Height="22" Margin="1,1"
+                                <Button Content="What-If Analysis" Width="116" Height="22" Margin="1,1"
                                         Style="{StaticResource RibbonBtn}" Click="GoalSeekBtn_Click"
-                                        local:RibbonTooltip.Title="Goal Seek"
-                                        local:RibbonTooltip.KeyTip="GS"
-                                        local:RibbonTooltip.Description="Find the input value that produces a desired formula result."/>
-                                <Button Content="Scenarios" Width="90" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="ScenariosBtn_Click"
-                                        local:RibbonTooltip.Title="Scenario Manager"
-                                        local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Save the current selection as a scenario or show a saved scenario."/>
+                                        local:RibbonTooltip.Title="What-If Analysis"
+                                        local:RibbonTooltip.KeyTip="W"
+                                        local:RibbonTooltip.Description="Open Goal Seek, Scenario Manager, or Data Table tools.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Goal Seek..." local:RibbonTooltip.KeyTip="G" Click="GoalSeekBtn_Click"/>
+                                            <MenuItem Header="Scenario Manager..." local:RibbonTooltip.KeyTip="S" Click="ScenariosBtn_Click"/>
+                                            <MenuItem Header="Data Table..." local:RibbonTooltip.KeyTip="D" Click="DataTableBtn_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="Forecast Sheet" Width="90" Height="22" Margin="1,1"
                                         Style="{StaticResource RibbonBtn}" Click="ForecastSheetBtn_Click"
                                         local:RibbonTooltip.Title="Forecast Sheet"
                                         local:RibbonTooltip.KeyTip="F"
                                         local:RibbonTooltip.Description="Create a new worksheet with forecast values from a two-column timeline and value range."/>
-                                <Button Content="Data Table" Width="90" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="DataTableBtn_Click"
-                                        local:RibbonTooltip.Title="Data Table"
-                                        local:RibbonTooltip.KeyTip="W"
-                                        local:RibbonTooltip.Description="Create a one-variable data table from the selected range."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
-                                <TextBlock Text="What-If Analysis" Style="{StaticResource GroupLbl}"/>
+                                <TextBlock Text="Forecast" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
@@ -2264,20 +2415,6 @@
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Outline" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Named Ranges ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <Button Grid.Row="0" Content="Name Manager" Width="90" Height="46"
-                                    Style="{StaticResource RibbonBtn}" FontSize="12"
-                                    VerticalAlignment="Center" Margin="1,2,1,0"
-                                    Click="NamedRangesButton_Click"
-                                    local:RibbonTooltip.Title="Name Manager"
-                                    local:RibbonTooltip.KeyTip="NM"
-                                    local:RibbonTooltip.Description="View, create, edit, and delete all named ranges in the workbook."/>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Named Ranges" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -2346,13 +2483,22 @@
                                         local:RibbonTooltip.Title="New Comment"
                                         local:RibbonTooltip.KeyTip="C"
                                         local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell (Ctrl+Shift+F2)."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Notes ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="New"    Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                        <Button Content="New" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
                                                 local:RibbonTooltip.Title="New Note"
                                                 local:RibbonTooltip.KeyTip="O"
                                                 local:RibbonTooltip.Description="Add a simple cell note to the selected cell."/>
-                                        <Button Content="Edit"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                        <Button Content="Edit" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
                                                 local:RibbonTooltip.Title="Edit Note"
                                                 local:RibbonTooltip.KeyTip="E"
                                                 local:RibbonTooltip.Description="Edit the simple cell note on the selected cell."/>
@@ -2362,11 +2508,11 @@
                                                 local:RibbonTooltip.Description="Remove the simple cell note from the selected cell."/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="Prev"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
+                                        <Button Content="Prev" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
                                                 local:RibbonTooltip.Title="Previous Note"
                                                 local:RibbonTooltip.KeyTip="P"
                                                 local:RibbonTooltip.Description="Navigate to the previous simple cell note in the sheet."/>
-                                        <Button Content="Next"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
+                                        <Button Content="Next" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
                                                 local:RibbonTooltip.Title="Next Note"
                                                 local:RibbonTooltip.KeyTip="N"
                                                 local:RibbonTooltip.Description="Navigate to the next simple cell note in the sheet."/>
@@ -2377,7 +2523,7 @@
                                             local:RibbonTooltip.Description="Open a list of simple cell notes on the active sheet."/>
                                 </StackPanel>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Notes" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
@@ -2467,33 +2613,6 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Freeze Panes ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Freeze Panes" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
-                                        local:RibbonTooltip.Title="Freeze Panes"
-                                        local:RibbonTooltip.KeyTip="F"
-                                        local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Freeze Panes"         local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
-                                            <MenuItem Header="Freeze Top Row"       local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
-                                            <MenuItem Header="Freeze First Column"  local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
-                                            <Separator/>
-                                            <MenuItem Header="Unfreeze All"         local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <ToggleButton x:Name="SplitViewBtn" Content="Split" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
-                                              local:RibbonTooltip.Title="Split"
-                                              local:RibbonTooltip.KeyTip="S"
-                                              local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Freeze Panes" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
                         <!-- ▌Zoom ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -2541,6 +2660,24 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Freeze Panes" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
+                                        local:RibbonTooltip.Title="Freeze Panes"
+                                        local:RibbonTooltip.KeyTip="F"
+                                        local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Freeze Panes" local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
+                                            <MenuItem Header="Freeze Top Row" local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
+                                            <MenuItem Header="Freeze First Column" local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Unfreeze All" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <ToggleButton x:Name="SplitViewBtn" Content="Split" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
+                                              local:RibbonTooltip.Title="Split"
+                                              local:RibbonTooltip.KeyTip="S"
+                                              local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
                                 <Button Content="New Window" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
                                         local:RibbonTooltip.Title="New Window"
                                         local:RibbonTooltip.KeyTip="NW"
@@ -2576,6 +2713,19 @@
                                         local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Window" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Macros ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Macros" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Macros"
+                                        local:RibbonTooltip.KeyTip="M"
+                                        local:RibbonTooltip.Description="VBA macro recording and playback are deferred in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Macros" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
