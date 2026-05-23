@@ -22,6 +22,9 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var picture = sheet.Pictures.FirstOrDefault(item => item.Id == _pictureId);
         if (picture is null)
             return new CommandOutcome(false, "Picture was not found.");
@@ -65,6 +68,9 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -108,6 +114,9 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
         if (textBox is null)
             return new CommandOutcome(false, "Text box was not found.");
