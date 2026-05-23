@@ -233,6 +233,15 @@ public class PhaseDLambdaTests
     // ── SCAN ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Reduce_ArrayReturningLambda_ReturnsCalcError()
+    {
+        Set(16, 1, new NumberValue(1));
+        Set(16, 2, new NumberValue(2));
+
+        Assert.Equal(ErrorValue.Calc, Eval("=REDUCE(0, A16:B16, LAMBDA(acc, x, HSTACK(acc,x)))"));
+    }
+
+    [Fact]
     public void Scan_RunningSum()
     {
         Set(6, 1, new NumberValue(1));
@@ -261,6 +270,15 @@ public class PhaseDLambdaTests
     }
 
     // ── BYROW ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Scan_ArrayReturningLambda_ReturnsCalcError()
+    {
+        Set(16, 1, new NumberValue(1));
+        Set(16, 2, new NumberValue(2));
+
+        Assert.Equal(ErrorValue.Calc, Eval("=SCAN(0, A16:B16, LAMBDA(acc, x, HSTACK(acc,x)))"));
+    }
 
     [Fact]
     public void ByRow_SumEachRow()

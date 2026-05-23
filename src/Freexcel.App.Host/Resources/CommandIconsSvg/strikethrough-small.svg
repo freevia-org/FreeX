@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  
-  <text x="10" y="10" font-size="9"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">S</text>
-  <path d="M5 10 L15 10" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Strikethrough">
+  <rect width="20" height="20" fill="none"/>
+  <text x="10" y="10.3" font-size="14" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">S</text>
+  <path d="M4.5 10.5H15.5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="square"/>
 </svg>
