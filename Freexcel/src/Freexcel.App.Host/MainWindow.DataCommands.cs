@@ -196,7 +196,7 @@ public partial class MainWindow
 
         var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
-            () => new ConsolidateCommand(dialog.Result.SourceRanges, dialog.Result.DestinationCell));
+            () => new ConsolidateCommand(dialog.Result.SourceRanges, dialog.Result.DestinationCell, dialog.Result.Function));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Consolidate");
