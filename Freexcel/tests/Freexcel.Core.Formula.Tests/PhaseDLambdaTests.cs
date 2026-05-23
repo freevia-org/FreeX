@@ -341,6 +341,24 @@ public class PhaseDLambdaTests
         Assert.Equal(ErrorValue.Value, Eval("=MAKEARRAY(0, 3, LAMBDA(r, c, 1))"));
     }
 
+    [Fact]
+    public void MakeArray_RowOrColumnError_PropagatesError()
+    {
+        Assert.Equal(ErrorValue.NA, Eval("=MAKEARRAY(NA(), 3, LAMBDA(r, c, 1))"));
+        Assert.Equal(ErrorValue.DivByZero, Eval("=MAKEARRAY(3, 1/0, LAMBDA(r, c, 1))"));
+    }
+
+    [Fact]
+    public void MakeArray_CoercesNumericTextDimensions()
+    {
+        var result = Rv(Eval("=MAKEARRAY(\"2\", \"2\", LAMBDA(r, c, r+c))"));
+
+        Assert.Equal(2, result.RowCount);
+        Assert.Equal(2, result.ColCount);
+        Assert.Equal(2.0, Num(result.At(1, 1)));
+        Assert.Equal(4.0, Num(result.At(2, 2)));
+    }
+
     // ── Edge cases ──────────────────────────────────────────────────────────
 
     [Fact]
