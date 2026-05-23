@@ -407,8 +407,8 @@ public static partial class BuiltInFunctions
         ScalarValue ifNotFound = args.Count > 3 && args[3] is not BlankValue ? args[3] : ErrorValue.NA;
         if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
         if (args.Count > 5 && args[5] is ErrorValue e5) return e5;
-        double rawXMatchMode  = args.Count > 4 ? ToNumber(args[4]) : 0;
-        double rawXSearchMode = args.Count > 5 ? ToNumber(args[5]) : 1;
+        double rawXMatchMode  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        double rawXSearchMode = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 1;
         if (!double.IsFinite(rawXMatchMode) || !double.IsFinite(rawXSearchMode)) return ErrorValue.Value;
         int matchMode  = (int)rawXMatchMode;  // 0=exact
         int searchMode = (int)rawXSearchMode; // 1=first-to-last
