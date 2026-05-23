@@ -5,12 +5,30 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed record HyperlinkDialogResult(string Target, string DisplayText);
+public enum HyperlinkLinkType
+{
+    ExistingFileOrWebPage,
+    CreateNewDocument,
+    PlaceInThisDocument,
+    EmailAddress
+}
+
+public sealed record HyperlinkDialogResult(
+    HyperlinkLinkType LinkType,
+    string Target,
+    string DisplayText,
+    string ScreenTip,
+    string Bookmark);
 
 public sealed class HyperlinkDialog : Window
 {
     private readonly TextBox _targetBox = new();
     private readonly TextBox _displayBox = new();
+    private readonly Button _screenTipButton = new() { Content = "ScreenTip..." };
+    private readonly Button _bookmarkButton = new() { Content = "Bookmark..." };
+    private readonly ListBox _linkTypes = new();
+    private string _screenTip = "";
+    private string _bookmark = "";
 
     public HyperlinkDialogResult Result { get; private set; }
 
@@ -18,32 +36,97 @@ public sealed class HyperlinkDialog : Window
     {
         Result = CreateResult(target, displayText);
         Title = "Insert Hyperlink";
-        Width = 420;
-        Height = 210;
+        Width = 560;
+        Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var grid = DialogGrid(2);
-        AddTextRow(grid, 0, "Address:", _targetBox, target);
-        AddTextRow(grid, 1, "Text to display:", _displayBox, displayText);
+        var root = new DockPanel { Margin = new Thickness(16) };
+        _linkTypes.Width = 170;
+        _linkTypes.Margin = new Thickness(0, 0, 12, 0);
+        _linkTypes.ItemsSource = new[]
+        {
+            "Existing File or Web Page",
+            "Create New Document",
+            "Place in This Document",
+            "E-mail Address"
+        };
+        _linkTypes.SelectedIndex = 0;
+        DockPanel.SetDock(_linkTypes, Dock.Left);
+        root.Children.Add(_linkTypes);
+
+        var grid = DialogGrid(3);
+        AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
+        AddTextRow(grid, 1, "_Address:", _targetBox, target);
+        _screenTipButton.Click += ScreenTipButton_Click;
+        _bookmarkButton.Click += BookmarkButton_Click;
+        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
+        _screenTipButton.Width = 96;
+        _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
+        _bookmarkButton.Width = 96;
+        buttonRow.Children.Add(_screenTipButton);
+        buttonRow.Children.Add(_bookmarkButton);
+        grid.Children.Add(buttonRow);
+        Grid.SetRow(buttonRow, 2);
+        Grid.SetColumn(buttonRow, 1);
+
         grid.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
-            Result = CreateResult(_targetBox.Text, _displayBox.Text);
+            Result = CreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark);
             DialogResult = true;
         }));
-        Grid.SetRow(grid.Children[^1], 2);
+        Grid.SetRow(grid.Children[^1], 3);
         Grid.SetColumnSpan(grid.Children[^1], 2);
-        Content = grid;
+        root.Children.Add(grid);
+        Content = root;
     }
 
-    public static HyperlinkDialogResult CreateResult(string target, string? displayText)
+    public static HyperlinkDialogResult CreateResult(
+        string target,
+        string? displayText,
+        HyperlinkLinkType linkType = HyperlinkLinkType.ExistingFileOrWebPage,
+        string? screenTip = "",
+        string? bookmark = "")
     {
         var normalizedTarget = target.Trim();
         var normalizedDisplay = string.IsNullOrWhiteSpace(displayText)
             ? normalizedTarget
             : displayText.Trim();
-        return new HyperlinkDialogResult(normalizedTarget, normalizedDisplay);
+        return new HyperlinkDialogResult(
+            linkType,
+            normalizedTarget,
+            normalizedDisplay,
+            (screenTip ?? "").Trim(),
+            (bookmark ?? "").Trim());
+    }
+
+    private HyperlinkLinkType SelectedLinkType => _linkTypes.SelectedIndex switch
+    {
+        1 => HyperlinkLinkType.CreateNewDocument,
+        2 => HyperlinkLinkType.PlaceInThisDocument,
+        3 => HyperlinkLinkType.EmailAddress,
+        _ => HyperlinkLinkType.ExistingFileOrWebPage
+    };
+
+    private void ScreenTipButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ScreenTipDialog(_screenTip) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _screenTip = dialog.Result.Text;
+        _screenTipButton.ToolTip = string.IsNullOrWhiteSpace(_screenTip) ? null : _screenTip;
+    }
+
+    private void BookmarkButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BookmarkDialog(_bookmark) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _bookmark = dialog.Result.Text;
+        _bookmarkButton.ToolTip = string.IsNullOrWhiteSpace(_bookmark) ? null : _bookmark;
     }
 
     private static Grid DialogGrid(int inputRows)
@@ -59,9 +142,11 @@ public sealed class HyperlinkDialog : Window
 
     private static void AddTextRow(Grid grid, int row, string label, TextBox box, string value)
     {
-        grid.Children.Add(new TextBlock
+        grid.Children.Add(new Label
         {
-            Text = label,
+            Content = label,
+            Target = box,
+            Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8)
         });
@@ -76,25 +161,51 @@ public sealed class HyperlinkDialog : Window
     }
 }
 
+public sealed class ScreenTipDialog : TextEntryDialog
+{
+    public ScreenTipDialog(string? initialText = "")
+        : base("Set Hyperlink ScreenTip", "_ScreenTip text:", initialText)
+    {
+    }
+}
+
+public sealed class BookmarkDialog : TextEntryDialog
+{
+    public BookmarkDialog(string? initialText = "")
+        : base("Select Place in Document", "_Bookmark or cell reference:", initialText)
+    {
+    }
+}
+
 public sealed record ObjectSizeDialogResult(double Width, double Height);
 
 public sealed class ObjectSizeDialog : Window
 {
-    private readonly TextBox _sizeBox = new();
+    private readonly TextBox _widthBox = new();
+    private readonly TextBox _heightBox = new();
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true };
+    private readonly double _originalWidth;
+    private readonly double _originalHeight;
+    private bool _updatingSize;
 
     public ObjectSizeDialogResult Result { get; private set; }
 
     public ObjectSizeDialog(double width, double height, string title = "Object Size")
     {
         Result = new ObjectSizeDialogResult(width, height);
+        _originalWidth = Math.Max(1, width);
+        _originalHeight = Math.Max(1, height);
         Title = title;
-        Width = 320;
-        Height = 150;
+        Width = 360;
+        Height = 250;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _sizeBox.Text = $"{(int)width}x{(int)height}";
-        Content = CreateSingleInputContent("Size:", _sizeBox, Accept);
+        _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
+        _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
+        _widthBox.TextChanged += WidthBox_TextChanged;
+        _heightBox.TextChanged += HeightBox_TextChanged;
+        Content = CreateSizeContent(Accept);
     }
 
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
@@ -113,16 +224,90 @@ public sealed class ObjectSizeDialog : Window
 
     private void Accept()
     {
-        if (!TryParseSize(_sizeBox.Text, out var result))
+        if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
             return;
         Result = result;
         DialogResult = true;
     }
 
+    private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
+            return;
+
+        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) || width <= 0)
+            return;
+
+        SetHeight(CalculateLockedAspectHeight(width, _originalWidth, _originalHeight));
+    }
+
+    private void HeightBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
+            return;
+
+        if (!double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var height) || height <= 0)
+            return;
+
+        SetWidth(CalculateLockedAspectWidth(height, _originalWidth, _originalHeight));
+    }
+
+    internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
+        originalWidth <= 0 || originalHeight <= 0 ? width : width * originalHeight / originalWidth;
+
+    internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
+        originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
+
+    private void SetWidth(double width)
+    {
+        _updatingSize = true;
+        try
+        {
+            _widthBox.Text = FormatSize(width);
+        }
+        finally
+        {
+            _updatingSize = false;
+        }
+    }
+
+    private void SetHeight(double height)
+    {
+        _updatingSize = true;
+        try
+        {
+            _heightBox.Text = FormatSize(height);
+        }
+        finally
+        {
+            _updatingSize = false;
+        }
+    }
+
+    private static string FormatSize(double value) =>
+        Math.Round(value, 2).ToString("0.##", CultureInfo.InvariantCulture);
+
+    private StackPanel CreateSizeContent(Action accept)
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        AddLabeledTextBox(stack, "Height:", _heightBox);
+        AddLabeledTextBox(stack, "Width:", _widthBox);
+        stack.Children.Add(_lockAspectRatioBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        return stack;
+    }
+
+    private static void AddLabeledTextBox(Panel stack, string label, TextBox box)
+    {
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        box.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(box);
+    }
+
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(box);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
@@ -174,7 +359,10 @@ public sealed record PictureCropDialogResult(double Left, double Top, double Rig
 
 public sealed class PictureCropDialog : Window
 {
-    private readonly TextBox _cropBox = new();
+    private readonly TextBox _cropLeftBox = new();
+    private readonly TextBox _cropTopBox = new();
+    private readonly TextBox _cropRightBox = new();
+    private readonly TextBox _cropBottomBox = new();
 
     public PictureCropDialogResult Result { get; private set; }
 
@@ -183,16 +371,15 @@ public sealed class PictureCropDialog : Window
         Result = new PictureCropDialogResult(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
         Title = "Crop Picture";
         Width = 420;
-        Height = 150;
+        Height = 280;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _cropBox.Text = string.Join(", ",
-            DrawingInputParser.FormatCropPercent(picture.CropLeft),
-            DrawingInputParser.FormatCropPercent(picture.CropTop),
-            DrawingInputParser.FormatCropPercent(picture.CropRight),
-            DrawingInputParser.FormatCropPercent(picture.CropBottom));
-        Content = ObjectSizeDialog.CreateSingleInputContent("Left, top, right, bottom (%):", _cropBox, Accept);
+        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
+        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
+        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
+        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
+        Content = CreateCropContent(Accept);
     }
 
     public static bool TryCreateResult(string input, out PictureCropDialogResult result, out string? error)
@@ -211,10 +398,252 @@ public sealed class PictureCropDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_cropBox.Text, out var result, out _))
+        var input = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
+        if (!TryCreateResult(input, out var result, out _))
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private StackPanel CreateCropContent(Action accept)
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        AddCropBox(stack, "Left:", _cropLeftBox);
+        AddCropBox(stack, "Top:", _cropTopBox);
+        AddCropBox(stack, "Right:", _cropRightBox);
+        AddCropBox(stack, "Bottom:", _cropBottomBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        return stack;
+    }
+
+    private static void AddCropBox(Panel stack, string label, TextBox box)
+    {
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        box.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(box);
+    }
+}
+
+public sealed record FormatPictureDialogResult(
+    double Width,
+    double Height,
+    double RotationDegrees,
+    double CropLeft,
+    double CropTop,
+    double CropRight,
+    double CropBottom,
+    string? AltText);
+
+public sealed class FormatPictureDialog : Window
+{
+    private readonly TextBox _widthBox = new();
+    private readonly TextBox _heightBox = new();
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly TextBox _rotationBox = new();
+    private readonly TextBox _cropLeftBox = new();
+    private readonly TextBox _cropTopBox = new();
+    private readonly TextBox _cropRightBox = new();
+    private readonly TextBox _cropBottomBox = new();
+    private readonly TextBox _altTextBox = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 86 };
+    private readonly double _aspectRatio;
+    private bool _updatingAspect;
+
+    public FormatPictureDialogResult Result { get; private set; }
+
+    public FormatPictureDialog(PictureModel picture)
+    {
+        Result = new FormatPictureDialogResult(
+            picture.Width,
+            picture.Height,
+            picture.RotationDegrees,
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom,
+            picture.AltText);
+        _aspectRatio = picture.Height > 0 ? picture.Width / picture.Height : 1;
+        Title = "Format Picture";
+        Width = 480;
+        Height = 440;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+
+        _widthBox.Text = picture.Width.ToString(CultureInfo.InvariantCulture);
+        _heightBox.Text = picture.Height.ToString(CultureInfo.InvariantCulture);
+        _rotationBox.Text = picture.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
+        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
+        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
+        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
+        _altTextBox.Text = picture.AltText ?? "";
+        if (picture.Kind != PictureKind.Image)
+        {
+            foreach (var box in new[] { _cropLeftBox, _cropTopBox, _cropRightBox, _cropBottomBox })
+                box.IsEnabled = false;
+        }
+
+        _widthBox.TextChanged += (_, _) => SyncAspectFromWidth();
+        _heightBox.TextChanged += (_, _) => SyncAspectFromHeight();
+        Content = CreateContent(picture.Kind == PictureKind.Image);
+    }
+
+    public static bool TryCreateResult(
+        string sizeInput,
+        string rotationInput,
+        string cropInput,
+        string? altText,
+        out FormatPictureDialogResult result,
+        out string? error)
+    {
+        result = new FormatPictureDialogResult(0, 0, 0, 0, 0, 0, 0, null);
+        error = null;
+        if (!ObjectSizeDialog.TryParseSize(sizeInput, out var size))
+        {
+            error = "Enter positive width and height values.";
+            return false;
+        }
+
+        if (!RotationDialog.TryParseRotation(rotationInput, out var rotation))
+        {
+            error = "Enter a numeric rotation in degrees.";
+            return false;
+        }
+
+        if (!PictureCropDialog.TryCreateResult(cropInput, out var crop, out error))
+            return false;
+
+        result = new FormatPictureDialogResult(
+            size.Width,
+            size.Height,
+            rotation.Degrees,
+            crop.Left,
+            crop.Top,
+            crop.Right,
+            crop.Bottom,
+            string.IsNullOrWhiteSpace(altText) ? null : altText.Trim());
+        return true;
+    }
+
+    private void Accept()
+    {
+        var cropInput = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
+        if (!TryCreateResult($"{_widthBox.Text}x{_heightBox.Text}", _rotationBox.Text, cropInput, _altTextBox.Text, out var result, out var error))
+        {
+            MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        Result = result;
+        DialogResult = true;
+    }
+
+    private Grid CreateContent(bool cropEnabled)
+    {
+        var root = new Grid { Margin = new Thickness(14) };
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var tabs = new TabControl();
+        tabs.Items.Add(new TabItem { Header = "_Size", Content = CreateSizeTab() });
+        tabs.Items.Add(new TabItem { Header = "_Crop", Content = CreateCropTab(cropEnabled) });
+        tabs.Items.Add(new TabItem { Header = "_Alt Text", Content = CreateAltTextTab() });
+        root.Children.Add(tabs);
+
+        var buttons = InsertChartDialog.CreateButtonRow(Accept);
+        Grid.SetRow(buttons, 1);
+        root.Children.Add(buttons);
+        return root;
+    }
+
+    private Grid CreateSizeTab()
+    {
+        var grid = CreateTwoColumnGrid();
+        AddRow(grid, 0, "_Height:", _heightBox);
+        AddRow(grid, 1, "_Width:", _widthBox);
+        AddRow(grid, 2, "_Rotation:", _rotationBox);
+        Grid.SetColumn(_lockAspectRatioBox, 1);
+        Grid.SetRow(_lockAspectRatioBox, 3);
+        grid.Children.Add(_lockAspectRatioBox);
+        return grid;
+    }
+
+    private Grid CreateCropTab(bool cropEnabled)
+    {
+        var grid = CreateTwoColumnGrid();
+        AddRow(grid, 0, "_Left:", _cropLeftBox);
+        AddRow(grid, 1, "_Top:", _cropTopBox);
+        AddRow(grid, 2, "_Right:", _cropRightBox);
+        AddRow(grid, 3, "_Bottom:", _cropBottomBox);
+        if (!cropEnabled)
+        {
+            var note = new TextBlock
+            {
+                Text = "Crop is available for inserted image pictures.",
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            Grid.SetRow(note, 4);
+            Grid.SetColumn(note, 1);
+            grid.Children.Add(note);
+        }
+        return grid;
+    }
+
+    private Grid CreateAltTextTab()
+    {
+        var grid = CreateTwoColumnGrid();
+        var label = new Label { Content = "_Description:", Target = _altTextBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 8, 8) };
+        Grid.SetRow(label, 0);
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+        Grid.SetRow(_altTextBox, 0);
+        Grid.SetColumn(_altTextBox, 1);
+        grid.Children.Add(_altTextBox);
+        return grid;
+    }
+
+    private static Grid CreateTwoColumnGrid()
+    {
+        var grid = new Grid { Margin = new Thickness(12) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < 5; i++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        return grid;
+    }
+
+    private static void AddRow(Grid grid, int row, string labelText, TextBox box)
+    {
+        var label = new Label { Content = labelText, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 8, 8) };
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+        box.Margin = new Thickness(0, 0, 0, 8);
+        Grid.SetRow(box, row);
+        Grid.SetColumn(box, 1);
+        grid.Children.Add(box);
+    }
+
+    private void SyncAspectFromWidth()
+    {
+        if (_updatingAspect || _lockAspectRatioBox.IsChecked != true || _aspectRatio <= 0)
+            return;
+        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) || width <= 0)
+            return;
+        _updatingAspect = true;
+        _heightBox.Text = (width / _aspectRatio).ToString("0.###", CultureInfo.InvariantCulture);
+        _updatingAspect = false;
+    }
+
+    private void SyncAspectFromHeight()
+    {
+        if (_updatingAspect || _lockAspectRatioBox.IsChecked != true || _aspectRatio <= 0)
+            return;
+        if (!double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var height) || height <= 0)
+            return;
+        _updatingAspect = true;
+        _widthBox.Text = (height * _aspectRatio).ToString("0.###", CultureInfo.InvariantCulture);
+        _updatingAspect = false;
     }
 }
 
@@ -222,9 +651,10 @@ public sealed record ShapeGradientDialogResult(CellColor StartColor, CellColor E
 
 public sealed class ShapeGradientDialog : Window
 {
-    private readonly TextBox _gradientBox = new();
-    private readonly Button _startColorButton = new() { Content = "Start Color..." };
-    private readonly Button _endColorButton = new() { Content = "End Color..." };
+    private readonly TextBox _startColorBox = new();
+    private readonly TextBox _endColorBox = new();
+    private readonly Button _startColorButton = new() { Content = "_Start Color..." };
+    private readonly Button _endColorButton = new() { Content = "_End Color..." };
     private readonly TextBlock _startColorText = new();
     private readonly TextBlock _endColorText = new();
     private CellColor _startColor = new(31, 119, 180);
@@ -241,7 +671,8 @@ public sealed class ShapeGradientDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _gradientBox.Text = FormatGradientText(_startColor, _endColor);
+        _startColorBox.Text = FormatColor(_startColor);
+        _endColorBox.Text = FormatColor(_endColor);
         _startColorButton.Click += StartColorButton_Click;
         _endColorButton.Click += EndColorButton_Click;
         UpdateColorText();
@@ -264,17 +695,13 @@ public sealed class ShapeGradientDialog : Window
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_gradientBox.Text))
+        if (!DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor) ||
+            !DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
         {
-            Result = new ShapeGradientDialogResult(_startColor, _endColor);
-        }
-        else
-        {
-            if (!TryCreateResult(_gradientBox.Text, out var result, out _))
-                return;
-            Result = result;
+            return;
         }
 
+        Result = new ShapeGradientDialogResult(startColor, endColor);
         DialogResult = true;
     }
 
@@ -282,22 +709,28 @@ public sealed class ShapeGradientDialog : Window
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        _startColorButton.Width = 120;
-        _startColorButton.Margin = new Thickness(0, 0, 8, 0);
-        _endColorButton.Width = 120;
-        buttonRow.Children.Add(_startColorButton);
-        buttonRow.Children.Add(_endColorButton);
-        stack.Children.Add(buttonRow);
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(104) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddStopRow(grid, 0, "Stop 1 _color (RGB):", _startColorBox, "0%", _startColorButton);
+        AddStopRow(grid, 1, "Stop 2 c_olor (RGB):", _endColorBox, "100%", _endColorButton);
+        stack.Children.Add(new GroupBox
+        {
+            Header = "Gradient stops",
+            Content = grid,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
 
         _startColorText.Margin = new Thickness(0, 0, 0, 4);
-        _endColorText.Margin = new Thickness(0, 0, 0, 10);
+        _endColorText.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_startColorText);
         stack.Children.Add(_endColorText);
 
-        stack.Children.Add(new TextBlock { Text = "RGB override:", Margin = new Thickness(0, 0, 0, 4) });
-        _gradientBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_gradientBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return stack;
     }
@@ -309,6 +742,7 @@ public sealed class ShapeGradientDialog : Window
             return;
 
         _startColor = color;
+        _startColorBox.Text = FormatColor(_startColor);
         SyncGradientTextFromPickers();
     }
 
@@ -319,12 +753,12 @@ public sealed class ShapeGradientDialog : Window
             return;
 
         _endColor = color;
+        _endColorBox.Text = FormatColor(_endColor);
         SyncGradientTextFromPickers();
     }
 
     private void SyncGradientTextFromPickers()
     {
-        _gradientBox.Text = FormatGradientText(_startColor, _endColor);
         UpdateColorText();
     }
 
@@ -334,16 +768,47 @@ public sealed class ShapeGradientDialog : Window
         _endColorText.Text = $"End: {FormatColor(_endColor)}";
     }
 
-    private static string FormatGradientText(CellColor startColor, CellColor endColor) =>
-        $"{FormatColor(startColor)}; {FormatColor(endColor)}";
-
     private static string FormatColor(CellColor color) =>
         $"{color.R},{color.G},{color.B}";
+
+    private static void AddStopRow(Grid grid, int row, string label, TextBox box, string position, Button colorButton)
+    {
+        grid.Children.Add(new Label
+        {
+            Content = label,
+            Target = box,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8)
+        });
+        Grid.SetRow(grid.Children[^1], row);
+        Grid.SetColumn(grid.Children[^1], 0);
+
+        box.Margin = new Thickness(0, 0, 8, 8);
+        grid.Children.Add(box);
+        Grid.SetRow(box, row);
+        Grid.SetColumn(box, 1);
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = position,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8)
+        });
+        Grid.SetRow(grid.Children[^1], row);
+        Grid.SetColumn(grid.Children[^1], 2);
+
+        colorButton.Width = 96;
+        colorButton.Margin = new Thickness(0, 0, 0, 8);
+        grid.Children.Add(colorButton);
+        Grid.SetRow(colorButton, row);
+        Grid.SetColumn(colorButton, 3);
+    }
 }
 
 public sealed record TextEntryDialogResult(string Text);
 
-public sealed class TextEntryDialog : Window
+public class TextEntryDialog : Window
 {
     private readonly TextBox _textBox = new();
 

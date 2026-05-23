@@ -1,7 +1,7 @@
 <Window x:Class="Freexcel.App.Host.GoalSeekDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Goal Seek" Width="320" Height="200"
+        Title="Goal Seek" Width="380" Height="210"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         ShowInTaskbar="False">
     <Grid Margin="12">
@@ -15,11 +15,16 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="140"/>
             <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="34"/>
         </Grid.ColumnDefinitions>
 
         <!-- Row 0: Set cell -->
         <Label Grid.Row="0" Grid.Column="0" Content="_Set cell:" Target="{Binding ElementName=SetCellBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="0" Grid.Column="1" x:Name="SetCellBox" Margin="0,4"/>
+        <Button Grid.Row="0" Grid.Column="2" Content="..." CommandParameter="SetCellBox"
+                Click="RangePickerButton_Click" Margin="6,4,0,4" ToolTip="Select set cell reference"
+                AutomationProperties.Name="Select set cell reference"
+                MinWidth="26" Padding="0"/>
 
         <!-- Row 1: To value -->
         <Label Grid.Row="1" Grid.Column="0" Content="_To value:" Target="{Binding ElementName=ToValueBox}" VerticalAlignment="Center" Margin="0,4"/>
@@ -28,9 +33,13 @@
         <!-- Row 2: By changing cell -->
         <Label Grid.Row="2" Grid.Column="0" Content="_By changing cell:" Target="{Binding ElementName=ChangingCellBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="2" Grid.Column="1" x:Name="ChangingCellBox" Margin="0,4"/>
+        <Button Grid.Row="2" Grid.Column="2" Content="..." CommandParameter="ChangingCellBox"
+                Click="RangePickerButton_Click" Margin="6,4,0,4" ToolTip="Select changing cell reference"
+                AutomationProperties.Name="Select changing cell reference"
+                MinWidth="26" Padding="0"/>
 
         <!-- Row 4: Buttons -->
-        <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal"
+        <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,8,0,0">
             <Button Content="_OK"     Width="75" IsDefault="True"  Click="OkBtn_Click"     Margin="0,0,6,0"/>
             <Button Content="_Cancel" Width="75" IsCancel="True"   Click="CancelBtn_Click"/>

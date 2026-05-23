@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  
+  <text x="9.6" y="9.6" font-size="8"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
+  <text x="9.6" y="22.4" font-size="8"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">Z</text>
+  <path d="M20.8 24 L20.8 8" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="23.2 11.84 20.8 8 18.4 11.84" fill="#107c41"/>
+</svg>

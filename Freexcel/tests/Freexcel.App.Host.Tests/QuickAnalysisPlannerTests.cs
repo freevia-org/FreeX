@@ -30,8 +30,19 @@ public sealed class QuickAnalysisPlannerTests
             .Should()
             .Contain([
                 QuickAnalysisCommand.DataBar,
+                QuickAnalysisCommand.LessThan,
+                QuickAnalysisCommand.Between,
+                QuickAnalysisCommand.EqualTo,
+                QuickAnalysisCommand.TextContains,
+                QuickAnalysisCommand.DateOccurring,
+                QuickAnalysisCommand.DuplicateValues,
                 QuickAnalysisCommand.IconSet,
                 QuickAnalysisCommand.Top10,
+                QuickAnalysisCommand.Top10Percent,
+                QuickAnalysisCommand.Bottom10,
+                QuickAnalysisCommand.Bottom10Percent,
+                QuickAnalysisCommand.AboveAverage,
+                QuickAnalysisCommand.BelowAverage,
                 QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
                 QuickAnalysisCommand.StackedColumnChart,
@@ -46,11 +57,35 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.RadarChart,
                 QuickAnalysisCommand.StockChart,
                 QuickAnalysisCommand.Sum,
+                QuickAnalysisCommand.PercentTotal,
+                QuickAnalysisCommand.RunningTotal,
                 QuickAnalysisCommand.Max,
                 QuickAnalysisCommand.Min,
                 QuickAnalysisCommand.FormatAsTable,
                 QuickAnalysisCommand.LineSparkline
             ]);
+
+        options.Where(option => option.Group == "Formatting")
+            .Select(option => option.Label)
+            .Should()
+            .Equal(
+                "Data Bars",
+                "Color Scale",
+                "Icon Set",
+                "Greater Than...",
+                "Less Than...",
+                "Between...",
+                "Equal To...",
+                "Text that Contains...",
+                "A Date Occurring...",
+                "Duplicate Values...",
+                "Top 10...",
+                "Top 10%",
+                "Bottom 10...",
+                "Bottom 10%",
+                "Above Average",
+                "Below Average",
+                "Clear Conditional Formatting");
 
         options.Where(option => option.Group == "Charts")
             .Select(option => option.Label)
@@ -69,7 +104,11 @@ public sealed class QuickAnalysisPlannerTests
                 "Scatter",
                 "Bubble",
                 "Radar",
-                "Stock");
+                "Stock",
+                "More Charts...");
+
+        options.Single(option => option.Label == "More Charts...")
+            .Command.Should().Be(QuickAnalysisCommand.MoreCharts);
     }
 
     [Fact]
@@ -86,6 +125,8 @@ public sealed class QuickAnalysisPlannerTests
         options.Single(option => option.Command == QuickAnalysisCommand.ColumnChart)
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Chart);
         options.Single(option => option.Command == QuickAnalysisCommand.Sum)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Total);
+        options.Single(option => option.Command == QuickAnalysisCommand.PercentTotal)
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Total);
         options.Single(option => option.Command == QuickAnalysisCommand.FormatAsTable)
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Table);
@@ -135,10 +176,14 @@ public sealed class QuickAnalysisPlannerTests
         var selection = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 5));
         var sum = QuickAnalysisPlanner.BuildOptions(selection)
             .Single(option => option.Command == QuickAnalysisCommand.Sum);
+        var percentTotal = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.PercentTotal);
         var sparkline = QuickAnalysisPlanner.BuildOptions(selection)
             .Single(option => option.Command == QuickAnalysisCommand.LineSparkline);
 
         QuickAnalysisPlanner.BuildHoverPreview(selection, sum)!.Range.Should().Be(
+            new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+        QuickAnalysisPlanner.BuildHoverPreview(selection, percentTotal)!.Range.Should().Be(
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
         QuickAnalysisPlanner.BuildHoverPreview(selection, sparkline)!.Range.Should().Be(
             new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));

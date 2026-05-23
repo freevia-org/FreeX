@@ -167,7 +167,7 @@ public partial class MainWindow
     private async Task OpenFileAsync(string path)
     {
         var ext = System.IO.Path.GetExtension(path).ToLower();
-        var adapter = _fileAdapters.FirstOrDefault(a => a.Extension == ext);
+        var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
         if (adapter == null) return;
         if (_isOpeningFile) return;
 
@@ -179,14 +179,14 @@ public partial class MainWindow
             var progress = new Progress<OpenProgressUpdate>(
                 update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
             var loader = new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook));
-            var result = await loader.LoadAsync(path, adapter, ext, progress);
+            var result = await loader.LoadAsync(path, adapter, ext, format!, progress);
 
             _currentXlsxFeatureReport = result.FeatureReport;
             _workbook = result.Workbook;
             _workbookRef.Current = result.Workbook;
             _workbook.Name = result.DisplayName;
             _currentSheetId = _workbook.Sheets[0].Id;
-            _currentFilePath = path;
+            _currentFilePath = result.OpenedAsTemplate ? null : path;
             UpdateTitleBar();
 
             _recentFiles.AddOrUpdate(path);
@@ -320,9 +320,29 @@ public partial class MainWindow
         {
             _options = dlg.Result;
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
+            ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
             UpdateViewport();
         }
+    }
+
+    private void ApplyOptionsWorksheetViewSettings()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        if (sheet.ShowGridlines == _options.ShowGridlines &&
+            sheet.ShowHeadings == _options.ShowHeadings)
+            return;
+
+        TryExecuteGroupedSheetCommand(
+            "Worksheet View Options",
+            sheetId => new SetWorksheetViewOptionsCommand(
+                sheetId,
+                _options.ShowGridlines,
+                _options.ShowHeadings,
+                _workbook.GetSheet(sheetId)?.ShowRulers ?? true));
     }
 
     private void ApplyFormulaErrorCheckingOptions(IReadOnlySet<string> disabledErrorCodes)
@@ -407,7 +427,7 @@ public partial class MainWindow
 
     private async void OpenButton_Click(object sender, RoutedEventArgs e)
     {
-        var filter = string.Join("|", _fileAdapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
+        var filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters);
         var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
 
         if (dialog.ShowDialog() == true)
@@ -430,7 +450,7 @@ public partial class MainWindow
 
     private bool SaveWorkbookWithDialog()
     {
-        var filter = string.Join("|", _fileAdapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
+        var filter = FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters);
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = filter,
@@ -441,7 +461,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() == true)
         {
             var ext = System.IO.Path.GetExtension(dialog.FileName).ToLower();
-            var adapter = _fileAdapters.FirstOrDefault(a => a.Extension == ext);
+            var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ext, out _);
             if (adapter == null)
                 return false;
 

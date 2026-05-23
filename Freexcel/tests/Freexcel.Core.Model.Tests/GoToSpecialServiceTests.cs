@@ -69,4 +69,116 @@ public sealed class GoToSpecialServiceTests
 
         result.Should().Equal(new CellAddress(sheet.Id, 1, 1));
     }
+
+    [Fact]
+    public void FindRowAndColumnDifferences_CompareAgainstFirstCellInEachRowOrColumn()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+        Set(sheet, 1, 1, "A");
+        Set(sheet, 1, 2, "A");
+        Set(sheet, 1, 3, "B");
+        Set(sheet, 2, 1, 10);
+        Set(sheet, 2, 2, 11);
+        Set(sheet, 2, 3, 10);
+        Set(sheet, 3, 1, "A");
+        Set(sheet, 3, 2, "A");
+        Set(sheet, 3, 3, "A");
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.RowDifferences)
+            .Should()
+            .Equal(new CellAddress(sheet.Id, 1, 3), new CellAddress(sheet.Id, 2, 2));
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.ColumnDifferences)
+            .Should()
+            .Equal(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 3), new CellAddress(sheet.Id, 3, 3));
+    }
+
+    [Fact]
+    public void FindCurrentRegionLastCellAndConditionalFormats_ReturnsExcelLikeTargets()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var active = new CellAddress(sheet.Id, 2, 2);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 5));
+        Set(sheet, 1, 1, "Region");
+        Set(sheet, 1, 2, "Amount");
+        Set(sheet, 2, 1, "East");
+        Set(sheet, 2, 2, 10);
+        Set(sheet, 5, 5, "last");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 4)),
+            RuleType = CfRuleType.ColorScale
+        });
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.CurrentRegion, active)
+            .Should()
+            .Equal(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 2),
+                new CellAddress(sheet.Id, 2, 1),
+                new CellAddress(sheet.Id, 2, 2));
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.LastCell)
+            .Should()
+            .Equal(new CellAddress(sheet.Id, 5, 5));
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.ConditionalFormats)
+            .Should()
+            .Equal(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 4));
+    }
+
+    [Fact]
+    public void FindObjects_ReturnsCellsAnchoringObjectsInRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
+        var chartAnchor = new CellAddress(sheet.Id, 2, 2);
+        var shapeAnchor = new CellAddress(sheet.Id, 3, 3);
+        var pictureAnchor = new CellAddress(sheet.Id, 4, 4);
+        var outsideAnchor = new CellAddress(sheet.Id, 5, 5);
+        sheet.Charts.Add(new ChartModel { DataRange = new GridRange(chartAnchor, chartAnchor) });
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = shapeAnchor });
+        sheet.Pictures.Add(new PictureModel { Anchor = pictureAnchor });
+        sheet.TextBoxes.Add(new TextBoxModel { Anchor = outsideAnchor });
+
+        GoToSpecialService.Find(wb, sheet, range, GoToSpecialKind.Objects)
+            .Should()
+            .Equal(chartAnchor, shapeAnchor, pictureAnchor);
+    }
+
+    [Fact]
+    public void FindPrecedentsAndDependents_ReturnsDirectSameSheetFormulaReferences()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var selectedFormula = new CellAddress(sheet.Id, 3, 3);
+        var selectedInput = new CellAddress(sheet.Id, 2, 2);
+        var selectedRange = new GridRange(selectedFormula, selectedFormula);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(selectedInput, new NumberValue(20));
+        sheet.SetCell(selectedFormula, Cell.FromFormula("A1+B2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), Cell.FromFormula("B2*2"));
+
+        GoToSpecialService.Find(wb, sheet, selectedRange, GoToSpecialKind.Precedents)
+            .Should()
+            .Equal(new CellAddress(sheet.Id, 1, 1), selectedInput);
+
+        GoToSpecialService.Find(
+                wb,
+                sheet,
+                new GridRange(selectedInput, selectedInput),
+                GoToSpecialKind.Dependents)
+            .Should()
+            .Equal(selectedFormula, new CellAddress(sheet.Id, 4, 4));
+    }
+
+    private static void Set(Sheet sheet, uint row, uint col, string value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
+
+    private static void Set(Sheet sheet, uint row, uint col, double value) =>
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
 }

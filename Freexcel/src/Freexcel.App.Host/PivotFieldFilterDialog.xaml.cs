@@ -11,14 +11,18 @@ public partial class PivotFieldFilterDialog : Window
     private readonly ObservableCollection<PivotFilterItem> _items;
     private readonly ICollectionView _view;
 
-    public PivotFieldFilterDialog(IEnumerable<string> items, IEnumerable<string>? selectedItems = null)
+    public PivotFieldFilterDialog(IEnumerable<string> items, IEnumerable<string>? selectedItems = null, bool canUseValueFilters = true)
         : this(
             items.Select(item => new AutoFilterChecklistItem(item, item)),
-            selectedItems)
+            selectedItems,
+            canUseValueFilters)
     {
     }
 
-    public PivotFieldFilterDialog(IEnumerable<AutoFilterChecklistItem> items, IEnumerable<string>? selectedItems = null)
+    public PivotFieldFilterDialog(
+        IEnumerable<AutoFilterChecklistItem> items,
+        IEnumerable<string>? selectedItems = null,
+        bool canUseValueFilters = true)
     {
         var selected = selectedItems?.ToHashSet(StringComparer.CurrentCultureIgnoreCase) ?? [];
         var hasExplicitSelection = selected.Count > 0;
@@ -32,12 +36,15 @@ public partial class PivotFieldFilterDialog : Window
 
         InitializeComponent();
         FilterItemsList.ItemsSource = _items;
+        ValueFilterButton.IsEnabled = canUseValueFilters;
+        ValueFilterUnavailableText.Visibility = canUseValueFilters ? Visibility.Collapsed : Visibility.Visible;
         _view = CollectionViewSource.GetDefaultView(FilterItemsList.ItemsSource);
         _view.Filter = FilterItem;
         UpdateSelectAllState();
     }
 
     public IReadOnlyList<string> SelectedItems { get; private set; } = [];
+    public PivotFieldFilterDialogAction RequestedAction { get; private set; } = PivotFieldFilterDialogAction.SelectItems;
 
     private bool FilterItem(object item) =>
         item is PivotFilterItem filterItem &&
@@ -67,6 +74,19 @@ public partial class PivotFieldFilterDialog : Window
             .Where(item => item.IsChecked)
             .Select(item => item.Value)
             .ToList();
+        RequestedAction = PivotFieldFilterDialogAction.SelectItems;
+        DialogResult = true;
+    }
+
+    private void LabelFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        RequestedAction = PivotFieldFilterDialogAction.LabelFilter;
+        DialogResult = true;
+    }
+
+    private void ValueFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        RequestedAction = PivotFieldFilterDialogAction.ValueFilter;
         DialogResult = true;
     }
 
@@ -82,4 +102,11 @@ public partial class PivotFieldFilterDialog : Window
         public string Value { get; } = value;
         public bool IsChecked { get; set; } = isChecked;
     }
+}
+
+public enum PivotFieldFilterDialogAction
+{
+    SelectItems,
+    LabelFilter,
+    ValueFilter
 }

@@ -28,16 +28,23 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
+        if (dialog.Result.Action is SpellCheckDialogAction.Ignore or SpellCheckDialogAction.IgnoreAll)
         {
             MessageBox.Show("Spelling issues ignored.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var plan = SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId);
+        if (dialog.Result.Action == SpellCheckDialogAction.Add)
+        {
+            MessageBox.Show("Spelling issue skipped.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var replacement = dialog.Result.Replacement ?? issue.Suggestion;
+
         if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
         {
-            var edits = SpellCheckService.BuildCorrectionCellEdits(plan);
+            var edits = BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement);
             if (edits.Count == 0)
             {
                 MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -52,8 +59,6 @@ public partial class MainWindow
             return;
         }
 
-        var replacement = dialog.Result.Replacement ?? issue.Suggestion;
-
         var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
         if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
             return;
@@ -61,6 +66,21 @@ public partial class MainWindow
         UpdateViewport();
         RefreshStatusBar();
     }
+
+    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckReplaceAllEdits(
+        IReadOnlyList<SpellingIssue> issues,
+        string word,
+        string replacement) =>
+        issues
+            .Where(issue => string.Equals(issue.Word, word, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(issue => issue.Address)
+            .Select(group =>
+            {
+                var issue = group.First();
+                var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
+                return (issue.Address, Cell.FromValue(new TextValue(corrected)));
+            })
+            .ToList();
 
     private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
         TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
@@ -176,6 +196,18 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ReviewDeleteThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Threaded Comment",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new DeleteThreadedCommentCommand(_currentSheetId, currentRange.Start)))
+            return;
+
+        UpdateViewport();
+    }
+
     private void ReviewPrevCommentBtn_Click(object sender, RoutedEventArgs e)
     {
         NavigateComment(previous: true);
@@ -222,15 +254,18 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        string? pwd = null;
+        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: null);
         if (!sheet.IsProtected)
         {
             var dialog = new PasswordProtectionDialog("Protect Sheet", "Password (optional):") { Owner = this };
             if (dialog.ShowDialog() != true) return;
-            pwd = dialog.Password;
+            result = ProtectionDialogPlanner.CreateSheetResult(
+                sheet,
+                dialog.Password,
+                dialog.SelectedSheetPermissions);
         }
 
-        var action = SheetProtectionWorkflow.CreateCommand(sheet, pwd);
+        var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
         var outcome = _commandBus.Execute(_workbook.Id, action.Command);
         if (!outcome.Success)
         {

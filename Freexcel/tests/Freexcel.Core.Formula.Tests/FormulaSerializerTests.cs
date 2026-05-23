@@ -107,6 +107,46 @@ public class FormulaSerializerTests
     public void Serialize_FunctionCall() => RoundTrip("=SUM(A1:A3)").Should().Be("SUM(A1:A3)");
 
     [Fact]
+    public void Serialize_CombinedStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[#Data],[Amount]])")
+            .Should().Be("SUM(SALES[[#Data],[Amount]])");
+    }
+
+    [Fact]
+    public void Serialize_CurrentRowStructuredReference()
+    {
+        RoundTrip("=[@Amount]").Should().Be("[@Amount]");
+    }
+
+    [Fact]
+    public void Serialize_TableQualifiedCurrentRowStructuredReference()
+    {
+        RoundTrip("=Sales[@Amount]").Should().Be("SALES[@Amount]");
+    }
+
+    [Fact]
+    public void Serialize_MultiColumnStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[Amount]:[Tax]])")
+            .Should().Be("SUM(SALES[[Amount]:[Tax]])");
+    }
+
+    [Fact]
+    public void Serialize_ThisRowStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[#This Row],[Amount]:[Tax]])")
+            .Should().Be("SUM(SALES[[#This Row],[Amount]:[Tax]])");
+    }
+
+    [Fact]
+    public void Serialize_UnqualifiedThisRowStructuredReference()
+    {
+        RoundTrip("=SUM([[#This Row],[Amount]:[Tax]])")
+            .Should().Be("SUM([[#This Row],[Amount]:[Tax]])");
+    }
+
+    [Fact]
     public void Serialize_FunctionNoArgs() => RoundTrip("=NOW()").Should().Be("NOW()");
 
     [Fact]
@@ -158,8 +198,31 @@ public class FormulaSerializerTests
         FormulaSerializer.Serialize(node).Should().Be("#REF!");
     }
 
-    [Fact]
-    public void Serialize_ErrorLiteral() => RoundTrip("=#N/A").Should().Be("#N/A");
+    [Theory]
+    [InlineData("=#NULL!", "#NULL!")]
+    [InlineData("=#DIV/0!", "#DIV/0!")]
+    [InlineData("=#VALUE!", "#VALUE!")]
+    [InlineData("=#REF!", "#REF!")]
+    [InlineData("=#NAME?", "#NAME?")]
+    [InlineData("=#NUM!", "#NUM!")]
+    [InlineData("=#N/A", "#N/A")]
+    [InlineData("=#SPILL!", "#SPILL!")]
+    [InlineData("=#CALC!", "#CALC!")]
+    public void Serialize_ErrorLiteral(string formula, string expected)
+    {
+        RoundTrip(formula).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("=TAKE(A1:C3,,2)", "TAKE(A1:C3,,2)")]
+    [InlineData("=DROP(A1:C3,,1)", "DROP(A1:C3,,1)")]
+    [InlineData("=EXPAND(A1:B1,,3)", "EXPAND(A1:B1,,3)")]
+    [InlineData("=EXPAND(A1:B1,2,,\"pad\")", "EXPAND(A1:B1,2,,\"pad\")")]
+    [InlineData("=INDEX(A1:B2,1,)", "INDEX(A1:B2,1,)")]
+    public void Serialize_OmittedFunctionArguments(string formula, string expected)
+    {
+        RoundTrip(formula).Should().Be(expected);
+    }
 
     [Fact]
     public void Serialize_ParensPreserved_AddInsideMultiply()

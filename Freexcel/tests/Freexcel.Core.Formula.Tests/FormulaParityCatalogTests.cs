@@ -9,17 +9,11 @@ public sealed class FormulaParityCatalogTests
 {
     private static readonly string[] ExcludedFunctionNames =
     [
-        "ASC",
-        "BAHTTEXT",
         "CUBEKPIMEMBER",
         "CUBEMEMBER",
         "CUBESET",
         "CUBESETCOUNT",
         "CUBEVALUE",
-        "DBCS",
-        "ENCODEURL",
-        "FILTERXML",
-        "PHONETIC",
         "RTD",
         "WEBSERVICE"
     ];
@@ -65,7 +59,7 @@ public sealed class FormulaParityCatalogTests
         var inScopeCount = ReadDocumentedFunctions()
             .Count(entry => !entry.Status.StartsWith("Excluded", StringComparison.OrdinalIgnoreCase));
 
-        inScopeCount.Should().Be(339);
+        inScopeCount.Should().Be(345);
     }
 
     private static IReadOnlyList<(string Name, string Status)> ReadDocumentedFunctions()

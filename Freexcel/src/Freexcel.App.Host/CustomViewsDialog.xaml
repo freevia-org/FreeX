@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Custom Views"
-        Width="420" Height="320"
+        Width="640" Height="360"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
         ShowInTaskbar="False">
@@ -18,9 +18,11 @@
                       AutomationProperties.Name="Custom views"
                       AutomationProperties.HelpText="Shows saved workbook views that can be shown or deleted.">
                 <ListView.View>
-                    <GridView>
-                        <GridViewColumn Header="Name" Width="220" DisplayMemberBinding="{Binding Name}"/>
-                        <GridViewColumn Header="Sheets" Width="90" DisplayMemberBinding="{Binding SheetCount}"/>
+                        <GridView>
+                        <GridViewColumn Header="Name" Width="200" DisplayMemberBinding="{Binding Name}"/>
+                        <GridViewColumn Header="Sheets" Width="70" DisplayMemberBinding="{Binding SheetCount}"/>
+                        <GridViewColumn Header="Print settings" Width="110" DisplayMemberBinding="{Binding PrintSettingsIndicator}"/>
+                        <GridViewColumn Header="Hidden rows, columns and filter settings" Width="210" DisplayMemberBinding="{Binding FilterSettingsIndicator}"/>
                     </GridView>
                 </ListView.View>
             </ListView>

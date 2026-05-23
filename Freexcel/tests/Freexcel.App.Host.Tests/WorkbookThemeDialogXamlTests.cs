@@ -159,4 +159,20 @@ public sealed class WorkbookThemeDialogXamlTests
         source.Should().Contain("WorkbookThemeDialogColorCodec.FormatColor(dialog.SelectedColor.Value)");
     }
 
+    [Fact]
+    public void Dialog_ExposesExcelLikeThemePreviewPane()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
+
+        xaml.Should().Contain("x:Name=\"ThemePreviewPane\"");
+        xaml.Should().Contain("x:Name=\"PreviewHeadingText\"");
+        xaml.Should().Contain("x:Name=\"PreviewBodyText\"");
+        xaml.Should().Contain("x:Name=\"PreviewAccentStrip\"");
+        xaml.Should().Contain("Sample");
+        source.Should().Contain("UpdatePreview");
+        source.Should().Contain("PreviewHeadingText.FontFamily");
+        source.Should().Contain("PreviewAccentStrip");
+    }
+
 }

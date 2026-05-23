@@ -16,10 +16,12 @@ public sealed class FormulaDialogAccessKeyTests
             "Content = \"_Left column\"",
             "Content = \"_Bottom row\"",
             "Content = \"_Right column\"",
-            "Content = \"_OK\"",
-            "Content = \"_Cancel\""
+            "DialogButtonRowFactory.Create"
         })
             source.Should().Contain(expected);
+
+        source.Should().Contain("Header = \"Create names from\"");
+        source.Should().Contain("Excel creates named ranges");
     }
 
     [Fact]
@@ -29,10 +31,15 @@ public sealed class FormulaDialogAccessKeyTests
 
         foreach (var expected in new[]
         {
-            "Content = \"_Previous\"",
+            "Content = \"_Help on this formula\"",
             "Content = \"_Evaluate\"",
+            "Content = \"Step _In\"",
+            "Content = \"Step _Out\"",
+            "Content = \"_Restart\"",
             "Content = \"_Close\""
         })
             source.Should().Contain(expected);
+
+        source.Should().NotContain("Content = \"_Previous\"");
     }
 }

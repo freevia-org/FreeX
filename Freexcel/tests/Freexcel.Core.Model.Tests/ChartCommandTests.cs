@@ -22,6 +22,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.PercentStackedColumn)]
     [InlineData(ChartType.Line)]
     [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.ThreeDPie)]
     [InlineData(ChartType.Doughnut)]
     [InlineData(ChartType.Bar)]
     [InlineData(ChartType.StackedBar)]
@@ -31,6 +32,8 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Area)]
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.ThreeDColumn)]
+    [InlineData(ChartType.ThreeDBar)]
     public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -47,7 +50,6 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void AdvancedChartTypes_AreRecognizedButNotRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -105,7 +107,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesXAxisLogScaleChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Scatter, ChartType.Bubble };
+        var supportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar, ChartType.Scatter, ChartType.Bubble };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsXAxisLogScale(type));
@@ -134,7 +136,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesValueAxisBoundsChartTypes()
     {
-        var xAxisSupportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Scatter, ChartType.Bubble };
+        var xAxisSupportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar, ChartType.Scatter, ChartType.Bubble };
         var yAxisSupportedTypes = new[]
         {
             ChartType.Column,
@@ -352,7 +354,6 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void AddChartCommand_RejectsDeferredChartFamilies(ChartType type)
     {
         var wb = new Workbook("test");
@@ -533,21 +534,37 @@ public sealed class ChartCommandTests
             DataRange = range,
             IsPivotChart = true,
             PivotTableName = "PivotTable1",
-            ChartStyleId = 4
+            ChartStyleId = 4,
+            ShowPivotChartReportFilterButtons = true,
+            ShowPivotChartAxisFieldButtons = true,
+            ShowPivotChartValueFieldButtons = true
         };
         sheet.Charts.Add(chart);
 
-        var command = new ConfigurePivotChartOptionsCommand(sheet.Id, chart.Id, 99, showFieldButtons: false);
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            99,
+            showFieldButtons: false,
+            showReportFilterButtons: false,
+            showAxisFieldButtons: true,
+            showValueFieldButtons: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         chart.ChartStyleId.Should().Be(48);
         chart.ShowPivotChartFieldButtons.Should().BeFalse();
+        chart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeFalse();
 
         command.Revert(ctx);
 
         chart.ChartStyleId.Should().Be(4);
         chart.ShowPivotChartFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartReportFilterButtons.Should().BeTrue();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeTrue();
     }
 
     [Fact]
@@ -571,6 +588,119 @@ public sealed class ChartCommandTests
         outcome.Success.Should().BeFalse();
         chart.ChartStyleId.Should().BeNull();
         chart.ShowPivotChartFieldButtons.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotChartOptionsCommand_PreservesIndividualButtonsWhenCallerOmitsThem()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartReportFilterButtons = false,
+            ShowPivotChartAxisFieldButtons = true,
+            ShowPivotChartValueFieldButtons = false
+        };
+        sheet.Charts.Add(chart);
+
+        var command = new ConfigurePivotChartOptionsCommand(sheet.Id, chart.Id, 12, showFieldButtons: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.ShowPivotChartFieldButtons.Should().BeFalse();
+        chart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ConfigurePivotChartOptionsCommand_UpdatesDataTableAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotChartOptionsDataTableCommandTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            DataTable = new ChartDataTableModel { ShowLegendKeys = false }
+        };
+        sheet.Charts.Add(chart);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            12,
+            showFieldButtons: true,
+            showDataTable: true,
+            showDataTableLegendKeys: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeTrue();
+        chart.DataTable.ShowHorizontalBorder.Should().BeTrue();
+        chart.DataTable.ShowVerticalBorder.Should().BeTrue();
+        chart.DataTable.ShowOutline.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ConfigurePivotChartOptionsCommand_UpdatesDesignFlagsAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotChartOptionsDesignCommandTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            RoundedCorners = false,
+            ShowDataInHiddenRowsAndColumns = false,
+            BlankDisplayMode = ChartBlankDisplayMode.Gap
+        };
+        sheet.Charts.Add(chart);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            12,
+            showFieldButtons: true,
+            roundedCorners: true,
+            showHiddenData: true,
+            blankDisplayMode: ChartBlankDisplayMode.Zero);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.RoundedCorners.Should().BeTrue();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+
+        command.Revert(ctx);
+
+        chart.RoundedCorners.Should().BeFalse();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeFalse();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Gap);
     }
 
     [Fact]

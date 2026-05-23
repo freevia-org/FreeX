@@ -9,7 +9,21 @@ public sealed record AutoFilterChecklistItem(string DisplayText, string Value);
 public sealed record AutoFilterMenuPlan(
     string HeaderText,
     AutoFilterMenuFilterKind FilterKind,
-    IReadOnlyList<AutoFilterMenuEntry> Entries);
+    IReadOnlyList<AutoFilterMenuEntry> Entries,
+    IReadOnlyList<AutoFilterColorOption>? ColorOptions = null);
+
+public enum AutoFilterColorFilterKind
+{
+    None,
+    CellFillColor,
+    NoFill,
+    FontColor
+}
+
+public sealed record AutoFilterColorOption(
+    string Label,
+    AutoFilterColorFilterKind Kind,
+    CellColor? Color);
 
 public sealed record AutoFilterMenuEntry(
     string Header,
@@ -44,6 +58,7 @@ public enum AutoFilterMenuEntryKind
 {
     SortAscending,
     SortDescending,
+    Separator,
     ClearFilter,
     FilterByColor,
     FilterFamily,
@@ -79,6 +94,8 @@ public static class AutoFilterDropdownPlanner
         "between:",
         "top:",
         "bottom:",
+        "toppercent:",
+        "bottompercent:",
         "above average",
         "below average",
         "blank",
@@ -88,8 +105,11 @@ public static class AutoFilterDropdownPlanner
     private static readonly string[] DateFilterCriteria =
     [
         "date=",
+        "date<>",
         "date>",
+        "date>=",
         "date<",
+        "date<=",
         "datebetween:",
         "blank",
         "nonblank"
@@ -132,6 +152,11 @@ public static class AutoFilterDropdownPlanner
 
     public static AutoFilterMenuPlan CreateMenuPlan(Sheet sheet, AutoFilterDropdownPlan plan)
     {
+        return CreateMenuPlan(null, sheet, plan);
+    }
+
+    public static AutoFilterMenuPlan CreateMenuPlan(Workbook? workbook, Sheet sheet, AutoFilterDropdownPlan plan)
+    {
         var headerText = SpreadsheetDisplayFormatter.FormatCellValue(
             sheet.GetValue(plan.Range.Start.Row, plan.Range.Start.Col + plan.FilterColumnOffset));
         if (string.IsNullOrWhiteSpace(headerText))
@@ -149,17 +174,70 @@ public static class AutoFilterDropdownPlanner
         {
             new("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
             new("Sort Z to A", AutoFilterMenuEntryKind.SortDescending),
+            new(string.Empty, AutoFilterMenuEntryKind.Separator),
             new($"Clear Filter From \"{headerText}\"", AutoFilterMenuEntryKind.ClearFilter),
             new("Filter by Color", AutoFilterMenuEntryKind.FilterByColor),
             filterEntry,
+            new(string.Empty, AutoFilterMenuEntryKind.Separator),
             new("Search", AutoFilterMenuEntryKind.Search),
-            new("(Select All)", AutoFilterMenuEntryKind.SelectAll)
+            new("(Select All)", AutoFilterMenuEntryKind.SelectAll),
+            new(string.Empty, AutoFilterMenuEntryKind.Separator)
         };
 
         entries.AddRange(CreateChecklistItems(sheet, plan)
             .Select(item => new AutoFilterMenuEntry(item)));
 
-        return new AutoFilterMenuPlan(headerText, filterKind, entries);
+        return new AutoFilterMenuPlan(headerText, filterKind, entries, CollectColorOptions(workbook, sheet, plan));
+    }
+
+    private static IReadOnlyList<AutoFilterColorOption> CollectColorOptions(
+        Workbook? workbook,
+        Sheet sheet,
+        AutoFilterDropdownPlan plan)
+    {
+        if (workbook is null)
+            return [];
+
+        var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
+        var fillColors = new List<CellColor>();
+        var fontColors = new List<CellColor>();
+        var seenFillColors = new HashSet<CellColor>();
+        var seenFontColors = new HashSet<CellColor>();
+        var hasNoFill = false;
+
+        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        {
+            var style = GetCellStyle(workbook, sheet, row, filterColumn);
+            if (style.FillColor is { } fillColor)
+            {
+                if (seenFillColors.Add(fillColor))
+                    fillColors.Add(fillColor);
+            }
+            else
+            {
+                hasNoFill = true;
+            }
+
+            if (!style.FontColor.IsBlack && seenFontColors.Add(style.FontColor))
+                fontColors.Add(style.FontColor);
+        }
+
+        var options = new List<AutoFilterColorOption>();
+        options.AddRange(fillColors.Select(color =>
+            new AutoFilterColorOption(ColorInputParser.FormatHexColor(color), AutoFilterColorFilterKind.CellFillColor, color)));
+        if (hasNoFill && fillColors.Count > 0)
+            options.Add(new AutoFilterColorOption("No Fill", AutoFilterColorFilterKind.NoFill, null));
+        options.AddRange(fontColors.Select(color =>
+            new AutoFilterColorOption(ColorInputParser.FormatHexColor(color), AutoFilterColorFilterKind.FontColor, color)));
+        return options;
+    }
+
+    private static CellStyle GetCellStyle(Workbook workbook, Sheet sheet, uint row, uint col)
+    {
+        var styleId = sheet.GetCell(row, col)?.StyleId ??
+            sheet.GetStyleOnly(row, col) ??
+            StyleId.Default;
+        return workbook.GetStyle(styleId);
     }
 
     private static AutoFilterMenuFilterKind DetectFilterKind(Sheet sheet, AutoFilterDropdownPlan plan)

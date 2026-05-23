@@ -34,15 +34,47 @@ public sealed class OpenWorkbookLoaderTests
                 tempPath,
                 adapter,
                 ".fxjson",
+                new FileFormatDescriptor(".fxjson", "Fake"),
                 new Progress<OpenProgressUpdate>(progressUpdates.Add));
 
             result.Workbook.Name.Should().Be("Loaded");
             result.DisplayName.Should().Be(Path.GetFileNameWithoutExtension(tempPath));
             result.FeatureReport.Should().BeNull();
+            result.OpenedAsTemplate.Should().BeFalse();
             recalculateCalled.Should().BeTrue();
             progressUpdates.Should().Contain(update => update.Detail.StartsWith("Loading file (reading)", StringComparison.Ordinal));
             progressUpdates.Should().Contain(update => update.Percent == 16);
             progressUpdates.Should().Contain(update => update.Percent == 98);
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_ReturnsTemplateMetadataFromSelectedFormat()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xltx");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var adapter = new FakeAdapter(_ =>
+            {
+                var workbook = new Workbook("Loaded");
+                workbook.AddSheet("Sheet1");
+                return workbook;
+            });
+            var loader = new OpenWorkbookLoader(_ => { });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                ".xltx",
+                new FileFormatDescriptor(".xltx", "Excel Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
+                new Progress<OpenProgressUpdate>());
+
+            result.OpenedAsTemplate.Should().BeTrue();
         }
         finally
         {

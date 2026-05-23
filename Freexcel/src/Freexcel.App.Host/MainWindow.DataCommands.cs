@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
+using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -12,8 +13,9 @@ public partial class MainWindow
 {
     private void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
+        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab"];
         var adapters = _fileAdapters
-            .Where(adapter => adapter.Extension is ".csv")
+            .Where(adapter => dataExtensions.Contains(adapter.Extension, StringComparer.OrdinalIgnoreCase))
             .ToList();
         if (adapters.Count == 0)
         {
@@ -21,12 +23,12 @@ public partial class MainWindow
             return;
         }
 
-        var filter = string.Join("|", adapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
+        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
         var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
         if (dialog.ShowDialog() != true) return;
 
         var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
-        var adapter = adapters.FirstOrDefault(a => a.Extension == ext);
+        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out _);
         if (adapter is null) return;
 
         try
@@ -55,32 +57,70 @@ public partial class MainWindow
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new TextToColumnsDialog { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
-        char delim = dialog.Result.Delimiter[0];
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+
+        var currentRange = SheetGrid.SelectedRange ?? range;
+        var edits = BuildTextToColumnsEdits(currentRange, dialog.Result);
+        if (sheet is not null &&
+            TextToColumnsPlanner.FindOverwriteTargets(sheet, edits, currentRange).Count > 0 &&
+            MessageBox.Show(
+                "There's already data here. Do you want to replace it?",
                 "Text to Columns",
-                range,
-                currentRange => CreateTextToColumnsCommand(currentRange, delim),
-                out var outcome))
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
             return;
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => CreateTextToColumnsCommand(edits));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Text to Columns");
+            return;
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
-    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, char delimiter)
+    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return new EditCellsCommand(_currentSheetId, []);
+        return CreateTextToColumnsCommand(BuildTextToColumnsEdits(range, result));
+    }
 
-        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, delimiter);
-
+    private IWorkbookCommand CreateTextToColumnsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+    {
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1
             ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
             : new EditCellsCommand(_currentSheetId, edits);
+    }
+
+    private IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildTextToColumnsEdits(
+        GridRange range,
+        TextToColumnsDialogResult result)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return [];
+
+        return result.SplitMode == TextToColumnsSplitMode.FixedWidth
+            ? TextToColumnsPlanner.BuildFixedWidthEdits(
+                sheet,
+                range,
+                result.Destination ?? range.Start,
+                result.FixedWidthBreakPositions ?? [],
+                result.ColumnFormats)
+            : TextToColumnsPlanner.BuildEdits(
+                sheet,
+                range,
+                result.Destination ?? range.Start,
+                result.Delimiters,
+                result.TextQualifierChar,
+                result.TreatConsecutiveDelimitersAsOne,
+                result.ColumnFormats);
     }
 
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
@@ -90,7 +130,10 @@ public partial class MainWindow
         var columns = sheet is null
             ? RemoveDuplicatesDialog.BuildColumnChoices(range)
             : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range);
-        var dialog = new RemoveDuplicatesDialog(columns) { Owner = this };
+        var genericColumns = sheet is null
+            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
+            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
+        var dialog = new RemoveDuplicatesDialog(columns, genericColumns) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         RemoveDuplicateRowsCommand? command = null;
@@ -99,7 +142,10 @@ public partial class MainWindow
                 range,
                 currentRange =>
                 {
-                    command = new RemoveDuplicateRowsCommand(_currentSheetId, currentRange, dialog.Result.SelectedColumnOffsets);
+                    command = new RemoveDuplicateRowsCommand(
+                        _currentSheetId,
+                        RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders),
+                        dialog.Result.SelectedColumnOffsets);
                     return command;
                 }))
             return;
@@ -113,7 +159,7 @@ public partial class MainWindow
         var defaultList = SheetGrid.SelectedRange is { } selected
             ? FormatWorkbookRange(selected)
             : "A1:C10";
-        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList) { Owner = this };
+        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList, ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var outcome = _commandBus.Execute(
@@ -135,9 +181,12 @@ public partial class MainWindow
         => AdvancedFilterInputParser.TryParseRange(
             _currentSheetId,
             input,
-            sheetName => _workbook.Sheets.FirstOrDefault(item =>
-                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id,
+            ResolveSheetIdByName,
             out range);
+
+    private SheetId? ResolveSheetIdByName(string sheetName) =>
+        _workbook.Sheets.FirstOrDefault(item =>
+            string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id;
 
     private void ConsolidateBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -149,7 +198,12 @@ public partial class MainWindow
 
         var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
-            () => new ConsolidateCommand(dialog.Result.SourceRanges, dialog.Result.DestinationCell));
+            () => new ConsolidateCommand(
+                dialog.Result.SourceRanges,
+                dialog.Result.DestinationCell,
+                dialog.Result.Function,
+                dialog.Result.UseTopRowLabels,
+                dialog.Result.UseLeftColumnLabels));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Consolidate");
@@ -175,6 +229,20 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new SubtotalDialog(sheet is null ? null : SubtotalDialog.BuildColumnChoices(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
+        if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Remove Subtotals",
+                    range,
+                    currentRange => new RemoveSubtotalRowsCommand(_currentSheetId, currentRange),
+                    out var removeOutcome))
+                return;
+
+            RecalculateIfAutomatic(removeOutcome.AffectedCells ?? []);
+            UpdateViewport();
+            return;
+        }
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Subtotal",
@@ -214,7 +282,7 @@ public partial class MainWindow
 
         var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
 
-        var statusDialog = new GoalSeekStatusDialog(result) { Owner = this };
+        var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
         {
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
@@ -233,11 +301,16 @@ public partial class MainWindow
 
         switch (dialog.SelectedAction)
         {
+            case ScenarioManagerAction.Add:
+            case ScenarioManagerAction.Edit:
             case ScenarioManagerAction.Save:
-                SaveScenarioFromSelection(dialog.NewScenarioName);
+                SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText);
                 break;
             case ScenarioManagerAction.Show:
                 ShowScenarioByName(dialog.SelectedScenarioName);
+                break;
+            case ScenarioManagerAction.Delete:
+                DeleteScenarioByName(dialog.SelectedScenarioName);
                 break;
             case ScenarioManagerAction.List:
                 ListScenarios();
@@ -248,9 +321,18 @@ public partial class MainWindow
         }
     }
 
-    private void SaveScenarioFromSelection(string? scenarioName)
+    private void SaveScenarioFromDialog(string? scenarioName, string? changingCellsText, string? comment)
     {
-        if (SheetGrid.SelectedRange is not { } range)
+        GridRange range;
+        if (TryParseScenarioChangingCells(changingCellsText, out var parsedRange))
+        {
+            range = parsedRange;
+        }
+        else if (SheetGrid.SelectedRange is { } selectedRange)
+        {
+            range = selectedRange;
+        }
+        else
         {
             MessageBox.Show("Select the changing cells for the scenario.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -269,11 +351,21 @@ public partial class MainWindow
         var changes = range.AllCells()
             .Select(address => new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)))
             .ToList();
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes), "Scenario Manager"))
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment), "Scenario Manager"))
             return;
 
         MessageBox.Show(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count),
             "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private bool TryParseScenarioChangingCells(string? changingCellsText, out GridRange range)
+    {
+        if (!string.IsNullOrWhiteSpace(changingCellsText) &&
+            WorkbookRangeTextCodec.TryParse(_currentSheetId, changingCellsText, ResolveSheetIdByName, out range))
+            return true;
+
+        range = default;
+        return false;
     }
 
     private void ShowScenarioByName(string? scenarioName)
@@ -298,6 +390,22 @@ public partial class MainWindow
             EnsureCellVisible(first);
         }
 
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void DeleteScenarioByName(string? scenarioName)
+    {
+        if (string.IsNullOrWhiteSpace(scenarioName))
+            return;
+
+        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), "Scenario Manager", out var outcome))
+        {
+            ShowCommandError(outcome, "Scenario Manager");
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }

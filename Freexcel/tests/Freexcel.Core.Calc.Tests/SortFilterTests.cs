@@ -293,7 +293,118 @@ public class SortFilterTests
         sheet.FilterHiddenRows.Should().BeEmpty();
     }
 
+    [Fact]
+    public void CellFillColorFilterCommand_HidesRowsWithoutMatchingFillColorAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var green = new CellColor(0, 176, 80);
+        var yellow = new CellColor(255, 192, 0);
+        var greenCellStyle = CellStyle.Default.Clone();
+        greenCellStyle.FillColor = green;
+        var yellowCellStyle = CellStyle.Default.Clone();
+        yellowCellStyle.FillColor = yellow;
+        var greenStyle = wb.RegisterStyle(greenCellStyle);
+        var yellowStyle = wb.RegisterStyle(yellowCellStyle);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue("Ready"));
+        sheet.SetCell(new CellAddress(sid, 3, 1), new TextValue("Blocked"));
+        sheet.SetCell(new CellAddress(sid, 4, 1), new TextValue("Open"));
+        sheet.GetCell(2, 1)!.StyleId = greenStyle;
+        sheet.GetCell(3, 1)!.StyleId = yellowStyle;
+        sheet.HiddenRows.Add(99);
+
+        var range = new GridRange(
+            new CellAddress(sid, 1, 1),
+            new CellAddress(sid, 4, 1));
+        var command = new CellFillColorFilterCommand(sid, range, filterColOffset: 0, green);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 4u]);
+        sheet.HiddenRows.Should().Contain(99u);
+
+        command.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+        sheet.HiddenRows.Should().Contain(99u);
+    }
+
     // ── New edge-case tests ───────────────────────────────────────────────────
+
+    [Fact]
+    public void CellNoFillColorFilterCommand_HidesRowsWithFillColorAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var green = new CellColor(0, 176, 80);
+        var greenCellStyle = CellStyle.Default.Clone();
+        greenCellStyle.FillColor = green;
+        var greenStyle = wb.RegisterStyle(greenCellStyle);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue("Ready"));
+        sheet.SetCell(new CellAddress(sid, 3, 1), new TextValue("Open"));
+        sheet.GetCell(2, 1)!.StyleId = greenStyle;
+        sheet.HiddenRows.Add(99);
+
+        var range = new GridRange(
+            new CellAddress(sid, 1, 1),
+            new CellAddress(sid, 3, 1));
+        var command = new CellNoFillColorFilterCommand(sid, range, filterColOffset: 0);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]);
+        sheet.HiddenRows.Should().Contain(99u);
+
+        command.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+        sheet.HiddenRows.Should().Contain(99u);
+    }
+
+    [Fact]
+    public void CellFontColorFilterCommand_HidesRowsWithoutMatchingFontColorAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var red = new CellColor(192, 0, 0);
+        var blue = new CellColor(0, 112, 192);
+        var redStyleValue = CellStyle.Default.Clone();
+        redStyleValue.FontColor = red;
+        var blueStyleValue = CellStyle.Default.Clone();
+        blueStyleValue.FontColor = blue;
+        var redStyle = wb.RegisterStyle(redStyleValue);
+        var blueStyle = wb.RegisterStyle(blueStyleValue);
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sid, 2, 1), new TextValue("Ready"));
+        sheet.SetCell(new CellAddress(sid, 3, 1), new TextValue("Blocked"));
+        sheet.SetCell(new CellAddress(sid, 4, 1), new TextValue("Open"));
+        sheet.GetCell(2, 1)!.StyleId = redStyle;
+        sheet.GetCell(3, 1)!.StyleId = blueStyle;
+        sheet.HiddenRows.Add(99);
+
+        var range = new GridRange(
+            new CellAddress(sid, 1, 1),
+            new CellAddress(sid, 4, 1));
+        var command = new CellFontColorFilterCommand(sid, range, filterColOffset: 0, red);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 4u]);
+        sheet.HiddenRows.Should().Contain(99u);
+
+        command.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+        sheet.HiddenRows.Should().Contain(99u);
+    }
 
     [Fact]
     public void Sort_MultiColumn_RevertRestoresAllColumns()

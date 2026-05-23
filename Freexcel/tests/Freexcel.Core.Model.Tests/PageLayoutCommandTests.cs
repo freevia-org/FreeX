@@ -578,6 +578,34 @@ public sealed class PageLayoutCommandTests
         sheet.HeaderFooterAlignWithMargins.Should().BeFalse();
     }
 
+    [Fact]
+    public void SetHeaderFooterCommand_SetsHeaderFooterPicturesAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var oldPicture = new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "old.png", 16, 16);
+        var newPicture = new WorksheetHeaderFooterPicture([4, 5, 6], "image/png", "logo.png", 120, 40);
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(oldPicture, null, null);
+
+        var command = new SetHeaderFooterCommand(
+            sheet.Id,
+            new WorksheetHeaderFooter("&[Picture]", "", ""),
+            new WorksheetHeaderFooter("", "", ""),
+            headerPictures: new WorksheetHeaderFooterPictureSet(null, newPicture, null));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.PageHeaderPictures.Center.Should().NotBeNull();
+        sheet.PageHeaderPictures.Center!.FileName.Should().Be("logo.png");
+        sheet.PageHeaderPictures.Center.Width.Should().Be(120);
+
+        command.Revert(ctx);
+
+        sheet.PageHeaderPictures.Left.Should().NotBeNull();
+        sheet.PageHeaderPictures.Left!.FileName.Should().Be("old.png");
+        sheet.PageHeaderPictures.Center.Should().BeNull();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

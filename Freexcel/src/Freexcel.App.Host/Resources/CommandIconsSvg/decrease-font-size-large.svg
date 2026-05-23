@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  
+  <text x="12.8" y="17.6" font-size="12.8"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
+  <path d="M25.6 9.6 L20.8 20.8" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="20.11 16.33 20.8 20.8 24.52 18.22" fill="#107c41"/>
+</svg>

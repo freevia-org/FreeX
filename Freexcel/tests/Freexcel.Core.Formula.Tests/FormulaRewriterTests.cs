@@ -195,6 +195,20 @@ public class FormulaRewriterTests
     }
 
     [Fact]
+    public void PasteOffset_DynamicArrayFormulaWithOmittedArgument_PreservesOmittedSlot()
+    {
+        var result = FormulaRewriter.Rewrite("EXPAND(A1:B1,,3)", new PasteOffsetOp(1, 1), "Sheet1");
+        result.Should().Be("EXPAND(B2:C2,,3)");
+    }
+
+    [Fact]
+    public void PasteOffset_ModernErrorLiteral_PreservesErrorToken()
+    {
+        var result = FormulaRewriter.Rewrite("IFERROR(A1,#CALC!)", new PasteOffsetOp(1, 1), "Sheet1");
+        result.Should().Be("IFERROR(B2,#CALC!)");
+    }
+
+    [Fact]
     public void Rewrite_ParseFailure_ReturnsNull()
     {
         // Malformed formula should not throw — returns null

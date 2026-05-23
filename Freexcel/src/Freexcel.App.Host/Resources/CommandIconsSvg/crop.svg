@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Crop">
+  <defs>
+    <style>
+      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .g,.green{fill:#107c41}
+      .g2,.palegreen,.green2{fill:#dff6dd}
+      .b,.blue{fill:#0078d4}
+      .o,.orange{fill:#f7630c}
+      .y,.yellow,.paleyellow{fill:#ffb900}
+      .rd,.red{fill:#d32f2f}
+      .p,.purple{fill:#8b5cf6}
+      .w,.paper,.bg{fill:#ffffff}
+      .k,.gray{fill:#242424}
+      .f,.soft{fill:#f3f2f1}
+      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
+      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
+      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
+      .paleblue{fill:#dcecff}
+      .palered{fill:#ffd7d7}
+      .none{fill:none}
+</style>
+  </defs>
+  <rect width="54" height="54" fill="none"/>
+  <g><rect fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2" x="13.5" y="13.5" width="24.84" height="24.84"/><path stroke="#202124" stroke-width="2.3" stroke-linecap="square" fill="none" d="M9.72 4.32v14.04h-5.4M9.72 4.32h14.04M44.28 49.68v-14.04h5.4M44.28 49.68h-14.04M38.34 13.5v24.84M13.5 38.34h24.84"/>  </g>
+</svg>
+

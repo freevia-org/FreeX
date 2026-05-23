@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Value Field Settings"
         Width="430"
-        Height="470"
+        Height="430"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <DockPanel Margin="14">
@@ -56,7 +56,7 @@
                                   AutomationProperties.Name="Summarize value field by"/>
                     </StackPanel>
                 </TabItem>
-                <TabItem Header="Show _Values As">
+                <TabItem Header="Show Values _As">
                     <StackPanel Margin="10">
                         <Label Content="Show values _as:"
                                Target="{Binding ElementName=ShowValuesAsBox}"
@@ -64,26 +64,35 @@
                                Margin="0,0,0,6"/>
                         <ComboBox x:Name="ShowValuesAsBox"
                                   Height="24"
-                                  AutomationProperties.Name="Show values as"/>
-                        <Label Content="_Base field:"
-                               Target="{Binding ElementName=BaseFieldBox}"
-                               Padding="0"
-                               Margin="0,10,0,6"/>
-                        <ComboBox x:Name="BaseFieldBox"
-                                  Height="24"
-                                  AutomationProperties.Name="Base field"/>
-                        <Label Content="Base _item:"
-                               Target="{Binding ElementName=BaseItemBox}"
-                               Padding="0"
-                               Margin="0,10,0,6"/>
-                        <TextBox x:Name="BaseItemBox"
-                                 Height="24"
-                                 AutomationProperties.Name="Base item"/>
+                                  AutomationProperties.Name="Show values as"
+                                  SelectionChanged="ShowValuesAsBox_SelectionChanged"/>
+                        <StackPanel x:Name="BaseFieldPanel"
+                                    Visibility="Collapsed"
+                                    IsEnabled="False">
+                            <Label Content="_Base field:"
+                                   Target="{Binding ElementName=BaseFieldBox}"
+                                   Padding="0"
+                                   Margin="0,10,0,6"/>
+                            <ComboBox x:Name="BaseFieldBox"
+                                      Height="24"
+                                      AutomationProperties.Name="Base field"/>
+                        </StackPanel>
+                        <StackPanel x:Name="BaseItemPanel"
+                                    Visibility="Collapsed"
+                                    IsEnabled="False">
+                            <Label Content="Base _item:"
+                                   Target="{Binding ElementName=BaseItemBox}"
+                                   Padding="0"
+                                   Margin="0,10,0,6"/>
+                            <TextBox x:Name="BaseItemBox"
+                                     Height="24"
+                                     AutomationProperties.Name="Base item"/>
+                        </StackPanel>
                     </StackPanel>
                 </TabItem>
                 <TabItem Header="_Number Format">
                     <StackPanel Margin="10">
-                        <Label Content="_Format preset:"
+                        <Label Content="_Number format:"
                                Target="{Binding ElementName=NumberFormatPresetBox}"
                                Padding="0"
                                Margin="0,0,0,6"/>
@@ -91,19 +100,19 @@
                                   Height="24"
                                   AutomationProperties.Name="Number format preset"
                                   SelectionChanged="NumberFormatPresetBox_SelectionChanged"/>
-                        <Label Content="Number format _ID:"
-                               Target="{Binding ElementName=NumberFormatBox}"
-                               Padding="0"
-                               Margin="0,10,0,6"/>
+                        <Button x:Name="NumberFormatButton"
+                                Content="_Number Format..."
+                                Width="128"
+                                HorizontalAlignment="Left"
+                                Margin="0,12,0,0"
+                                Click="NumberFormatButton_Click"/>
                         <TextBox x:Name="NumberFormatBox"
                                  Height="24"
+                                 Visibility="Collapsed"
                                  AutomationProperties.Name="Number format ID"/>
-                        <Label Content="Custom format _code:"
-                               Target="{Binding ElementName=NumberFormatCodeBox}"
-                               Padding="0"
-                               Margin="0,10,0,6"/>
                         <TextBox x:Name="NumberFormatCodeBox"
                                  Height="24"
+                                 Visibility="Collapsed"
                                  AutomationProperties.Name="Custom format code"/>
                     </StackPanel>
                 </TabItem>

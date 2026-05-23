@@ -56,4 +56,18 @@ public sealed class ErrorCheckingDialogSourceTests
         })
             source.Should().Contain($"Content = \"{content}\"");
     }
+
+    [Fact]
+    public void ErrorCheckingDialog_UsesExcelLikeErrorHelpAndActionStructure()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+
+        source.Should().Contain("Error help");
+        source.Should().Contain("Content = \"_Help on this error\"");
+        source.Should().Contain("ShowSelectedIssueHelp");
+        source.Should().Contain("Content = \"Show _Calculation Steps\"");
+        source.Should().Contain("Content = \"_Ignore Error\"");
+        source.Should().Contain("Content = \"_Edit in Formula Bar\"");
+        source.Should().NotContain("SystemSounds.Asterisk.Play");
+    }
 }

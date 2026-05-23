@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Format as Table">
+
+<rect width="32" height="32" fill="none"/>
+<g transform="translate(16 16) scale(1.25) translate(-16 -16)">
+<rect x="6" y="7" width="20" height="18" rx="1.5" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="7" width="20" height="5" rx="1.5" fill="#107c41"/><path d="M6 12h20M6 18h20M13 12v13M20 12v13" fill="none" stroke="#5c5c5c" stroke-width="1.0" stroke-linecap="square"/>
+</g>
+</svg>

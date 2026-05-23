@@ -21,9 +21,10 @@ public sealed class PivotTableDialog : Window
 {
     private readonly TextBox _sourceRangeBox = new();
     private readonly TextBox _destinationRangeBox = new();
-    private readonly RadioButton _newWorksheetButton = new() { Content = "New worksheet" };
-    private readonly RadioButton _existingWorksheetButton = new() { Content = "Existing worksheet", IsChecked = true };
-    private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable Fields pane", IsChecked = true };
+    private readonly RadioButton _selectTableRangeButton = new() { Content = "Select a _table or range", IsChecked = true };
+    private readonly RadioButton _newWorksheetButton = new() { Content = "_New worksheet", IsChecked = true };
+    private readonly RadioButton _existingWorksheetButton = new() { Content = "_Existing worksheet" };
+    private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable _Fields pane", IsChecked = true };
 
     public PivotTableDialogResult Result { get; private set; }
 
@@ -33,23 +34,31 @@ public sealed class PivotTableDialog : Window
         var destinationText = FormatDestination(workbook, sourceSheetId, sourceRange);
         Result = CreateResult(
             sourceRangeText,
-            PivotTableDestinationKind.ExistingWorksheet,
+            PivotTableDestinationKind.NewWorksheet,
             destinationText,
             openFieldList: true);
 
         Title = "Create PivotTable";
-        Width = 430;
+        Width = 500;
         Height = 320;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        stack.Children.Add(new TextBlock { Text = "Table/Range", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(CreateSectionHeader("Choose the data that you want to analyze"));
+        _selectTableRangeButton.Margin = new Thickness(0, 0, 0, 6);
+        stack.Children.Add(_selectTableRangeButton);
         _sourceRangeBox.Text = Result.SourceRangeText;
-        stack.Children.Add(CreateReferenceEditor(_sourceRangeBox, "Select PivotTable source range", new Thickness(0, 0, 0, 12)));
+        AddLabeledReferenceEditor(
+            stack,
+            "Table/_Range:",
+            _sourceRangeBox,
+            "Select PivotTable source range",
+            labelMargin: new Thickness(22, 0, 0, 4),
+            editorMargin: new Thickness(22, 0, 0, 8));
 
-        stack.Children.Add(new TextBlock { Text = "Choose where to place the PivotTable", Margin = new Thickness(0, 0, 0, 6) });
+        stack.Children.Add(CreateSectionHeader("Choose where you want the PivotTable report to be placed"));
         _newWorksheetButton.Margin = new Thickness(0, 0, 0, 4);
         _newWorksheetButton.Checked += (_, _) => UpdateDestinationState();
         _existingWorksheetButton.Checked += (_, _) => UpdateDestinationState();
@@ -57,21 +66,20 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_existingWorksheetButton);
 
         _destinationRangeBox.Text = Result.DestinationRangeText;
-        stack.Children.Add(CreateReferenceEditor(_destinationRangeBox, "Select PivotTable location", new Thickness(22, 4, 0, 12)));
+        AddLabeledReferenceEditor(
+            stack,
+            "_Location:",
+            _destinationRangeBox,
+            "Select PivotTable location",
+            labelMargin: new Thickness(22, 4, 0, 4),
+            editorMargin: new Thickness(22, 0, 0, 12));
 
         _openFieldListBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_openFieldListBox);
 
-        stack.Children.Add(new TextBlock
-        {
-            Text = "Freexcel creates worksheet-range PivotTables; data-model and external OLAP sources remain excluded.",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-        var ok = new Button { Content = "Create", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var ok = new Button { Content = "_Create", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
             Result = CreateResult(
@@ -90,6 +98,14 @@ public sealed class PivotTableDialog : Window
         Content = stack;
         UpdateDestinationState();
     }
+
+    private static TextBlock CreateSectionHeader(string text) =>
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
 
     public static PivotTableDialogResult CreateResult(
         string sourceRangeText,
@@ -129,6 +145,24 @@ public sealed class PivotTableDialog : Window
             throw new ArgumentException("Range text is required.", parameterName);
 
         return value.Trim();
+    }
+
+    private static void AddLabeledReferenceEditor(
+        Panel stack,
+        string label,
+        TextBox textBox,
+        string automationName,
+        Thickness labelMargin,
+        Thickness editorMargin)
+    {
+        stack.Children.Add(new Label
+        {
+            Content = label,
+            Target = textBox,
+            Padding = new Thickness(0),
+            Margin = labelMargin
+        });
+        stack.Children.Add(CreateReferenceEditor(textBox, automationName, editorMargin));
     }
 
     private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName, Thickness margin)

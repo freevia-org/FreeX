@@ -10,7 +10,7 @@ public sealed class GoalSeekStatusDialog : Window
 {
     public bool ApplyResult { get; private set; }
 
-    public GoalSeekStatusDialog(GoalSeekResult result)
+    public GoalSeekStatusDialog(GoalSeekResult result, double targetValue)
     {
         Title = "Goal Seek Status";
         Width = 380;
@@ -22,7 +22,7 @@ public sealed class GoalSeekStatusDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock
         {
-            Text = CreateMessage(result),
+            Text = CreateMessage(result, targetValue),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
@@ -33,43 +33,59 @@ public sealed class GoalSeekStatusDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right
         };
 
-        var okButton = new Button
-        {
-            Content = "OK",
-            Width = 76,
-            Margin = new Thickness(4, 0, 0, 0),
-            IsDefault = true
-        };
-        okButton.Click += (_, _) =>
-        {
-            ApplyResult = result.Converged;
-            DialogResult = result.Converged;
-        };
-        buttons.Children.Add(okButton);
-
         if (result.Converged)
         {
-            var cancelButton = new Button
+            var keepButton = new Button
             {
-                Content = "Cancel",
-                Width = 76,
+                Content = "_Keep Result",
+                Width = 104,
+                Margin = new Thickness(4, 0, 0, 0),
+                IsDefault = true
+            };
+            keepButton.Click += (_, _) =>
+            {
+                ApplyResult = true;
+                DialogResult = true;
+            };
+            buttons.Children.Add(keepButton);
+
+            var restoreButton = new Button
+            {
+                Content = "_Restore Original Values",
+                Width = 152,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsCancel = true
             };
-            buttons.Children.Add(cancelButton);
+            buttons.Children.Add(restoreButton);
+        }
+        else
+        {
+            var okButton = new Button
+            {
+                Content = "_OK",
+                Width = 76,
+                Margin = new Thickness(4, 0, 0, 0),
+                IsDefault = true
+            };
+            okButton.Click += (_, _) => DialogResult = false;
+            buttons.Children.Add(okButton);
         }
 
         stack.Children.Add(buttons);
         Content = stack;
     }
 
-    public static string CreateMessage(GoalSeekResult result)
+    public static string CreateMessage(GoalSeekResult result) =>
+        CreateMessage(result, result.ActualResult);
+
+    public static string CreateMessage(GoalSeekResult result, double targetValue)
     {
-        var foundValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
-        var actualResult = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
+        var target = targetValue.ToString("G10", CultureInfo.InvariantCulture);
+        var currentFormulaResult = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
+        var changingCellValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
         return result.Converged
-            ? $"Goal Seek found a solution.\nChanging cell value: {foundValue}"
-            : $"Goal Seek could not find a solution.\nClosest value: {foundValue}\nActual result: {actualResult}";
+            ? $"Goal Seek found a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}"
+            : $"Goal Seek could not find a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}";
     }
 }
 
@@ -98,7 +114,7 @@ public sealed class WorkbookStatisticsDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(() => Window.GetWindow(stack)!.DialogResult = true));
+        stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
 }
@@ -134,7 +150,7 @@ public sealed class AccessibilityCheckerDialog : Window
             MinHeight = 80,
             Margin = new Thickness(0, 0, 0, 16)
         });
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(() => Window.GetWindow(stack)!.DialogResult = true));
+        stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
 }

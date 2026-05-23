@@ -11,9 +11,9 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
 
     public string Label => "Save Scenario";
 
-    public SaveScenarioCommand(string name, IReadOnlyList<ScenarioCellValue> changingCells)
+    public SaveScenarioCommand(string name, IReadOnlyList<ScenarioCellValue> changingCells, string? comment = null)
     {
-        _scenario = new WorkbookScenario(name.Trim(), changingCells.ToList());
+        _scenario = new WorkbookScenario(name.Trim(), changingCells.ToList(), string.IsNullOrWhiteSpace(comment) ? null : comment.Trim());
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -116,6 +116,44 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
                 sheet.SetCell(address, previousCell.Clone());
         }
 
+        _applied = false;
+    }
+}
+
+public sealed class DeleteScenarioCommand : IWorkbookCommand
+{
+    private readonly string _name;
+    private WorkbookScenario? _removedScenario;
+    private int _removedIndex = -1;
+    private bool _applied;
+
+    public string Label => "Delete Scenario";
+
+    public DeleteScenarioCommand(string name)
+    {
+        _name = name.Trim();
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        _removedIndex = ctx.Workbook.Scenarios.FindIndex(s =>
+            string.Equals(s.Name, _name, StringComparison.OrdinalIgnoreCase));
+        if (_removedIndex < 0)
+            return new CommandOutcome(false, "Scenario was not found.");
+
+        _removedScenario = ctx.Workbook.Scenarios[_removedIndex];
+        ctx.Workbook.Scenarios.RemoveAt(_removedIndex);
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: _removedScenario.ChangingCells.Select(c => c.Address).ToList());
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied || _removedScenario is null)
+            return;
+
+        var index = Math.Clamp(_removedIndex, 0, ctx.Workbook.Scenarios.Count);
+        ctx.Workbook.Scenarios.Insert(index, _removedScenario);
         _applied = false;
     }
 }

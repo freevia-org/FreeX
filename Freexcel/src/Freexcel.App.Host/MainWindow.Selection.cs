@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -150,6 +151,14 @@ public partial class MainWindow
         var hitAddress = Freexcel.App.UI.GridView.HitTestViewportCell(viewport, _currentSheetId, pos);
         if (hitAddress is { } newAddr)
         {
+            if (TryApplyFormulaRangeSelection(newAddr, extendSelection: (Keyboard.Modifiers & ModifierKeys.Shift) != 0))
+            {
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             if (_inlineEditor?.IsVisible == true)
             {
                 FormulaBar.Text = _inlineEditor.Text;
@@ -219,6 +228,8 @@ public partial class MainWindow
             {
                 _inlineEditor.Text = e.Text;
                 _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+                _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(e.Text);
+                RefreshFormulaReferenceHighlights();
             }
         }
         e.Handled = true;
@@ -259,7 +270,7 @@ public partial class MainWindow
             var keyTipKey = GetEffectiveKey(e);
             if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipMode.IsActive)
             {
-                _pendingStandaloneAltKeyTip = true;
+                _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
@@ -273,12 +284,19 @@ public partial class MainWindow
 
             if (Keyboard.Modifiers == ModifierKeys.Alt && IsStandaloneAltKey(keyTipKey))
             {
-                _pendingStandaloneAltKeyTip = true;
+                _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
 
-            _pendingStandaloneAltKeyTip = false;
+            if (Keyboard.Modifiers == ModifierKeys.Alt && TryHandleDirectRibbonKeyTip(keyTipKey))
+            {
+                _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
+                e.Handled = true;
+                return;
+            }
+
+            _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
 
             if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
             {
@@ -304,24 +322,6 @@ public partial class MainWindow
             if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(e.Key, Keyboard.Modifiers, _endMode, out var nextEndMode))
             {
                 SetEndMode(nextEndMode);
-                e.Handled = true;
-                return;
-            }
-
-            if (Keyboard.Modifiers == ModifierKeys.Alt &&
-                RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
-                TryHandleTopLevelRibbonKeyTip(keyTip))
-            {
-                EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-                e.Handled = true;
-                return;
-            }
-
-            if (Keyboard.Modifiers == ModifierKeys.Alt &&
-                RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } qatKeyTip &&
-                TryInvokeTopLevelQatKeyTip(qatKeyTip))
-            {
-                ExitRibbonKeyTipMode();
                 e.Handled = true;
                 return;
             }
@@ -368,6 +368,9 @@ public partial class MainWindow
                 return;
             }
         }
+
+        if (TryHandleFocusedRibbonKeyboardNavigation(e))
+            return;
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
         {
@@ -498,6 +501,54 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private bool TryHandleFocusedRibbonKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            !IsInsideRibbonSurface(focusedElement) ||
+            Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
+        {
+            return false;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            FocusSheetGridIfNeeded();
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End)
+        {
+            e.Handled = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsInsideRibbonSurface(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null; current = GetTreeParentForKeyboardFocus(current))
+        {
+            if (ReferenceEquals(current, RibbonTabs))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static DependencyObject? GetTreeParentForKeyboardFocus(DependencyObject element)
+    {
+        if (element is Visual)
+        {
+            var visualParent = VisualTreeHelper.GetParent(element);
+            if (visualParent is not null)
+                return visualParent;
+        }
+
+        return LogicalTreeHelper.GetParent(element);
+    }
+
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
     {
         _keyboardCommandDispatcher.TryExecute(shortcut, sender, e);
@@ -532,14 +583,10 @@ public partial class MainWindow
 
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (!_pendingStandaloneAltKeyTip)
-            return;
-
         var keyTipKey = GetEffectiveKey(e);
-        if (!IsStandaloneAltKey(keyTipKey))
+        if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
             return;
 
-        _pendingStandaloneAltKeyTip = false;
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
@@ -553,6 +600,9 @@ public partial class MainWindow
 
     private void SetActiveCell(CellAddress addr)
     {
+        if (GetFormulaRangeEntryEditor() is null)
+            ClearFormulaRangeEntryState();
+
         // If the cell belongs to a merged region, select the whole region
         var sheet = _workbook.GetSheet(_currentSheetId);
         var merge = sheet?.GetMergeRegion(addr);
@@ -712,7 +762,9 @@ public partial class MainWindow
         if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed) return;
         if (_selectionAnchor is not { } anchor) return;
         var hitAddr = HitTestCell(e.GetPosition(SheetGrid));
-        if (hitAddr.HasValue)
+        if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
+            TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
+        else if (hitAddr.HasValue)
             ExtendSelection(anchor, hitAddr.Value);
     }
 
@@ -734,11 +786,12 @@ public partial class MainWindow
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
         SheetGrid.ReleaseMouseCapture();
+        GetFormulaRangeEntryEditor()?.Focus();
     }
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
-        _pendingStandaloneAltKeyTip = false;
+        _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
         if (_ribbonKeyTipMode.IsActive)
             ExitRibbonKeyTipMode();
     }

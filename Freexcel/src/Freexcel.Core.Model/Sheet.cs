@@ -2,11 +2,24 @@ namespace Freexcel.Core.Model;
 
 public sealed record ThreadedComment(string Text, string Author = "Freexcel");
 
+public enum HyperlinkTargetKind
+{
+    ExistingFileOrWebPage,
+    CreateNewDocument,
+    PlaceInThisDocument,
+    EmailAddress
+}
+
+public sealed record HyperlinkMetadata(
+    HyperlinkTargetKind LinkType = HyperlinkTargetKind.ExistingFileOrWebPage,
+    string ScreenTip = "",
+    string Bookmark = "");
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
 /// </summary>
-public sealed class Sheet
+public sealed partial class Sheet
 {
     private readonly Dictionary<(uint Row, uint Col), Cell> _cells = [];
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
@@ -92,20 +105,38 @@ public sealed class Sheet
     /// <summary>Worksheet printed page header text.</summary>
     public WorksheetHeaderFooter PageHeader { get; set; } = new("", "", "");
 
+    /// <summary>Pictures used by the left, center, and right page header sections.</summary>
+    public WorksheetHeaderFooterPictureSet PageHeaderPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
+
     /// <summary>Worksheet printed page footer text.</summary>
     public WorksheetHeaderFooter PageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Pictures used by the left, center, and right page footer sections.</summary>
+    public WorksheetHeaderFooterPictureSet PageFooterPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
 
     /// <summary>Optional first-page header used when different first-page headers/footers are enabled.</summary>
     public WorksheetHeaderFooter FirstPageHeader { get; set; } = new("", "", "");
 
+    /// <summary>Pictures used by first-page header sections.</summary>
+    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
+
     /// <summary>Optional first-page footer used when different first-page headers/footers are enabled.</summary>
     public WorksheetHeaderFooter FirstPageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Pictures used by first-page footer sections.</summary>
+    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
 
     /// <summary>Optional even-page header used when different odd/even headers/footers are enabled.</summary>
     public WorksheetHeaderFooter EvenPageHeader { get; set; } = new("", "", "");
 
+    /// <summary>Pictures used by even-page header sections.</summary>
+    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
+
     /// <summary>Optional even-page footer used when different odd/even headers/footers are enabled.</summary>
     public WorksheetHeaderFooter EvenPageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Pictures used by even-page footer sections.</summary>
+    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; set; } = WorksheetHeaderFooterPictureSet.Empty;
 
     /// <summary>Whether the first printed page uses separate header/footer text.</summary>
     public bool DifferentFirstPageHeaderFooter { get; set; }
@@ -280,6 +311,9 @@ public sealed class Sheet
 
     /// <summary>Cell hyperlinks keyed by address. Value is the target URL/location.</summary>
     public Dictionary<CellAddress, string> Hyperlinks { get; } = [];
+
+    /// <summary>Excel hyperlink metadata keyed by address.</summary>
+    public Dictionary<CellAddress, HyperlinkMetadata> HyperlinkMetadata { get; } = [];
 
     /// <summary>True when the sheet is protected against edits.</summary>
     public bool IsProtected { get; set; }
@@ -518,280 +552,6 @@ public sealed class Sheet
             new CellAddress(Id, maxRow, maxCol));
     }
 
-    /// <summary>
-    /// Creates a deep copy of this sheet with a new <paramref name="newId"/> and <paramref name="newName"/>.
-    /// All model-layer properties are copied, including the previously missed fields:
-    /// <c>BackgroundImage</c>, <c>RowOutlineLevels</c>, <c>ColOutlineLevels</c>,
-    /// <c>GroupHiddenRows</c>, and <c>GroupHiddenCols</c>.
-    /// Drawing collections (Charts, TextBoxes, DrawingShapes, Pictures, Sparklines) are intentionally
-    /// left empty; the caller (e.g. <c>DuplicateSheetCommand</c>) is responsible for copying those.
-    /// </summary>
-    public Sheet Clone(SheetId newId, string newName)
-    {
-        var copy = new Sheet(newId, newName)
-        {
-            DefaultColumnWidth            = DefaultColumnWidth,
-            DefaultRowHeight              = DefaultRowHeight,
-            FrozenRows                    = FrozenRows,
-            FrozenCols                    = FrozenCols,
-            SplitRow                      = SplitRow,
-            SplitColumn                   = SplitColumn,
-            ViewTopRow                    = ViewTopRow,
-            ViewLeftCol                   = ViewLeftCol,
-            ActiveRow                     = ActiveRow,
-            ActiveCol                     = ActiveCol,
-            ShowGridlines                 = ShowGridlines,
-            ShowHeadings                  = ShowHeadings,
-            ShowRulers                    = ShowRulers,
-            ZoomPercent                   = ZoomPercent,
-            ShowFormulas                  = ShowFormulas,
-            FullCalculationOnLoad         = FullCalculationOnLoad,
-            PhoneticProperties            = PhoneticProperties,
-            PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
-            PageOrientation               = PageOrientation,
-            PaperSize                     = PaperSize,
-            PageMargins                   = PageMargins,
-            HeaderMargin                  = HeaderMargin,
-            FooterMargin                  = FooterMargin,
-            PrintGridlines                = PrintGridlines,
-            PrintHeadings                 = PrintHeadings,
-            ScaleToFit                    = ScaleToFit,
-            PrintTitleRows                = PrintTitleRows,
-            PrintTitleColumns             = PrintTitleColumns,
-            PageHeader                    = PageHeader,
-            PageFooter                    = PageFooter,
-            FirstPageHeader               = FirstPageHeader,
-            FirstPageFooter               = FirstPageFooter,
-            EvenPageHeader                = EvenPageHeader,
-            EvenPageFooter                = EvenPageFooter,
-            DifferentFirstPageHeaderFooter = DifferentFirstPageHeaderFooter,
-            DifferentOddEvenHeaderFooter  = DifferentOddEvenHeaderFooter,
-            HeaderFooterScaleWithDocument = HeaderFooterScaleWithDocument,
-            HeaderFooterAlignWithMargins  = HeaderFooterAlignWithMargins,
-            CenterHorizontallyOnPage      = CenterHorizontallyOnPage,
-            CenterVerticallyOnPage        = CenterVerticallyOnPage,
-            PageOrder                     = PageOrder,
-            FirstPageNumber               = FirstPageNumber,
-            PrintBlackAndWhite            = PrintBlackAndWhite,
-            PrintDraftQuality             = PrintDraftQuality,
-            PrintQualityDpi               = PrintQualityDpi,
-            PrintErrorValue               = PrintErrorValue,
-            PrintComments                 = PrintComments,
-            ViewMode                      = ViewMode,
-            IsHidden                      = false,
-            IsVeryHidden                  = IsVeryHidden,
-            CodeName                      = CodeName,
-            TabColor                      = TabColor,
-            IsProtected                   = IsProtected,
-            ProtectionPassword            = ProtectionPassword,
-            // Previously missed fields:
-            BackgroundImage               = BackgroundImage,
-        };
-
-        // Collections: column/row dimensions
-        foreach (var (col, width) in ColumnWidths)
-            copy.ColumnWidths[col] = width;
-        foreach (var (row, height) in RowHeights)
-            copy.RowHeights[row] = height;
-
-        // Hidden rows/cols
-        foreach (var row in HiddenRows)
-            copy.HiddenRows.Add(row);
-        foreach (var row in FilterHiddenRows)
-            copy.FilterHiddenRows.Add(row);
-        foreach (var col in HiddenCols)
-            copy.HiddenCols.Add(col);
-
-        // Page breaks
-        foreach (var rowBreak in RowPageBreaks)
-            copy.RowPageBreaks.Add(rowBreak);
-        foreach (var colBreak in ColumnPageBreaks)
-            copy.ColumnPageBreaks.Add(colBreak);
-
-        // Previously missed: outline levels and group-hidden rows/cols
-        foreach (var (row, level) in RowOutlineLevels)
-            copy.RowOutlineLevels[row] = level;
-        foreach (var (col, level) in ColOutlineLevels)
-            copy.ColOutlineLevels[col] = level;
-        foreach (var row in GroupHiddenRows)
-            copy.GroupHiddenRows.Add(row);
-        foreach (var col in GroupHiddenCols)
-            copy.GroupHiddenCols.Add(col);
-
-        // Cells (deep copy)
-        foreach (var (address, cell) in EnumerateCells())
-            copy.SetCell(RemapAddress(address, newId), cell.Clone());
-
-        // Style-only overrides for empty cells
-        foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
-            copy.SetStyleOnly(row, col, styleId);
-
-        // Merged regions
-        copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
-
-        // Comments and hyperlinks
-        foreach (var (address, comment) in Comments)
-            copy.Comments[RemapAddress(address, newId)] = comment;
-        foreach (var (address, comment) in ThreadedComments)
-            copy.ThreadedComments[RemapAddress(address, newId)] = comment;
-        foreach (var (address, hyperlink) in Hyperlinks)
-            copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
-
-        // Allow-edit ranges (protection)
-        foreach (var range in AllowEditRanges)
-            copy.AllowEditRanges.Add(RemapRange(range, newId));
-        foreach (var property in CustomProperties)
-            copy.CustomProperties.Add(property);
-
-        // Pivot tables
-        foreach (var pt in PivotTables)
-        {
-            var clonedPt = new PivotTableModel
-            {
-                Name        = pt.Name,
-                CacheId     = pt.CacheId,
-                SourceRange = RemapRange(pt.SourceRange, newId),
-                TargetRange = RemapRange(pt.TargetRange, newId),
-                PackagePart = pt.PackagePart,
-                ShowSubtotals = pt.ShowSubtotals,
-                SubtotalPlacement = pt.SubtotalPlacement,
-                ShowRowGrandTotals = pt.ShowRowGrandTotals,
-                ShowColumnGrandTotals = pt.ShowColumnGrandTotals,
-                RepeatItemLabels = pt.RepeatItemLabels,
-                BlankLineAfterItems = pt.BlankLineAfterItems,
-                ReportLayout = pt.ReportLayout,
-                StyleName = pt.StyleName,
-                ShowRowHeaders = pt.ShowRowHeaders,
-                ShowColumnHeaders = pt.ShowColumnHeaders,
-                ShowRowStripes = pt.ShowRowStripes,
-                ShowColumnStripes = pt.ShowColumnStripes
-            };
-            clonedPt.RowFields.AddRange(pt.RowFields);
-            clonedPt.ColumnFields.AddRange(pt.ColumnFields);
-            clonedPt.PageFields.AddRange(pt.PageFields);
-            clonedPt.DataFields.AddRange(pt.DataFields);
-            clonedPt.CalculatedFields.AddRange(pt.CalculatedFields);
-            clonedPt.CalculatedItems.AddRange(pt.CalculatedItems);
-            clonedPt.LabelFilters.AddRange(pt.LabelFilters);
-            clonedPt.ValueFilters.AddRange(pt.ValueFilters);
-            clonedPt.Sorts.AddRange(pt.Sorts);
-            copy.PivotTables.Add(clonedPt);
-        }
-
-        // Structured tables
-        foreach (var table in StructuredTables)
-        {
-            var clonedTable = new StructuredTableModel
-            {
-                Id = table.Id,
-                Name = table.Name,
-                DisplayName = table.DisplayName,
-                Range = RemapRange(table.Range, newId),
-                HasAutoFilter = table.HasAutoFilter,
-                TotalsRowShown = table.TotalsRowShown,
-                StyleName = table.StyleName,
-                ShowFirstColumn = table.ShowFirstColumn,
-                ShowLastColumn = table.ShowLastColumn,
-                ShowRowStripes = table.ShowRowStripes,
-                ShowColumnStripes = table.ShowColumnStripes,
-                PackagePart = table.PackagePart,
-                NativeSortStateXml = table.NativeSortStateXml,
-                NativeAttributes = table.NativeAttributes,
-                NativeChildXmls = table.NativeChildXmls,
-                NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
-                NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
-                NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
-                NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
-            };
-            clonedTable.Columns.AddRange(table.Columns);
-            clonedTable.FilterColumns.AddRange(table.FilterColumns);
-            copy.StructuredTables.Add(clonedTable);
-        }
-
-        // Conditional formats
-        foreach (var cf in ConditionalFormats)
-        {
-            var clonedFormat = new ConditionalFormat
-            {
-                AppliesTo            = RemapRange(cf.AppliesTo, newId),
-                Priority             = cf.Priority,
-                RuleType             = cf.RuleType,
-                Operator             = cf.Operator,
-                Value1               = cf.Value1,
-                Value2               = cf.Value2,
-                FormatIfTrue         = cf.FormatIfTrue?.Clone(),
-                MinColor             = cf.MinColor,
-                MidColor             = cf.MidColor,
-                MaxColor             = cf.MaxColor,
-                UseThreeColorScale   = cf.UseThreeColorScale,
-                MinThresholdType     = cf.MinThresholdType,
-                MinThresholdValue    = cf.MinThresholdValue,
-                MidThresholdType     = cf.MidThresholdType,
-                MidThresholdValue    = cf.MidThresholdValue,
-                MaxThresholdType     = cf.MaxThresholdType,
-                MaxThresholdValue    = cf.MaxThresholdValue,
-                DataBarColor         = cf.DataBarColor,
-                DataBarMinThresholdType = cf.DataBarMinThresholdType,
-                DataBarMinThresholdValue = cf.DataBarMinThresholdValue,
-                DataBarMaxThresholdType = cf.DataBarMaxThresholdType,
-                DataBarMaxThresholdValue = cf.DataBarMaxThresholdValue,
-                DataBarShowValue     = cf.DataBarShowValue,
-                DataBarMinLength     = cf.DataBarMinLength,
-                DataBarMaxLength     = cf.DataBarMaxLength,
-                AboveAverage         = cf.AboveAverage,
-                FormulaText          = cf.FormulaText,
-                IconSetStyle         = cf.IconSetStyle,
-                IconSetShowValue     = cf.IconSetShowValue,
-                IconSetReverse       = cf.IconSetReverse,
-                TopBottomRank        = cf.TopBottomRank,
-                TopBottomPercent     = cf.TopBottomPercent,
-                TextRuleText         = cf.TextRuleText,
-                DateOccurringPeriod  = cf.DateOccurringPeriod,
-                StopIfTrue           = cf.StopIfTrue,
-                NativeAttributes     = cf.NativeAttributes,
-                NativeChildXmls      = cf.NativeChildXmls,
-                NativePayloadAttributes = cf.NativePayloadAttributes,
-                NativePayloadChildXmls = cf.NativePayloadChildXmls,
-                NativeContainerAttributes = cf.NativeContainerAttributes,
-                NativeContainerChildXmls = cf.NativeContainerChildXmls
-            };
-            clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
-            copy.ConditionalFormats.Add(clonedFormat);
-        }
-
-        // Data validations
-        foreach (var dv in DataValidations)
-            copy.DataValidations.Add(new DataValidation
-            {
-                AppliesTo         = RemapRange(dv.AppliesTo, newId),
-                Type              = dv.Type,
-                Operator          = dv.Operator,
-                Formula1          = dv.Formula1,
-                Formula2          = dv.Formula2,
-                AllowBlank        = dv.AllowBlank,
-                ShowDropdown      = dv.ShowDropdown,
-                AlertStyle        = dv.AlertStyle,
-                ShowInputMessage  = dv.ShowInputMessage,
-                ShowErrorMessage  = dv.ShowErrorMessage,
-                ErrorTitle        = dv.ErrorTitle,
-                ErrorMessage      = dv.ErrorMessage,
-                PromptTitle       = dv.PromptTitle,
-                PromptMessage     = dv.PromptMessage,
-                NativeAttributes  = dv.NativeAttributes,
-                NativeChildXmls   = dv.NativeChildXmls,
-                NativeContainerAttributes = dv.NativeContainerAttributes,
-                NativeContainerChildXmls = dv.NativeContainerChildXmls
-            });
-
-        // Note: Charts, TextBoxes, DrawingShapes, Pictures, and Sparklines are intentionally
-        // left empty here. The caller must copy those drawing collections separately.
-
-        return copy;
-
-        static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
-        static GridRange   RemapRange         (GridRange   r, SheetId id) =>
-            new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
-    }
 }
 
 public sealed record WorksheetCustomProperty(string Name, int Id);

@@ -16,6 +16,12 @@ internal enum ExportContentScope
     EntireWorkbook
 }
 
+internal enum ExportQuality
+{
+    Standard,
+    MinimumSize
+}
+
 internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
@@ -28,7 +34,10 @@ internal sealed record ExportOptions(
     ExportContentScope Scope,
     bool IncludeDocumentProperties,
     bool OpenAfterPublish,
-    ExportPageRange? PageRange = null)
+    bool IgnorePrintAreas = false,
+    ExportPageRange? PageRange = null,
+    ExportQuality Quality = ExportQuality.Standard,
+    bool CreateBookmarks = false)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -60,16 +69,22 @@ internal static class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var format = InferExportFormat(path);
-        var normalizedPath = NormalizeExportPath(path, format);
+        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: false);
+        return new ExportRequest(normalizedPath, format, options, null);
+    }
+
+    public static ExportRequest PlanExport(string path, ExportFormat format, ExportOptions options)
+    {
+        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: true);
         return new ExportRequest(normalizedPath, format, options, null);
     }
 
     public static string GetFallbackXpsPath(string requestedPath) =>
         Path.ChangeExtension(requestedPath, ".xps");
 
-    private static string NormalizeExportPath(string path, ExportFormat format)
+    private static string NormalizeExportPath(string path, ExportFormat format, bool forceMatchingExtension)
     {
-        if (!string.IsNullOrEmpty(Path.GetExtension(path)))
+        if (!forceMatchingExtension && !string.IsNullOrEmpty(Path.GetExtension(path)))
             return path;
 
         return Path.ChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf");
@@ -87,14 +102,21 @@ internal static class ExportPlanner
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
+        var quality = DescribeQuality(options.Quality);
+        var printAreas = options.IgnorePrintAreas
+            ? "print areas are ignored"
+            : null;
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
+        var bookmarks = options.CreateBookmarks
+            ? "bookmarks use sheet names"
+            : null;
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, bookmarks, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -120,17 +142,26 @@ internal static class ExportPlanner
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
+        var quality = DescribeQualityForFormat(options.Quality, format);
+        var printAreas = options.IgnorePrintAreas
+            ? "print areas are ignored"
+            : null;
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
-            (true, ExportFormat.Xps) => "document properties are not included in XPS output",
+            (true, ExportFormat.Xps) => "document properties are included",
             _ => "document properties are not included"
         };
+        var bookmarks = options.CreateBookmarks
+            ? format == ExportFormat.Pdf
+                ? "bookmarks use sheet names"
+                : "bookmarks are PDF-only"
+            : null;
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, bookmarks, open);
     }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
@@ -185,4 +216,14 @@ internal static class ExportPlanner
 
     private static string JoinOptionParts(params string?[] parts) =>
         string.Join("; ", parts.Where(part => !string.IsNullOrWhiteSpace(part))) + ".";
+
+    private static string DescribeQuality(ExportQuality quality) =>
+        quality == ExportQuality.MinimumSize
+            ? "minimum size"
+            : "standard quality";
+
+    private static string DescribeQualityForFormat(ExportQuality quality, ExportFormat format) =>
+        quality == ExportQuality.MinimumSize && format == ExportFormat.Xps
+            ? "minimum size is PDF-only"
+            : DescribeQuality(quality);
 }

@@ -234,7 +234,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("zoom")) return new(RibbonCommandIconKind.Zoom);
         if (name.Contains("new window")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("arrange")) return new(RibbonCommandIconKind.PageBreak);
-        if (name.Contains("side by side") || name.Contains("synchronous") || name.Contains("reset window") || name.Contains("switch window")) return new(RibbonCommandIconKind.History);
+        if (name.Contains("side by side") || name.Contains("synchronous") || name.Contains("sync scrolling") || name.Contains("reset window") || name.Contains("reset position") || name.Contains("switch window")) return new(RibbonCommandIconKind.History);
         if (name.Contains("macro")) return new(RibbonCommandIconKind.GetData);
 
         if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help);
@@ -302,17 +302,19 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("conditional formatting") ||
         name.Contains("format as table") ||
         name.Contains("cell styles") ||
-        name.Contains("pivottable") ||
+        name == "pivottable" ||
         name is "table" ||
         name.Contains("recommended chart") ||
-        name.Contains("picture") ||
-        name.Contains("link") ||
-        name.Contains("new note") ||
+        name == "insert picture" ||
+        name == "insert link" ||
         name.Contains("insert symbol") ||
         name.Contains("text box") ||
         name.Contains("rectangle") ||
         name.Contains("ellipse") ||
         name == "line" ||
+        name.Contains("bring forward") ||
+        name.Contains("send backward") ||
+        name.Contains("selection pane") ||
         name.Contains("themes") ||
         name.Contains("margins") ||
         name.Contains("orientation") ||
@@ -323,17 +325,10 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("print titles") ||
         name.Contains("insert function") ||
         name.Contains("autosum") ||
-        name.Contains("recently used") ||
-        name.Contains("financial") ||
-        name.Contains("logical") ||
-        name.Contains("text functions") ||
-        name.Contains("date") ||
-        name.Contains("lookup") ||
-        name.Contains("math") ||
-        name.Contains("more functions") ||
         name.Contains("name manager") ||
-        name.Contains("watch window") ||
         name.Contains("calculation options") ||
+        name.Contains("calculate now") ||
+        name.Contains("calculate sheet") ||
         name.Contains("get data") ||
         name.Contains("refresh all") ||
         name == "sort ascending" ||
@@ -357,7 +352,6 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("show changes") ||
         name.Contains("new comment") ||
         name.Contains("show comments") ||
-        name.Contains("notes") ||
         name.Contains("protect sheet") ||
         name.Contains("protect workbook") ||
         name.Contains("allow edit") ||
@@ -372,6 +366,9 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("arrange all") ||
         name.Contains("freeze panes") ||
         name.Contains("switch windows") ||
+        name.Contains("side by side") ||
+        name.Contains("sync scrolling") ||
+        name.Contains("reset position") ||
         name.Contains("help online") ||
         name.Contains("about") ||
         name.Contains("feedback");
@@ -382,14 +379,7 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("theme effects") ||
         name.Contains("line sparkline") ||
         name.Contains("column sparkline") ||
-        name.Contains("win/loss") ||
-        name.Contains("column chart") ||
-        name.Contains("line chart") ||
-        name.Contains("pie chart") ||
-        name.Contains("bar chart") ||
-        name.Contains("scatter chart") ||
-        name.Contains("area chart") ||
-        name.Contains("doughnut chart");
+        name.Contains("win/loss");
 }
 
 public enum RibbonCommandLayoutKind

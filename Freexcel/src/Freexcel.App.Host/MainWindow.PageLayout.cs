@@ -333,37 +333,73 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var dialog = new PageSetupDialog(sheet) { Owner = this };
+        var dialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
         if (!TryExecuteGroupedSheetCommand(
                 "Page Setup",
-                sheetId => new SetPageSetupCommand(
-                    sheetId,
-                    dialog.Orientation,
-                    dialog.PaperSize,
-                    dialog.Margins,
-                    dialog.PrintGridlines,
-                    dialog.PrintHeadings,
-                    dialog.ScaleToFit,
-                    dialog.PrintTitleRows,
-                    dialog.PrintTitleColumns,
-                    dialog.CenterHorizontally,
-                    dialog.CenterVertically,
-                    dialog.PageOrder,
-                    dialog.FirstPageNumber,
-                    dialog.HeaderMargin,
-                    dialog.FooterMargin,
-                    dialog.PrintBlackAndWhite,
-                    dialog.PrintDraftQuality,
-                    dialog.PrintQualityDpi,
-                    dialog.PrintErrorValue,
-                    dialog.PrintComments)))
+                sheetId => new CompositeWorkbookCommand(
+                    "Page Setup",
+                    [
+                        new SetPageSetupCommand(
+                            sheetId,
+                            dialog.Orientation,
+                            dialog.PaperSize,
+                            dialog.Margins,
+                            dialog.PrintGridlines,
+                            dialog.PrintHeadings,
+                            dialog.ScaleToFit,
+                            dialog.PrintTitleRows,
+                            dialog.PrintTitleColumns,
+                            dialog.CenterHorizontally,
+                            dialog.CenterVertically,
+                            dialog.PageOrder,
+                            dialog.FirstPageNumber,
+                            dialog.HeaderMargin,
+                            dialog.FooterMargin,
+                            dialog.PrintBlackAndWhite,
+                            dialog.PrintDraftQuality,
+                            dialog.PrintQualityDpi,
+                            dialog.PrintErrorValue,
+                            dialog.PrintComments),
+                        new SetHeaderFooterCommand(
+                            sheetId,
+                            dialog.Header,
+                            dialog.Footer,
+                            dialog.FirstPageHeader,
+                            dialog.FirstPageFooter,
+                            dialog.EvenPageHeader,
+                            dialog.EvenPageFooter,
+                            dialog.DifferentFirstPage,
+                            dialog.DifferentOddEvenPages,
+                            dialog.ScaleHeaderFooterWithDocument,
+                            dialog.AlignHeaderFooterWithMargins,
+                            dialog.HeaderPictures,
+                            dialog.FooterPictures,
+                            dialog.FirstPageHeaderPictures,
+                            dialog.FirstPageFooterPictures,
+                            dialog.EvenPageHeaderPictures,
+                            dialog.EvenPageFooterPictures)
+                    ])))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
+        if (dialog.RequestedAction == PageSetupDialogAction.Options)
+        {
+            ShowPageSetupPrinterOptions();
+            return;
+        }
+
+        if (dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
+            PrintButton_Click(this, new RoutedEventArgs());
+    }
+
+    private void ShowPageSetupPrinterOptions()
+    {
+        var dialog = new System.Windows.Controls.PrintDialog();
+        dialog.ShowDialog();
     }
 
     private void PrintGridlinesChk_Click(object sender, RoutedEventArgs e)

@@ -92,7 +92,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new SimpleCtx(wb);
         var original = new GridRange(Addr(sheet, 10, 1), Addr(sheet, 10, 1));
-        wb.DefineNamedRange("Sales", original);
+        wb.DefineNamedRange("Sales", original, new NamedRangeMetadata("Sheet1", "Manual override"));
         Set(sheet, 1, 1, "Sales");
         Set(sheet, 2, 1, 99);
 
@@ -110,6 +110,7 @@ public sealed class CreateNamedRangesFromSelectionCommandTests
 
         wb.NamedRanges.Should().ContainSingle();
         wb.NamedRanges["Sales"].Should().Be(original);
+        wb.NamedRangeMetadataByName["Sales"].Should().Be(new NamedRangeMetadata("Sheet1", "Manual override"));
     }
 
     [Fact]

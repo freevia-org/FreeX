@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -9,6 +10,38 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class ConditionalFormatDialogTests
 {
+    [Fact]
+    public void BaseRuleDialog_ExposesKeyboardAccessKeysForFieldsAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+
+        source.Should().Contain("isBetween ? \"_Minimum:\" : \"_Value:\"");
+        source.Should().Contain("Content = \"Ma_ximum:\"");
+        source.Should().Contain("isDataBar ? \"_Bar color:\" : \"_Format:\"");
+        source.Should().Contain("CreateAccessLabel(\"_Formula:\", _formulaBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum type:\", _dataBarMinTypeBox)");
+        source.Should().Contain("CreateAccessLabel(\"Minimum _value:\", _dataBarMinValueBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum type:\", _dataBarMaxTypeBox)");
+        source.Should().Contain("CreateAccessLabel(\"Maximum _value:\", _dataBarMaxValueBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum bar length (%):\", _dataBarMinLengthBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum bar length (%):\", _dataBarMaxLengthBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum color (R,G,B):\", _colorScaleMinColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Midpoint type:\", _colorScaleMidTypeBox)");
+        source.Should().Contain("CreateAccessLabel(\"Midpoint _value:\", _colorScaleMidValueBox)");
+        source.Should().Contain("CreateAccessLabel(\"Midpoint _color (R,G,B):\", _colorScaleMidColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum color (R,G,B):\", _colorScaleMaxColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Icon set:\", _iconSetStyleBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Date period:\", _dateOccurringPeriodBox)");
+        source.Should().Contain("CreateAccessLabel(\"Format cells that _contain:\", _duplicateValuesKindBox)");
+        source.Should().Contain("Content = \"_Show value\"");
+        source.Should().Contain("Content = \"_Reverse icon order\"");
+        source.Should().Contain("Content = \"_Show Bar Only\"");
+        source.Should().Contain("Content = \"Use _three-color scale\"");
+        source.Should().Contain("CreateAccessLabel(ruleType is \"Top 10%\" or \"Bottom 10%\" ? \"_Percent:\" : \"_Rank:\", _topBottomRankBox)");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+    }
+
     [Fact]
     public void NewRuleDialog_UsesExcelRuleShell()
     {
@@ -28,6 +61,68 @@ public sealed class ConditionalFormatDialogTests
                 "Use a formula to determine which cells to format"
             ]);
             ruleTypeList.SelectedItem.Should().Be("Use a formula to determine which cells to format");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ChangingRuleShellSelectionRefreshesEditor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            var ruleTypeList = FindControl<ListBox>(dialog.Content);
+            ruleTypeList.Should().NotBeNull();
+            ruleTypeList!.SelectedItem = "Use a formula to determine which cells to format";
+
+            FindLabel(dialog.Content, "_Formula:").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_formulaBox").Text = "=A1>10";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.Formula);
+            dialog.ResultRule.FormulaText.Should().Be("A1>10");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void NewRuleDialog_ChangingToValueBasedShellRefreshesToDataBarControls()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Formula", RangeFor(SheetId.New())));
+
+            var ruleTypeList = FindControl<ListBox>(dialog.Content);
+            ruleTypeList.Should().NotBeNull();
+            ruleTypeList!.SelectedItem = "Format all cells based on their values";
+
+            FindLabel(dialog.Content, "_Minimum type:").Should().NotBeNull();
+            FindNamedControl<Border>(dialog.Content, "DataBarPreview").Should().NotBeNull();
+            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").Content.Should().Be("_Show Bar Only");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void HighlightRuleDialog_OffersExcelFormatPresetsAndFormatButton()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Greater Than", RangeFor(SheetId.New())));
+
+            var formatBox = GetControl<ComboBox>(dialog, "_colorBox");
+            formatBox.Items.Cast<object>().Select(item => item.ToString()).Should().Contain([
+                "Light Red Fill with Dark Red Text",
+                "Yellow Fill with Dark Yellow Text",
+                "Custom Format..."
+            ]);
+            FindButton(dialog.Content, "Format...").Should().NotBeNull();
 
             dialog.Close();
         });
@@ -273,7 +368,7 @@ public sealed class ConditionalFormatDialogTests
             GetControl<TextBox>(dialog, "_dataBarMinValueBox").Text = "10";
             GetControl<ComboBox>(dialog, "_dataBarMaxTypeBox").SelectedItem = CfThresholdType.Number;
             GetControl<TextBox>(dialog, "_dataBarMaxValueBox").Text = "99";
-            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked = false;
+            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked = true;
             GetControl<TextBox>(dialog, "_dataBarMinLengthBox").Text = "5";
             GetControl<TextBox>(dialog, "_dataBarMaxLengthBox").Text = "95";
             GetControl<ComboBox>(dialog, "_colorBox").SelectedItem = "Green Fill";
@@ -291,6 +386,26 @@ public sealed class ConditionalFormatDialogTests
             dialog.ResultRule.DataBarMinLength.Should().Be(5);
             dialog.ResultRule.DataBarMaxLength.Should().Be(95);
             dialog.ResultRule.FormatIfTrue.Should().BeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_ShowBarOnlyCheckboxUsesExcelSemantics()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", RangeFor(SheetId.New())));
+
+            var showBarOnly = GetControl<CheckBox>(dialog, "_dataBarShowValueBox");
+            showBarOnly.Content.Should().Be("_Show Bar Only");
+            showBarOnly.IsChecked.Should().BeFalse();
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarShowValue.Should().BeTrue();
 
             dialog.Close();
         });
@@ -329,6 +444,54 @@ public sealed class ConditionalFormatDialogTests
             dialog.ResultRule.MaxThresholdValue.Should().Be("MAX(A:A)");
             dialog.ResultRule.MaxColor.Should().Be(new RgbColor(70, 80, 90));
             dialog.ResultRule.FormatIfTrue.Should().BeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ColorScaleRule_DisablesMidpointControlsUntilThreeColorScaleSelected()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Color Scale", RangeFor(SheetId.New())));
+
+            var threeColor = GetControl<CheckBox>(dialog, "_colorScaleUseThreeColorBox");
+            var midType = GetControl<ComboBox>(dialog, "_colorScaleMidTypeBox");
+            var midValue = GetControl<TextBox>(dialog, "_colorScaleMidValueBox");
+            var midColor = GetControl<TextBox>(dialog, "_colorScaleMidColorBox");
+
+            threeColor.IsChecked.Should().BeFalse();
+            midType.IsEnabled.Should().BeFalse();
+            midValue.IsEnabled.Should().BeFalse();
+            midColor.IsEnabled.Should().BeFalse();
+
+            threeColor.IsChecked = true;
+            midType.IsEnabled.Should().BeTrue();
+            midValue.IsEnabled.Should().BeTrue();
+            midColor.IsEnabled.Should().BeTrue();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void TopBottomRule_UsesEditableRankOrPercentValue()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Bottom 10%", RangeFor(SheetId.New())));
+
+            FindLabel(dialog.Content, "_Percent:").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_topBottomRankBox").Text = "25";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.Top10);
+            dialog.ResultRule.AboveAverage.Should().BeFalse();
+            dialog.ResultRule.TopBottomPercent.Should().BeTrue();
+            dialog.ResultRule.TopBottomRank.Should().Be(25);
 
             dialog.Close();
         });
@@ -396,7 +559,7 @@ public sealed class ConditionalFormatDialogTests
             GetControl<TextBox>(dialog, "_dataBarMinValueBox").Text.Should().Be("15");
             GetControl<ComboBox>(dialog, "_dataBarMaxTypeBox").SelectedItem.Should().Be(CfThresholdType.Percent);
             GetControl<TextBox>(dialog, "_dataBarMaxValueBox").Text.Should().Be("90");
-            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked.Should().BeFalse();
+            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked.Should().BeTrue();
             GetControl<TextBox>(dialog, "_dataBarMinLengthBox").Text.Should().Be("7");
             GetControl<TextBox>(dialog, "_dataBarMaxLengthBox").Text.Should().Be("88");
 
@@ -536,6 +699,9 @@ public sealed class ConditionalFormatDialogTests
     private static TextBlock? FindText(object? root, string text) =>
         EnumerateLogical(root).OfType<TextBlock>().FirstOrDefault(block => Equals(block.Text, text));
 
+    private static Label? FindLabel(object? root, string content) =>
+        EnumerateLogical(root).OfType<Label>().FirstOrDefault(label => Equals(label.Content, content));
+
     private static T? FindControl<T>(object? root)
         where T : DependencyObject =>
         EnumerateLogical(root).OfType<T>().FirstOrDefault();
@@ -543,6 +709,9 @@ public sealed class ConditionalFormatDialogTests
     private static T? FindNamedControl<T>(object? root, string name)
         where T : FrameworkElement =>
         EnumerateLogical(root).OfType<T>().FirstOrDefault(element => element.Name == name);
+
+    private static Button? FindButton(object? root, string content) =>
+        EnumerateLogical(root).OfType<Button>().FirstOrDefault(button => Equals(button.Content, content));
 
     private static IEnumerable<object> EnumerateLogical(object? root)
     {

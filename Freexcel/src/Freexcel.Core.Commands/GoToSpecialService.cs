@@ -9,14 +9,54 @@ public enum GoToSpecialKind
     Formulas,
     Comments,
     DataValidation,
-    VisibleCellsOnly
+    VisibleCellsOnly,
+    RowDifferences,
+    ColumnDifferences,
+    CurrentRegion,
+    LastCell,
+    ConditionalFormats,
+    Objects,
+    Precedents,
+    Dependents
 }
 
 public static class GoToSpecialService
 {
-    public static IReadOnlyList<CellAddress> Find(Sheet sheet, GridRange range, GoToSpecialKind kind)
+    public static IReadOnlyList<CellAddress> Find(
+        Sheet sheet,
+        GridRange range,
+        GoToSpecialKind kind,
+        CellAddress? activeCell = null)
+        => Find(null, sheet, range, kind, activeCell);
+
+    public static IReadOnlyList<CellAddress> Find(
+        Workbook? workbook,
+        Sheet sheet,
+        GridRange range,
+        GoToSpecialKind kind,
+        CellAddress? activeCell = null)
     {
+        if (kind == GoToSpecialKind.CurrentRegion)
+            return SelectionRangeService.GetCurrentRegion(sheet, activeCell ?? range.Start)?.AllCells().ToList() ?? [];
+
+        if (kind == GoToSpecialKind.LastCell)
+            return sheet.GetUsedRange() is { } usedRange ? [usedRange.End] : [];
+
+        if (kind == GoToSpecialKind.Objects)
+            return FindObjects(sheet, range);
+
+        if (kind == GoToSpecialKind.Precedents)
+            return workbook is null ? [] : FindPrecedents(workbook, sheet, range);
+
+        if (kind == GoToSpecialKind.Dependents)
+            return workbook is null ? [] : FindDependents(workbook, sheet, range);
+
         var result = new List<CellAddress>();
+        if (kind == GoToSpecialKind.RowDifferences)
+            return FindRowDifferences(sheet, range);
+        if (kind == GoToSpecialKind.ColumnDifferences)
+            return FindColumnDifferences(sheet, range);
+
         foreach (var address in range.AllCells())
         {
             if (kind == GoToSpecialKind.VisibleCellsOnly)
@@ -47,9 +87,106 @@ public static class GoToSpecialService
                 case GoToSpecialKind.DataValidation when sheet.DataValidations.Any(rule => rule.AppliesTo.Contains(address)):
                     result.Add(address);
                     break;
+                case GoToSpecialKind.ConditionalFormats when sheet.ConditionalFormats.Any(rule => rule.AppliesTo.Contains(address)):
+                    result.Add(address);
+                    break;
             }
         }
 
         return result;
     }
+
+    private static IReadOnlyList<CellAddress> FindObjects(Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        foreach (var chart in sheet.Charts)
+            AddIfInRange(result, range, chart.DataRange.Start);
+        foreach (var shape in sheet.DrawingShapes)
+            AddIfInRange(result, range, shape.Anchor);
+        foreach (var picture in sheet.Pictures)
+            AddIfInRange(result, range, picture.Anchor);
+        foreach (var textBox in sheet.TextBoxes)
+            AddIfInRange(result, range, textBox.Anchor);
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindPrecedents(Workbook workbook, Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            foreach (var precedent in FormulaAuditingService.GetDirectPrecedents(workbook, address))
+                if (precedent.Sheet == sheet.Id && !result.Contains(precedent))
+                    result.Add(precedent);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindDependents(Workbook workbook, Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, address))
+                if (dependent.Sheet == sheet.Id && !result.Contains(dependent))
+                    result.Add(dependent);
+        }
+
+        return result;
+    }
+
+    private static void AddIfInRange(List<CellAddress> result, GridRange range, CellAddress address)
+    {
+        if (range.Contains(address) && !result.Contains(address))
+            result.Add(address);
+    }
+
+    private static IReadOnlyList<CellAddress> FindRowDifferences(Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            var firstValue = sheet.GetCell(row, range.Start.Col)?.Value ?? BlankValue.Instance;
+            for (var col = range.Start.Col + 1; col <= range.End.Col; col++)
+            {
+                var address = new CellAddress(range.Start.Sheet, row, col);
+                var value = sheet.GetCell(address)?.Value ?? BlankValue.Instance;
+                if (!ScalarEquals(firstValue, value))
+                    result.Add(address);
+            }
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindColumnDifferences(Sheet sheet, GridRange range)
+    {
+        var result = new List<CellAddress>();
+        for (var col = range.Start.Col; col <= range.End.Col; col++)
+        {
+            var firstValue = sheet.GetCell(range.Start.Row, col)?.Value ?? BlankValue.Instance;
+            for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+            {
+                var address = new CellAddress(range.Start.Sheet, row, col);
+                var value = sheet.GetCell(address)?.Value ?? BlankValue.Instance;
+                if (!ScalarEquals(firstValue, value))
+                    result.Add(address);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool ScalarEquals(ScalarValue a, ScalarValue b) =>
+        (a, b) switch
+        {
+            (TextValue ta, TextValue tb) => string.Equals(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase),
+            (NumberValue na, NumberValue nb) => na.Value.Equals(nb.Value),
+            (DateTimeValue da, DateTimeValue db) => da.Value.Equals(db.Value),
+            (BoolValue ba, BoolValue bb) => ba.Value == bb.Value,
+            (BlankValue, BlankValue) => true,
+            _ => false
+        };
 }

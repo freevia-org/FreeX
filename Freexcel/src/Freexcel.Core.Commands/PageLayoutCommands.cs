@@ -1,5 +1,4 @@
 using Freexcel.Core.Model;
-using System.Globalization;
 
 namespace Freexcel.Core.Commands;
 
@@ -155,43 +154,6 @@ public sealed class SetPageMarginsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         ctx.GetSheet(_sheetId).PageMargins = _previousMargins;
-    }
-}
-
-public static class PageMarginInputParser
-{
-    public static bool TryParse(string input, out WorksheetPageMargins margins, out string? error)
-    {
-        margins = default;
-
-        var parts = input.Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 4)
-        {
-            error = "Enter four comma-separated margins: left, right, top, bottom.";
-            return false;
-        }
-
-        var values = new double[4];
-        for (var i = 0; i < parts.Length; i++)
-        {
-            if (!double.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                error = "Margins must be numbers in inches.";
-                return false;
-            }
-
-            if (value < 0)
-            {
-                error = "Margins cannot be negative.";
-                return false;
-            }
-
-            values[i] = value;
-        }
-
-        margins = new WorksheetPageMargins(values[0], values[1], values[2], values[3]);
-        error = null;
-        return true;
     }
 }
 
@@ -610,100 +572,3 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
     }
 }
 
-public sealed class SetHeaderFooterCommand : IWorkbookCommand
-{
-    private readonly SheetId _sheetId;
-    private readonly WorksheetHeaderFooter _header;
-    private readonly WorksheetHeaderFooter _footer;
-    private readonly WorksheetHeaderFooter _firstPageHeader;
-    private readonly WorksheetHeaderFooter _firstPageFooter;
-    private readonly WorksheetHeaderFooter _evenPageHeader;
-    private readonly WorksheetHeaderFooter _evenPageFooter;
-    private readonly bool _differentFirstPage;
-    private readonly bool _differentOddEvenPages;
-    private readonly bool _scaleWithDocument;
-    private readonly bool _alignWithMargins;
-    private WorksheetHeaderFooter _previousHeader;
-    private WorksheetHeaderFooter _previousFooter;
-    private WorksheetHeaderFooter _previousFirstPageHeader;
-    private WorksheetHeaderFooter _previousFirstPageFooter;
-    private WorksheetHeaderFooter _previousEvenPageHeader;
-    private WorksheetHeaderFooter _previousEvenPageFooter;
-    private bool _previousDifferentFirstPage;
-    private bool _previousDifferentOddEvenPages;
-    private bool _previousScaleWithDocument;
-    private bool _previousAlignWithMargins;
-    private bool _applied;
-
-    public string Label => "Header & Footer";
-
-    public SetHeaderFooterCommand(
-        SheetId sheetId,
-        WorksheetHeaderFooter header,
-        WorksheetHeaderFooter footer,
-        WorksheetHeaderFooter? firstPageHeader = null,
-        WorksheetHeaderFooter? firstPageFooter = null,
-        WorksheetHeaderFooter? evenPageHeader = null,
-        WorksheetHeaderFooter? evenPageFooter = null,
-        bool differentFirstPage = false,
-        bool differentOddEvenPages = false,
-        bool scaleWithDocument = true,
-        bool alignWithMargins = true)
-    {
-        _sheetId = sheetId;
-        _header = header;
-        _footer = footer;
-        _firstPageHeader = firstPageHeader ?? new WorksheetHeaderFooter("", "", "");
-        _firstPageFooter = firstPageFooter ?? new WorksheetHeaderFooter("", "", "");
-        _evenPageHeader = evenPageHeader ?? new WorksheetHeaderFooter("", "", "");
-        _evenPageFooter = evenPageFooter ?? new WorksheetHeaderFooter("", "", "");
-        _differentFirstPage = differentFirstPage;
-        _differentOddEvenPages = differentOddEvenPages;
-        _scaleWithDocument = scaleWithDocument;
-        _alignWithMargins = alignWithMargins;
-    }
-
-    public CommandOutcome Apply(ICommandContext ctx)
-    {
-        var sheet = ctx.GetSheet(_sheetId);
-        _previousHeader = sheet.PageHeader;
-        _previousFooter = sheet.PageFooter;
-        _previousFirstPageHeader = sheet.FirstPageHeader;
-        _previousFirstPageFooter = sheet.FirstPageFooter;
-        _previousEvenPageHeader = sheet.EvenPageHeader;
-        _previousEvenPageFooter = sheet.EvenPageFooter;
-        _previousDifferentFirstPage = sheet.DifferentFirstPageHeaderFooter;
-        _previousDifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter;
-        _previousScaleWithDocument = sheet.HeaderFooterScaleWithDocument;
-        _previousAlignWithMargins = sheet.HeaderFooterAlignWithMargins;
-        sheet.PageHeader = _header;
-        sheet.PageFooter = _footer;
-        sheet.FirstPageHeader = _firstPageHeader;
-        sheet.FirstPageFooter = _firstPageFooter;
-        sheet.EvenPageHeader = _evenPageHeader;
-        sheet.EvenPageFooter = _evenPageFooter;
-        sheet.DifferentFirstPageHeaderFooter = _differentFirstPage;
-        sheet.DifferentOddEvenHeaderFooter = _differentOddEvenPages;
-        sheet.HeaderFooterScaleWithDocument = _scaleWithDocument;
-        sheet.HeaderFooterAlignWithMargins = _alignWithMargins;
-        _applied = true;
-        return new CommandOutcome(true);
-    }
-
-    public void Revert(ICommandContext ctx)
-    {
-        if (!_applied) return;
-        var sheet = ctx.GetSheet(_sheetId);
-        sheet.PageHeader = _previousHeader;
-        sheet.PageFooter = _previousFooter;
-        sheet.FirstPageHeader = _previousFirstPageHeader;
-        sheet.FirstPageFooter = _previousFirstPageFooter;
-        sheet.EvenPageHeader = _previousEvenPageHeader;
-        sheet.EvenPageFooter = _previousEvenPageFooter;
-        sheet.DifferentFirstPageHeaderFooter = _previousDifferentFirstPage;
-        sheet.DifferentOddEvenHeaderFooter = _previousDifferentOddEvenPages;
-        sheet.HeaderFooterScaleWithDocument = _previousScaleWithDocument;
-        sheet.HeaderFooterAlignWithMargins = _previousAlignWithMargins;
-        _applied = false;
-    }
-}

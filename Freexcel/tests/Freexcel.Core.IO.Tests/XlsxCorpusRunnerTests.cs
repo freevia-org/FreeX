@@ -154,6 +154,36 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    [Theory]
+    [InlineData("generated-slicers-001", "xl/drawings/drawing1.xml", "../slicers/slicer1.xml")]
+    [InlineData("generated-timelines-001", "xl/drawings/drawing1.xml", "../timelines/timeline1.xml")]
+    public void GeneratedSlicerTimelineRows_RetainFloatingDrawingAnchorsAfterModelEdit(
+        string id,
+        string drawingPart,
+        string drawingRelationshipTarget)
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(id);
+        var before = CapturePackageSummary(source);
+        before.CriticalParts.Should().Contain(drawingPart, id);
+        before.CriticalRelationshipTargets.Should().Contain(target =>
+            target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-floating-anchor-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, id);
+        var after = CapturePackageSummary(saved);
+
+        after.CriticalParts.Should().Contain(drawingPart, id);
+        after.CriticalRelationshipTargets.Should().Contain(target =>
+            target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+    }
+
     [Fact]
     public void PackageSummary_TreatsDocumentPropertiesAsFidelityCriticalParts()
     {
@@ -283,6 +313,7 @@ public class XlsxCorpusRunnerTests
             using var source = File.OpenRead(path);
             var workbook = adapter.Load(source);
             workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+            var before = CapturePublicComparableSummary(workbook);
 
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
@@ -292,6 +323,10 @@ public class XlsxCorpusRunnerTests
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
+            CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
+                before,
+                options => options.WithStrictOrdering(),
+                row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
     }
@@ -454,6 +489,9 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("data-bars"))
             summary.Sheets.Sum(sheet => sheet.DataBarConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
 
+        if (tags.Contains("icon-sets"))
+            summary.Sheets.Sum(sheet => sheet.IconSetConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
         if (tags.Contains("charts") && !tags.Contains("unsupported-chart-family"))
             summary.Sheets.Sum(sheet => sheet.ChartCount).Should().BeGreaterThan(0, row.Id);
 
@@ -539,6 +577,7 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count,
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
             sheet.Comments.Count,
             sheet.Hyperlinks.Count,
             sheet.Charts.Count,
@@ -582,6 +621,17 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
+
+    private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
+    {
+        var summary = CaptureSummary(workbook);
+        return summary with
+        {
+            Sheets = summary.Sheets
+                .Select(sheet => sheet with { StyleOnlyCellCount = 0 })
+                .ToArray()
+        };
+    }
 
     private static PackagePartSummary CapturePackageSummary(Stream stream)
     {
@@ -805,6 +855,7 @@ public class XlsxCorpusRunnerTests
         int ConditionalFormatCount,
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
+        int IconSetConditionalFormatCount,
         int CommentCount,
         int HyperlinkCount,
         int ChartCount,

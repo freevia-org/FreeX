@@ -14,6 +14,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Copy",
             "Paste",
             "Paste Special...",
+            "Insert Copied Cells...",
             "Insert...",
             "Insert Row Above",
             "Delete...",
@@ -40,6 +41,8 @@ public sealed class WorksheetContextMenuPlannerTests
             "Column Width...",
             "AutoFit Column Width",
             "New Comment",
+            "Edit Comment...",
+            "Delete Comment",
             "New Note",
             "Edit Note...",
             "Delete Note",
@@ -62,6 +65,8 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.PickFromDropDown);
         commands.Single(command => command.Header == "Quick Analysis")
             .Action.Should().Be(WorksheetContextMenuAction.QuickAnalysis);
+        commands.Single(command => command.Header == "Insert Copied Cells...")
+            .Action.Should().Be(WorksheetContextMenuAction.InsertCopiedCells);
         commands.Single(command => command.Header == "Define Name...")
             .Action.Should().Be(WorksheetContextMenuAction.DefineName);
         commands.Single(command => command.Header == "Create Table...")
@@ -88,6 +93,10 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
         commands.Single(command => command.Header == "New Comment")
             .Action.Should().Be(WorksheetContextMenuAction.NewComment);
+        commands.Single(command => command.Header == "Edit Comment...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditComment);
+        commands.Single(command => command.Header == "Delete Comment")
+            .Action.Should().Be(WorksheetContextMenuAction.DeleteComment);
         commands.Single(command => command.Header == "Edit Note...")
             .Action.Should().Be(WorksheetContextMenuAction.EditNote);
         commands.Single(command => command.Header == "Show Notes")
@@ -99,7 +108,10 @@ public sealed class WorksheetContextMenuPlannerTests
     [InlineData("Copy", "_Copy")]
     [InlineData("Paste", "_Paste")]
     [InlineData("Paste Special...", "Paste _Special...")]
+    [InlineData("Insert Copied Cells...", "Insert Copied _Cells...")]
     [InlineData("Quick Analysis", "_Quick Analysis")]
+    [InlineData("Edit Comment...", "_Edit Comment...")]
+    [InlineData("Delete Comment", "Delete _Comment")]
     [InlineData("Format Cells...", "_Format Cells...")]
     [InlineData("Clear Contents", "Clear C_ontents")]
     public void BuildCommands_ProvidesKeyboardAccessHeaders(string header, string expectedAccessHeader)
@@ -108,5 +120,103 @@ public sealed class WorksheetContextMenuPlannerTests
             .Single(command => command.Header == header);
 
         command.AccessHeader.Should().Be(expectedAccessHeader);
+    }
+
+    [Fact]
+    public void BuildCommands_ForPictureTargetIncludesExcelObjectCommands()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Picture);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Format Picture...",
+            "Crop...",
+            "Reset Crop",
+            "Edit Alt Text...",
+            "Selection Pane...");
+        commands.Single(command => command.Header == "Format Picture...")
+            .Action.Should().Be(WorksheetContextMenuAction.FormatPicture);
+        commands.Single(command => command.Header == "Edit Alt Text...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditAltText);
+    }
+
+    [Theory]
+    [InlineData(WorksheetContextMenuTargetKind.Shape, "Format Shape...", true)]
+    [InlineData(WorksheetContextMenuTargetKind.TextBox, "Format Text Box...", false)]
+    public void BuildCommands_ForDrawingObjectTargetsIncludesExcelObjectCommands(
+        WorksheetContextMenuTargetKind targetKind,
+        string formatHeader,
+        bool includesReorder)
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            formatHeader,
+            "Size and Properties...",
+            "Rotate...",
+            "Shape Fill...",
+            "Shape Outline...",
+            "Edit Alt Text...",
+            "Selection Pane...");
+        if (includesReorder)
+        {
+            commands.Select(command => command.Header).Should().ContainInOrder(
+                "Bring Forward",
+                "Send Backward");
+        }
+
+        commands.Single(command => command.Header == formatHeader)
+            .Action.Should().Be(WorksheetContextMenuAction.FormatDrawingObject);
+    }
+
+    [Fact]
+    public void BuildCommands_ForWholeRowSelectionIncludesOnlyRowLayoutCommands()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.RowSelection);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
+            "Insert Row Above",
+            "Delete Row(s)",
+            "Row Height...",
+            "AutoFit Row Height",
+            "Hide Rows",
+            "Unhide Rows",
+            "Clear Contents");
+        commands.Select(command => command.Header).Should().NotContain([
+            "Insert Column Left",
+            "Delete Column(s)",
+            "Column Width...",
+            "AutoFit Column Width",
+            "Hide Columns",
+            "Unhide Columns"
+        ]);
+    }
+
+    [Fact]
+    public void BuildCommands_ForWholeColumnSelectionIncludesOnlyColumnLayoutCommands()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.ColumnSelection);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
+            "Insert Column Left",
+            "Delete Column(s)",
+            "Column Width...",
+            "AutoFit Column Width",
+            "Hide Columns",
+            "Unhide Columns",
+            "Clear Contents");
+        commands.Select(command => command.Header).Should().NotContain([
+            "Insert Row Above",
+            "Delete Row(s)",
+            "Row Height...",
+            "AutoFit Row Height",
+            "Hide Rows",
+            "Unhide Rows"
+        ]);
     }
 }

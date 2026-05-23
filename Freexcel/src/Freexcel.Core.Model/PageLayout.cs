@@ -70,6 +70,28 @@ public readonly record struct WorksheetHeaderFooter(
     string Center,
     string Right);
 
+public sealed record WorksheetHeaderFooterPicture(
+    byte[] ImageBytes,
+    string ContentType,
+    string? FileName = null,
+    double Width = 96,
+    double Height = 48)
+{
+    public WorksheetHeaderFooterPicture DeepClone() =>
+        this with { ImageBytes = ImageBytes.ToArray() };
+}
+
+public readonly record struct WorksheetHeaderFooterPictureSet(
+    WorksheetHeaderFooterPicture? Left,
+    WorksheetHeaderFooterPicture? Center,
+    WorksheetHeaderFooterPicture? Right)
+{
+    public static WorksheetHeaderFooterPictureSet Empty { get; } = new(null, null, null);
+
+    public WorksheetHeaderFooterPictureSet DeepClone() =>
+        new(Left?.DeepClone(), Center?.DeepClone(), Right?.DeepClone());
+}
+
 public readonly record struct WorksheetPageSize(double Width, double Height);
 
 public readonly record struct WorksheetMarginGuideFractions(

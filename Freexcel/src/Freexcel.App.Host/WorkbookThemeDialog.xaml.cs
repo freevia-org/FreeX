@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -47,6 +48,7 @@ public partial class WorkbookThemeDialog : Window
         Accent6ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent6));
         HyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Hyperlink));
         FollowedHyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.FollowedHyperlink));
+        UpdatePreview();
     }
 
     private void OfficePresetButton_Click(object sender, RoutedEventArgs e) =>
@@ -77,8 +79,51 @@ public partial class WorkbookThemeDialog : Window
 
         var dialog = new ColorPickerDialog(initialColor) { Owner = this };
         if (dialog.ShowDialog() == true && dialog.SelectedColor.HasValue)
+        {
             colorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(dialog.SelectedColor.Value);
+            UpdatePreview();
+        }
     }
+
+    private void UpdatePreview()
+    {
+        PreviewHeadingText.FontFamily = new FontFamily(string.IsNullOrWhiteSpace(HeadingFontBox.Text) ? "Aptos Display" : HeadingFontBox.Text);
+        PreviewBodyText.FontFamily = new FontFamily(string.IsNullOrWhiteSpace(BodyFontBox.Text) ? "Aptos" : BodyFontBox.Text);
+
+        PreviewAccentStrip.Children.Clear();
+        foreach (var colorBox in new[]
+        {
+            Accent1ColorBox,
+            Accent2ColorBox,
+            Accent3ColorBox,
+            Accent4ColorBox,
+            Accent5ColorBox,
+            Accent6ColorBox
+        })
+        {
+            PreviewAccentStrip.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(colorBox.Text))),
+                Margin = new Thickness(0, 0, 4, 0)
+            });
+        }
+
+        PreviewBodyText.Foreground = new SolidColorBrush(ToMediaColor(ParsePreviewColor(HyperlinkColorBox.Text)));
+    }
+
+    private static CellColor ParsePreviewColor(string text)
+    {
+        try
+        {
+            return WorkbookThemeDialogColorCodec.ParseColor(text);
+        }
+        catch (FormatException)
+        {
+            return new CellColor(0, 0, 0);
+        }
+    }
+
+    private static Color ToMediaColor(CellColor color) => Color.FromRgb(color.R, color.G, color.B);
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {

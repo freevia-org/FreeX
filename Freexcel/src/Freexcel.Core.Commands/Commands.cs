@@ -168,7 +168,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private Sheet? _removedSheet;
     private int _removedIndex;
-    private Dictionary<string, GridRange>? _namedRangeSnapshot;
+    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -291,6 +291,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         foreach (var textBox in source.TextBoxes)
             copy.TextBoxes.Add(new TextBoxModel
             {
+                Name            = textBox.Name,
                 Anchor          = RemapAddress(textBox.Anchor, copyId),
                 Text            = textBox.Text,
                 Width           = textBox.Width,
@@ -304,6 +305,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         foreach (var shape in source.DrawingShapes)
             copy.DrawingShapes.Add(new DrawingShapeModel
             {
+                Name            = shape.Name,
                 Anchor          = RemapAddress(shape.Anchor, copyId),
                 Kind            = shape.Kind,
                 Width           = shape.Width,
@@ -318,6 +320,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         {
             var copiedPicture = new PictureModel
             {
+                Name              = picture.Name,
                 Anchor            = RemapAddress(picture.Anchor, copyId),
                 Kind              = picture.Kind,
                 SourceRowCount    = picture.SourceRowCount,
@@ -373,6 +376,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
     private static ChartModel CloneChart(ChartModel chart, SheetId copyId) =>
         new()
         {
+            Name = chart.Name,
             Type = chart.Type,
             DataRange = RemapRange(chart.DataRange, copyId),
             IsVisible = chart.IsVisible,

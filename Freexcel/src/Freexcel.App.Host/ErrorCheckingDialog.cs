@@ -31,7 +31,7 @@ public sealed class ErrorCheckingDialog : Window
 
         Title = "Error Checking";
         Width = 720;
-        Height = 360;
+        Height = 420;
         MinWidth = 540;
         MinHeight = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -45,6 +45,36 @@ public sealed class ErrorCheckingDialog : Window
         };
         DockPanel.SetDock(_header, Dock.Top);
         root.Children.Add(_header);
+
+        var actionPanel = new GroupBox
+        {
+            Header = "Error help",
+            Width = 180,
+            Margin = new Thickness(10, 0, 0, 0),
+            Padding = new Thickness(8)
+        };
+        DockPanel.SetDock(actionPanel, Dock.Right);
+        var actionStack = new StackPanel();
+        actionPanel.Content = actionStack;
+        actionStack.Children.Add(new TextBlock
+        {
+            Text = "Choose an action for the selected issue.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        var help = new Button { Content = "_Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        help.Click += (_, _) => ShowSelectedIssueHelp();
+        actionStack.Children.Add(help);
+        var showSteps = new Button { Content = "Show _Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        showSteps.Click += (_, _) => TraceSelected();
+        actionStack.Children.Add(showSteps);
+        var ignoreAction = new Button { Content = "_Ignore Error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        ignoreAction.Click += (_, _) => IgnoreSelected();
+        actionStack.Children.Add(ignoreAction);
+        var editFormula = new Button { Content = "_Edit in Formula Bar", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        editFormula.Click += (_, _) => NavigateSelected();
+        actionStack.Children.Add(editFormula);
+        root.Children.Add(actionPanel);
 
         var buttons = new StackPanel
         {
@@ -166,4 +196,13 @@ public sealed class ErrorCheckingDialog : Window
     }
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e) => NavigateSelected();
+
+    private void ShowSelectedIssueHelp()
+    {
+        var message = _listView.SelectedItem is FormulaErrorIssue issue
+            ? $"{issue.ErrorCode}\n\n{issue.Description}\n\nUse Show Calculation Steps to trace the formula, Ignore Error to suppress this issue, or Edit in Formula Bar to correct the formula."
+            : "Select an issue to see its description and available correction actions.";
+
+        MessageBox.Show(this, message, "Error Checking Help", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 }

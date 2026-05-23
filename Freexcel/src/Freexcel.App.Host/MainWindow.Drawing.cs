@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -56,19 +57,43 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ObjectSizeDialog(picture.Width, picture.Height, "Picture Size") { Owner = this };
+        var dialog = new FormatPictureDialog(picture) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Picture Size",
-                sheetId => new ResizePictureCommand(
-                    sheetId,
-                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
-                    dialog.Result.Width,
-                    dialog.Result.Height)))
+                "Format Picture",
+                sheetId => CreateFormatPictureCommand(sheetId, GetTargetPicture(sheetId), dialog.Result)))
             return;
 
         UpdateViewport();
+    }
+
+    private static IWorkbookCommand CreateFormatPictureCommand(
+        SheetId sheetId,
+        PictureModel? picture,
+        FormatPictureDialogResult result)
+    {
+        if (picture is null)
+            return new FailedWorkbookCommand("Picture was not found.");
+
+        var commands = new List<IWorkbookCommand>
+        {
+            new ResizePictureCommand(sheetId, picture.Id, result.Width, result.Height),
+            new RotatePictureCommand(sheetId, picture.Id, result.RotationDegrees),
+            new SetPictureAltTextCommand(sheetId, picture.Id, result.AltText)
+        };
+        if (picture.Kind == PictureKind.Image)
+        {
+            commands.Add(new SetPictureCropCommand(
+                sheetId,
+                picture.Id,
+                result.CropLeft,
+                result.CropTop,
+                result.CropRight,
+                result.CropBottom));
+        }
+
+        return new CompositeWorkbookCommand("Format Picture", commands);
     }
 
     private void PictureRotateBtn_Click(object sender, RoutedEventArgs e)
@@ -404,49 +429,24 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        switch (dialog.Result.Action)
-        {
-            case SelectionPaneDialogAction.MoveUp when dialog.Result.Target is { } target:
-                if (!ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges))
-                    return;
-                ApplySelectionPaneMove(target, forward: true);
-                break;
-            case SelectionPaneDialogAction.MoveDown when dialog.Result.Target is { } target:
-                if (!ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges))
-                    return;
-                ApplySelectionPaneMove(target, forward: false);
-                break;
-            default:
-                ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges);
-                break;
-        }
+        ApplySelectionPaneChanges(dialog.Result);
     }
 
-    private void ApplySelectionPaneMove(SelectionPaneItem target, bool forward)
+    private void ApplySelectionPaneChanges(SelectionPaneDialogResult result)
     {
-        var title = forward ? "Bring Forward" : "Send Backward";
-        if (!TryExecuteCommand(
-                new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward),
-                title))
+        var commands = new List<IWorkbookCommand>();
+        commands.AddRange(result.RenameChanges.Select(change =>
+            new RenameSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Name)));
+        commands.AddRange(result.VisibilityChanges.Select(change =>
+            new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible)));
+        commands.AddRange(result.MoveChanges.Select(change =>
+            new MoveSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Forward)));
+
+        if (commands.Count == 0)
             return;
 
-        UpdateViewport();
-    }
-
-    private bool ApplySelectionPaneVisibilityChanges(IReadOnlyList<SelectionPaneVisibilityChange> changes)
-    {
-        foreach (var change in changes)
-        {
-            if (!TryExecuteCommand(
-                    new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible),
-                    change.IsVisible ? "Show Object" : "Hide Object"))
-                return false;
-        }
-
-        if (changes.Count > 0)
+        if (TryExecuteCommand(new CompositeWorkbookCommand("Selection Pane", commands), "Selection Pane"))
             UpdateViewport();
-
-        return true;
     }
 
     private DrawingShapeModel? GetTargetDrawingShape(SheetId sheetId)

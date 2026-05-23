@@ -32,16 +32,30 @@ public sealed class CellShiftDialog : Window
     {
         _mode = mode;
         Title = mode == CellShiftDialogMode.Insert ? "Insert" : "Delete";
-        Width = 260;
-        Height = 210;
+        Width = 310;
+        Height = 245;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        var optionPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        var optionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         DockPanel.SetDock(optionPanel, Dock.Top);
-        root.Children.Add(optionPanel);
+        root.Children.Add(new TextBlock
+        {
+            Text = mode == CellShiftDialogMode.Insert ? "Insert cells" : "Delete cells",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+        var group = new GroupBox
+        {
+            Header = mode == CellShiftDialogMode.Insert ? "Insert" : "Delete",
+            Margin = new Thickness(0, 0, 0, 10),
+            Content = optionPanel
+        };
+        DockPanel.SetDock(group, Dock.Top);
+        root.Children.Add(group);
 
         foreach (var option in GetAvailableChoices(mode))
         {
@@ -58,29 +72,9 @@ public sealed class CellShiftDialog : Window
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
-        };
+        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
-
-        buttons.Children.Add(new Button
-        {
-            Content = "_OK",
-            Width = 72,
-            Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
-        });
-        ((Button)buttons.Children[0]).Click += (_, _) => Accept();
-
-        buttons.Children.Add(new Button
-        {
-            Content = "_Cancel",
-            Width = 72,
-            IsCancel = true
-        });
 
         Content = root;
     }

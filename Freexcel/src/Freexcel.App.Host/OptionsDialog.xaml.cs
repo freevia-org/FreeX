@@ -51,6 +51,26 @@ public partial class OptionsDialog : Window
         OptFormulasAutocomplete.IsChecked = true;
         PopulateErrorCheckingRules();
 
+        // Advanced
+        OptMoveAfterEnter.IsChecked = _opts.MoveSelectionAfterEnter;
+        OptAfterEnterDirection.ItemsSource = new[] { "Down", "Right", "Up", "Left" };
+        OptAfterEnterDirection.SelectedIndex = _opts.AfterEnterDirection switch
+        {
+            FreexcelEnterDirection.Right => 1,
+            FreexcelEnterDirection.Up => 2,
+            FreexcelEnterDirection.Left => 3,
+            _ => 0
+        };
+        OptShowGridlines.IsChecked = _opts.ShowGridlines;
+        OptShowHeadings.IsChecked = _opts.ShowHeadings;
+        OptObjectsDisplay.ItemsSource = new[] { "All", "Placeholders", "Nothing (hide objects)" };
+        OptObjectsDisplay.SelectedIndex = _opts.ObjectsDisplay switch
+        {
+            FreexcelObjectDisplay.Placeholders => 1,
+            FreexcelObjectDisplay.Nothing => 2,
+            _ => 0
+        };
+
         // View
         OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
         OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded;
@@ -67,10 +87,19 @@ public partial class OptionsDialog : Window
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (TabList.SelectedIndex < 0) return;
-        PanelGeneral.Visibility  = TabList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PanelFormulas.Visibility = TabList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PanelView.Visibility     = TabList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
-        PanelSave.Visibility     = TabList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        var selected = (TabList.SelectedItem as ListBoxItem)?.Content?.ToString() ?? "";
+        PanelGeneral.Visibility = selected == "_General" ? Visibility.Visible : Visibility.Collapsed;
+        PanelFormulas.Visibility = selected == "_Formulas" ? Visibility.Visible : Visibility.Collapsed;
+        PanelProofing.Visibility = selected == "_Proofing" ? Visibility.Visible : Visibility.Collapsed;
+        PanelSave.Visibility = selected == "_Save" ? Visibility.Visible : Visibility.Collapsed;
+        PanelLanguage.Visibility = selected == "_Language" ? Visibility.Visible : Visibility.Collapsed;
+        PanelEaseOfAccess.Visibility = selected == "_Ease of Access" ? Visibility.Visible : Visibility.Collapsed;
+        PanelAdvanced.Visibility = selected == "_Advanced" ? Visibility.Visible : Visibility.Collapsed;
+        PanelCustomizeRibbon.Visibility = selected == "_Customize Ribbon" ? Visibility.Visible : Visibility.Collapsed;
+        PanelQuickAccessToolbar.Visibility = selected == "_Quick Access Toolbar" ? Visibility.Visible : Visibility.Collapsed;
+        PanelAddIns.Visibility = selected == "_Add-ins" ? Visibility.Visible : Visibility.Collapsed;
+        PanelTrustCenter.Visibility = selected == "_Trust Center" ? Visibility.Visible : Visibility.Collapsed;
+        PanelView.Visibility = selected == "_View" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
@@ -85,6 +114,22 @@ public partial class OptionsDialog : Window
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
             ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
             FormulaBarExpanded = OptFormulaBarExpanded.IsChecked == true,
+            MoveSelectionAfterEnter = OptMoveAfterEnter.IsChecked == true,
+            AfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
+            {
+                1 => FreexcelEnterDirection.Right,
+                2 => FreexcelEnterDirection.Up,
+                3 => FreexcelEnterDirection.Left,
+                _ => FreexcelEnterDirection.Down
+            },
+            ShowGridlines = OptShowGridlines.IsChecked == true,
+            ShowHeadings = OptShowHeadings.IsChecked == true,
+            ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
+            {
+                1 => FreexcelObjectDisplay.Placeholders,
+                2 => FreexcelObjectDisplay.Nothing,
+                _ => FreexcelObjectDisplay.All
+            },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
         };
         opts.Save();

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Copy">
+<rect width="32" height="32" fill="none"/>
+<!-- Back sheet (behind) -->
+<rect fill="white" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" x="7" y="11" width="13" height="16" rx="1.5"/>
+<!-- Front sheet (on top, covers back) -->
+<rect fill="white" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" x="11" y="7" width="13" height="16" rx="1.5"/>
+</svg>
