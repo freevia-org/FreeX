@@ -188,6 +188,46 @@ public sealed class SortCommandTests
         sheet.GetValue(4, 2).Should().Be(new TextValue("Blue 2"));
     }
 
+    [Fact]
+    public void SortCommand_RejectsProtectedSheetWithoutSortPermission()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.IsProtected = true;
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void SortCommand_AllowsProtectedSheetWithSortPermission()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.Sort);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
+    }
+
     private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)
     {
         var keyCell = Cell.FromValue(new TextValue(label));
