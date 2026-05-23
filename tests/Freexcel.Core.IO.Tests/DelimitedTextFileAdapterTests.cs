@@ -124,6 +124,24 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_IgnoresRecordsBeyondExcelRowLimit()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        var builder = new StringBuilder();
+        for (var row = 1; row < CellAddress.MaxRow; row++)
+            builder.AppendLine();
+        builder.AppendLine("last");
+        builder.AppendLine("overflow");
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(builder.ToString()));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, CellAddress.MaxRow, 1)).Should().Be(new TextValue("last"));
+        sheet.GetCell(new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1)).Should().BeNull();
+    }
+
+    [Fact]
     public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
