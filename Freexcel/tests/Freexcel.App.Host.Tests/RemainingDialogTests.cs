@@ -301,6 +301,9 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_locationPickerButton");
         source.Should().Contain("Select Data Range");
         source.Should().Contain("Select Location Range");
+        source.Should().Contain("_dataRangePickerButton.Click += (_, _) => FocusRangeBox(_dataRangeBox)");
+        source.Should().Contain("_locationPickerButton.Click += (_, _) => FocusRangeBox(_locationBox)");
+        source.Should().Contain("textBox.SelectAll()");
     }
 
     [Fact]
