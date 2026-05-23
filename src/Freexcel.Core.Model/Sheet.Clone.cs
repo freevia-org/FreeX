@@ -152,6 +152,7 @@ public sealed partial class Sheet
                 RepeatItemLabels = pt.RepeatItemLabels,
                 BlankLineAfterItems = pt.BlankLineAfterItems,
                 ReportLayout = pt.ReportLayout,
+                CompactRowLabelIndent = pt.CompactRowLabelIndent,
                 StyleName = pt.StyleName,
                 ShowRowHeaders = pt.ShowRowHeaders,
                 ShowColumnHeaders = pt.ShowColumnHeaders,

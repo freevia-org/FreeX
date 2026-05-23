@@ -12593,6 +12593,7 @@ public partial class FileAdapterSmokeTests
             CacheId = 1,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
+            CompactRowLabelIndent = 4,
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             AltTextTitle = "Sales pivot",
@@ -12621,6 +12622,7 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("itemPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("indent")!.Value.Should().Be("4");
             pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
             pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
         }
@@ -12631,6 +12633,7 @@ public partial class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        loadedPivot.CompactRowLabelIndent.Should().Be(4);
         loadedPivot.PrintTitles.Should().BeTrue();
         loadedPivot.PrintExpandCollapseButtons.Should().BeTrue();
         loadedPivot.AltTextTitle.Should().Be("Sales pivot");

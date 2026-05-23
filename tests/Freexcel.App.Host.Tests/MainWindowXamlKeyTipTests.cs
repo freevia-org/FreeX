@@ -1822,6 +1822,19 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void PivotTableContextualLayoutCommands_PreserveCompactIndentWhenUsingOptionWrapper()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("int? compactRowLabelIndent = null");
+        source.Should().Contain("bool? printTitles = null");
+        source.Should().Contain("bool? printExpandCollapseButtons = null");
+        source.Should().Contain("bool updateAltText = false");
+        source.Should().Contain("compactRowLabelIndent,");
+        source.Should().Contain("updateAltText: true");
+    }
+
+    [Fact]
     public void PivotTableChangeDataSource_RoutesThroughUndoableSourceCommand()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));

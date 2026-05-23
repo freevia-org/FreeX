@@ -478,6 +478,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _blankLineAfterItems;
     private readonly string _styleName;
     private readonly PivotReportLayout _reportLayout;
+    private readonly int? _compactRowLabelIndent;
     private readonly bool _showRowHeaders;
     private readonly bool _showColumnHeaders;
     private readonly bool _showRowStripes;
@@ -486,10 +487,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
-    private readonly bool _printTitles;
-    private readonly bool _printExpandCollapseButtons;
+    private readonly bool? _printTitles;
+    private readonly bool? _printExpandCollapseButtons;
     private readonly string? _altTextTitle;
     private readonly string? _altTextDescription;
+    private readonly bool _updateAltText;
     private PivotOptionsSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
@@ -512,10 +514,12 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool updateEmptyValueText = false,
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
-        bool printTitles = false,
-        bool printExpandCollapseButtons = false,
+        bool? printTitles = null,
+        bool? printExpandCollapseButtons = null,
         string? altTextTitle = null,
-        string? altTextDescription = null)
+        string? altTextDescription = null,
+        int? compactRowLabelIndent = null,
+        bool updateAltText = false)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -527,6 +531,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _blankLineAfterItems = blankLineAfterItems;
         _styleName = styleName;
         _reportLayout = reportLayout;
+        _compactRowLabelIndent = compactRowLabelIndent is { } indent
+            ? NormalizeCompactRowLabelIndent(indent)
+            : null;
         _showRowHeaders = showRowHeaders;
         _showColumnHeaders = showColumnHeaders;
         _showRowStripes = showRowStripes;
@@ -539,6 +546,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _printExpandCollapseButtons = printExpandCollapseButtons;
         _altTextTitle = NormalizeEmptyValueText(altTextTitle);
         _altTextDescription = NormalizeEmptyValueText(altTextDescription);
+        _updateAltText = updateAltText || _altTextTitle is not null || _altTextDescription is not null;
     }
 
     public string Label => "Configure PivotTable Options";
@@ -563,16 +571,23 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         pivotTable.BlankLineAfterItems = _blankLineAfterItems;
         pivotTable.StyleName = _styleName;
         pivotTable.ReportLayout = _reportLayout;
+        if (_compactRowLabelIndent is { } compactRowLabelIndent)
+            pivotTable.CompactRowLabelIndent = compactRowLabelIndent;
         pivotTable.ShowRowHeaders = _showRowHeaders;
         pivotTable.ShowColumnHeaders = _showColumnHeaders;
         pivotTable.ShowRowStripes = _showRowStripes;
         pivotTable.ShowColumnStripes = _showColumnStripes;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
-        pivotTable.PrintTitles = _printTitles;
-        pivotTable.PrintExpandCollapseButtons = _printExpandCollapseButtons;
-        pivotTable.AltTextTitle = _altTextTitle;
-        pivotTable.AltTextDescription = _altTextDescription;
+        if (_printTitles is { } printTitles)
+            pivotTable.PrintTitles = printTitles;
+        if (_printExpandCollapseButtons is { } printExpandCollapseButtons)
+            pivotTable.PrintExpandCollapseButtons = printExpandCollapseButtons;
+        if (_updateAltText)
+        {
+            pivotTable.AltTextTitle = _altTextTitle;
+            pivotTable.AltTextDescription = _altTextDescription;
+        }
         if (cache is not null)
         {
             if (_refreshOnOpen is { } refreshOnOpen)
@@ -609,6 +624,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool BlankLineAfterItems,
         string StyleName,
         PivotReportLayout ReportLayout,
+        int CompactRowLabelIndent,
         bool ShowRowHeaders,
         bool ShowColumnHeaders,
         bool ShowRowStripes,
@@ -632,6 +648,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.BlankLineAfterItems,
                 pivotTable.StyleName,
                 pivotTable.ReportLayout,
+                pivotTable.CompactRowLabelIndent,
                 pivotTable.ShowRowHeaders,
                 pivotTable.ShowColumnHeaders,
                 pivotTable.ShowRowStripes,
@@ -655,6 +672,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.BlankLineAfterItems = BlankLineAfterItems;
             pivotTable.StyleName = StyleName;
             pivotTable.ReportLayout = ReportLayout;
+            pivotTable.CompactRowLabelIndent = CompactRowLabelIndent;
             pivotTable.ShowRowHeaders = ShowRowHeaders;
             pivotTable.ShowColumnHeaders = ShowColumnHeaders;
             pivotTable.ShowRowStripes = ShowRowStripes;
@@ -683,6 +701,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
 
         return text.Trim();
     }
+
+    private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
 }
 
 public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
