@@ -84,7 +84,7 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_newWorksheetButton);
         stack.Children.Add(_existingWorksheetButton);
 
-        _destinationRangeBox.Text = Result.DestinationRangeText;
+        _destinationRangeBox.Text = destinationText;
         AddLabeledReferenceEditor(
             stack,
             "_Location:",
