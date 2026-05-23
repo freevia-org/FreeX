@@ -6706,6 +6706,9 @@ public partial class FileAdapterSmokeTests
             Top = 130,
             Width = 360,
             Height = 210,
+            BubbleScale = 150,
+            ShowNegativeBubbles = true,
+            BubbleSizeRepresents = ChartBubbleSizeRepresents.Width,
             SeriesFormats =
             [
                 new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1))
@@ -6721,6 +6724,12 @@ public partial class FileAdapterSmokeTests
         {
             archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
             archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            var bubbleChart = chartXml.Descendants(chartNs + "bubbleChart").Single();
+            bubbleChart.Element(chartNs + "bubbleScale")!.Attribute("val")!.Value.Should().Be("150");
+            bubbleChart.Element(chartNs + "showNegBubbles")!.Attribute("val")!.Value.Should().Be("1");
+            bubbleChart.Element(chartNs + "sizeRepresents")!.Attribute("val")!.Value.Should().Be("w");
         }
 
         saved.Position = 0;
@@ -6737,6 +6746,9 @@ public partial class FileAdapterSmokeTests
         loadedChart.Top.Should().BeApproximately(130, 0.01);
         loadedChart.Width.Should().BeApproximately(360, 0.01);
         loadedChart.Height.Should().BeApproximately(210, 0.01);
+        loadedChart.BubbleScale.Should().Be(150);
+        loadedChart.ShowNegativeBubbles.Should().BeTrue();
+        loadedChart.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
         loadedChart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
             new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)));
     }

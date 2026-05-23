@@ -108,6 +108,9 @@ public sealed partial class NativeJsonAdapter
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
         public bool? VaryColorsByPoint { get; set; }
+        public int BubbleScale { get; set; } = 100;
+        public bool ShowNegativeBubbles { get; set; }
+        public ChartBubbleSizeRepresents BubbleSizeRepresents { get; set; } = ChartBubbleSizeRepresents.Area;
         public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
         public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
         public bool LegendOverlay { get; set; }
