@@ -8452,7 +8452,13 @@ public partial class FileAdapterSmokeTests
                 new CellAddress(sheet.Id, 4, 3)),
             ShowDropLines = true,
             ShowHighLowLines = true,
-            ShowUpDownBars = true
+            ShowUpDownBars = true,
+            DropLineColor = new CellColor(91, 155, 213),
+            DropLineThickness = 1.5,
+            DropLineDashStyle = ChartLineDashStyle.Dot,
+            HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+            HighLowLineThickness = 2,
+            HighLowLineDashStyle = ChartLineDashStyle.Dash
         });
 
         var saved = new MemoryStream();
@@ -8467,6 +8473,20 @@ public partial class FileAdapterSmokeTests
         lineChart.Element(chartNs + "dropLines").Should().NotBeNull();
         lineChart.Element(chartNs + "hiLowLines").Should().NotBeNull();
         lineChart.Element(chartNs + "upDownBars").Should().NotBeNull();
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var dropLine = lineChart.Element(chartNs + "dropLines")!
+            .Element(chartNs + "spPr")!
+            .Element(drawingNs + "ln")!;
+        dropLine.Attribute("w")!.Value.Should().Be("19050");
+        dropLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("5B9BD5");
+        dropLine.Element(drawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dot");
+
+        var highLowLine = lineChart.Element(chartNs + "hiLowLines")!
+            .Element(chartNs + "spPr")!
+            .Element(drawingNs + "ln")!;
+        highLowLine.Attribute("w")!.Value.Should().Be("25400");
+        highLowLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent4");
+        highLowLine.Element(drawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dash");
     }
 
     [Fact]

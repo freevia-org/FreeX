@@ -270,6 +270,34 @@ public sealed partial class SetChartLayoutCommand
             chart.ErrorBarThickness = ClampFinite(options.ErrorBarThickness.Value, 0.5, 10);
         if (options.ErrorBarDashStyle is not null)
             chart.ErrorBarDashStyle = ValidEnumOrDefault(options.ErrorBarDashStyle.Value, ChartLineDashStyle.Solid);
+        if (options.DropLineColor is not null)
+        {
+            chart.DropLineColor = options.DropLineColor;
+            chart.DropLineThemeColor = null;
+        }
+        if (options.DropLineThemeColor is not null)
+        {
+            chart.DropLineThemeColor = options.DropLineThemeColor;
+            chart.DropLineColor = null;
+        }
+        if (options.DropLineThickness is not null)
+            chart.DropLineThickness = ClampFinite(options.DropLineThickness.Value, 0.5, 10);
+        if (options.DropLineDashStyle is not null)
+            chart.DropLineDashStyle = ValidEnumOrDefault(options.DropLineDashStyle.Value, ChartLineDashStyle.Solid);
+        if (options.HighLowLineColor is not null)
+        {
+            chart.HighLowLineColor = options.HighLowLineColor;
+            chart.HighLowLineThemeColor = null;
+        }
+        if (options.HighLowLineThemeColor is not null)
+        {
+            chart.HighLowLineThemeColor = options.HighLowLineThemeColor;
+            chart.HighLowLineColor = null;
+        }
+        if (options.HighLowLineThickness is not null)
+            chart.HighLowLineThickness = ClampFinite(options.HighLowLineThickness.Value, 0.5, 10);
+        if (options.HighLowLineDashStyle is not null)
+            chart.HighLowLineDashStyle = ValidEnumOrDefault(options.HighLowLineDashStyle.Value, ChartLineDashStyle.Solid);
         if (options.ShowSecondaryAxis is not null)
             chart.ShowSecondaryAxis = options.ShowSecondaryAxis.Value;
         if (options.SecondaryAxisSeriesIndexes is not null)

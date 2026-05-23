@@ -52,8 +52,32 @@ internal static class XlsxChartTrendlineErrorBarReader
 
     public static void ApplyChartGuideLineMetadata(XElement plotChart, ChartModel chart)
     {
-        chart.ShowDropLines |= plotChart.Element(ChartNs + "dropLines") is not null;
-        chart.ShowHighLowLines |= plotChart.Element(ChartNs + "hiLowLines") is not null;
+        if (plotChart.Element(ChartNs + "dropLines") is { } dropLines)
+        {
+            chart.ShowDropLines = true;
+            ApplyLineShapeProperties(
+                dropLines.Element(ChartNs + "spPr"),
+                color => chart.DropLineColor = color,
+                theme => chart.DropLineThemeColor = theme,
+                thickness => chart.DropLineThickness = thickness,
+                dashStyle => chart.DropLineDashStyle = dashStyle,
+                () => chart.DropLineColor = null,
+                () => chart.DropLineThemeColor = null);
+        }
+
+        if (plotChart.Element(ChartNs + "hiLowLines") is { } highLowLines)
+        {
+            chart.ShowHighLowLines = true;
+            ApplyLineShapeProperties(
+                highLowLines.Element(ChartNs + "spPr"),
+                color => chart.HighLowLineColor = color,
+                theme => chart.HighLowLineThemeColor = theme,
+                thickness => chart.HighLowLineThickness = thickness,
+                dashStyle => chart.HighLowLineDashStyle = dashStyle,
+                () => chart.HighLowLineColor = null,
+                () => chart.HighLowLineThemeColor = null);
+        }
+
         chart.ShowUpDownBars |= plotChart.Element(ChartNs + "upDownBars") is not null;
     }
 
@@ -94,14 +118,33 @@ internal static class XlsxChartTrendlineErrorBarReader
 
     private static void ApplyErrorBarShapeProperties(XElement? shapeProperties, ChartModel chart)
     {
+        ApplyLineShapeProperties(
+            shapeProperties,
+            color => chart.ErrorBarColor = color,
+            theme => chart.ErrorBarThemeColor = theme,
+            thickness => chart.ErrorBarThickness = thickness,
+            dashStyle => chart.ErrorBarDashStyle = dashStyle,
+            () => chart.ErrorBarColor = null,
+            () => chart.ErrorBarThemeColor = null);
+    }
+
+    private static void ApplyLineShapeProperties(
+        XElement? shapeProperties,
+        Action<CellColor> setColor,
+        Action<WorkbookThemeColorReference> setThemeColor,
+        Action<double> setThickness,
+        Action<ChartLineDashStyle> setDashStyle,
+        Action clearColor,
+        Action clearThemeColor)
+    {
         var line = shapeProperties?.Element(DrawingNs + "ln");
         if (line is null)
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.ErrorBarThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
+            setThickness(Math.Clamp(emus / 12700.0, 0.5, 10));
 
-        chart.ErrorBarDashStyle = FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value);
+        setDashStyle(FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value));
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)
@@ -109,13 +152,13 @@ internal static class XlsxChartTrendlineErrorBarReader
 
         if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var themeColor))
         {
-            chart.ErrorBarThemeColor = themeColor;
-            chart.ErrorBarColor = null;
+            setThemeColor(themeColor);
+            clearColor();
         }
         else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var color))
         {
-            chart.ErrorBarColor = color;
-            chart.ErrorBarThemeColor = null;
+            setColor(color);
+            clearThemeColor();
         }
     }
 
