@@ -29,7 +29,7 @@ public sealed partial class NamedRangeDialog : Window
         _commandBus = commandBus;
         InitializeComponent();
         RefreshList();
-        RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+        UpdateSelectionCommands();
 
         _initialRefersTo = initialRange.HasValue ? FormatRange(initialRange.Value, workbook) : "";
     }
@@ -76,7 +76,7 @@ public sealed partial class NamedRangeDialog : Window
             RefersToBox.Text = vm.RefersTo;
         }
 
-        RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+        UpdateSelectionCommands();
     }
 
     private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => ApplyFilter();
@@ -94,8 +94,16 @@ public sealed partial class NamedRangeDialog : Window
         if (NamesList.SelectedItem is not NamedRangeViewModel)
         {
             RefersToBox.Clear();
-            RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel;
+            UpdateSelectionCommands();
         }
+    }
+
+    private void UpdateSelectionCommands()
+    {
+        var hasSelection = NamesList.SelectedItem is NamedRangeViewModel;
+        EditButton.IsEnabled = hasSelection;
+        DeleteButton.IsEnabled = hasSelection;
+        RefersToPickerButton.IsEnabled = hasSelection;
     }
 
     private void RefersToPickerButton_Click(object sender, RoutedEventArgs e)
@@ -177,6 +185,16 @@ public sealed partial class NamedRangeDialog : Window
         if (NamesList.SelectedItem is not NamedRangeViewModel vm)
         {
             MessageBox.Show("Select a named range to delete.", "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (MessageBox.Show(
+                this,
+                $"Delete the name '{vm.Name}'?",
+                "Name Manager",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
             return;
         }
 
