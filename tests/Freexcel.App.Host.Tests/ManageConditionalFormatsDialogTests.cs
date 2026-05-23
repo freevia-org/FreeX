@@ -227,6 +227,17 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesScopeSelector()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_scopeBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_scopeBox);");
+    }
+
+    [Fact]
     public void ScopeSelector_DefaultsToCurrentSelectionWhenSelectionIsProvided()
     {
         StaTestRunner.Run(() =>
