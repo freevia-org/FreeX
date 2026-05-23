@@ -288,7 +288,10 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
         bool showAxisFieldButtons,
         bool showValueFieldButtons,
         bool showDataTable = false,
-        bool showDataTableLegendKeys = false)
+        bool showDataTableLegendKeys = false,
+        bool roundedCorners = false,
+        bool showHiddenData = false,
+        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap)
     {
         ChartStyleId = chartStyleId;
         ShowFieldButtons = showFieldButtons;
@@ -297,6 +300,9 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
         ShowValueFieldButtons = showValueFieldButtons;
         ShowDataTable = showDataTable;
         ShowDataTableLegendKeys = showDataTableLegendKeys;
+        RoundedCorners = roundedCorners;
+        ShowHiddenData = showHiddenData;
+        BlankDisplayMode = blankDisplayMode;
     }
 
     public int? ChartStyleId { get; }
@@ -306,6 +312,9 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
     public bool ShowValueFieldButtons { get; }
     public bool ShowDataTable { get; }
     public bool ShowDataTableLegendKeys { get; }
+    public bool RoundedCorners { get; }
+    public bool ShowHiddenData { get; }
+    public ChartBlankDisplayMode BlankDisplayMode { get; }
 
     public bool Equals(PivotChartOptionsDialogResult? other) =>
         other is not null &&
@@ -315,19 +324,28 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
         ShowAxisFieldButtons == other.ShowAxisFieldButtons &&
         ShowValueFieldButtons == other.ShowValueFieldButtons &&
         ShowDataTable == other.ShowDataTable &&
-        ShowDataTableLegendKeys == other.ShowDataTableLegendKeys;
+        ShowDataTableLegendKeys == other.ShowDataTableLegendKeys &&
+        RoundedCorners == other.RoundedCorners &&
+        ShowHiddenData == other.ShowHiddenData &&
+        BlankDisplayMode == other.BlankDisplayMode;
 
     public override bool Equals(object? obj) => Equals(obj as PivotChartOptionsDialogResult);
 
-    public override int GetHashCode() =>
-        HashCode.Combine(
-            ChartStyleId,
-            ShowFieldButtons,
-            ShowReportFilterButtons,
-            ShowAxisFieldButtons,
-            ShowValueFieldButtons,
-            ShowDataTable,
-            ShowDataTableLegendKeys);
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(ChartStyleId);
+        hash.Add(ShowFieldButtons);
+        hash.Add(ShowReportFilterButtons);
+        hash.Add(ShowAxisFieldButtons);
+        hash.Add(ShowValueFieldButtons);
+        hash.Add(ShowDataTable);
+        hash.Add(ShowDataTableLegendKeys);
+        hash.Add(RoundedCorners);
+        hash.Add(ShowHiddenData);
+        hash.Add(BlankDisplayMode);
+        return hash.ToHashCode();
+    }
 }
 
 public sealed class PivotChartOptionsDialog : Window
@@ -339,6 +357,9 @@ public sealed class PivotChartOptionsDialog : Window
     private readonly CheckBox _showValueFieldButtonsBox = new() { Content = "_Value field buttons" };
     private readonly CheckBox _showDataTableBox = new() { Content = "Show data _table" };
     private readonly CheckBox _showDataTableLegendKeysBox = new() { Content = "Show legend _keys" };
+    private readonly CheckBox _roundedCornersBox = new() { Content = "_Rounded corners" };
+    private readonly CheckBox _showHiddenDataBox = new() { Content = "Show data in _hidden rows and columns" };
+    private readonly ComboBox _blankDisplayBox = new();
 
     public PivotChartOptionsDialogResult Result { get; private set; }
 
@@ -347,7 +368,7 @@ public sealed class PivotChartOptionsDialog : Window
         Result = FromChart(chart);
         Title = "PivotChart Options";
         Width = 420;
-        Height = 330;
+        Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -374,6 +395,20 @@ public sealed class PivotChartOptionsDialog : Window
         _showDataTableBox.Margin = new Thickness(0, 0, 0, 6);
         _showDataTableLegendKeysBox.IsChecked = Result.ShowDataTableLegendKeys;
         _showDataTableLegendKeysBox.Margin = new Thickness(18, 0, 0, 16);
+        _roundedCornersBox.IsChecked = Result.RoundedCorners;
+        _roundedCornersBox.Margin = new Thickness(0, 0, 0, 6);
+        _showHiddenDataBox.IsChecked = Result.ShowHiddenData;
+        _showHiddenDataBox.Margin = new Thickness(0, 0, 0, 8);
+        _blankDisplayBox.ItemsSource = new[]
+        {
+            new BlankDisplayChoice("Gaps", ChartBlankDisplayMode.Gap),
+            new BlankDisplayChoice("Connect data points with line", ChartBlankDisplayMode.Span),
+            new BlankDisplayChoice("Zero", ChartBlankDisplayMode.Zero)
+        };
+        _blankDisplayBox.DisplayMemberPath = nameof(BlankDisplayChoice.Label);
+        _blankDisplayBox.SelectedValuePath = nameof(BlankDisplayChoice.Mode);
+        _blankDisplayBox.SelectedValue = Result.BlankDisplayMode;
+        _blankDisplayBox.Margin = new Thickness(0, 0, 0, 16);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
@@ -390,6 +425,10 @@ public sealed class PivotChartOptionsDialog : Window
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
         layoutPanel.Children.Add(_showDataTableBox);
         layoutPanel.Children.Add(_showDataTableLegendKeysBox);
+        layoutPanel.Children.Add(_roundedCornersBox);
+        layoutPanel.Children.Add(_showHiddenDataBox);
+        layoutPanel.Children.Add(new Label { Content = "_Blank cells", Target = _blankDisplayBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        layoutPanel.Children.Add(_blankDisplayBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout", layoutPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         Content = stack;
@@ -403,7 +442,10 @@ public sealed class PivotChartOptionsDialog : Window
             chart.ShowPivotChartAxisFieldButtons,
             chart.ShowPivotChartValueFieldButtons,
             chart.DataTable is not null,
-            chart.DataTable?.ShowLegendKeys == true);
+            chart.DataTable?.ShowLegendKeys == true,
+            chart.RoundedCorners,
+            chart.ShowDataInHiddenRowsAndColumns,
+            chart.BlankDisplayMode);
 
     public static PivotChartOptionsDialogResult CreateResult(
         string? chartStyleIdText,
@@ -412,7 +454,10 @@ public sealed class PivotChartOptionsDialog : Window
         bool showAxisFieldButtons = true,
         bool showValueFieldButtons = true,
         bool showDataTable = false,
-        bool showDataTableLegendKeys = false) =>
+        bool showDataTableLegendKeys = false,
+        bool roundedCorners = false,
+        bool showHiddenData = false,
+        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap) =>
         new(
             ParseStyleId(chartStyleIdText),
             showFieldButtons,
@@ -420,7 +465,10 @@ public sealed class PivotChartOptionsDialog : Window
             showAxisFieldButtons,
             showValueFieldButtons,
             showDataTable,
-            showDataTableLegendKeys);
+            showDataTableLegendKeys,
+            roundedCorners,
+            showHiddenData,
+            blankDisplayMode);
 
     public static PivotChartOptionsDialogResult CreateResult(
         int? chartStyleId,
@@ -429,7 +477,10 @@ public sealed class PivotChartOptionsDialog : Window
         bool showAxisFieldButtons = true,
         bool showValueFieldButtons = true,
         bool showDataTable = false,
-        bool showDataTableLegendKeys = false) =>
+        bool showDataTableLegendKeys = false,
+        bool roundedCorners = false,
+        bool showHiddenData = false,
+        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap) =>
         new(
             NormalizeStyleId(chartStyleId),
             showFieldButtons,
@@ -437,7 +488,10 @@ public sealed class PivotChartOptionsDialog : Window
             showAxisFieldButtons,
             showValueFieldButtons,
             showDataTable,
-            showDataTableLegendKeys);
+            showDataTableLegendKeys,
+            roundedCorners,
+            showHiddenData,
+            blankDisplayMode);
 
     private void Accept()
     {
@@ -451,9 +505,14 @@ public sealed class PivotChartOptionsDialog : Window
             _showAxisFieldButtonsBox.IsChecked == true,
             _showValueFieldButtonsBox.IsChecked == true,
             _showDataTableBox.IsChecked == true,
-            _showDataTableLegendKeysBox.IsChecked == true);
+            _showDataTableLegendKeysBox.IsChecked == true,
+            _roundedCornersBox.IsChecked == true,
+            _showHiddenDataBox.IsChecked == true,
+            _blankDisplayBox.SelectedValue is ChartBlankDisplayMode mode ? mode : ChartBlankDisplayMode.Gap);
         DialogResult = true;
     }
+
+    private sealed record BlankDisplayChoice(string Label, ChartBlankDisplayMode Mode);
 
     private static int? ParseStyleId(string? text)
     {

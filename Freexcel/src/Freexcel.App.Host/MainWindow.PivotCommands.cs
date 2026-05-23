@@ -254,7 +254,10 @@ public partial class MainWindow
                     dialog.Result.ShowAxisFieldButtons,
                     dialog.Result.ShowValueFieldButtons,
                     dialog.Result.ShowDataTable,
-                    dialog.Result.ShowDataTableLegendKeys),
+                    dialog.Result.ShowDataTableLegendKeys,
+                    dialog.Result.RoundedCorners,
+                    dialog.Result.ShowHiddenData,
+                    dialog.Result.BlankDisplayMode),
                 "PivotChart Options"))
             return;
 

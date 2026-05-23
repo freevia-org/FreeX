@@ -101,6 +101,34 @@ public sealed class FormulaEvaluationSummaryServiceTests
     }
 
     [Fact]
+    public void FormulaEvaluationSession_StepOutMovesToContainingExpression()
+    {
+        var summary = new FormulaEvaluationSummary(
+            new SheetId(Guid.NewGuid()),
+            "Sheet1",
+            new CellAddress(new SheetId(Guid.NewGuid()), 1, 1),
+            "=SUM(B1*2,C1)",
+            "13",
+            [
+                new FormulaEvaluationStep("B1", "5"),
+                new FormulaEvaluationStep("2", "2"),
+                new FormulaEvaluationStep("B1*2", "10"),
+                new FormulaEvaluationStep("C1", "3"),
+                new FormulaEvaluationStep("SUM(B1*2,C1)", "13")
+            ]);
+
+        var session = FormulaEvaluationSession.Start(summary);
+
+        session.StepOut().Should().BeTrue();
+
+        session.CurrentStep.Should().Be(summary.Steps[2]);
+        session.CurrentStepNumber.Should().Be(3);
+
+        session.StepOut().Should().BeTrue();
+        session.CurrentStep.Should().Be(summary.Steps[4]);
+    }
+
+    [Fact]
     public void GetSummary_ReturnsNullForNonFormulaCell()
     {
         var workbook = new Workbook("test");

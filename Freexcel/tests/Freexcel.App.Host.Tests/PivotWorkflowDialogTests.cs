@@ -701,9 +701,12 @@ public sealed class PivotWorkflowDialogTests
                 showFieldButtons: true,
                 showReportFilterButtons: true,
                 showAxisFieldButtons: true,
-                showValueFieldButtons: true)
+                showValueFieldButtons: true,
+                roundedCorners: true,
+                showHiddenData: true,
+                blankDisplayMode: ChartBlankDisplayMode.Zero)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(48, true, true, true, true));
+            .Be(new PivotChartOptionsDialogResult(48, true, true, true, true, false, false, true, true, ChartBlankDisplayMode.Zero));
     }
 
     [Fact]
@@ -716,12 +719,15 @@ public sealed class PivotWorkflowDialogTests
             ShowPivotChartReportFilterButtons = true,
             ShowPivotChartAxisFieldButtons = false,
             ShowPivotChartValueFieldButtons = true,
-            DataTable = new ChartDataTableModel { ShowLegendKeys = true }
+            DataTable = new ChartDataTableModel { ShowLegendKeys = true },
+            RoundedCorners = true,
+            ShowDataInHiddenRowsAndColumns = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Span
         };
 
         PivotChartOptionsDialog.FromChart(chart)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true, true, true));
+            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true, true, true, true, true, ChartBlankDisplayMode.Span));
     }
 
     [Fact]
@@ -741,6 +747,9 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("_Value field buttons");
         source.Should().Contain("Show data _table");
         source.Should().Contain("Show legend _keys");
+        source.Should().Contain("_Rounded corners");
+        source.Should().Contain("Show data in _hidden rows and columns");
+        source.Should().Contain("_Blank cells");
         source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
         source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
     }
