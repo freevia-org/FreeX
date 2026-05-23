@@ -51,7 +51,9 @@ public sealed class SortDialog : Window
 
     private static readonly IReadOnlyList<SortOnChoice> SortOnChoices =
     [
-        new("Cell Values")
+        new("Cell Values"),
+        new("Cell Color"),
+        new("Font Color")
     ];
 
     private readonly ObservableCollection<SortDialogLevel> _levels;
@@ -265,7 +267,7 @@ public sealed class SortDialog : Window
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels)
     {
         return NormalizeLevels(levels)
-            .Select(level => new SortKey(level.ColumnOffset, level.Ascending))
+            .Select(level => new SortKey(level.ColumnOffset, level.Ascending, SortOnFromLabel(level.SortOn)))
             .ToList();
     }
 
@@ -400,6 +402,14 @@ public sealed class SortDialog : Window
 
         return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
     }
+
+    private static SortOn SortOnFromLabel(string? label) =>
+        label switch
+        {
+            "Cell Color" => SortOn.CellColor,
+            "Font Color" => SortOn.FontColor,
+            _ => SortOn.CellValues
+        };
 }
 
 public sealed class SortOptionsDialog : Window

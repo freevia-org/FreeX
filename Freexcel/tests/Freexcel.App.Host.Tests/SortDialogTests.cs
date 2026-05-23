@@ -12,15 +12,15 @@ public sealed class SortDialogTests
     {
         var levels = new[]
         {
-            new SortDialogLevel(2, true),
-            new SortDialogLevel(0, false)
+            new SortDialogLevel(2, true) { SortOn = "Cell Values" },
+            new SortDialogLevel(0, false) { SortOn = "Font Color" }
         };
 
         var keys = SortDialog.BuildSortKeys(levels);
 
         keys.Should().Equal(
             new SortKey(2, true),
-            new SortKey(0, false));
+            new SortKey(0, false, SortOn.FontColor));
     }
 
     [Fact]
@@ -82,6 +82,8 @@ public sealed class SortDialogTests
         source.Should().Contain("Header = \"Sort On\"");
         source.Should().Contain("Header = \"Order\"");
         source.Should().Contain("Cell Values");
+        source.Should().Contain("Cell Color");
+        source.Should().Contain("Font Color");
         source.Should().Contain("UpdateColumnChoices");
         source.Should().Contain("SortOptionsDialog");
     }
