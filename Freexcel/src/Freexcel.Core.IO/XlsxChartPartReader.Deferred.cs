@@ -41,6 +41,7 @@ public static partial class XlsxChartPartReader
             "barChart" or
             "bubbleChart" or
             "doughnutChart" or
+            "line3DChart" or
             "lineChart" or
             "ofPieChart" or
             "pie3DChart" or
