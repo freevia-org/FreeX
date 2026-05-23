@@ -72,6 +72,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_General\"");
         source.Should().Contain("Content = \"_Text\"");
         source.Should().Contain("Do not import column (_skip)");
+        source.Should().Contain("Header = \"Advanced\"");
+        source.Should().Contain("_Decimal separator:");
+        source.Should().Contain("_Thousands separator:");
+        source.Should().Contain("_Trailing minus for negative numbers");
     }
 
     [Fact]
@@ -423,6 +427,18 @@ public sealed class DataToolDialogTests
         result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
         result.CopyToRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 10), new CellAddress(sheetId, 1, 10)));
         result.UniqueRecordsOnly.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TextToColumnsResult_CapturesAdvancedNumberOptions()
+    {
+        var advanced = new TextToColumnsAdvancedOptions(",", ".", TrailingMinusNumbers: true);
+
+        var result = TextToColumnsDialog.CreateResult(
+            [TextToColumnsDelimiterKind.Semicolon],
+            advancedOptions: advanced);
+
+        result.AdvancedOptions.Should().Be(advanced);
     }
 
     [Fact]
