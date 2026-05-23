@@ -407,8 +407,10 @@ public sealed partial class NativeJsonAdapter
         public string? XAxisTitle { get; set; }
         public string? YAxisTitle { get; set; }
         public CellColor? ChartTitleTextColor { get; set; }
+        public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;
         public CellColor? AxisTitleTextColor { get; set; }
+        public ThemeColorReferenceDto? AxisTitleTextThemeColor { get; set; }
         public double AxisTitleFontSize { get; set; } = 12;
         public CellColor? ChartAreaFillColor { get; set; }
         public ThemeColorReferenceDto? ChartAreaFillThemeColor { get; set; }
@@ -444,6 +446,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowXAxisLabels { get; set; } = true;
         public CellColor? XAxisLabelTextColor { get; set; }
+        public ThemeColorReferenceDto? XAxisLabelTextThemeColor { get; set; }
         public double XAxisLabelFontSize { get; set; } = 11;
         public double XAxisLabelAngle { get; set; }
         public CellColor? XAxisLineColor { get; set; }
@@ -463,6 +466,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowYAxisLabels { get; set; } = true;
         public CellColor? YAxisLabelTextColor { get; set; }
+        public ThemeColorReferenceDto? YAxisLabelTextThemeColor { get; set; }
         public double YAxisLabelFontSize { get; set; } = 11;
         public double YAxisLabelAngle { get; set; }
         public CellColor? YAxisLineColor { get; set; }

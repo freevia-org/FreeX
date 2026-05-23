@@ -7518,6 +7518,51 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartTextThemeFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartTextThemeFormattingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales",
+            XAxisTitle = "Month",
+            YAxisTitle = "Amount",
+            ChartTitleTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2),
+            AxisTitleTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            XAxisLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            YAxisLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2, 0.1),
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ChartTitleTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2));
+        loadedChart.ChartTitleTextColor.Should().BeNull();
+        loadedChart.AxisTitleTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+        loadedChart.AxisTitleTextColor.Should().BeNull();
+        loadedChart.XAxisLabelTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1));
+        loadedChart.XAxisLabelTextColor.Should().BeNull();
+        loadedChart.YAxisLabelTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2, 0.1));
+        loadedChart.YAxisLabelTextColor.Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartAxisTitleFormattingPackagePart()
     {
         var workbook = new Workbook("ChartAxisTitleFormattingPackageSave");
