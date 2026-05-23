@@ -64,27 +64,27 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         foreach (var c in hiddenToShift) sheet.HiddenCols.Add(c + _count);
 
         _columnWidthSnapshot = new Dictionary<uint, double>(sheet.ColumnWidths);
-        InsertRowsCommand.ShiftIndexesUp(sheet.ColumnWidths, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnWidths, _beforeCol, _count);
 
         _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
-        InsertRowsCommand.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Comments, _beforeCol, _count);
         _threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>(sheet.ThreadedComments);
-        InsertRowsCommand.ShiftCommentColumnsUp(sheet.ThreadedComments, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.ThreadedComments, _beforeCol, _count);
         _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
-        InsertRowsCommand.ShiftCommentColumnsUp(sheet.Hyperlinks, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.Hyperlinks, _beforeCol, _count);
         _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
-        InsertRowsCommand.ShiftCommentColumnsUp(sheet.HyperlinkMetadata, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.HyperlinkMetadata, _beforeCol, _count);
 
-        (_dataValidationSnapshot, _conditionalFormatSnapshot) = InsertRowsCommand.CaptureRuleRanges(sheet);
-        InsertRowsCommand.ShiftRuleColumnsUp(sheet, _beforeCol, _count);
-        _namedRangeSnapshot = InsertRowsCommand.CaptureNamedRanges(ctx.Workbook);
-        InsertRowsCommand.ShiftNamedRangeColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
+        (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+        RowColumnShiftHelpers.ShiftRuleColumnsUp(sheet, _beforeCol, _count);
+        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        RowColumnShiftHelpers.ShiftNamedRangeColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         _printAreaSnapshot = sheet.PrintArea;
-        InsertRowsCommand.ShiftPrintAreaColumnsUp(sheet, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftPrintAreaColumnsUp(sheet, _beforeCol, _count);
         _columnPageBreakSnapshot = sheet.ColumnPageBreaks.ToList();
-        InsertRowsCommand.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
-        _chartSnapshot = InsertRowsCommand.CaptureChartDataRanges(sheet);
-        InsertRowsCommand.ShiftChartColumnsUp(sheet, _sheetId, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
+        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
+        RowColumnShiftHelpers.ShiftChartColumnsUp(sheet, _sheetId, _beforeCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var shiftedMerges = sheet.MergedRegions.Select(m =>
@@ -102,7 +102,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         sheet.ReplaceMergedRegions(shiftedMerges);
 
         _formulaSnapshot.Clear();
-        InsertRowsCommand.RewriteAllFormulas(
+        RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _formulaSnapshot);
 
         return new CommandOutcome(true);
@@ -113,7 +113,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count));
@@ -128,16 +128,16 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
 
-        InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
-        InsertRowsCommand.RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
-        InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
+        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
-        InsertRowsCommand.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
-        InsertRowsCommand.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
+        RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 }
 
@@ -204,27 +204,27 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         foreach (var c in aboveHidden) { sheet.HiddenCols.Remove(c); sheet.HiddenCols.Add(c - _count); }
 
         _columnWidthSnapshot = new Dictionary<uint, double>(sheet.ColumnWidths);
-        InsertRowsCommand.ShiftIndexesDown(sheet.ColumnWidths, _startCol, _count);
+        RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnWidths, _startCol, _count);
 
         _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
-        InsertRowsCommand.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Comments, _startCol, _count);
         _threadedCommentSnapshot = new Dictionary<CellAddress, ThreadedComment>(sheet.ThreadedComments);
-        InsertRowsCommand.ShiftCommentColumnsDown(sheet.ThreadedComments, _startCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.ThreadedComments, _startCol, _count);
         _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
-        InsertRowsCommand.ShiftCommentColumnsDown(sheet.Hyperlinks, _startCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.Hyperlinks, _startCol, _count);
         _hyperlinkMetadataSnapshot = new Dictionary<CellAddress, HyperlinkMetadata>(sheet.HyperlinkMetadata);
-        InsertRowsCommand.ShiftCommentColumnsDown(sheet.HyperlinkMetadata, _startCol, _count);
+        RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.HyperlinkMetadata, _startCol, _count);
 
-        (_dataValidationSnapshot, _conditionalFormatSnapshot) = InsertRowsCommand.CaptureRuleRanges(sheet);
-        InsertRowsCommand.ShiftRuleColumnsDown(sheet, _startCol, _count);
-        _namedRangeSnapshot = InsertRowsCommand.CaptureNamedRanges(ctx.Workbook);
-        InsertRowsCommand.ShiftNamedRangeColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
+        (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
+        RowColumnShiftHelpers.ShiftRuleColumnsDown(sheet, _startCol, _count);
+        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        RowColumnShiftHelpers.ShiftNamedRangeColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         _printAreaSnapshot = sheet.PrintArea;
-        InsertRowsCommand.ShiftPrintAreaColumnsDown(sheet, _startCol, _count);
+        RowColumnShiftHelpers.ShiftPrintAreaColumnsDown(sheet, _startCol, _count);
         _columnPageBreakSnapshot = sheet.ColumnPageBreaks.ToList();
-        InsertRowsCommand.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
-        _chartSnapshot = InsertRowsCommand.CaptureChartDataRanges(sheet);
-        InsertRowsCommand.ShiftChartColumnsDown(sheet, _sheetId, _startCol, _count);
+        RowColumnShiftHelpers.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
+        _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
+        RowColumnShiftHelpers.ShiftChartColumnsDown(sheet, _sheetId, _startCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var adjustedMerges = new List<GridRange>();
@@ -259,7 +259,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         sheet.ReplaceMergedRegions(adjustedMerges);
 
         _formulaSnapshot.Clear();
-        InsertRowsCommand.RewriteAllFormulas(
+        RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _formulaSnapshot);
 
         return new CommandOutcome(true);
@@ -270,7 +270,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         if (_deletedSnapshot is null || _shiftedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var (addr, _) in _shiftedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count));
@@ -284,17 +284,17 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
 
-        InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
-        InsertRowsCommand.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
-        InsertRowsCommand.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
+        RowColumnShiftHelpers.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
-        InsertRowsCommand.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
-        InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
+        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
-        InsertRowsCommand.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
-        InsertRowsCommand.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
+        RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 }
