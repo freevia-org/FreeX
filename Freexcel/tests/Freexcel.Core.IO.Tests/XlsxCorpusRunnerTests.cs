@@ -919,11 +919,46 @@ public class XlsxCorpusRunnerTests
             chart.Title ?? "",
             chart.ShowLegend,
             chart.IsPivotChart,
+            chart.ChartStyleId,
+            chart.RoundedCorners,
+            chart.BlankDisplayMode,
+            chart.ShowDataInHiddenRowsAndColumns,
+            chart.LegendPosition,
+            chart.LegendOverlay,
+            chart.ShowDataLabels,
+            chart.ShowDataLabelCategoryName,
+            chart.ShowDataLabelSeriesName,
+            chart.ShowDataLabelPercentage,
+            chart.BarGapWidth,
+            chart.BarOverlap,
+            chart.VaryColorsByPoint,
+            CaptureChartDataTableSummary(chart.DataTable),
+            CaptureChart3DViewSummary(chart.ThreeDView),
             new ChartRangeSummary(
                 chart.DataRange.Start.Row,
                 chart.DataRange.Start.Col,
                 chart.DataRange.End.Row,
                 chart.DataRange.End.Col));
+
+    private static ChartDataTableSummary? CaptureChartDataTableSummary(ChartDataTableModel? dataTable) =>
+        dataTable is null
+            ? null
+            : new ChartDataTableSummary(
+                dataTable.ShowHorizontalBorder,
+                dataTable.ShowVerticalBorder,
+                dataTable.ShowOutline,
+                dataTable.ShowLegendKeys);
+
+    private static Chart3DViewSummary? CaptureChart3DViewSummary(Chart3DViewModel? view) =>
+        view is null
+            ? null
+            : new Chart3DViewSummary(
+                view.RotationX,
+                view.HeightPercent,
+                view.RotationY,
+                view.DepthPercent,
+                view.RightAngleAxes,
+                view.Perspective);
 
     private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
         new(
@@ -1619,7 +1654,36 @@ public class XlsxCorpusRunnerTests
         string Title,
         bool ShowLegend,
         bool IsPivotChart,
+        int? ChartStyleId,
+        bool RoundedCorners,
+        ChartBlankDisplayMode BlankDisplayMode,
+        bool ShowDataInHiddenRowsAndColumns,
+        ChartLegendPosition LegendPosition,
+        bool LegendOverlay,
+        bool ShowDataLabels,
+        bool ShowDataLabelCategoryName,
+        bool ShowDataLabelSeriesName,
+        bool ShowDataLabelPercentage,
+        int? BarGapWidth,
+        int? BarOverlap,
+        bool? VaryColorsByPoint,
+        ChartDataTableSummary? DataTable,
+        Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
+
+    private sealed record ChartDataTableSummary(
+        bool? ShowHorizontalBorder,
+        bool? ShowVerticalBorder,
+        bool? ShowOutline,
+        bool? ShowLegendKeys);
+
+    private sealed record Chart3DViewSummary(
+        int? RotationX,
+        int? HeightPercent,
+        int? RotationY,
+        int? DepthPercent,
+        bool? RightAngleAxes,
+        int? Perspective);
 
     private sealed record ChartRangeSummary(
         uint StartRow,
