@@ -28,6 +28,9 @@ public sealed class SetSelectionPaneObjectVisibilityCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
             return new CommandOutcome(false, "Selection pane object was not found.");
@@ -74,6 +77,9 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         return _kind switch
         {
             SelectionPaneObjectKind.Chart => Move(sheet.Charts, chart => chart.Id, chart => chart.DataRange.Start),
@@ -157,7 +163,11 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
         if (string.IsNullOrWhiteSpace(_newName))
             return new CommandOutcome(false, "Object name cannot be blank.");
 
-        var target = SelectionPaneObjectAccess.Find(ctx.GetSheet(_sheetId), _kind, _objectId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
             return new CommandOutcome(false, "Selection pane object was not found.");
 
