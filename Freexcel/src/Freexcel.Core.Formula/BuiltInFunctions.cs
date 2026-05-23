@@ -643,7 +643,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var text  = ToText(args[0]);
-        var rawCount = args.Count > 1 ? ToNumber(args[1]) : 1;
+        var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
@@ -658,7 +658,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var text  = ToText(args[0]);
-        var rawCount = args.Count > 1 ? ToNumber(args[1]) : 1;
+        var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
