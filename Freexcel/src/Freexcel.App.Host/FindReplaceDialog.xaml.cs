@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -14,6 +15,8 @@ public sealed partial class FindReplaceDialog : Window
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
     private string _lastSearch = string.Empty;
+    private StyleDiff? _findFormatDiff;
+    private StyleDiff? _replaceFormatDiff;
 
     public FindReplaceDialog(
         Func<Workbook> getWorkbook,
@@ -44,6 +47,8 @@ public sealed partial class FindReplaceDialog : Window
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
     private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options <<";
     private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
+    private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
+    private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
 
     private void FindBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -162,7 +167,20 @@ public sealed partial class FindReplaceDialog : Window
                 2 => FindLookIn.Notes,
                 3 => FindLookIn.Comments,
                 _ => FindLookIn.Values
-            });
+            },
+            RequiredFormat: _findFormatDiff);
+
+    private void PickFormat(ref StyleDiff? target, params Button[] buttons)
+    {
+        var baseStyle = target?.ApplyTo(CellStyle.Default) ?? CellStyle.Default;
+        var dialog = new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.ResultDiff is null)
+            return;
+
+        target = dialog.ResultDiff;
+        foreach (var button in buttons)
+            button.Content = "For_mat...";
+    }
 
     private void UpdateResultsGrid()
     {
