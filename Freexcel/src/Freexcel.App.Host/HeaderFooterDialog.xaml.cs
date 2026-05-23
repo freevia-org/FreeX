@@ -342,7 +342,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         };
         resetButton.Click += (_, _) => ResetSize();
         stack.Children.Add(resetButton);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 
