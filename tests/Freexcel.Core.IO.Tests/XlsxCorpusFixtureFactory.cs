@@ -1304,7 +1304,13 @@ internal static class XlsxCorpusFixtureFactory
             TargetRange = Range(sheet, "A5", "B8"),
             PackagePart = "xl/pivotTables/pivotTable1.xml",
             StyleName = "FreexcelCorpusPivotStyle",
-            ShowRowStripes = true
+            ShowRowStripes = true,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            AltTextTitle = "Corpus pivot",
+            AltTextDescription = "Generated PivotTable parity fixture"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
