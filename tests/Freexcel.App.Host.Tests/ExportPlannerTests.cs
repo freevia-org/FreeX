@@ -159,6 +159,19 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyMinimumSize()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            Quality: ExportQuality.MinimumSize);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Selection; minimum size is PDF-only; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeEntireWorkbook()
     {
         var options = new ExportOptions(
