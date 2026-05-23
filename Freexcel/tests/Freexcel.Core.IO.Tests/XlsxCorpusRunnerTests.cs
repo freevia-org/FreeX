@@ -664,6 +664,7 @@ public class XlsxCorpusRunnerTests
                 .ToArray(),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
+            CapturePivotNumberFormatCatalogSummary(workbook),
             workbook.CustomViews
                 .OrderBy(view => view.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(CaptureCustomViewSummary)
@@ -743,6 +744,26 @@ public class XlsxCorpusRunnerTests
             workbook.IterativeCalculation,
             workbook.MaxCalculationIterations,
             workbook.MaxCalculationChange);
+
+    private static IReadOnlyList<NumberFormatCatalogSummary> CapturePivotNumberFormatCatalogSummary(Workbook workbook)
+    {
+        var referencedIds = workbook.PivotCaches
+            .SelectMany(cache => cache.Fields)
+            .Select(field => field.NumberFormatId)
+            .Concat(workbook.Sheets
+                .SelectMany(sheet => sheet.PivotTables)
+                .SelectMany(pivot => pivot.DataFields)
+                .Select(field => field.NumberFormatId))
+            .Where(id => id is >= 164)
+            .Select(id => id!.Value)
+            .ToHashSet();
+
+        return workbook.NumberFormatCatalog
+            .Where(pair => referencedIds.Contains(pair.Key))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => new NumberFormatCatalogSummary(pair.Key, pair.Value))
+            .ToArray();
+    }
 
     private static WorkbookThemeSummary CaptureWorkbookThemeSummary(WorkbookTheme theme) =>
         new(
@@ -1067,8 +1088,10 @@ public class XlsxCorpusRunnerTests
             cache.RefreshOnLoad,
             cache.SaveData,
             cache.EnableRefresh,
+            cache.PreserveSourceSortFilter,
             cache.MissingItemsLimit,
             cache.RefreshedVersion,
+            cache.RefreshedBy ?? "",
             cache.Fields
                 .Select(field => new PivotCacheFieldSummary(
                     field.Name,
@@ -1595,6 +1618,7 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<PivotTableStyleSummary> PivotTableStyles,
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
+        IReadOnlyList<NumberFormatCatalogSummary> NumberFormatCatalog,
         IReadOnlyList<CustomViewSummary> CustomViews,
         int CustomViewCount,
         WorkbookMetadataSummary Metadata,
@@ -1964,8 +1988,10 @@ public class XlsxCorpusRunnerTests
         bool RefreshOnLoad,
         bool SaveData,
         bool EnableRefresh,
+        bool PreserveSourceSortFilter,
         int? MissingItemsLimit,
         int? RefreshedVersion,
+        string RefreshedBy,
         IReadOnlyList<PivotCacheFieldSummary> Fields);
 
     private sealed record PivotCacheFieldSummary(
@@ -2017,6 +2043,8 @@ public class XlsxCorpusRunnerTests
         string Type,
         int? DifferentialFormatId,
         int? Size);
+
+    private sealed record NumberFormatCatalogSummary(int Id, string FormatCode);
 
     private sealed record SparklineSummary(
         SparklineKind Kind,
