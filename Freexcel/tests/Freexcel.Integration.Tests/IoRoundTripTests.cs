@@ -53,6 +53,19 @@ public class IoRoundTripTests
     }
 
     [Fact]
+    public void Csv_RoundTrip_PreservesLeadingBlankColumns()
+    {
+        var adapter = new CsvFileAdapter();
+        using var source = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(",offset\r\n"));
+
+        var workbook = adapter.Load(source);
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+
+        System.Text.Encoding.UTF8.GetString(saved.ToArray()).Should().Be(",offset\r\n");
+    }
+
+    [Fact]
     public void Json_RoundTrip_PreservesValuesAndFormulas()
     {
         var wb    = new Workbook("Book1");
