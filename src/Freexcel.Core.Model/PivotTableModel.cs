@@ -13,6 +13,7 @@ public sealed class PivotCacheModel
     public bool RefreshOnLoad { get; set; } = true;
     public bool SaveData { get; set; } = true;
     public bool EnableRefresh { get; set; } = true;
+    public bool PreserveSourceSortFilter { get; set; } = true;
     public int? MissingItemsLimit { get; set; }
     public int? RefreshedVersion { get; set; }
     public string? RefreshedBy { get; set; }
