@@ -12701,6 +12701,7 @@ public partial class FileAdapterSmokeTests
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
             CompactRowLabelIndent = 4,
+            ShowFieldHeaders = false,
             ShowExpandCollapseButtons = false,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
@@ -12732,6 +12733,7 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("itemPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("showDrill")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("showHeaders")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("applyWidthHeightFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("preserveFormatting")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
@@ -12748,6 +12750,7 @@ public partial class FileAdapterSmokeTests
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
         loadedPivot.CompactRowLabelIndent.Should().Be(4);
         loadedPivot.ShowExpandCollapseButtons.Should().BeFalse();
+        loadedPivot.ShowFieldHeaders.Should().BeFalse();
         loadedPivot.AutofitColumnsOnUpdate.Should().BeFalse();
         loadedPivot.PreserveFormattingOnUpdate.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
