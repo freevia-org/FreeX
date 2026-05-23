@@ -6721,6 +6721,7 @@ public partial class FileAdapterSmokeTests
     [Theory]
     [InlineData(ChartType.Radar, "radarChart", null)]
     [InlineData(ChartType.Stock, "stockChart", null)]
+    [InlineData(ChartType.ThreeDLine, "line3DChart", null)]
     [InlineData(ChartType.ThreeDArea, "area3DChart", null)]
     [InlineData(ChartType.ThreeDColumn, "bar3DChart", "col")]
     [InlineData(ChartType.ThreeDBar, "bar3DChart", "bar")]

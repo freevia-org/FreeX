@@ -20,6 +20,7 @@ public sealed class ChartDialogTests
             ChartType.StackedColumn,
             ChartType.PercentStackedColumn,
             ChartType.Line,
+            ChartType.ThreeDLine,
             ChartType.Pie,
             ChartType.ThreeDPie,
             ChartType.Doughnut,
@@ -73,6 +74,9 @@ public sealed class ChartDialogTests
             ChartType.StackedColumn,
             ChartType.PercentStackedColumn,
             ChartType.ThreeDColumn);
+        categories.Single(category => category.Name == "Line").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Line,
+            ChartType.ThreeDLine);
         categories.Single(category => category.Name == "Pie").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Pie,
             ChartType.ThreeDPie,
