@@ -283,11 +283,15 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
     private readonly bool? _showReportFilterButtons;
     private readonly bool? _showAxisFieldButtons;
     private readonly bool? _showValueFieldButtons;
+    private readonly bool? _showDataTable;
+    private readonly bool? _showDataTableLegendKeys;
     private int? _previousChartStyleId;
     private bool? _previousShowFieldButtons;
     private bool? _previousShowReportFilterButtons;
     private bool? _previousShowAxisFieldButtons;
     private bool? _previousShowValueFieldButtons;
+    private ChartDataTableModel? _previousDataTable;
+    private bool _previousDataTableCaptured;
 
     public string Label => "PivotChart Options";
 
@@ -298,7 +302,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         bool showFieldButtons,
         bool? showReportFilterButtons = null,
         bool? showAxisFieldButtons = null,
-        bool? showValueFieldButtons = null)
+        bool? showValueFieldButtons = null,
+        bool? showDataTable = null,
+        bool? showDataTableLegendKeys = null)
     {
         _sheetId = sheetId;
         _chartId = chartId;
@@ -307,6 +313,8 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _showReportFilterButtons = showReportFilterButtons;
         _showAxisFieldButtons = showAxisFieldButtons;
         _showValueFieldButtons = showValueFieldButtons;
+        _showDataTable = showDataTable;
+        _showDataTableLegendKeys = showDataTableLegendKeys;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -322,11 +330,30 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _previousShowReportFilterButtons = chart.ShowPivotChartReportFilterButtons;
         _previousShowAxisFieldButtons = chart.ShowPivotChartAxisFieldButtons;
         _previousShowValueFieldButtons = chart.ShowPivotChartValueFieldButtons;
+        _previousDataTable = CloneDataTable(chart.DataTable);
+        _previousDataTableCaptured = true;
         chart.ChartStyleId = _chartStyleId;
         chart.ShowPivotChartFieldButtons = _showFieldButtons;
         chart.ShowPivotChartReportFilterButtons = _showReportFilterButtons ?? chart.ShowPivotChartReportFilterButtons;
         chart.ShowPivotChartAxisFieldButtons = _showAxisFieldButtons ?? chart.ShowPivotChartAxisFieldButtons;
         chart.ShowPivotChartValueFieldButtons = _showValueFieldButtons ?? chart.ShowPivotChartValueFieldButtons;
+        if (_showDataTable is { } showDataTable)
+        {
+            chart.DataTable = showDataTable
+                ? new ChartDataTableModel
+                {
+                    ShowHorizontalBorder = true,
+                    ShowVerticalBorder = true,
+                    ShowOutline = true,
+                    ShowLegendKeys = _showDataTableLegendKeys ?? chart.DataTable?.ShowLegendKeys ?? false
+                }
+                : null;
+        }
+        else if (_showDataTableLegendKeys is { } showLegendKeys && chart.DataTable is not null)
+        {
+            chart.DataTable.ShowLegendKeys = showLegendKeys;
+        }
+
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
     }
 
@@ -344,12 +371,27 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         chart.ShowPivotChartReportFilterButtons = _previousShowReportFilterButtons ?? true;
         chart.ShowPivotChartAxisFieldButtons = _previousShowAxisFieldButtons ?? true;
         chart.ShowPivotChartValueFieldButtons = _previousShowValueFieldButtons ?? true;
+        if (_previousDataTableCaptured)
+            chart.DataTable = CloneDataTable(_previousDataTable);
         _previousChartStyleId = null;
         _previousShowFieldButtons = null;
         _previousShowReportFilterButtons = null;
         _previousShowAxisFieldButtons = null;
         _previousShowValueFieldButtons = null;
+        _previousDataTable = null;
+        _previousDataTableCaptured = false;
     }
+
+    private static ChartDataTableModel? CloneDataTable(ChartDataTableModel? dataTable) =>
+        dataTable is null
+            ? null
+            : new ChartDataTableModel
+            {
+                ShowHorizontalBorder = dataTable.ShowHorizontalBorder,
+                ShowVerticalBorder = dataTable.ShowVerticalBorder,
+                ShowOutline = dataTable.ShowOutline,
+                ShowLegendKeys = dataTable.ShowLegendKeys
+            };
 
     private static int? NormalizeStyleId(int? chartStyleId)
     {
