@@ -1071,7 +1071,9 @@ public sealed record PivotTableOptionsDialogResult(
     string? AltTextTitle = null,
     string? AltTextDescription = null,
     int CompactRowLabelIndent = 1,
-    bool ShowExpandCollapseButtons = true);
+    bool ShowExpandCollapseButtons = true,
+    bool AutofitColumnsOnUpdate = true,
+    bool PreserveFormattingOnUpdate = true);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -1143,7 +1145,9 @@ public sealed class PivotTableOptionsDialog : Window
             altTextTitle: pivotTable.AltTextTitle,
             altTextDescription: pivotTable.AltTextDescription,
             compactRowLabelIndent: pivotTable.CompactRowLabelIndent,
-            showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons);
+            showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons,
+            autofitColumnsOnUpdate: pivotTable.AutofitColumnsOnUpdate,
+            preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1166,7 +1170,9 @@ public sealed class PivotTableOptionsDialog : Window
         string? altTextTitle = null,
         string? altTextDescription = null,
         int compactRowLabelIndent = 1,
-        bool showExpandCollapseButtons = true) =>
+        bool showExpandCollapseButtons = true,
+        bool autofitColumnsOnUpdate = true,
+        bool preserveFormattingOnUpdate = true) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1188,7 +1194,9 @@ public sealed class PivotTableOptionsDialog : Window
             NormalizeOptionalText(altTextTitle),
             NormalizeOptionalText(altTextDescription),
             NormalizeCompactRowLabelIndent(compactRowLabelIndent),
-            showExpandCollapseButtons);
+            showExpandCollapseButtons,
+            autofitColumnsOnUpdate,
+            preserveFormattingOnUpdate);
 
     private DockPanel CreateContent()
     {
@@ -1347,6 +1355,8 @@ public sealed class PivotTableOptionsDialog : Window
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
+        _autofitColumnsBox.IsChecked = result.AutofitColumnsOnUpdate;
+        _preserveFormattingBox.IsChecked = result.PreserveFormattingOnUpdate;
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
@@ -1383,7 +1393,9 @@ public sealed class PivotTableOptionsDialog : Window
             _altTextTitleBox.Text,
             _altTextDescriptionBox.Text,
             ParseCompactRowLabelIndent(_compactIndentBox.Text),
-            _showExpandCollapseBox.IsChecked == true);
+            _showExpandCollapseBox.IsChecked == true,
+            _autofitColumnsBox.IsChecked == true,
+            _preserveFormattingBox.IsChecked == true);
         DialogResult = true;
     }
 

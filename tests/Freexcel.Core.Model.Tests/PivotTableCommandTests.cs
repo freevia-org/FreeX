@@ -806,6 +806,8 @@ public sealed class PivotTableCommandTests
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             ShowExpandCollapseButtons = false,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
             AltTextTitle = "Existing title",
             AltTextDescription = "Existing description"
         };
@@ -832,6 +834,8 @@ public sealed class PivotTableCommandTests
         pivot.PrintTitles.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
+        pivot.AutofitColumnsOnUpdate.Should().BeFalse();
+        pivot.PreserveFormattingOnUpdate.Should().BeFalse();
         pivot.AltTextTitle.Should().Be("Existing title");
         pivot.AltTextDescription.Should().Be("Existing description");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "D4"))!.StyleId).IndentLevel.Should().Be(5);
@@ -879,6 +883,50 @@ public sealed class PivotTableCommandTests
 
         pivot.ShowExpandCollapseButtons.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesFormatOptionsAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotFormatOptionsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            AutofitColumnsOnUpdate = true,
+            PreserveFormattingOnUpdate = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.AutofitColumnsOnUpdate.Should().BeFalse();
+        pivot.PreserveFormattingOnUpdate.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        pivot.AutofitColumnsOnUpdate.Should().BeTrue();
+        pivot.PreserveFormattingOnUpdate.Should().BeTrue();
     }
 
     [Fact]

@@ -159,6 +159,8 @@ public sealed partial class Sheet
                 ShowRowStripes = pt.ShowRowStripes,
                 ShowColumnStripes = pt.ShowColumnStripes,
                 EmptyValueText = pt.EmptyValueText,
+                AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
+                PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
                 ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
                 PrintTitles = pt.PrintTitles,
                 PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
