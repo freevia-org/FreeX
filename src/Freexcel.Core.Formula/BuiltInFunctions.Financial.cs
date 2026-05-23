@@ -689,10 +689,10 @@ public static partial class BuiltInFunctions
         double rate          = ToNumber(args[3]);
         double par           = ToNumber(args[4]);
         double frequency     = ToNumber(args[5]);
-        int basis = args.Count > 6 && args[6] is not BlankValue ? (int)Math.Truncate(ToNumber(args[6])) : 0;
         if (!double.IsFinite(issue) || !double.IsFinite(settlement) || !double.IsFinite(rate) ||
             !double.IsFinite(par) || !double.IsFinite(frequency))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate <= 0 || par <= 0 || frequency <= 0) return ErrorValue.Num;
         DateTime sd = SerialToDate(issue), sett = SerialToDate(settlement);
         if (sd >= sett) return ErrorValue.Num;
@@ -849,10 +849,10 @@ public static partial class BuiltInFunctions
         double yld         = ToNumber(args[3]);
         double redemption  = ToNumber(args[4]);
         int frequency      = (int)Math.Truncate(ToNumber(args[5]));
-        int basis = args.Count > 6 && args[6] is not BlankValue ? (int)Math.Truncate(ToNumber(args[6])) : 0;
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
             !double.IsFinite(yld) || !double.IsFinite(redemption))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
@@ -870,10 +870,10 @@ public static partial class BuiltInFunctions
         double pr          = ToNumber(args[3]);
         double redemption  = ToNumber(args[4]);
         int frequency      = (int)Math.Truncate(ToNumber(args[5]));
-        int basis = args.Count > 6 && args[6] is not BlankValue ? (int)Math.Truncate(ToNumber(args[6])) : 0;
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
             !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
@@ -919,10 +919,10 @@ public static partial class BuiltInFunctions
         double issue       = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
         double yld         = ToNumber(args[4]);
-        int basis = args.Count > 5 && args[5] is not BlankValue ? (int)Math.Truncate(ToNumber(args[5])) : 0;
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(rate) || !double.IsFinite(yld))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity), id = SerialToDate(issue);
         if (sd >= md) return ErrorValue.Num;
@@ -958,10 +958,10 @@ public static partial class BuiltInFunctions
         double issue       = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
         double pr          = ToNumber(args[4]);
-        int basis = args.Count > 5 && args[5] is not BlankValue ? (int)Math.Truncate(ToNumber(args[5])) : 0;
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(rate) || !double.IsFinite(pr))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity), id = SerialToDate(issue);
         if (sd >= md) return ErrorValue.Num;
@@ -980,10 +980,10 @@ public static partial class BuiltInFunctions
         double coupon      = ToNumber(args[2]);
         double yld         = ToNumber(args[3]);
         int frequency      = (int)Math.Truncate(ToNumber(args[4]));
-        int basis = args.Count > 5 && args[5] is not BlankValue ? (int)Math.Truncate(ToNumber(args[5])) : 0;
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(coupon) ||
             !double.IsFinite(yld))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (coupon < 0 || yld < 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
