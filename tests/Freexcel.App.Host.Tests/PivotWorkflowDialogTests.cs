@@ -264,6 +264,7 @@ public sealed class PivotWorkflowDialogTests
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
             preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
             compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
@@ -287,6 +288,7 @@ public sealed class PivotWorkflowDialogTests
             ShowExpandCollapseButtons: false,
             AutofitColumnsOnUpdate: false,
             PreserveFormattingOnUpdate: false,
+            ShowFieldHeaders: false,
             CompactRowLabelIndent: 3));
     }
 
@@ -344,6 +346,7 @@ public sealed class PivotWorkflowDialogTests
             PrintExpandCollapseButtons = true,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
+            ShowFieldHeaders = false,
             CompactRowLabelIndent = 5
         };
 
@@ -367,6 +370,7 @@ public sealed class PivotWorkflowDialogTests
                 ShowExpandCollapseButtons: false,
                 AutofitColumnsOnUpdate: false,
                 PreserveFormattingOnUpdate: false,
+                ShowFieldHeaders: false,
                 CompactRowLabelIndent: 5));
     }
 
@@ -419,6 +423,7 @@ public sealed class PivotWorkflowDialogTests
             "_refreshOnOpenBox",
             "_enableRefreshBox",
             "_missingItemsLimitBox",
+            "_fieldHeadersBox",
             "_showExpandCollapseBox",
             "_printTitlesBox",
             "_printExpandCollapseBox",
@@ -456,7 +461,8 @@ public sealed class PivotWorkflowDialogTests
             "Print options",
             "Alt Text",
             "Preserve source sort and _filter settings",
-            "Retain items _deleted from the data source"
+            "Retain items _deleted from the data source",
+            "Display field _captions and filter drop-downs"
         })
             source.Should().Contain(content);
 
@@ -497,6 +503,7 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"Insert _blank line after each item\"",
             "Content = \"Row _headers\"",
             "Content = \"Column hea_ders\"",
+            "Content = \"Display field _captions and filter drop-downs\"",
             "Content = \"Banded _rows\"",
             "Content = \"Banded c_olumns\"",
             "Content = \"_Autofit column widths on update\"",
@@ -535,6 +542,7 @@ public sealed class PivotWorkflowDialogTests
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
             preserveFormattingOnUpdate: false,
+            showFieldHeaders: false,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
@@ -543,6 +551,7 @@ public sealed class PivotWorkflowDialogTests
         result.ShowExpandCollapseButtons.Should().BeFalse();
         result.AutofitColumnsOnUpdate.Should().BeFalse();
         result.PreserveFormattingOnUpdate.Should().BeFalse();
+        result.ShowFieldHeaders.Should().BeFalse();
         result.EnableRefresh.Should().BeFalse();
         result.MissingItemsLimit.Should().Be(0);
         result.PrintTitles.Should().BeTrue();
