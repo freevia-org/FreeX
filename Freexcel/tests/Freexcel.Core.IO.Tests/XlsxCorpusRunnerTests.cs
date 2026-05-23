@@ -637,6 +637,10 @@ public class XlsxCorpusRunnerTests
     private static WorkbookSummary CaptureSummary(Workbook workbook) =>
         new(
             workbook.SheetCount,
+            workbook.NamedRanges
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => CaptureNamedRangeSummary(workbook, pair.Key, pair.Value))
+                .ToArray(),
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
             workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
@@ -717,6 +721,19 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
+
+    private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
+    {
+        var metadata = workbook.TryGetNamedRangeMetadata(name, out var savedMetadata)
+            ? savedMetadata
+            : NamedRangeMetadata.WorkbookScope;
+
+        return new NamedRangeSummary(
+            name,
+            metadata.Scope,
+            metadata.Comment,
+            ToRangeSummary(range));
+    }
 
     private static ChartSummary CaptureChartSummary(ChartModel chart) =>
         new(
@@ -1181,6 +1198,7 @@ public class XlsxCorpusRunnerTests
 
     private sealed record WorkbookSummary(
         int SheetCount,
+        IReadOnlyList<NamedRangeSummary> NamedRanges,
         int NamedRangeCount,
         bool IsStructureProtected,
         IReadOnlyList<PivotCacheSummary> PivotCaches,
@@ -1189,6 +1207,12 @@ public class XlsxCorpusRunnerTests
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
         IReadOnlyList<SheetSummary> Sheets);
+
+    private sealed record NamedRangeSummary(
+        string Name,
+        string Scope,
+        string Comment,
+        ChartRangeSummary Range);
 
     private sealed record SheetSummary(
         string Name,
