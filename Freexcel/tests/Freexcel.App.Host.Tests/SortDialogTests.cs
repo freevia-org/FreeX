@@ -149,6 +149,29 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void BuildColorChoices_ScopesChoicesToRequestedColorSortKind()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var fillStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var fontStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0, 0, 255) });
+        var fillCell = Cell.FromValue(new TextValue("fill"));
+        fillCell.StyleId = fillStyle;
+        var fontCell = Cell.FromValue(new TextValue("font"));
+        fontCell.StyleId = fontStyle;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), fillCell);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), fontCell);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
+
+        SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.CellColor)
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#FF0000"));
+        SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.FontColor)
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#000000"), new SortColorChoice("#0000FF"));
+    }
+
+    [Fact]
     public void BuildColumnChoices_UsesSelectedRangeColumnsInDisplayOrder()
     {
         var sheetId = SheetId.New();
