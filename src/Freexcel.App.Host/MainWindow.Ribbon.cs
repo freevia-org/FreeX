@@ -711,18 +711,24 @@ public partial class MainWindow
             };
         }
 
-        return new StackPanel
+        var compactGrid = new Grid
         {
             Tag = contentTag,
-            Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Children =
-            {
-                iconSlot,
-                labelBlock
-            }
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
         };
+        compactGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(slotSize) });
+        compactGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        iconSlot.Margin = new Thickness(0);
+        labelBlock.Margin = new Thickness(5, 0, 0, 0);
+        Grid.SetColumn(iconSlot, 0);
+        Grid.SetColumn(labelBlock, 1);
+        compactGrid.Children.Add(iconSlot);
+        compactGrid.Children.Add(labelBlock);
+        return compactGrid;
     }
 
     private static FrameworkElement CreateRibbonIconOnlyContent(string commandName, double iconSize)

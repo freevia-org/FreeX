@@ -27,6 +27,7 @@ public partial class ConditionalFormatDialog : Window
     private TextBox _dataBarMaxValueBox;
     private CheckBox _dataBarShowValueBox;
     private CheckBox _dataBarGradientBox;
+    private Button _dataBarColorButton;
     private TextBox _dataBarMinLengthBox;
     private TextBox _dataBarMaxLengthBox;
     private ComboBox _colorScaleMinTypeBox;
@@ -126,6 +127,7 @@ public partial class ConditionalFormatDialog : Window
         _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
         _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+        _dataBarColorButton = CreateDataBarColorButton();
         _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
         _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
@@ -300,7 +302,7 @@ public partial class ConditionalFormatDialog : Window
         {
             colorLabel.Content = isDataBar ? "_Bar color:" : "_Format:";
             inner.Children.Add(colorLabel);
-            inner.Children.Add(_colorBox);
+            inner.Children.Add(isDataBar ? CreateDataBarColorEditor(_colorBox, _dataBarColorButton) : _colorBox);
             if (!isDataBar)
                 inner.Children.Add(formatButton);
         }
@@ -411,8 +413,15 @@ public partial class ConditionalFormatDialog : Window
             if (ColorOptions[i].FillColor == wc)
             {
                 _colorBox.SelectedIndex = i;
+                _customFormatStyle = null;
                 break;
             }
+        }
+
+        if (_colorBox.SelectedIndex < 0 || ColorOptions[_colorBox.SelectedIndex].FillColor != wc)
+        {
+            _customFormatStyle = new CellStyle { FillColor = color };
+            _colorBox.SelectedItem = "Custom Format...";
         }
     }
 
@@ -499,7 +508,8 @@ public partial class ConditionalFormatDialog : Window
             }
             else if (cf.RuleType == CfRuleType.DataBar)
             {
-                cf.DataBarColor = new RgbColor(fillColor.R, fillColor.G, fillColor.B);
+                var barColor = SelectedDataBarColor(fillColor);
+                cf.DataBarColor = new RgbColor(barColor.R, barColor.G, barColor.B);
                 cf.DataBarMinThresholdType = SelectedThresholdType(_dataBarMinTypeBox, CfThresholdType.Min);
                 cf.DataBarMinThresholdValue = BlankToNull(_dataBarMinValueBox.Text);
                 cf.DataBarMaxThresholdType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max);
@@ -559,6 +569,11 @@ public partial class ConditionalFormatDialog : Window
         return ColorOptions[index];
     }
 
+    private CellColor SelectedDataBarColor(Color fallback) =>
+        _colorBox.SelectedItem as string == "Custom Format..." && _customFormatStyle?.FillColor is { } custom
+            ? custom
+            : new CellColor(fallback.R, fallback.G, fallback.B);
+
     private CellStyle BuildSelectedCellStyle()
     {
         if (_colorBox.SelectedItem as string == "Custom Format..." && _customFormatStyle is not null)
@@ -578,6 +593,28 @@ public partial class ConditionalFormatDialog : Window
 
     private static Label CreateAccessLabel(string content, Control target) =>
         new() { Content = content, Target = target, Padding = new Thickness(0) };
+
+    private Button CreateDataBarColorButton()
+    {
+        var button = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(6, 4, 0, 12),
+            ToolTip = "Choose data bar color"
+        };
+        button.Click += FormatButton_Click;
+        return button;
+    }
+
+    private static DockPanel CreateDataBarColorEditor(ComboBox colorBox, Button pickerButton)
+    {
+        var panel = new DockPanel();
+        DockPanel.SetDock(pickerButton, Dock.Right);
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(colorBox);
+        return panel;
+    }
 
     private static Button CreateColorScaleColorButton(TextBox colorBox, string tooltip)
     {
@@ -751,6 +788,7 @@ public partial class ConditionalFormatDialog : Window
             _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
             _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+            _dataBarColorButton = CreateDataBarColorButton();
             _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
             inner.Children.Add(CreateAccessLabel("_Minimum type:", _dataBarMinTypeBox));
@@ -911,7 +949,7 @@ public partial class ConditionalFormatDialog : Window
         if (ruleType is not ("Icon Set" or "Color Scale"))
         {
             inner.Children.Add(new Label { Content = ruleType is "Data Bar" ? "_Bar color:" : "_Format with:", Target = _colorBox, Padding = new Thickness(0) });
-            inner.Children.Add(_colorBox);
+            inner.Children.Add(ruleType is "Data Bar" ? CreateDataBarColorEditor(_colorBox, _dataBarColorButton) : _colorBox);
             if (ruleType is not "Data Bar")
                 inner.Children.Add(formatButton);
         }
