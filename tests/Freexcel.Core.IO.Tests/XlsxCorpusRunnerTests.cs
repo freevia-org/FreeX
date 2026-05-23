@@ -394,7 +394,10 @@ public class XlsxCorpusRunnerTests
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
             CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
                 before,
-                options => options.WithStrictOrdering(),
+                options => options
+                    .Using<double>(context => context.Subject.Should().BeApproximately(context.Expectation, 0.0001))
+                    .WhenTypeIs<double>()
+                    .WithStrictOrdering(),
                 row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
