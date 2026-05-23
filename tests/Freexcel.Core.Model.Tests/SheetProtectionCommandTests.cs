@@ -32,6 +32,29 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
+    public void ProtectSheetCommand_StoresSelectedPermissionsAndUndoRestoresPreviousPermissions()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ProtectionPermissions.Clear();
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.SelectUnlockedCells);
+
+        var cmd = new ProtectSheetCommand(
+            sheet.Id,
+            "secret",
+            [SheetProtectionPermission.SelectLockedCells, SheetProtectionPermission.FormatCells]);
+
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.ProtectionPermissions.Should().Equal(
+            SheetProtectionPermission.SelectLockedCells,
+            SheetProtectionPermission.FormatCells);
+
+        cmd.Revert(ctx);
+
+        sheet.ProtectionPermissions.Should().Equal(SheetProtectionPermission.SelectUnlockedCells);
+    }
+
+    [Fact]
     public void ProtectSheetCommand_UndoRestoresExistingProtectionState()
     {
         var (_, sheet, ctx) = Setup();
@@ -228,6 +251,24 @@ public class SheetProtectionCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.GetCell(1, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyStyleCommand_AllowsStyleChangesWhenProtectedSheetAllowsFormatCells()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1));
+
+        var outcome = new ApplyStyleCommand(sheet.Id, range, new StyleDiff(Bold: true)).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        var styleOnly = sheet.GetStyleOnly(1, 1);
+        styleOnly.Should().NotBeNull();
+        ctx.Workbook.GetStyle(styleOnly!.Value).Bold.Should().BeTrue();
     }
 
     [Fact]

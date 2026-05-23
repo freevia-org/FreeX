@@ -29,7 +29,7 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
         foreach (var sheetId in _sheetIds)
         {
             var sheet = ctx.GetSheet(sheetId);
-            if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
                 return protectedOutcome;
         }
         if (StyleDiffValidator.Validate(_diff) is { } validationOutcome)
