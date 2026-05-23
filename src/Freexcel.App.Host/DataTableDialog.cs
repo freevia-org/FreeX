@@ -40,22 +40,13 @@ public sealed class DataTableDialog : Window
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock
-        {
-            Text = "Substitute values in the selected data table using worksheet input cells.",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10)
-        });
-
-        var inputGroup = new GroupBox { Header = "Inputs", Margin = new Thickness(0, 12, 0, 0) };
-        var grid = new Grid { Margin = new Thickness(8) };
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         AddReferenceRow(grid, 0, "_Row input cell:", _rowInputBox, "Select row input cell");
         AddReferenceRow(grid, 1, "_Column input cell:", _columnInputBox, "Select column input cell");
-        inputGroup.Content = grid;
-        root.Children.Add(inputGroup);
-        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 14, 0, 0)));
+        root.Children.Add(grid);
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76));
         Content = root;
     }
 
