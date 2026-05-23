@@ -3476,21 +3476,44 @@
                 <Border x:Name="StatusStatsViewport" Grid.Column="1"
                         Margin="8,0,12,0"
                         ClipToBounds="True">
-                    <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
-                                HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Visibility="Collapsed"
-                                ClipToBounds="True">
-                        <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
-                                   MaxWidth="120" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
+                    <Grid ClipToBounds="True">
+                        <StackPanel x:Name="StatusSaveProgressPanel"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed"
+                                    MaxWidth="420"
+                                    ClipToBounds="True">
+                            <ProgressBar x:Name="StatusSaveProgressBar"
+                                         Width="120" Height="5"
+                                         Minimum="0" Maximum="100"
+                                         Foreground="#D7F0DF"
+                                         Background="#356B4D"
+                                         BorderThickness="0"
+                                         AutomationProperties.Name="Saving Progress"/>
+                            <TextBlock x:Name="StatusSaveProgressText"
+                                       Foreground="White" FontSize="12"
+                                       Margin="8,0,0,0"
+                                       MaxWidth="280"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    Visibility="Collapsed"
+                                    ClipToBounds="True">
+                            <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
+                                       MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Grid>
                 </Border>
 
                 <!-- Zoom controls on the right -->
