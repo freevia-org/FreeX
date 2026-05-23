@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
@@ -164,6 +165,24 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void VerticallyStackedRibbonCommands_AlignIconSlots()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1465);
+
+                harness.VerticallyStackedRibbonIconOffsets.Should().OnlyContain(
+                    stack => stack.Offsets.Select(offset => Math.Round(offset, 1)).Distinct().Count() == 1,
+                    $"{tab} vertical command stacks should put small command icons directly above one another");
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
     {
         StaTestRunner.Run(() =>
@@ -304,6 +323,12 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Select(button => button.Height)
                 .ToList();
 
+        public IReadOnlyList<RibbonIconStackOffsets> VerticallyStackedRibbonIconOffsets =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<Panel>()
+                .SelectMany(GetVerticalIconStacks)
+                .ToList();
+
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
                 ? EnumerateSelfAndVisualDescendants(tabs)
@@ -426,6 +451,61 @@ public sealed class MainWindowAdaptiveRibbonTests
                 ?.Text ?? "";
         }
 
+        private static double GetIconSlotOffset(Visual ancestor, Button button)
+        {
+            if (button.Content is not StackPanel { Children.Count: > 0 } content ||
+                content.Children[0] is not FrameworkElement iconSlot)
+            {
+                return double.NaN;
+            }
+
+            return iconSlot.TransformToAncestor(ancestor).Transform(new Point(0, 0)).X;
+        }
+
+        private static IEnumerable<RibbonIconStackOffsets> GetVerticalIconStacks(Panel panel)
+        {
+            if (panel is StackPanel { Orientation: Orientation.Vertical })
+            {
+                var buttons = GetSmallCommandButtons(panel).ToArray();
+                if (buttons.Length >= 2)
+                    yield return CreateIconStackOffsets(panel, buttons);
+
+                yield break;
+            }
+
+            if (panel is UniformGrid { Rows: > 0 } grid)
+            {
+                var buttons = GetSmallCommandButtons(grid).ToArray();
+                if (buttons.Length < 2)
+                    yield break;
+
+                var columns = (int)Math.Ceiling(buttons.Length / (double)grid.Rows);
+                for (var column = 0; column < columns; column++)
+                {
+                    var columnButtons = buttons
+                        .Skip(column)
+                        .Where((_, index) => index % columns == 0)
+                        .ToArray();
+                    if (columnButtons.Length >= 2)
+                        yield return CreateIconStackOffsets(grid, columnButtons);
+                }
+            }
+        }
+
+        private static IEnumerable<Button> GetSmallCommandButtons(Panel panel) =>
+            panel.Children.OfType<Button>()
+                .Where(IsEffectivelyVisible)
+                .Where(button => button.Content is StackPanel
+                {
+                    Orientation: Orientation.Horizontal,
+                    Tag: string tag
+                } && tag == "RibbonCommandContent:S");
+
+        private static RibbonIconStackOffsets CreateIconStackOffsets(Visual ancestor, IReadOnlyList<Button> buttons) =>
+            new(
+                buttons.Select(GetButtonLabel).ToArray(),
+                buttons.Select(button => GetIconSlotOffset(ancestor, button)).ToArray());
+
         private static bool IsEffectivelyVisible(DependencyObject element)
         {
             var current = element;
@@ -441,6 +521,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             return true;
         }
     }
+
+    public sealed record RibbonIconStackOffsets(IReadOnlyList<string> Labels, IReadOnlyList<double> Offsets);
 
     private static void PumpDispatcher()
     {
