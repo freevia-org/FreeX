@@ -181,7 +181,18 @@ internal static class DelimitedTextWorkbookReader
         var trimmed = field.Trim();
         return DateTime.TryParseExact(
             trimmed,
-            ["yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss"],
+            [
+                "yyyy-MM-dd",
+                "yyyy-MM-dd HH:mm",
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-ddTHH:mm",
+                "yyyy-MM-ddTHH:mm:ss",
+                "M/d/yyyy",
+                "M/d/yyyy HH:mm",
+                "M/d/yyyy HH:mm:ss",
+                "M/d/yyyy h:mm tt",
+                "M/d/yyyy h:mm:ss tt"
+            ],
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out dateTime);
