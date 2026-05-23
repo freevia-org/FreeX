@@ -54,6 +54,54 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddPivotTableCommand_RejectsProtectedTargetSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotTableCommand(
+            sheet.Id,
+            Range(sheet, "A1", "B3"),
+            Range(sheet, "D3", "E5"),
+            "PivotTable1",
+            rowFieldIndexes: [0],
+            dataFieldIndexes: [1]).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.PivotCaches.Should().BeEmpty();
+        sheet.PivotTables.Should().BeEmpty();
+        sheet.GetCell(Addr(sheet, "D3")).Should().BeNull();
+    }
+
+    [Fact]
+    public void AddPivotTableCommand_AllowsProtectedTargetSheetWithUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotTableCommand(
+            sheet.Id,
+            Range(sheet, "A1", "B3"),
+            Range(sheet, "D3", "E5"),
+            "PivotTable1",
+            rowFieldIndexes: [0],
+            dataFieldIndexes: [1]).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.PivotCaches.Should().ContainSingle();
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Category"));
+    }
+
+    [Fact]
     public void RefreshPivotTableCommand_RefreshesAndUndoRestoresPreviousCells()
     {
         var workbook = new Workbook("PivotCommandTest");
