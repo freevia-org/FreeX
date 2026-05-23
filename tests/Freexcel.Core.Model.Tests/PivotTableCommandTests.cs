@@ -854,6 +854,7 @@ public sealed class PivotTableCommandTests
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B3"),
             TargetRange = Range(sheet, "D3", "F8"),
+            ShowFieldHeaders = true,
             ShowExpandCollapseButtons = true,
             PrintExpandCollapseButtons = true
         };
@@ -872,17 +873,20 @@ public sealed class PivotTableCommandTests
             blankLineAfterItems: false,
             styleName: "PivotStyleLight16",
             showExpandCollapseButtons: false,
-            printExpandCollapseButtons: false);
+            printExpandCollapseButtons: false,
+            showFieldHeaders: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
         pivot.PrintExpandCollapseButtons.Should().BeFalse();
+        pivot.ShowFieldHeaders.Should().BeFalse();
 
         command.Revert(ctx);
 
         pivot.ShowExpandCollapseButtons.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
+        pivot.ShowFieldHeaders.Should().BeTrue();
     }
 
     [Fact]

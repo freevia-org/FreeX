@@ -119,11 +119,24 @@ public static partial class BuiltInFunctions
     private static ScalarValue MakeArrayFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count != 3) return ErrorValue.Value;
+        if (args[0] is ErrorValue rowError) return rowError;
+        if (args[1] is ErrorValue colError) return colError;
         if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
-        if (args[0] is not NumberValue rowsNv || args[1] is not NumberValue colsNv)
+        double rawRows;
+        double rawCols;
+        try
+        {
+            rawRows = ToNumber(args[0]);
+            rawCols = ToNumber(args[1]);
+        }
+        catch (FormulaEvalException)
+        {
             return ErrorValue.Value;
-        int rows = (int)rowsNv.Value, cols = (int)colsNv.Value;
+        }
+
+        if (!double.IsFinite(rawRows) || !double.IsFinite(rawCols)) return ErrorValue.Value;
+        int rows = (int)rawRows, cols = (int)rawCols;
         if (rows < 1 || cols < 1 || (long)rows * cols > 1_000_000L) return ErrorValue.Value;
 
         var result = new ScalarValue[rows, cols];
