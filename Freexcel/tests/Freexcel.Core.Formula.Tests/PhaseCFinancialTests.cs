@@ -655,6 +655,17 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void CouponDateFunctions_NegativeDateSerial_ReturnNumError()
+    {
+        CalcError("COUPDAYBS(-1,44197,2)").Should().Be("#NUM!");
+        CalcError("COUPDAYS(-1,44197,2)").Should().Be("#NUM!");
+        CalcError("COUPDAYSNC(-1,44197,2)").Should().Be("#NUM!");
+        CalcError("COUPNCD(-1,44197,2)").Should().Be("#NUM!");
+        CalcError("COUPNUM(-1,44197,2)").Should().Be("#NUM!");
+        CalcError("COUPPCD(-1,44197,2)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
     {
         double r = 0.12;
