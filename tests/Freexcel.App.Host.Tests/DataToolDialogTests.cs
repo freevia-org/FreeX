@@ -708,9 +708,23 @@ public sealed class DataToolDialogTests
 
         oneVariableParsed.Should().BeTrue(oneVariableError);
         oneVariable.Mode.Should().Be(DataTableMode.OneVariable);
+        oneVariable.Orientation.Should().Be(DataTableInputOrientation.Column);
         oneVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 3));
         oneVariable.RowInputCell.Should().BeNull();
         oneVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
+
+        var rowInputParsed = DataTableDialog.TryParse(
+            sheetId,
+            range,
+            rowInputCellText: "A1",
+            columnInputCellText: "",
+            out var rowInput,
+            out var rowInputError);
+
+        rowInputParsed.Should().BeTrue(rowInputError);
+        rowInput.Mode.Should().Be(DataTableMode.OneVariable);
+        rowInput.Orientation.Should().Be(DataTableInputOrientation.Row);
+        rowInput.FormulaCell.Should().Be(new CellAddress(sheetId, 3, 2));
 
         var twoVariableParsed = DataTableDialog.TryParse(
             sheetId,
@@ -722,6 +736,7 @@ public sealed class DataToolDialogTests
 
         twoVariableParsed.Should().BeTrue(twoVariableError);
         twoVariable.Mode.Should().Be(DataTableMode.TwoVariable);
+        twoVariable.Orientation.Should().Be(DataTableInputOrientation.Column);
         twoVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 2));
         twoVariable.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
         twoVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));

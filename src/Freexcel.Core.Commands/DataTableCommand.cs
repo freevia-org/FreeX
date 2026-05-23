@@ -3,21 +3,33 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
 
+public enum DataTableInputOrientation
+{
+    Column,
+    Row
+}
+
 public sealed class OneVariableDataTableCommand : IWorkbookCommand
 {
     private readonly GridRange _tableRange;
     private readonly CellAddress _formulaCell;
     private readonly CellAddress _inputCell;
+    private readonly DataTableInputOrientation _orientation;
     private List<(CellAddress Address, Cell? PreviousCell)>? _snapshot;
     private bool _applied;
 
     public string Label => "Data Table";
 
-    public OneVariableDataTableCommand(GridRange tableRange, CellAddress formulaCell, CellAddress inputCell)
+    public OneVariableDataTableCommand(
+        GridRange tableRange,
+        CellAddress formulaCell,
+        CellAddress inputCell,
+        DataTableInputOrientation orientation = DataTableInputOrientation.Column)
     {
         _tableRange = tableRange;
         _formulaCell = formulaCell;
         _inputCell = inputCell;
+        _orientation = orientation;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -39,15 +51,32 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
 
         _snapshot = [];
         var affected = new List<CellAddress>();
-        for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
+        if (_orientation == DataTableInputOrientation.Row)
         {
-            var trialInputAddress = new CellAddress(_tableRange.Start.Sheet, row, _tableRange.Start.Col);
             for (uint col = _tableRange.Start.Col + 1; col <= _tableRange.End.Col; col++)
             {
-                var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
-                _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
-                sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula, _inputCell, trialInputAddress)));
-                affected.Add(outputAddress);
+                var trialInputAddress = new CellAddress(_tableRange.Start.Sheet, _tableRange.Start.Row, col);
+                for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
+                {
+                    var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
+                    _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
+                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula, _inputCell, trialInputAddress)));
+                    affected.Add(outputAddress);
+                }
+            }
+        }
+        else
+        {
+            for (uint row = _tableRange.Start.Row + 1; row <= _tableRange.End.Row; row++)
+            {
+                var trialInputAddress = new CellAddress(_tableRange.Start.Sheet, row, _tableRange.Start.Col);
+                for (uint col = _tableRange.Start.Col + 1; col <= _tableRange.End.Col; col++)
+                {
+                    var outputAddress = new CellAddress(_tableRange.Start.Sheet, row, col);
+                    _snapshot.Add((outputAddress, sheet.GetCell(outputAddress)?.Clone()));
+                    sheet.SetCell(outputAddress, Cell.FromFormula(DataTableFormulaRewriter.ReplaceCellReference(formula, _inputCell, trialInputAddress)));
+                    affected.Add(outputAddress);
+                }
             }
         }
 

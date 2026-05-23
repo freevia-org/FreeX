@@ -17,6 +17,8 @@ public static partial class XlsxChartPartReader
         var barChart = barCharts.FirstOrDefault();
         var lineCharts = plotArea?.Elements(ChartNs + "lineChart").ToList() ?? [];
         var lineChart = lineCharts.FirstOrDefault();
+        var threeDLineCharts = plotArea?.Elements(ChartNs + "line3DChart").ToList() ?? [];
+        var threeDLineChart = threeDLineCharts.FirstOrDefault();
         var scatterCharts = plotArea?.Elements(ChartNs + "scatterChart").ToList() ?? [];
         var scatterChart = scatterCharts.FirstOrDefault();
         var areaCharts = plotArea?.Elements(ChartNs + "areaChart").ToList() ?? [];
@@ -54,6 +56,8 @@ public static partial class XlsxChartPartReader
             read = TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, out chart);
         else if (lineChart is not null)
             read = TryReadLineChart(chartXml, plotArea, [lineChart], sheetId, out chart);
+        else if (threeDLineChart is not null)
+            read = TryReadLineLikeChart(chartXml, plotArea, threeDLineCharts, sheetId, ChartType.ThreeDLine, out chart);
         else if (radarCharts.Count > 0)
             read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
         else if (stockCharts.Count > 0)

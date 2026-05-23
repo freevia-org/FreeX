@@ -65,6 +65,7 @@ internal static class XlsxChartDataLabelReader
     private static XElement? FindPlotChartElement(XElement? plotArea) =>
         plotArea?.Elements().FirstOrDefault(element => element.Name == ChartNs + "barChart"
             || element.Name == ChartNs + "lineChart"
+            || element.Name == ChartNs + "line3DChart"
             || element.Name == ChartNs + "scatterChart"
             || element.Name == ChartNs + "areaChart"
             || element.Name == ChartNs + "area3DChart"

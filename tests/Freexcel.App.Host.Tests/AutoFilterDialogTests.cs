@@ -226,7 +226,7 @@ public sealed class AutoFilterDialogTests
     [Fact]
     public void DialogSearch_NarrowsChecklistWithoutDroppingHiddenSelections()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+        var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("_searchBox.TextChanged");
         source.Should().Contain("FilterItems(_allItems, _searchBox.Text)");
@@ -236,7 +236,7 @@ public sealed class AutoFilterDialogTests
     [Fact]
     public void DialogControls_ExposeExcelStyleKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+        var source = ReadAutoFilterDialogSources();
 
         foreach (var content in new[]
         {
@@ -261,7 +261,7 @@ public sealed class AutoFilterDialogTests
     [Fact]
     public void DialogControls_ExposeFilterByColorPickerWhenMenuPlanSupportsIt()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+        var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("_filterByColorGroup");
         source.Should().Contain("Header = \"Filter by Color\"");
@@ -289,7 +289,7 @@ public sealed class AutoFilterDialogTests
     [Fact]
     public void DialogControls_UseTypedCriteriaControlsInsteadOfFocusOnlyFilterButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+        var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("_criteriaOperatorBox");
         source.Should().Contain("_criteriaValueBox");
@@ -328,7 +328,7 @@ public sealed class AutoFilterDialogTests
     [Fact]
     public void DialogLayout_UsesSeparatorsBetweenExcelFilterMenuSections()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+        var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("AddFilterMenuSeparator(stack)");
         source.Should().Contain("new Separator");
@@ -346,5 +346,14 @@ public sealed class AutoFilterDialogTests
         AutoFilterDialog.BuildCompositeCriteriaText(firstCriteria, connector, secondCriteria)
             .Should()
             .Be(expected);
+    }
+
+    private static string ReadAutoFilterDialogSources()
+    {
+        return string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogModel.cs")));
     }
 }

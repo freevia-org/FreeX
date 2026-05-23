@@ -3927,7 +3927,7 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("UnlockedStyleTest");
         var sheet = workbook.AddSheet("S1");
         var address = new CellAddress(sheet.Id, 1, 1);
-        var styleId = workbook.RegisterStyle(new CellStyle { Locked = false });
+        var styleId = workbook.RegisterStyle(new CellStyle { Locked = false, Hidden = true });
         var cell = Cell.FromValue(new TextValue("editable"));
         cell.StyleId = styleId;
         sheet.SetCell(address, cell);
@@ -3942,6 +3942,7 @@ public partial class FileAdapterSmokeTests
         var loadedCell = loaded.GetSheetAt(0).GetCell(1, 1);
         loadedCell.Should().NotBeNull();
         loaded.GetStyle(loadedCell!.StyleId).Locked.Should().BeFalse();
+        loaded.GetStyle(loadedCell.StyleId).Hidden.Should().BeTrue();
     }
 
     [Fact]
@@ -5350,7 +5351,8 @@ public partial class FileAdapterSmokeTests
             FillColor = new CellColor(200, 210, 220),
             FillPatternStyle = CellFillPatternStyle.DarkGrid,
             FillPatternColor = new CellColor(90, 80, 70),
-            Locked = false
+            Locked = false,
+            Hidden = true
         });
         sheet.SetCell(address, cell);
 
@@ -5370,6 +5372,7 @@ public partial class FileAdapterSmokeTests
         loadedStyle.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
         loadedStyle.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
         loadedStyle.Locked.Should().BeFalse();
+        loadedStyle.Hidden.Should().BeTrue();
     }
 
     [Fact]
@@ -6721,6 +6724,7 @@ public partial class FileAdapterSmokeTests
     [Theory]
     [InlineData(ChartType.Radar, "radarChart", null)]
     [InlineData(ChartType.Stock, "stockChart", null)]
+    [InlineData(ChartType.ThreeDLine, "line3DChart", null)]
     [InlineData(ChartType.ThreeDArea, "area3DChart", null)]
     [InlineData(ChartType.ThreeDColumn, "bar3DChart", "col")]
     [InlineData(ChartType.ThreeDBar, "bar3DChart", "bar")]
