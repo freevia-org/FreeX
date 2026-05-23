@@ -6706,6 +6706,9 @@ public partial class FileAdapterSmokeTests
             Top = 130,
             Width = 360,
             Height = 210,
+            BubbleScale = 150,
+            ShowNegativeBubbles = true,
+            BubbleSizeRepresents = ChartBubbleSizeRepresents.Width,
             SeriesFormats =
             [
                 new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1))
@@ -6721,6 +6724,12 @@ public partial class FileAdapterSmokeTests
         {
             archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
             archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            var bubbleChart = chartXml.Descendants(chartNs + "bubbleChart").Single();
+            bubbleChart.Element(chartNs + "bubbleScale")!.Attribute("val")!.Value.Should().Be("150");
+            bubbleChart.Element(chartNs + "showNegBubbles")!.Attribute("val")!.Value.Should().Be("1");
+            bubbleChart.Element(chartNs + "sizeRepresents")!.Attribute("val")!.Value.Should().Be("w");
         }
 
         saved.Position = 0;
@@ -6737,6 +6746,9 @@ public partial class FileAdapterSmokeTests
         loadedChart.Top.Should().BeApproximately(130, 0.01);
         loadedChart.Width.Should().BeApproximately(360, 0.01);
         loadedChart.Height.Should().BeApproximately(210, 0.01);
+        loadedChart.BubbleScale.Should().Be(150);
+        loadedChart.ShowNegativeBubbles.Should().BeTrue();
+        loadedChart.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
         loadedChart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
             new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)));
     }
@@ -9682,6 +9694,49 @@ public partial class FileAdapterSmokeTests
         recovery.Should().NotBeNull();
         recovery!.Attribute("autoRecover")!.Value.Should().Be("1");
         recovery.Attribute("crashSave")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesMultipleWorkbookFileRecoveryProperties()
+    {
+        var workbook = new Workbook("WorkbookMultiFileRecoveryRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(
+                new XElement(workbookNs + "fileRecoveryPr",
+                    new XAttribute("autoRecover", "1"),
+                    new XAttribute("crashSave", "1")),
+                new XElement(workbookNs + "fileRecoveryPr",
+                    new XAttribute("dataExtractLoad", "1"),
+                    new XAttribute("repairLoad", "1")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorkbookXml = LoadPackageXml(savedArchive.GetEntry("xl/workbook.xml")!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var recoveryBlocks = savedWorkbookXml.Root!.Elements(ns + "fileRecoveryPr").ToArray();
+        recoveryBlocks.Should().HaveCount(2);
+        recoveryBlocks[0].Attribute("autoRecover")!.Value.Should().Be("1");
+        recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1");
     }
 
     [Fact]

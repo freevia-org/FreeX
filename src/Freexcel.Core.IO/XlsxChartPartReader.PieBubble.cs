@@ -88,7 +88,10 @@ public static partial class XlsxChartPartReader
         {
             Type = ChartType.Bubble,
             Title = XlsxChartLevelReader.ReadTitle(chartXml),
-            FirstColIsCategories = false
+            FirstColIsCategories = false,
+            BubbleScale = ReadBubbleScale(bubbleChart),
+            ShowNegativeBubbles = XlsxChartScalarReader.IsTrue(bubbleChart.Element(ChartNs + "showNegBubbles")?.Attribute("val")?.Value),
+            BubbleSizeRepresents = ReadBubbleSizeRepresents(bubbleChart)
         };
 
         var seriesIndex = 0;
@@ -123,4 +126,16 @@ public static partial class XlsxChartPartReader
         chart = result;
         return true;
     }
+
+    private static int ReadBubbleScale(XElement bubbleChart)
+    {
+        return int.TryParse(bubbleChart.Element(ChartNs + "bubbleScale")?.Attribute("val")?.Value, out var scale)
+            ? Math.Clamp(scale, 0, 300)
+            : 100;
+    }
+
+    private static ChartBubbleSizeRepresents ReadBubbleSizeRepresents(XElement bubbleChart) =>
+        bubbleChart.Element(ChartNs + "sizeRepresents")?.Attribute("val")?.Value == "w"
+            ? ChartBubbleSizeRepresents.Width
+            : ChartBubbleSizeRepresents.Area;
 }
