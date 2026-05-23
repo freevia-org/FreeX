@@ -19,7 +19,8 @@ public static class ChartTypeSupport
             or ChartType.Area
             or ChartType.Radar
             or ChartType.Stock
-            or ChartType.ThreeDColumn;
+            or ChartType.ThreeDColumn
+            or ChartType.ThreeDBar;
 
     public static bool SupportsTrendlines(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
@@ -37,7 +38,7 @@ public static class ChartTypeSupport
         SupportsComboLineOverlay(chart.Type) && GetDataSeriesCount(chart) >= 2;
 
     public static bool SupportsXAxisLogScale(ChartType type) =>
-        type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.Scatter or ChartType.Bubble;
+        type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar or ChartType.Scatter or ChartType.Bubble;
 
     public static bool SupportsYAxisLogScale(ChartType type) =>
         type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
@@ -96,7 +97,7 @@ public static class ChartTypeSupport
         if (chart.Type is ChartType.Scatter or ChartType.Bubble)
             return [chart.DataRange.Start.Col];
 
-        if (chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar)
+        if (chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar)
             return GetSeriesValueColumns(chart);
 
         return [];
