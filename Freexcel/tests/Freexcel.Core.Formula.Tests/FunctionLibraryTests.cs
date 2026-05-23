@@ -2725,6 +2725,23 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_HorizontalLookup_ReturnsMatchingReturnColumn()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new TextValue("B")), (1, 3, new TextValue("C")),
+            (2, 1, new NumberValue(1)), (2, 2, new NumberValue(2)), (2, 3, new NumberValue(3)),
+            (3, 1, new NumberValue(10)), (3, 2, new NumberValue(20)), (3, 3, new NumberValue(30)));
+
+        var result = _eval.Evaluate("=XLOOKUP(\"B\",A1:C1,A2:C3)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new NumberValue(2));
+        rv.Cells[1, 0].Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
     public void Xlookup_ApproximateMode_PrefersExactMatchBeforeFallback()
     {
         var sheet = MakeSheet(
