@@ -344,11 +344,11 @@
                                             local:RibbonTooltip.Title="Increase Font Size"
                                             local:RibbonTooltip.KeyTip="FG"
                                             local:RibbonTooltip.Description="Make the font larger.">
-                                        <Grid Width="18" Height="16">
-                                            <TextBlock Text="A" FontSize="13" FontWeight="SemiBold" Margin="0,0,5,0"
+                                        <Grid Width="20" Height="18">
+                                            <TextBlock Text="A" FontSize="16" FontWeight="SemiBold" Margin="0,0,5,0"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                                        TextAlignment="Center"/>
-                                            <TextBlock Text="A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                                            <TextBlock Text="A" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                                             <Path Data="M 0 5 L 4 0 L 8 5" Stroke="#111" StrokeThickness="1.2"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top" Width="8" Height="6"/>
                                         </Grid>
@@ -358,11 +358,11 @@
                                             local:RibbonTooltip.Title="Decrease Font Size"
                                             local:RibbonTooltip.KeyTip="FK"
                                             local:RibbonTooltip.Description="Make the font smaller.">
-                                        <Grid Width="18" Height="16">
-                                            <TextBlock Text="A" FontSize="13" FontWeight="SemiBold" Margin="0,0,5,0"
+                                        <Grid Width="20" Height="18">
+                                            <TextBlock Text="A" FontSize="16" FontWeight="SemiBold" Margin="0,0,5,0"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                                        TextAlignment="Center"/>
-                                            <TextBlock Text="A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <TextBlock Text="A" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                             <Path Data="M 0 0 L 4 5 L 8 0" Stroke="#111" StrokeThickness="1.2"
                                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="8" Height="6"/>
                                         </Grid>
@@ -375,7 +375,8 @@
                                                   local:RibbonTooltip.Title="Bold"
                                                   local:RibbonTooltip.KeyTip="1"
                                                   local:RibbonTooltip.Description="Make the selected text bold (Ctrl+B).">
-                                        <TextBlock Text="B" FontWeight="Bold"/>
+                                        <TextBlock Text="B" FontFamily="Segoe UI" FontSize="19" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="ItalicButton"
                                                   Style="{StaticResource RibbonIconToggleButton}"
@@ -383,7 +384,8 @@
                                                   local:RibbonTooltip.Title="Italic"
                                                   local:RibbonTooltip.KeyTip="2"
                                                   local:RibbonTooltip.Description="Italicize the selected text (Ctrl+I).">
-                                        <TextBlock Text="I" FontStyle="Italic"/>
+                                        <TextBlock Text="I" FontFamily="Segoe UI" FontSize="19" FontStyle="Italic" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="UnderlineButton"
                                                   Style="{StaticResource RibbonIconToggleButton}"
@@ -391,7 +393,8 @@
                                                   local:RibbonTooltip.Title="Underline"
                                                   local:RibbonTooltip.KeyTip="3"
                                                   local:RibbonTooltip.Description="Underline the selected text (Ctrl+U).">
-                                        <TextBlock Text="U" TextDecorations="Underline"/>
+                                        <TextBlock Text="U" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold"
+                                                   TextDecorations="Underline" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="StrikeButton"
                                                   Style="{StaticResource RibbonIconToggleButton}"
@@ -399,7 +402,8 @@
                                                   local:RibbonTooltip.Title="Strikethrough"
                                                   local:RibbonTooltip.KeyTip="4"
                                                   local:RibbonTooltip.Description="Draw a line through the middle of the selected text.">
-                                        <TextBlock Text="S">
+                                        <TextBlock Text="S" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <TextBlock.TextDecorations>
                                                 <TextDecorationCollection>
                                                     <TextDecoration Location="Strikethrough"/>
@@ -473,8 +477,8 @@
                                             local:RibbonTooltip.KeyTip="FC"
                                             local:RibbonTooltip.Description="Change the color of the text.">
                                         <StackPanel>
-                                            <TextBlock Text="A" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,1,0,0"/>
-                                            <Rectangle x:Name="FontColorBar" Height="3" Width="14" Fill="#FF0000" Margin="0,1,0,0"/>
+                                            <TextBlock Text="A" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-3,0,0"/>
+                                            <Rectangle x:Name="FontColorBar" Height="3" Width="17" Fill="#FF0000" Margin="0,0,0,0"/>
                                         </StackPanel>
                                     </Button>
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
@@ -483,11 +487,15 @@
                                             local:RibbonTooltip.Title="Fill Color"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="Color the background of the selected cells.">
-                                        <StackPanel>
-                                            <local:RibbonIcon Kind="Fill" IconSize="11"
-                                                              HorizontalAlignment="Center" Margin="0,1,0,0"/>
-                                            <Rectangle x:Name="FillColorBar" Height="3" Width="14" Fill="#FFFF00" Margin="0,1,0,0"/>
-                                        </StackPanel>
+                                        <Grid Width="20" Height="18">
+                                            <Rectangle Width="17" Height="15" Fill="{Binding ElementName=FillColorBar, Path=Fill}"
+                                                       Stroke="#555" StrokeThickness="1"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <TextBlock Text="A" FontFamily="Segoe UI" FontSize="17" FontWeight="SemiBold"
+                                                       Foreground="#242424"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"/>
+                                            <Rectangle x:Name="FillColorBar" Width="0" Height="0" Fill="#FFFF00"/>
+                                        </Grid>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
@@ -683,35 +691,56 @@
                                             local:RibbonTooltip.Title="Accounting Number Format"
                                             local:RibbonTooltip.KeyTip="AN"
                                             local:RibbonTooltip.Description="Choose the currency format for selected cells.">
-                                        <TextBlock Text="$" FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Text="$" FontFamily="Segoe UI" FontSize="19" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
                                     <Button Style="{StaticResource RibbonIconButton}"
                                             Click="PercentBtn_Click"
                                             local:RibbonTooltip.Title="Percent Style"
                                             local:RibbonTooltip.KeyTip="P"
                                             local:RibbonTooltip.Description="Display values as a percentage (Ctrl+Shift+%).">
-                                        <TextBlock Text="%" FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Text="%" FontFamily="Segoe UI" FontSize="19" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
                                     <Button Style="{StaticResource RibbonIconButton}"
                                             Click="CommaStyleBtn_Click"
                                             local:RibbonTooltip.Title="Comma Style"
                                             local:RibbonTooltip.KeyTip="K"
                                             local:RibbonTooltip.Description="Display values with a thousands separator.">
-                                        <TextBlock Text="," FontSize="11" FontWeight="Bold"/>
+                                        <TextBlock Text="," FontFamily="Segoe UI" FontSize="23" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-7,0,0"/>
                                     </Button>
-                                    <Button Style="{StaticResource RibbonIconButton}"
+                                    <Button Width="42" Height="22" Style="{StaticResource RibbonIconButton}"
                                             Click="IncDecimalBtn_Click"
                                             local:RibbonTooltip.Title="Increase Decimal Places"
                                             local:RibbonTooltip.KeyTip="QI"
                                             local:RibbonTooltip.Description="Show more decimal places.">
-                                        <TextBlock Text=".0+" FontSize="9"/>
+                                        <Grid Width="38" Height="18" SnapsToDevicePixels="True">
+                                            <StackPanel Margin="1,0,10,0" VerticalAlignment="Center">
+                                                <TextBlock Text="0.0" FontFamily="Segoe UI" FontSize="10" LineHeight="9"
+                                                           HorizontalAlignment="Left"/>
+                                                <TextBlock Text="0.00" FontFamily="Segoe UI" FontSize="10" LineHeight="9"
+                                                           HorizontalAlignment="Left" Margin="0,-1,0,0"/>
+                                            </StackPanel>
+                                            <Path Data="M 30 5 L 35 9 L 30 13" Stroke="#1F6AA5" StrokeThickness="1.4"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                        </Grid>
                                     </Button>
-                                    <Button Style="{StaticResource RibbonIconButton}"
+                                    <Button Width="42" Height="22" Style="{StaticResource RibbonIconButton}"
                                             Click="DecDecimalBtn_Click"
                                             local:RibbonTooltip.Title="Decrease Decimal Places"
                                             local:RibbonTooltip.KeyTip="QD"
                                             local:RibbonTooltip.Description="Show fewer decimal places.">
-                                        <TextBlock Text=".0-" FontSize="9"/>
+                                        <Grid Width="38" Height="18" SnapsToDevicePixels="True">
+                                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="0.00" FontFamily="Segoe UI" FontSize="10" LineHeight="9"
+                                                           HorizontalAlignment="Left"/>
+                                                <TextBlock Text="0.0" FontFamily="Segoe UI" FontSize="10" LineHeight="9"
+                                                           HorizontalAlignment="Left" Margin="0,-1,0,0"/>
+                                            </StackPanel>
+                                            <Path Data="M 8 5 L 3 9 L 8 13" Stroke="#1F6AA5" StrokeThickness="1.4"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                        </Grid>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
