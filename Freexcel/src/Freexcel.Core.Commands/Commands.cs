@@ -146,7 +146,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _oldName = sheet.Name;
         sheet.Name = _newName;
         _formulaSnapshot.Clear();
-        InsertRowsCommand.RewriteAllFormulas(
+        RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new RenameSheetOp(_oldName, _newName), _formulaSnapshot);
         return new CommandOutcome(true);
     }
@@ -157,7 +157,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         {
             var sheet = ctx.GetSheet(_sheetId);
             sheet.Name = _oldName;
-            InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+            RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         }
     }
 }
@@ -187,7 +187,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         var sheets = ctx.Workbook.Sheets;
         for (int i = 0; i < sheets.Count; i++)
             if (sheets[i].Id == _sheetId) { _removedIndex = i; break; }
-        _namedRangeSnapshot = InsertRowsCommand.CaptureNamedRanges(ctx.Workbook);
+        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
         foreach (var (name, range) in ctx.Workbook.NamedRanges.ToList())
         {
             if (range.Start.Sheet == _sheetId)
@@ -202,7 +202,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         if (_removedSheet is not null)
         {
             ctx.Workbook.InsertSheet(_removedIndex, _removedSheet);
-            InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+            RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         }
     }
 }
