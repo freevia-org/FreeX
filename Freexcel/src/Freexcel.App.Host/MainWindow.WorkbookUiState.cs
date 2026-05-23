@@ -73,6 +73,9 @@ public partial class MainWindow
 
     private void RefreshToolbar()
     {
+        UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);
+        RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);
+
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
