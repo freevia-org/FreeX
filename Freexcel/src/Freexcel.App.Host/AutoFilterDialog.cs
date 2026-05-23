@@ -167,6 +167,8 @@ public sealed partial class AutoFilterDialog : Window
             _searchBox.Clear();
             _sortNone.IsChecked = true;
             ReplaceAllItems(SelectAll(_allItems));
+            Result = CreateClearFilterResult();
+            DialogResult = true;
         };
         stack.Children.Add(_clearFilterButton);
         _filterByColorGroup.Content = _filterByColorPanel;
