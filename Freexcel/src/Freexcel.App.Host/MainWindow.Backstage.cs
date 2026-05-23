@@ -32,6 +32,26 @@ public partial class MainWindow
         Keyboard.Focus(SsHomeNavBtn);
     }
 
+    private bool TryHandleBackstageShellFocusCycle(bool reverse)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            !IsInsideStartScreenOverlay(focusedElement))
+        {
+            FocusBackstageHomeNavigation();
+            return true;
+        }
+
+        var direction = reverse
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next;
+
+        if (StartScreenOverlay.MoveFocus(new TraversalRequest(direction)))
+            return true;
+
+        FocusBackstageHomeNavigation();
+        return true;
+    }
+
     private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.Modifiers != ModifierKeys.None ||
