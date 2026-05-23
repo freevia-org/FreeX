@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -126,6 +127,13 @@ public sealed class PasteSpecialDialog : Window
         stack.Children.Add(CreateFooterRow());
 
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rbAll.Focus();
+        Keyboard.Focus(_rbAll);
     }
 
     private GroupBox CreatePasteGroup()
