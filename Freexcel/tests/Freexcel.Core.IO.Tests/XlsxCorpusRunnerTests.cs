@@ -667,6 +667,7 @@ public class XlsxCorpusRunnerTests
             workbook.CustomViews.Count,
             CaptureWorkbookMetadataSummary(workbook),
             CaptureWorkbookCalculationSummary(workbook),
+            CaptureWorkbookThemeSummary(workbook.Theme),
             workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
 
     private static WorkbookMetadataSummary CaptureWorkbookMetadataSummary(Workbook workbook) =>
@@ -738,6 +739,19 @@ public class XlsxCorpusRunnerTests
             workbook.IterativeCalculation,
             workbook.MaxCalculationIterations,
             workbook.MaxCalculationChange);
+
+    private static WorkbookThemeSummary CaptureWorkbookThemeSummary(WorkbookTheme theme) =>
+        new(
+            theme.Name,
+            theme.MajorFontName,
+            theme.MinorFontName,
+            theme.EffectsName,
+            Enum.GetValues<WorkbookThemeColorSlot>()
+                .Select(slot => new ThemeColorSummary(slot, ToColorSummary(theme.GetColor(slot))))
+                .ToArray());
+
+    private static string ToColorSummary(CellColor color) =>
+        FormattableString.Invariant($"{color.R:X2}{color.G:X2}{color.B:X2}");
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
@@ -1492,6 +1506,7 @@ public class XlsxCorpusRunnerTests
         int CustomViewCount,
         WorkbookMetadataSummary Metadata,
         WorkbookCalculationSummary Calculation,
+        WorkbookThemeSummary Theme,
         IReadOnlyList<SheetSummary> Sheets);
 
     private sealed record WorkbookMetadataSummary(
@@ -1551,6 +1566,17 @@ public class XlsxCorpusRunnerTests
         bool IterativeCalculation,
         int? MaxIterations,
         double? MaxChange);
+
+    private sealed record WorkbookThemeSummary(
+        string Name,
+        string MajorFontName,
+        string MinorFontName,
+        string EffectsName,
+        IReadOnlyList<ThemeColorSummary> Colors);
+
+    private sealed record ThemeColorSummary(
+        WorkbookThemeColorSlot Slot,
+        string Color);
 
     private sealed record NamedRangeSummary(
         string Name,
