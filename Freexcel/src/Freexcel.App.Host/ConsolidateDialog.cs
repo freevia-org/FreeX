@@ -1,11 +1,18 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed record ConsolidateDialogResult(IReadOnlyList<GridRange> SourceRanges, CellAddress DestinationCell);
+public sealed record ConsolidateDialogResult(
+    IReadOnlyList<GridRange> SourceRanges,
+    CellAddress DestinationCell,
+    ConsolidateFunction Function,
+    bool UseTopRowLabels = false,
+    bool UseLeftColumnLabels = false,
+    bool CreateLinksToSourceData = false);
 
 public sealed class ConsolidateDialog : Window
 {
@@ -17,7 +24,6 @@ public sealed class ConsolidateDialog : Window
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
     private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
-    private const string SumOnlyHelpText = "Only Sum consolidation is currently applied.";
     private const string LabelMatchingHelpText = "Label matching is not available yet; source ranges are consolidated by position.";
     private const string SourceLinksHelpText = "Source links are not available yet; consolidated values are written as results.";
 
@@ -40,10 +46,9 @@ public sealed class ConsolidateDialog : Window
         _destinationBox.Text = defaultDestination;
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new Label { Content = "_Function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
-        foreach (var function in new[] { "Sum", "Count", "Average", "Max", "Min", "Product", "Count Numbers", "StdDev", "StdDevp", "Var", "Varp" })
-            _functionBox.Items.Add(function);
+        foreach (var function in Enum.GetValues<ConsolidateFunction>())
+            _functionBox.Items.Add(new ComboBoxItem { Content = FunctionLabel(function), Tag = function });
         _functionBox.SelectedIndex = 0;
-        DisableUnsupported(_functionBox, SumOnlyHelpText);
         _functionBox.Margin = new Thickness(0, 0, 0, 8);
         root.Children.Add(_functionBox);
         root.Children.Add(new Label { Content = "_Reference:", Target = _referenceBox, Padding = new Thickness(0) });
@@ -89,13 +94,25 @@ public sealed class ConsolidateDialog : Window
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
         string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
 
-    public static ConsolidateDialogResult CreateResult(IEnumerable<GridRange> sourceRanges, CellAddress destinationCell)
+    public static ConsolidateDialogResult CreateResult(
+        IEnumerable<GridRange> sourceRanges,
+        CellAddress destinationCell,
+        ConsolidateFunction function,
+        bool useTopRowLabels = false,
+        bool useLeftColumnLabels = false,
+        bool createLinksToSourceData = false)
     {
         var ranges = sourceRanges.ToList();
         if (ranges.Count == 0)
             throw new ArgumentException("At least one source range is required.", nameof(sourceRanges));
 
-        return new ConsolidateDialogResult(ranges, destinationCell);
+        return new ConsolidateDialogResult(
+            ranges,
+            destinationCell,
+            function,
+            useTopRowLabels,
+            useLeftColumnLabels,
+            createLinksToSourceData);
     }
 
     public static bool HaveSameSize(IEnumerable<GridRange> sourceRanges)
@@ -113,6 +130,27 @@ public sealed class ConsolidateDialog : Window
         SheetId sheetId,
         string sourceRangesText,
         string destinationCellText,
+        out ConsolidateDialogResult result,
+        out string? error) =>
+        TryParse(
+            sheetId,
+            sourceRangesText,
+            destinationCellText,
+            ConsolidateFunction.Sum,
+            useTopRowLabels: false,
+            useLeftColumnLabels: false,
+            createLinksToSourceData: false,
+            out result,
+            out error);
+
+    public static bool TryParse(
+        SheetId sheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        ConsolidateFunction function,
+        bool useTopRowLabels,
+        bool useLeftColumnLabels,
+        bool createLinksToSourceData,
         out ConsolidateDialogResult result,
         out string? error)
     {
@@ -139,7 +177,13 @@ public sealed class ConsolidateDialog : Window
             return false;
         }
 
-        result = CreateResult(ranges, destination);
+        result = CreateResult(
+            ranges,
+            destination,
+            function,
+            useTopRowLabels,
+            useLeftColumnLabels,
+            createLinksToSourceData);
         return true;
     }
 
@@ -195,7 +239,16 @@ public sealed class ConsolidateDialog : Window
     private void Accept()
     {
         var sourceRangesText = JoinSourceRanges(_referencesList.Items.Cast<string>());
-        if (!TryParse(_sheetId, sourceRangesText, _destinationBox.Text, out var result, out var error))
+        if (!TryParse(
+                _sheetId,
+                sourceRangesText,
+                _destinationBox.Text,
+                SelectedFunction(),
+                _topRowBox.IsChecked == true,
+                _leftColumnBox.IsChecked == true,
+                _createLinksBox.IsChecked == true,
+                out var result,
+                out var error))
         {
             MessageBox.Show(this, error ?? "Enter valid consolidation ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -204,4 +257,18 @@ public sealed class ConsolidateDialog : Window
         Result = result;
         DialogResult = true;
     }
+
+    private ConsolidateFunction SelectedFunction() =>
+        _functionBox.SelectedItem is ComboBoxItem { Tag: ConsolidateFunction function }
+            ? function
+            : ConsolidateFunction.Sum;
+
+    private static string FunctionLabel(ConsolidateFunction function) =>
+        function switch
+        {
+            ConsolidateFunction.CountNumbers => "Count Numbers",
+            ConsolidateFunction.StdDev => "StdDev",
+            ConsolidateFunction.StdDevp => "StdDevp",
+            _ => function.ToString()
+        };
 }
