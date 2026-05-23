@@ -156,6 +156,8 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
             ChartType.Stock => CreateStockPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Surface => new XElement(chartNs + "surfaceChart",
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
@@ -599,6 +601,7 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Doughnut
                 or ChartType.Radar
                 or ChartType.Stock
+                or ChartType.Surface
                 or ChartType.ThreeDColumn
                 or ChartType.ThreeDBar);
 

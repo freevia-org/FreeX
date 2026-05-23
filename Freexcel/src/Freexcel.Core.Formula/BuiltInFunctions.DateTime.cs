@@ -384,11 +384,7 @@ public static partial class BuiltInFunctions
         if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        var holidays = new HashSet<DateTime>();
-        if (args.Count > 2 && args[2] is RangeValue hRange)
-            foreach (var v in hRange.Flatten())
-                if (TryCellNumber(v, out double holidaySerial))
-                    holidays.Add(DateTime.FromOADate(holidaySerial).Date);
+        var holidays = args.Count > 2 ? CollectHolidays(args[2]) : new HashSet<DateTime>();
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
