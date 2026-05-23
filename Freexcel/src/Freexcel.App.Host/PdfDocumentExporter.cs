@@ -151,9 +151,14 @@ internal static class PdfDocumentExporter
     {
         const string printScalingKey = "/PrintScaling";
         const string noPrintScalingName = "/None";
+        const string fitWindowKey = "/FitWindow";
+        const string centerWindowKey = "/CenterWindow";
 
         pdf.PageLayout = PdfPageLayout.SinglePage;
-        GetOrCreateViewerPreferences(pdf).Elements.SetName(printScalingKey, noPrintScalingName);
+        var viewerPreferences = GetOrCreateViewerPreferences(pdf);
+        viewerPreferences.Elements.SetName(printScalingKey, noPrintScalingName);
+        viewerPreferences.Elements.SetBoolean(fitWindowKey, true);
+        viewerPreferences.Elements.SetBoolean(centerWindowKey, true);
     }
 
     private static PdfDictionary GetOrCreateViewerPreferences(PdfDocument pdf)
