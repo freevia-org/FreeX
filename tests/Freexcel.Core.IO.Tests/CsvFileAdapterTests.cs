@@ -107,4 +107,30 @@ public sealed class CsvFileAdapterTests
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("visible\r\n");
     }
+
+    [Fact]
+    public void Save_PreservesLeadingBlankColumnsFromWorksheetCoordinates()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("offset"));
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be(",offset\r\n");
+    }
+
+    [Fact]
+    public void Save_PreservesLeadingBlankRowsFromWorksheetCoordinates()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("offset"));
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\r\noffset\r\n");
+    }
 }

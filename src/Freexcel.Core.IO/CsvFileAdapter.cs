@@ -23,9 +23,9 @@ public sealed class CsvFileAdapter : IFileAdapter
             .ToDictionary(pair => (pair.Key.Row, pair.Key.Col), pair => pair.Value);
         if (usedCells.Count == 0) return;
 
-        var startRow = usedCells.Keys.Min(key => key.Row);
+        var startRow = 1u;
         var endRow = usedCells.Keys.Max(key => key.Row);
-        var startCol = usedCells.Keys.Min(key => key.Col);
+        var startCol = 1u;
         var endCol = usedCells.Keys.Max(key => key.Col);
 
         using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
