@@ -63,6 +63,7 @@ public sealed partial class XlsxFileAdapter
                 CropBottom = picturePart.CropBottom
             };
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
+            picture.IsSourceLoaded = true;
             sheet.Pictures.Add(picture);
         }
         foreach (var textBoxPart in layout.TextBoxParts)
@@ -81,6 +82,7 @@ public sealed partial class XlsxFileAdapter
                 OutlineColor = textBoxPart.OutlineColor
             };
             XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
+            textBox.IsSourceLoaded = true;
             sheet.TextBoxes.Add(textBox);
         }
         foreach (var shapePart in layout.ShapeParts)
@@ -101,6 +103,7 @@ public sealed partial class XlsxFileAdapter
                 HasShadowEffect = shapePart.HasShadowEffect
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
+            shape.IsSourceLoaded = true;
             sheet.DrawingShapes.Add(shape);
         }
         foreach (var sparkline in layout.Sparklines)
