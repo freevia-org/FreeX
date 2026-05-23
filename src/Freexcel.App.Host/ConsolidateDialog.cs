@@ -24,7 +24,6 @@ public sealed class ConsolidateDialog : Window
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
     private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
-    private const string LabelMatchingHelpText = "Label matching is not available yet; source ranges are consolidated by position.";
     private const string SourceLinksHelpText = "Source links are not available yet; consolidated values are written as results.";
 
     public ConsolidateDialogResult? Result { get; private set; }
@@ -73,8 +72,6 @@ public sealed class ConsolidateDialog : Window
         root.Children.Add(new Label { Content = "Use _labels in:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
         var labelOptions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         _topRowBox.Margin = new Thickness(0, 0, 16, 0);
-        DisableUnsupported(_topRowBox, LabelMatchingHelpText);
-        DisableUnsupported(_leftColumnBox, LabelMatchingHelpText);
         labelOptions.Children.Add(_topRowBox);
         labelOptions.Children.Add(_leftColumnBox);
         root.Children.Add(labelOptions);
