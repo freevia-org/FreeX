@@ -36,7 +36,18 @@ public sealed partial class TextToColumnsDialog : Window
     private readonly IReadOnlyList<string> _previewRows;
     private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
     private readonly CellAddress _defaultDestination;
+    private readonly TextBlock _wizardHeader = new() { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly TextBlock _wizardInstruction = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
+    private Button? _backButton;
+    private Button? _nextButton;
+    private FrameworkElement? _originalDataTypePanel;
+    private FrameworkElement? _delimiterPanel;
+    private FrameworkElement? _fixedWidthPanel;
+    private FrameworkElement? _dataPreviewLabel;
+    private FrameworkElement? _columnFormatPanel;
+    private FrameworkElement? _destinationPanel;
     private int _previewColumnCount = 1;
+    private int _wizardStep = 1;
     private bool _suppressColumnFormatSync;
     private bool _suppressFixedWidthSync;
     private int? _dragBreakIndex;
@@ -83,7 +94,7 @@ public sealed partial class TextToColumnsDialog : Window
         _formatSkipButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Skip);
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        var buttons = CreateWizardButtonRow(Accept);
+        var buttons = CreateWizardButtonRow();
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
@@ -91,26 +102,24 @@ public sealed partial class TextToColumnsDialog : Window
         DockPanel.SetDock(body, Dock.Top);
         root.Children.Add(body);
 
-        body.Children.Add(new TextBlock
-        {
-            Text = "Text Wizard - Step 2 of 3",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-        body.Children.Add(new TextBlock
-        {
-            Text = "Choose the delimiters that separate your selected text.",
-            Margin = new Thickness(0, 0, 0, 10)
-        });
-        body.Children.Add(CreateOriginalDataTypePanel());
-        body.Children.Add(CreateDelimiterPanel());
-        body.Children.Add(CreateFixedWidthPanel());
-        body.Children.Add(new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) });
+        body.Children.Add(_wizardHeader);
+        body.Children.Add(_wizardInstruction);
+        _originalDataTypePanel = CreateOriginalDataTypePanel();
+        _delimiterPanel = CreateDelimiterPanel();
+        _fixedWidthPanel = CreateFixedWidthPanel();
+        _dataPreviewLabel = new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) };
+        _columnFormatPanel = CreateColumnFormatPanel();
+        _destinationPanel = CreateDestinationPanel();
+        body.Children.Add(_originalDataTypePanel);
+        body.Children.Add(_delimiterPanel);
+        body.Children.Add(_fixedWidthPanel);
+        body.Children.Add(_dataPreviewLabel);
         body.Children.Add(_previewGrid);
-        body.Children.Add(CreateColumnFormatPanel());
-        body.Children.Add(CreateDestinationPanel());
+        body.Children.Add(_columnFormatPanel);
+        body.Children.Add(_destinationPanel);
 
         Content = root;
+        UpdateWizardStep();
         RefreshMode();
         RefreshPreview();
     }
@@ -313,7 +322,7 @@ public sealed partial class TextToColumnsDialog : Window
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
 
-    private static StackPanel CreateWizardButtonRow(Action accept)
+    private StackPanel CreateWizardButtonRow()
     {
         var panel = new StackPanel
         {
@@ -322,22 +331,28 @@ public sealed partial class TextToColumnsDialog : Window
             Margin = new Thickness(0, 12, 0, 0)
         };
 
-        panel.Children.Add(new Button
+        _backButton = new Button
         {
             Content = "< _Back",
             Width = 72,
-            Margin = new Thickness(0, 0, 8, 0),
-            IsEnabled = false,
-            ToolTip = "This dialog opens on the split-options step."
-        });
-        var nextButton = new Button
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        _backButton.Click += (_, _) => MoveWizardStep(-1);
+        panel.Children.Add(_backButton);
+        _nextButton = new Button
         {
             Content = "_Next >",
             Width = 72,
             Margin = new Thickness(0, 0, 8, 0)
         };
-        nextButton.Click += (_, _) => accept();
-        panel.Children.Add(nextButton);
+        _nextButton.Click += (_, _) =>
+        {
+            if (_wizardStep < 3)
+                MoveWizardStep(1);
+            else
+                Accept();
+        };
+        panel.Children.Add(_nextButton);
         var finishButton = new Button
         {
             Content = "_Finish",
@@ -345,10 +360,46 @@ public sealed partial class TextToColumnsDialog : Window
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
         };
-        finishButton.Click += (_, _) => accept();
+        finishButton.Click += (_, _) => Accept();
         panel.Children.Add(finishButton);
         panel.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
         return panel;
+    }
+
+    private void MoveWizardStep(int direction)
+    {
+        _wizardStep = Math.Clamp(_wizardStep + direction, 1, 3);
+        UpdateWizardStep();
+    }
+
+    private void UpdateWizardStep()
+    {
+        _wizardHeader.Text = $"Text Wizard - Step {_wizardStep} of 3";
+        _wizardInstruction.Text = _wizardStep switch
+        {
+            1 => "Choose the file type that best describes your data.",
+            2 => "Choose the delimiters that separate your selected text.",
+            _ => "Select each column and set the data format and destination."
+        };
+
+        SetVisible(_originalDataTypePanel, _wizardStep == 1);
+        SetVisible(_delimiterPanel, _wizardStep == 2 && _fixedWidthButton.IsChecked != true);
+        SetVisible(_fixedWidthPanel, _wizardStep == 2 && _fixedWidthButton.IsChecked == true);
+        SetVisible(_dataPreviewLabel, true);
+        _previewGrid.Visibility = Visibility.Visible;
+        SetVisible(_columnFormatPanel, _wizardStep == 3);
+        SetVisible(_destinationPanel, _wizardStep == 3);
+
+        if (_backButton is not null)
+            _backButton.IsEnabled = _wizardStep > 1;
+        if (_nextButton is not null)
+            _nextButton.IsEnabled = _wizardStep < 3;
+    }
+
+    private static void SetVisible(FrameworkElement? element, bool visible)
+    {
+        if (element is not null)
+            element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RefreshMode()
@@ -365,6 +416,7 @@ public sealed partial class TextToColumnsDialog : Window
         _fixedWidthBreaksBox.IsEnabled = fixedWidth;
         _fixedWidthRuler.IsEnabled = fixedWidth;
         _fixedWidthRuler.Opacity = fixedWidth ? 1.0 : 0.55;
+        UpdateWizardStep();
         RefreshPreview();
     }
 
