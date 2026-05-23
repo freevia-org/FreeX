@@ -52,7 +52,7 @@ public sealed class SparklineDialog : Window
         _kindBox.SelectedIndex = Math.Max(0, Array.IndexOf(Enum.GetValues<SparklineKindChoice>(), kind));
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_kindBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         Content = stack;
     }
 
