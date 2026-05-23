@@ -14,6 +14,7 @@ public sealed class GoToDialog : Window
 
     public CellAddress SelectedAddress { get; private set; }
     public GoToSpecialKind? SelectedSpecialKind { get; private set; }
+    public GoToSpecialOptions? SelectedSpecialOptions { get; private set; }
 
     public GoToDialog(
         SheetId sheetId,
@@ -132,6 +133,7 @@ public sealed class GoToDialog : Window
             return;
 
         SelectedSpecialKind = dialog.SelectedKind;
+        SelectedSpecialOptions = dialog.SelectedOptions;
         DialogResult = true;
     }
 
@@ -145,6 +147,7 @@ public sealed class GoToDialog : Window
 
         SelectedAddress = address;
         SelectedSpecialKind = null;
+        SelectedSpecialOptions = null;
         DialogResult = true;
     }
 

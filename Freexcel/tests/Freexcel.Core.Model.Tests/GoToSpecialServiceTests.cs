@@ -23,6 +23,58 @@ public sealed class GoToSpecialServiceTests
     }
 
     [Fact]
+    public void FindConstants_HonorsExcelValueTypeSuboptions()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 4));
+        var number = new CellAddress(sheet.Id, 1, 1);
+        var text = new CellAddress(sheet.Id, 1, 2);
+        var logical = new CellAddress(sheet.Id, 1, 3);
+        var error = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(number, new NumberValue(12));
+        sheet.SetCell(text, new TextValue("east"));
+        sheet.SetCell(logical, new BoolValue(true));
+        sheet.SetCell(error, ErrorValue.NA);
+
+        var result = GoToSpecialService.Find(
+            sheet,
+            range,
+            GoToSpecialKind.Constants,
+            options: new GoToSpecialOptions(GoToSpecialValueTypes.Numbers | GoToSpecialValueTypes.Errors));
+
+        result.Should().Equal(number, error);
+    }
+
+    [Fact]
+    public void FindFormulas_HonorsExcelValueTypeSuboptions()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 4));
+        var numberFormula = new CellAddress(sheet.Id, 1, 1);
+        var textFormula = new CellAddress(sheet.Id, 1, 2);
+        var logicalFormula = new CellAddress(sheet.Id, 1, 3);
+        var errorFormula = new CellAddress(sheet.Id, 1, 4);
+        sheet.SetCell(numberFormula, Cell.FromFormula("1+1"));
+        sheet.GetCell(numberFormula)!.Value = new NumberValue(2);
+        sheet.SetCell(textFormula, Cell.FromFormula("\"east\""));
+        sheet.GetCell(textFormula)!.Value = new TextValue("east");
+        sheet.SetCell(logicalFormula, Cell.FromFormula("TRUE"));
+        sheet.GetCell(logicalFormula)!.Value = new BoolValue(true);
+        sheet.SetCell(errorFormula, Cell.FromFormula("NA()"));
+        sheet.GetCell(errorFormula)!.Value = ErrorValue.NA;
+
+        var result = GoToSpecialService.Find(
+            sheet,
+            range,
+            GoToSpecialKind.Formulas,
+            options: new GoToSpecialOptions(GoToSpecialValueTypes.Text | GoToSpecialValueTypes.Logicals));
+
+        result.Should().Equal(textFormula, logicalFormula);
+    }
+
+    [Fact]
     public void FindBlanks_ReturnsBlankAddressesInRange()
     {
         var wb = new Workbook("test");

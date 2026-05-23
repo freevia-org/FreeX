@@ -178,6 +178,24 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_Reads3DAreaChartAsRenderable()
+    {
+        var sheetId = SheetId.New();
+        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("area3DChart"));
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.ThreeDArea);
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
+        chart.DataRange.Should().Be(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2)));
+        chart.FirstRowIsHeader.Should().BeTrue();
+        chart.FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryReadSupportedChart_DoesNotLetAdvancedExtensionOverrideDirectSupportedChart()
     {
         var sheetId = SheetId.New();
@@ -424,6 +442,14 @@ public sealed class XlsxChartPartReaderTests
                     <c:spPr><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></c:spPr>
                   </c:pivotFmt>
                 </c:pivotFmts>
+                <c:view3D>
+                  <c:rotX val="20"/>
+                  <c:hPercent val="150"/>
+                  <c:rotY val="30"/>
+                  <c:depthPercent val="200"/>
+                  <c:rAngAx val="0"/>
+                  <c:perspective val="45"/>
+                </c:view3D>
                 <c:plotArea>
                   <c:layout>
                     <c:manualLayout>
@@ -526,6 +552,15 @@ public sealed class XlsxChartPartReaderTests
             Y = 0.15,
             Width = 0.2,
             Height = 0.7
+        });
+        chart.ThreeDView.Should().BeEquivalentTo(new Chart3DViewModel
+        {
+            RotationX = 20,
+            HeightPercent = 150,
+            RotationY = 30,
+            DepthPercent = 200,
+            RightAngleAxes = false,
+            Perspective = 45
         });
         chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
         {

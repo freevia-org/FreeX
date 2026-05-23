@@ -9,7 +9,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesTrendlineChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Bar, ChartType.Scatter, ChartType.Bubble, ChartType.Area };
+        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Bar, ChartType.Scatter, ChartType.Bubble, ChartType.Area, ChartType.ThreeDArea };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsTrendlines(type));
@@ -30,6 +30,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Scatter)]
     [InlineData(ChartType.Bubble)]
     [InlineData(ChartType.Area)]
+    [InlineData(ChartType.ThreeDArea)]
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.ThreeDColumn)]
@@ -59,7 +60,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesSecondaryAxisChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Area, ChartType.Scatter };
+        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Area, ChartType.ThreeDArea, ChartType.Scatter };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsSecondaryAxis(type));
@@ -69,7 +70,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesComboLineOverlayChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.Area };
+        var supportedTypes = new[] { ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.Area, ChartType.ThreeDArea };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsComboLineOverlay(type));
@@ -125,7 +126,8 @@ public sealed class ChartCommandTests
             ChartType.Line,
             ChartType.Scatter,
             ChartType.Bubble,
-            ChartType.Area
+            ChartType.Area,
+            ChartType.ThreeDArea
         };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
@@ -145,7 +147,8 @@ public sealed class ChartCommandTests
             ChartType.Line,
             ChartType.Scatter,
             ChartType.Bubble,
-            ChartType.Area
+            ChartType.Area,
+            ChartType.ThreeDArea
         };
 
         xAxisSupportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsXAxisBounds(type));
@@ -286,6 +289,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Scatter)]
     [InlineData(ChartType.Bubble)]
     [InlineData(ChartType.Area)]
+    [InlineData(ChartType.ThreeDArea)]
     public void AddChartCommand_AddsRequestedChartTypeAndUndoRemovesIt(ChartType type)
     {
         var wb = new Workbook("test");

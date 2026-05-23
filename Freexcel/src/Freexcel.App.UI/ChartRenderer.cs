@@ -262,7 +262,7 @@ public static partial class ChartRenderer
                     firstSeriesPoints = trendPoints;
                 model.Series.Add(series);
             }
-            else if (chart.Type == ChartType.Area)
+            else if (chart.Type is ChartType.Area or ChartType.ThreeDArea)
             {
                 if (!model.Axes.Any())
                 {
