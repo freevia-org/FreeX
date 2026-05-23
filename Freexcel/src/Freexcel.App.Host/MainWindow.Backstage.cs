@@ -32,6 +32,23 @@ public partial class MainWindow
         Keyboard.Focus(SsHomeNavBtn);
     }
 
+    private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None ||
+            Keyboard.FocusedElement is not UIElement focusedElement ||
+            !IsDescendantOf(focusedElement, StartScreenSidebar) ||
+            e.Key != Key.Up && e.Key != Key.Down)
+        {
+            return;
+        }
+
+        var direction = e.Key == Key.Up
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next;
+        focusedElement.MoveFocus(new TraversalRequest(direction));
+        e.Handled = true;
+    }
+
     private void OpenPrintBackstage()
     {
         ShowStartScreen();
