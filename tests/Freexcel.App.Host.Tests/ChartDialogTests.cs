@@ -21,10 +21,12 @@ public sealed class ChartDialogTests
             ChartType.PercentStackedColumn,
             ChartType.Line,
             ChartType.Pie,
+            ChartType.ThreeDPie,
             ChartType.Doughnut,
             ChartType.Bar,
             ChartType.StackedBar,
             ChartType.PercentStackedBar,
+            ChartType.ThreeDBar,
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
@@ -68,7 +70,17 @@ public sealed class ChartDialogTests
         categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
             ChartType.StackedColumn,
-            ChartType.PercentStackedColumn);
+            ChartType.PercentStackedColumn,
+            ChartType.ThreeDColumn);
+        categories.Single(category => category.Name == "Pie").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Pie,
+            ChartType.ThreeDPie,
+            ChartType.Doughnut);
+        categories.Single(category => category.Name == "Bar").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Bar,
+            ChartType.StackedBar,
+            ChartType.PercentStackedBar,
+            ChartType.ThreeDBar);
     }
 
     [Fact]

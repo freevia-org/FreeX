@@ -31,6 +31,7 @@ public static class ChartTypePickerPlanner
         new(ChartType.ThreeDColumn, "3D Column"),
         new(ChartType.Line, "Line", true),
         new(ChartType.Pie, "Pie", true),
+        new(ChartType.ThreeDPie, "3D Pie"),
         new(ChartType.Doughnut, "Doughnut"),
         new(ChartType.Bar, "Clustered Bar", true),
         new(ChartType.StackedBar, "Stacked Bar"),
@@ -66,7 +67,7 @@ public static class ChartTypePickerPlanner
             {
                 ("Column", [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.ThreeDColumn]),
                 ("Line", [ChartType.Line]),
-                ("Pie", [ChartType.Pie, ChartType.Doughnut]),
+                ("Pie", [ChartType.Pie, ChartType.ThreeDPie, ChartType.Doughnut]),
                 ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar]),
                 ("Area", [ChartType.Area]),
                 ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),

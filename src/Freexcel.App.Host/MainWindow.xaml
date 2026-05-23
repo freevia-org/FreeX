@@ -1160,6 +1160,9 @@
                                     <Button Content="Pie"       Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieMenuItem_Click"
                                             local:RibbonTooltip.Title="Pie Chart" local:RibbonTooltip.KeyTip="PI"
                                             local:RibbonTooltip.Description="Insert a pie chart to show proportions of a whole."/>
+                                    <Button Content="3D Pie"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DPieMenuItem_Click"
+                                            local:RibbonTooltip.Title="3D Pie Chart" local:RibbonTooltip.KeyTip="3P"
+                                            local:RibbonTooltip.Description="Insert a 3D pie chart to show proportions of a whole."/>
                                     <Button Content="Doughnut"  Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutMenuItem_Click"
                                             local:RibbonTooltip.Title="Doughnut Chart" local:RibbonTooltip.KeyTip="D"
                                             local:RibbonTooltip.Description="Insert a doughnut chart to show proportions with a center hole."/>

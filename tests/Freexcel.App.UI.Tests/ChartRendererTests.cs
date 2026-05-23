@@ -1880,6 +1880,32 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ThreeDPieRenderer_UsesPieSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.ThreeDPie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>();
+        model.Axes.Should().BeEmpty();
+    }
+
+    [Fact]
     public void StockRenderer_UsesDateTimeAxisForDateCategories()
     {
         var sheetId = SheetId.New();

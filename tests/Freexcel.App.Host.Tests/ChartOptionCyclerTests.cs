@@ -86,6 +86,7 @@ public sealed class ChartOptionCyclerTests
     }
 
     [Theory]
+    [InlineData("3d pie", ChartType.ThreeDPie)]
     [InlineData("doughnut", ChartType.Doughnut)]
     [InlineData("donut", ChartType.Doughnut)]
     [InlineData("100% stacked bar", ChartType.PercentStackedBar)]
