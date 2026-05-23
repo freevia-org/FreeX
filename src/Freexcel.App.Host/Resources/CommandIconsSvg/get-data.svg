@@ -1,28 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Get Data">
-  <defs>
-    <style>
-      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
-      .b,.blue{fill:#0078d4}
-      .o,.orange{fill:#f7630c}
-      .y,.yellow,.paleyellow{fill:#ffb900}
-      .rd,.red{fill:#d32f2f}
-      .p,.purple{fill:#8b5cf6}
-      .w,.paper,.bg{fill:#ffffff}
-      .k,.gray{fill:#242424}
-      .f,.soft{fill:#f3f2f1}
-      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
-      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
-      .paleblue{fill:#dcecff}
-      .palered{fill:#ffd7d7}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><ellipse class="paper" stroke="#202124" stroke-width="1.8" cx="27" cy="15.12" rx="13.5" ry="5.4"/><path class="s" d="M13.5 15.12v19.44c0 3.24 6.48 5.4 13.5 5.4s13.5-2.16 13.5-5.4V15.12M13.5 24.84c0 3.24 6.48 5.4 13.5 5.4s13.5-2.16 13.5-5.4"/>  </g>
+  <g><ellipse stroke="#202124" stroke-width="1.8" cx="27" cy="15.12" rx="13.5" ry="5.4" fill="#ffffff"/><path d="M13.5 15.12v19.44c0 3.24 6.48 5.4 13.5 5.4s13.5-2.16 13.5-5.4V15.12M13.5 24.84c0 3.24 6.48 5.4 13.5 5.4s13.5-2.16 13.5-5.4" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>  </g>
 </svg>
 
