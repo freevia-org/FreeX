@@ -1243,6 +1243,9 @@
                                     <Button Content="3D Column"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DColumnMenuItem_Click"
                                             local:RibbonTooltip.Title="3D Column Chart" local:RibbonTooltip.KeyTip="3C"
                                             local:RibbonTooltip.Description="Insert a 3D clustered column chart for the selected data."/>
+                                    <Button Content="3D Bar"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DBarMenuItem_Click"
+                                            local:RibbonTooltip.Title="3D Bar Chart" local:RibbonTooltip.KeyTip="3B"
+                                            local:RibbonTooltip.Description="Insert a 3D clustered bar chart for the selected data."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Data Labels"  Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
