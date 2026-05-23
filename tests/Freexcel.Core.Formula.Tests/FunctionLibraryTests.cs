@@ -5057,6 +5057,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TakeAndDrop_HugeFiniteSliceCount_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+
+        _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Drop_AllRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
