@@ -664,6 +664,7 @@ public class XlsxCorpusRunnerTests
                 .ToArray(),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
+            CapturePivotNumberFormatCatalogSummary(workbook),
             workbook.CustomViews
                 .OrderBy(view => view.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(CaptureCustomViewSummary)
@@ -743,6 +744,26 @@ public class XlsxCorpusRunnerTests
             workbook.IterativeCalculation,
             workbook.MaxCalculationIterations,
             workbook.MaxCalculationChange);
+
+    private static IReadOnlyList<NumberFormatCatalogSummary> CapturePivotNumberFormatCatalogSummary(Workbook workbook)
+    {
+        var referencedIds = workbook.PivotCaches
+            .SelectMany(cache => cache.Fields)
+            .Select(field => field.NumberFormatId)
+            .Concat(workbook.Sheets
+                .SelectMany(sheet => sheet.PivotTables)
+                .SelectMany(pivot => pivot.DataFields)
+                .Select(field => field.NumberFormatId))
+            .Where(id => id is >= 164)
+            .Select(id => id!.Value)
+            .ToHashSet();
+
+        return workbook.NumberFormatCatalog
+            .Where(pair => referencedIds.Contains(pair.Key))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => new NumberFormatCatalogSummary(pair.Key, pair.Value))
+            .ToArray();
+    }
 
     private static WorkbookThemeSummary CaptureWorkbookThemeSummary(WorkbookTheme theme) =>
         new(
@@ -848,6 +869,12 @@ public class XlsxCorpusRunnerTests
             sheet.DifferentOddEvenHeaderFooter,
             sheet.HeaderFooterScaleWithDocument,
             sheet.HeaderFooterAlignWithMargins,
+            CaptureHeaderFooterPictureSetSummary(sheet.PageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.PageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.FirstPageFooterPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageHeaderPictures),
+            CaptureHeaderFooterPictureSetSummary(sheet.EvenPageFooterPictures),
             sheet.CenterHorizontallyOnPage,
             sheet.CenterVerticallyOnPage,
             sheet.PageOrder,
@@ -1067,8 +1094,10 @@ public class XlsxCorpusRunnerTests
             cache.RefreshOnLoad,
             cache.SaveData,
             cache.EnableRefresh,
+            cache.PreserveSourceSortFilter,
             cache.MissingItemsLimit,
             cache.RefreshedVersion,
+            cache.RefreshedBy ?? "",
             cache.Fields
                 .Select(field => new PivotCacheFieldSummary(
                     field.Name,
@@ -1157,6 +1186,8 @@ public class XlsxCorpusRunnerTests
             pivot.ShowRowStripes,
             pivot.ShowColumnStripes,
             pivot.ShowFieldHeaders,
+            pivot.ShowItemsWithNoDataOnRows,
+            pivot.ShowItemsWithNoDataOnColumns,
             pivot.PageOverThenDown,
             pivot.PageWrap,
             pivot.EmptyValueText ?? "",
@@ -1207,6 +1238,22 @@ public class XlsxCorpusRunnerTests
             NormalizeHeaderFooterText(value.Left),
             NormalizeHeaderFooterText(value.Center),
             NormalizeHeaderFooterText(value.Right));
+
+    private static HeaderFooterPictureSetSummary CaptureHeaderFooterPictureSetSummary(WorksheetHeaderFooterPictureSet value) =>
+        new(
+            CaptureHeaderFooterPictureSummary(value.Left),
+            CaptureHeaderFooterPictureSummary(value.Center),
+            CaptureHeaderFooterPictureSummary(value.Right));
+
+    private static HeaderFooterPictureSummary? CaptureHeaderFooterPictureSummary(WorksheetHeaderFooterPicture? picture) =>
+        picture is null
+            ? null
+            : new HeaderFooterPictureSummary(
+                picture.ContentType,
+                picture.FileName ?? "",
+                picture.ImageBytes.Length,
+                picture.Width,
+                picture.Height);
 
     private static string NormalizeHeaderFooterText(string text) =>
         text
@@ -1593,6 +1640,7 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<PivotTableStyleSummary> PivotTableStyles,
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
+        IReadOnlyList<NumberFormatCatalogSummary> NumberFormatCatalog,
         IReadOnlyList<CustomViewSummary> CustomViews,
         int CustomViewCount,
         WorkbookMetadataSummary Metadata,
@@ -1739,6 +1787,12 @@ public class XlsxCorpusRunnerTests
         bool DifferentOddEvenHeaderFooter,
         bool HeaderFooterScaleWithDocument,
         bool HeaderFooterAlignWithMargins,
+        HeaderFooterPictureSetSummary PageHeaderPictures,
+        HeaderFooterPictureSetSummary PageFooterPictures,
+        HeaderFooterPictureSetSummary FirstPageHeaderPictures,
+        HeaderFooterPictureSetSummary FirstPageFooterPictures,
+        HeaderFooterPictureSetSummary EvenPageHeaderPictures,
+        HeaderFooterPictureSetSummary EvenPageFooterPictures,
         bool CenterHorizontallyOnPage,
         bool CenterVerticallyOnPage,
         WorksheetPageOrder PageOrder,
@@ -1849,6 +1903,18 @@ public class XlsxCorpusRunnerTests
         public static HeaderFooterSummary Empty { get; } = new("", "", "");
     }
 
+    private sealed record HeaderFooterPictureSetSummary(
+        HeaderFooterPictureSummary? Left,
+        HeaderFooterPictureSummary? Center,
+        HeaderFooterPictureSummary? Right);
+
+    private sealed record HeaderFooterPictureSummary(
+        string ContentType,
+        string FileName,
+        int ByteLength,
+        double Width,
+        double Height);
+
     private sealed record ChartSummary(
         ChartType Type,
         string Title,
@@ -1936,6 +2002,8 @@ public class XlsxCorpusRunnerTests
         bool ShowRowStripes,
         bool ShowColumnStripes,
         bool ShowFieldHeaders,
+        bool ShowItemsWithNoDataOnRows,
+        bool ShowItemsWithNoDataOnColumns,
         bool PageOverThenDown,
         int PageWrap,
         string EmptyValueText,
@@ -1960,8 +2028,10 @@ public class XlsxCorpusRunnerTests
         bool RefreshOnLoad,
         bool SaveData,
         bool EnableRefresh,
+        bool PreserveSourceSortFilter,
         int? MissingItemsLimit,
         int? RefreshedVersion,
+        string RefreshedBy,
         IReadOnlyList<PivotCacheFieldSummary> Fields);
 
     private sealed record PivotCacheFieldSummary(
@@ -2013,6 +2083,8 @@ public class XlsxCorpusRunnerTests
         string Type,
         int? DifferentialFormatId,
         int? Size);
+
+    private sealed record NumberFormatCatalogSummary(int Id, string FormatCode);
 
     private sealed record SparklineSummary(
         SparklineKind Kind,

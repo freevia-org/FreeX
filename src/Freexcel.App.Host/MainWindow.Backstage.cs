@@ -17,12 +17,41 @@ public partial class MainWindow
         UpdateSsRecentList();
         ShowHomeView();
         StartScreenOverlay.Visibility = Visibility.Visible;
+        FocusBackstageHomeNavigation();
     }
 
     private void HideStartScreen()
     {
         StartScreenOverlay.Visibility = Visibility.Collapsed;
         SheetGrid.Focus();
+    }
+
+    private void FocusBackstageHomeNavigation()
+    {
+        SsHomeNavBtn.Focus();
+        Keyboard.Focus(SsHomeNavBtn);
+    }
+
+    private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None ||
+            Keyboard.FocusedElement is not UIElement focusedElement ||
+            !IsDescendantOf(focusedElement, StartScreenSidebar) ||
+            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+        {
+            return;
+        }
+
+        var direction = e.Key switch
+        {
+            Key.Up => FocusNavigationDirection.Previous,
+            Key.Down => FocusNavigationDirection.Next,
+            Key.Home => FocusNavigationDirection.First,
+            Key.End => FocusNavigationDirection.Last,
+            _ => FocusNavigationDirection.Next
+        };
+        focusedElement.MoveFocus(new TraversalRequest(direction));
+        e.Handled = true;
     }
 
     private void OpenPrintBackstage()

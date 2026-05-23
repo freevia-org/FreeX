@@ -76,6 +76,44 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("StartScreenOverlay.Visibility = Visibility.Visible;");
+        backstageSource.Should().Contain("FocusBackstageHomeNavigation();");
+        backstageSource.Should().Contain("private void FocusBackstageHomeNavigation()");
+        backstageSource.Should().Contain("SsHomeNavBtn.Focus();");
+        backstageSource.Should().Contain("Keyboard.Focus(SsHomeNavBtn);");
+    }
+
+    [Fact]
+    public void BackstageSidebar_UpDownKeysMoveThroughNavigation()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        xaml.Should().Contain("PreviewKeyDown=\"StartScreenOverlay_PreviewKeyDown\"");
+        xaml.Should().Contain("x:Name=\"StartScreenSidebar\"");
+        backstageSource.Should().Contain("private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)");
+        backstageSource.Should().Contain("IsDescendantOf(focusedElement, StartScreenSidebar)");
+        backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
+        backstageSource.Should().Contain("FocusNavigationDirection.Previous");
+        backstageSource.Should().Contain("FocusNavigationDirection.Next");
+        backstageSource.Should().Contain("focusedElement.MoveFocus(new TraversalRequest(direction));");
+    }
+
+    [Fact]
+    public void BackstageSidebar_HomeEndKeysMoveToNavigationEdges()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
+        backstageSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
+        backstageSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
+    }
+
+    [Fact]
     public void GetData_IncludesDelimitedTextAdapters()
     {
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
