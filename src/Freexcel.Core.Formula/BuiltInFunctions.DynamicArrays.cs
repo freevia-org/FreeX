@@ -787,6 +787,7 @@ public static partial class BuiltInFunctions
         }
 
         if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
+        if ((long)rowCount * colCount > 1_000_000) return ErrorValue.Value;
 
         var padWith = args.Count > 3 ? args[3] : ErrorValue.NA;
         var result = CreateFilledRange(rowCount, colCount, padWith);

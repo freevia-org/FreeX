@@ -5552,6 +5552,14 @@ public class FunctionLibraryTests
 
     // ── UNIQUE ────────────────────────────────────────────────────────────────────
 
+    [Fact]
+    public void Expand_TooManyCells_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        _eval.Evaluate("=EXPAND(A1,1000001,1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
     [Fact] public void Sort_SortIndexError_PropagatesError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)));
