@@ -209,6 +209,7 @@ public class XlsxCorpusRunnerTests
 
             source.Position = 0;
             var workbook = adapter.Load(source);
+            var beforeMetadata = CaptureWorkbookMetadataSummary(workbook);
             var sheet = workbook.GetSheetAt(0);
             sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freexcel-metadata-retention-edit"));
 
@@ -220,6 +221,13 @@ public class XlsxCorpusRunnerTests
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            CaptureWorkbookMetadataSummary(roundTripped).Should().BeEquivalentTo(
+                beforeMetadata,
+                options => options.WithStrictOrdering(),
+                row.Id);
         }
     }
 
@@ -657,7 +665,45 @@ public class XlsxCorpusRunnerTests
                 .Select(CaptureCustomViewSummary)
                 .ToArray(),
             workbook.CustomViews.Count,
+            CaptureWorkbookMetadataSummary(workbook),
             workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
+
+    private static WorkbookMetadataSummary CaptureWorkbookMetadataSummary(Workbook workbook) =>
+        new(
+            workbook.Slicers
+                .OrderBy(slicer => slicer.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(slicer => new SlicerSummary(
+                    slicer.Name,
+                    slicer.Caption ?? "",
+                    slicer.CacheName,
+                    slicer.SourcePivotTableName ?? "",
+                    slicer.SourceFieldName ?? "",
+                    slicer.StyleName ?? "",
+                    slicer.SelectedItems.OrderBy(item => item, StringComparer.Ordinal).ToArray(),
+                    slicer.PackagePart))
+                .ToArray(),
+            workbook.Timelines
+                .OrderBy(timeline => timeline.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(timeline => new TimelineSummary(
+                    timeline.Name,
+                    timeline.Caption ?? "",
+                    timeline.CacheName,
+                    timeline.SourcePivotTableName ?? "",
+                    timeline.SourceFieldName ?? "",
+                    timeline.StyleName ?? "",
+                    timeline.StartDate ?? "",
+                    timeline.EndDate ?? "",
+                    timeline.SelectedStartDate ?? "",
+                    timeline.SelectedEndDate ?? "",
+                    timeline.PackagePart))
+                .ToArray(),
+            workbook.ExternalLinks
+                .OrderBy(link => link.PackagePart, StringComparer.OrdinalIgnoreCase)
+                .Select(link => new ExternalLinkSummary(
+                    link.PackagePart,
+                    link.TargetUri ?? "",
+                    link.TargetMode ?? ""))
+                .ToArray());
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
@@ -1375,7 +1421,41 @@ public class XlsxCorpusRunnerTests
         int PivotTableStyleElementCount,
         IReadOnlyList<CustomViewSummary> CustomViews,
         int CustomViewCount,
+        WorkbookMetadataSummary Metadata,
         IReadOnlyList<SheetSummary> Sheets);
+
+    private sealed record WorkbookMetadataSummary(
+        IReadOnlyList<SlicerSummary> Slicers,
+        IReadOnlyList<TimelineSummary> Timelines,
+        IReadOnlyList<ExternalLinkSummary> ExternalLinks);
+
+    private sealed record SlicerSummary(
+        string Name,
+        string Caption,
+        string CacheName,
+        string SourcePivotTableName,
+        string SourceFieldName,
+        string StyleName,
+        IReadOnlyList<string> SelectedItems,
+        string PackagePart);
+
+    private sealed record TimelineSummary(
+        string Name,
+        string Caption,
+        string CacheName,
+        string SourcePivotTableName,
+        string SourceFieldName,
+        string StyleName,
+        string StartDate,
+        string EndDate,
+        string SelectedStartDate,
+        string SelectedEndDate,
+        string PackagePart);
+
+    private sealed record ExternalLinkSummary(
+        string PackagePart,
+        string TargetUri,
+        string TargetMode);
 
     private sealed record NamedRangeSummary(
         string Name,
