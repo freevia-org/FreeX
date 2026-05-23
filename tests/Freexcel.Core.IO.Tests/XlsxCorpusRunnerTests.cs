@@ -655,6 +655,7 @@ public class XlsxCorpusRunnerTests
                 .ToArray(),
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
+            ToLegacyPasswordHash(workbook.StructureProtectionPassword),
             workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
@@ -778,6 +779,34 @@ public class XlsxCorpusRunnerTests
     private static string ToColorSummary(CellColor color) =>
         FormattableString.Invariant($"{color.R:X2}{color.G:X2}{color.B:X2}");
 
+    private static string ToLegacyPasswordHash(string? passwordOrHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordOrHash))
+            return "";
+        if (IsLegacyPasswordHash(passwordOrHash))
+            return passwordOrHash.ToUpperInvariant();
+
+        var hash = 0;
+        for (var i = 0; i < passwordOrHash.Length; i++)
+        {
+            var value = passwordOrHash[i] << (i + 1);
+            var rotatedBits = value >> 15;
+            value &= 0x7fff;
+            hash ^= value | rotatedBits;
+        }
+
+        hash ^= passwordOrHash.Length;
+        hash ^= 0xCE4B;
+        return hash.ToString("X4", CultureInfo.InvariantCulture);
+    }
+
+    private static bool IsLegacyPasswordHash(string value) =>
+        value.Length is > 0 and <= 4 &&
+        value.All(ch =>
+            ch is >= '0' and <= '9' ||
+            ch is >= 'A' and <= 'F' ||
+            ch is >= 'a' and <= 'f');
+
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
             sheet.Name,
@@ -835,6 +864,7 @@ public class XlsxCorpusRunnerTests
             CaptureBackgroundImageSummary(sheet.BackgroundImage),
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
+            ToLegacyPasswordHash(sheet.ProtectionPassword),
             sheet.AllowEditRanges
                 .OrderBy(range => range.Start.Row)
                 .ThenBy(range => range.Start.Col)
@@ -1691,6 +1721,7 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<NamedRangeSummary> NamedRanges,
         int NamedRangeCount,
         bool IsStructureProtected,
+        string StructureProtectionPassword,
         IReadOnlyList<PivotCacheSummary> PivotCaches,
         int PivotCacheCount,
         int PivotCacheFieldCount,
@@ -1816,6 +1847,7 @@ public class XlsxCorpusRunnerTests
         BackgroundImageSummary? BackgroundImage,
         bool HasBackgroundImage,
         bool IsProtected,
+        string ProtectionPassword,
         IReadOnlyList<ChartRangeSummary> AllowEditRanges,
         int AllowEditRangeCount,
         ChartRangeSummary? PrintArea,
