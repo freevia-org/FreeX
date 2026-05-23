@@ -209,6 +209,10 @@
         <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="{StaticResource FreexcelRibbonSurfaceBrush}"
                     BorderThickness="0,0,0,1" BorderBrush="{StaticResource FreexcelBorderBrush}"
                     Padding="0" TabStripPlacement="Top" SelectedIndex="1" MinHeight="132"
+                    Focusable="True" IsTabStop="True"
+                    KeyboardNavigation.TabNavigation="Continue"
+                    KeyboardNavigation.ControlTabNavigation="Continue"
+                    KeyboardNavigation.DirectionalNavigation="Contained"
                     SelectionChanged="RibbonTabs_SelectionChanged">
 
             <!-- ── FILE — clicking opens the overlay; handler immediately switches back to Home -->

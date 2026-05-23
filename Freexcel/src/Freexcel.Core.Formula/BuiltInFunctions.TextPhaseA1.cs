@@ -23,7 +23,6 @@ public static partial class BuiltInFunctions
     private static ScalarValue UnicodeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is not TextValue and not DirectTextLiteralValue) return ErrorValue.Value;
         var text = ToText(args[0]);
         if (text.Length == 0) return ErrorValue.Value;
         if (char.IsHighSurrogate(text[0]))

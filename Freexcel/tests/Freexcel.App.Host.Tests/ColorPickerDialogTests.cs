@@ -54,6 +54,19 @@ public sealed class ColorPickerDialogTests
     }
 
     [Fact]
+    public void BuildCustomSpectrumSwatches_ReturnsHueAndSaturationGrid()
+    {
+        var swatches = ColorPickerDialog.BuildCustomSpectrumSwatches();
+
+        swatches.Should().HaveCount(48);
+        swatches.Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
+        swatches.Should().Contain(swatch => swatch.Hex == "#FF0000");
+        swatches.Should().Contain(swatch => swatch.Hex == "#00FF00");
+        swatches.Should().Contain(swatch => swatch.Hex == "#0000FF");
+        swatches.Should().Contain(swatch => swatch.Color.R != swatch.Color.G || swatch.Color.G != swatch.Color.B);
+    }
+
+    [Fact]
     public void DialogXaml_ExposesExcelLikePaletteSectionsAndPreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
@@ -71,6 +84,8 @@ public sealed class ColorPickerDialogTests
         xaml.Should().Contain("NewBackgroundPreview");
         xaml.Should().Contain("ThemeColorsPanel");
         xaml.Should().Contain("StandardColorsPanel");
+        xaml.Should().Contain("CustomSpectrumPanel");
+        xaml.Should().Contain("CustomLuminositySlider");
     }
 
     [Fact]
@@ -203,6 +218,43 @@ public sealed class ColorPickerDialogTests
 
                 dialog.SelectedColor.Should().Be(new CellColor(33, 115, 70));
                 hex.Text.Should().Be("#217346");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SelectingCustomSpectrumSwatch_UpdatesNewPreviewAndRgbFieldsButKeepsCurrentPreview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x00, 0x20, 0x60);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var currentForegroundPreview = (TextBlock)dialog.FindName("CurrentForegroundPreview");
+                var currentBackgroundPreview = (Border)dialog.FindName("CurrentBackgroundPreview");
+                var newForegroundPreview = (TextBlock)dialog.FindName("NewForegroundPreview");
+                var newBackgroundPreview = (Border)dialog.FindName("NewBackgroundPreview");
+                var red = (TextBox)dialog.FindName("CustomRedTextBox");
+                var green = (TextBox)dialog.FindName("CustomGreenTextBox");
+                var blue = (TextBox)dialog.FindName("CustomBlueTextBox");
+                var hex = (TextBox)dialog.FindName("CustomColorTextBox");
+                var spectrumButton = FindSwatchButton((Panel)dialog.FindName("CustomSpectrumPanel"), new CellColor(0x00, 0xFF, 0x00));
+
+                spectrumButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+
+                GetForegroundPreviewColor(currentForegroundPreview).Should().Be(initialColor);
+                GetBackgroundPreviewColor(currentBackgroundPreview).Should().Be(initialColor);
+                GetForegroundPreviewColor(newForegroundPreview).Should().Be(new CellColor(0x00, 0xFF, 0x00));
+                GetBackgroundPreviewColor(newBackgroundPreview).Should().Be(new CellColor(0x00, 0xFF, 0x00));
+                red.Text.Should().Be("0");
+                green.Text.Should().Be("255");
+                blue.Text.Should().Be("0");
+                hex.Text.Should().Be("#00FF00");
             }
             finally
             {
