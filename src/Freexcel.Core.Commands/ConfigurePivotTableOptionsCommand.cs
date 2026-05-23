@@ -24,6 +24,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _showPropertiesInTooltips;
     private readonly bool? _showClassicLayout;
     private readonly bool? _mergeAndCenterLabels;
+    private readonly bool? _showItemsWithNoDataOnRows;
+    private readonly bool? _showItemsWithNoDataOnColumns;
     private readonly bool? _pageOverThenDown;
     private readonly int? _pageWrap;
     private readonly string? _emptyValueText;
@@ -82,6 +84,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? showPropertiesInTooltips = null,
         bool? showClassicLayout = null,
         bool? mergeAndCenterLabels = null,
+        bool? showItemsWithNoDataOnRows = null,
+        bool? showItemsWithNoDataOnColumns = null,
         bool? pageOverThenDown = null,
         int? pageWrap = null)
     {
@@ -107,6 +111,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showPropertiesInTooltips = showPropertiesInTooltips;
         _showClassicLayout = showClassicLayout;
         _mergeAndCenterLabels = mergeAndCenterLabels;
+        _showItemsWithNoDataOnRows = showItemsWithNoDataOnRows;
+        _showItemsWithNoDataOnColumns = showItemsWithNoDataOnColumns;
         _pageOverThenDown = pageOverThenDown;
         _pageWrap = pageWrap is { } wrap ? NormalizePageWrap(wrap) : null;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
@@ -165,6 +171,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowClassicLayout = showClassicLayout;
         if (_mergeAndCenterLabels is { } mergeAndCenterLabels)
             pivotTable.MergeAndCenterLabels = mergeAndCenterLabels;
+        if (_showItemsWithNoDataOnRows is { } showItemsWithNoDataOnRows)
+            pivotTable.ShowItemsWithNoDataOnRows = showItemsWithNoDataOnRows;
+        if (_showItemsWithNoDataOnColumns is { } showItemsWithNoDataOnColumns)
+            pivotTable.ShowItemsWithNoDataOnColumns = showItemsWithNoDataOnColumns;
         if (_pageOverThenDown is { } pageOverThenDown)
             pivotTable.PageOverThenDown = pageOverThenDown;
         if (_pageWrap is { } pageWrap)
@@ -238,6 +248,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowPropertiesInTooltips,
         bool ShowClassicLayout,
         bool MergeAndCenterLabels,
+        bool ShowItemsWithNoDataOnRows,
+        bool ShowItemsWithNoDataOnColumns,
         bool PageOverThenDown,
         int PageWrap,
         string? EmptyValueText,
@@ -274,6 +286,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowPropertiesInTooltips,
                 pivotTable.ShowClassicLayout,
                 pivotTable.MergeAndCenterLabels,
+                pivotTable.ShowItemsWithNoDataOnRows,
+                pivotTable.ShowItemsWithNoDataOnColumns,
                 pivotTable.PageOverThenDown,
                 pivotTable.PageWrap,
                 pivotTable.EmptyValueText,
@@ -310,6 +324,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
             pivotTable.ShowClassicLayout = ShowClassicLayout;
             pivotTable.MergeAndCenterLabels = MergeAndCenterLabels;
+            pivotTable.ShowItemsWithNoDataOnRows = ShowItemsWithNoDataOnRows;
+            pivotTable.ShowItemsWithNoDataOnColumns = ShowItemsWithNoDataOnColumns;
             pivotTable.PageOverThenDown = PageOverThenDown;
             pivotTable.PageWrap = PageWrap;
             pivotTable.EmptyValueText = EmptyValueText;
