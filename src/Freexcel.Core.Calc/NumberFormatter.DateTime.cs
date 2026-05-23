@@ -30,6 +30,10 @@ public static partial class NumberFormatter
     {
         var (_, cleanFmt) = NumberFormatColorMapper.ExtractColor(format);
         cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
+        var elapsedMatch = Regex.Match(cleanFmt, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+        if (elapsedMatch.Success)
+            return FormatElapsedTime(oaDate, RemoveSpacingAndFillDirectives(cleanFmt), elapsedMatch);
+
         cleanFmt = Regex.Replace(cleanFmt, @"\[[^\]]*\]", "");
         cleanFmt = RemoveSpacingAndFillDirectives(cleanFmt);
         try
