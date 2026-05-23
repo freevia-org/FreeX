@@ -47,8 +47,10 @@ public sealed partial class NativeJsonAdapter
                 XAxisTitle = chartDto.XAxisTitle,
                 YAxisTitle = chartDto.YAxisTitle,
                 ChartTitleTextColor = chartDto.ChartTitleTextColor,
+                ChartTitleTextThemeColor = ToThemeColorReference(chartDto.ChartTitleTextThemeColor),
                 ChartTitleFontSize = chartDto.ChartTitleFontSize,
                 AxisTitleTextColor = chartDto.AxisTitleTextColor,
+                AxisTitleTextThemeColor = ToThemeColorReference(chartDto.AxisTitleTextThemeColor),
                 AxisTitleFontSize = chartDto.AxisTitleFontSize,
                 ChartAreaFillColor = chartDto.ChartAreaFillColor,
                 ChartAreaFillThemeColor = ToThemeColorReference(chartDto.ChartAreaFillThemeColor),
@@ -84,6 +86,7 @@ public sealed partial class NativeJsonAdapter
                 XAxisMinorTickStyle = chartDto.XAxisMinorTickStyle,
                 ShowXAxisLabels = chartDto.ShowXAxisLabels,
                 XAxisLabelTextColor = chartDto.XAxisLabelTextColor,
+                XAxisLabelTextThemeColor = ToThemeColorReference(chartDto.XAxisLabelTextThemeColor),
                 XAxisLabelFontSize = chartDto.XAxisLabelFontSize,
                 XAxisLabelAngle = chartDto.XAxisLabelAngle,
                 XAxisLineColor = chartDto.XAxisLineColor,
@@ -103,6 +106,7 @@ public sealed partial class NativeJsonAdapter
                 YAxisMinorTickStyle = chartDto.YAxisMinorTickStyle,
                 ShowYAxisLabels = chartDto.ShowYAxisLabels,
                 YAxisLabelTextColor = chartDto.YAxisLabelTextColor,
+                YAxisLabelTextThemeColor = ToThemeColorReference(chartDto.YAxisLabelTextThemeColor),
                 YAxisLabelFontSize = chartDto.YAxisLabelFontSize,
                 YAxisLabelAngle = chartDto.YAxisLabelAngle,
                 YAxisLineColor = chartDto.YAxisLineColor,
@@ -206,8 +210,10 @@ public sealed partial class NativeJsonAdapter
         XAxisTitle = chart.XAxisTitle,
         YAxisTitle = chart.YAxisTitle,
         ChartTitleTextColor = chart.ChartTitleTextColor,
+        ChartTitleTextThemeColor = FromThemeColorReference(chart.ChartTitleTextThemeColor),
         ChartTitleFontSize = chart.ChartTitleFontSize,
         AxisTitleTextColor = chart.AxisTitleTextColor,
+        AxisTitleTextThemeColor = FromThemeColorReference(chart.AxisTitleTextThemeColor),
         AxisTitleFontSize = chart.AxisTitleFontSize,
         ChartAreaFillColor = chart.ChartAreaFillColor,
         ChartAreaFillThemeColor = FromThemeColorReference(chart.ChartAreaFillThemeColor),
@@ -243,6 +249,7 @@ public sealed partial class NativeJsonAdapter
         XAxisMinorTickStyle = chart.XAxisMinorTickStyle,
         ShowXAxisLabels = chart.ShowXAxisLabels,
         XAxisLabelTextColor = chart.XAxisLabelTextColor,
+        XAxisLabelTextThemeColor = FromThemeColorReference(chart.XAxisLabelTextThemeColor),
         XAxisLabelFontSize = chart.XAxisLabelFontSize,
         XAxisLabelAngle = chart.XAxisLabelAngle,
         XAxisLineColor = chart.XAxisLineColor,
@@ -262,6 +269,7 @@ public sealed partial class NativeJsonAdapter
         YAxisMinorTickStyle = chart.YAxisMinorTickStyle,
         ShowYAxisLabels = chart.ShowYAxisLabels,
         YAxisLabelTextColor = chart.YAxisLabelTextColor,
+        YAxisLabelTextThemeColor = FromThemeColorReference(chart.YAxisLabelTextThemeColor),
         YAxisLabelFontSize = chart.YAxisLabelFontSize,
         YAxisLabelAngle = chart.YAxisLabelAngle,
         YAxisLineColor = chart.YAxisLineColor,
@@ -331,6 +339,7 @@ public sealed partial class NativeJsonAdapter
             chart.XAxisTitle = null;
             chart.YAxisTitle = null;
             chart.AxisTitleTextColor = null;
+            chart.AxisTitleTextThemeColor = null;
             chart.AxisTitleFontSize = 12;
         }
         chart.PlotAreaBorderThickness = Math.Clamp(chart.PlotAreaBorderThickness, 0, 10);
@@ -494,6 +503,7 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMinorTickStyle = ChartAxisTickStyle.None;
         chart.ShowXAxisLabels = true;
         chart.XAxisLabelTextColor = null;
+        chart.XAxisLabelTextThemeColor = null;
         chart.XAxisLabelFontSize = 11;
         chart.XAxisLabelAngle = 0;
         chart.XAxisLineColor = null;
@@ -517,6 +527,7 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisMinorTickStyle = ChartAxisTickStyle.None;
         chart.ShowYAxisLabels = true;
         chart.YAxisLabelTextColor = null;
+        chart.YAxisLabelTextThemeColor = null;
         chart.YAxisLabelFontSize = 11;
         chart.YAxisLabelAngle = 0;
         chart.YAxisLineColor = null;
