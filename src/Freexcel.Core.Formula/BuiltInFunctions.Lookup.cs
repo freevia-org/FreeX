@@ -22,7 +22,8 @@ public static partial class BuiltInFunctions
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]); // default TRUE
 
-        if (colIndex < 1 || colIndex > (int)table.ColCount) return ErrorValue.Ref;
+        if (colIndex < 1) return ErrorValue.Value;
+        if (colIndex > (int)table.ColCount) return ErrorValue.Ref;
 
         if (rangeLookup)
         {
@@ -71,7 +72,8 @@ public static partial class BuiltInFunctions
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]);
 
-        if (rowIndex < 1 || rowIndex > (int)table.RowCount) return ErrorValue.Ref;
+        if (rowIndex < 1) return ErrorValue.Value;
+        if (rowIndex > (int)table.RowCount) return ErrorValue.Ref;
 
         if (rangeLookup)
         {

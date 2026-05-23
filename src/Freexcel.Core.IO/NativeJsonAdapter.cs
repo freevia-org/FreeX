@@ -228,46 +228,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     sheet.DataValidations.Add(validation);
             }
 
-            foreach (var formatDto in sDto.ConditionalFormats ?? [])
-            {
-                if (string.IsNullOrWhiteSpace(formatDto?.AppliesTo))
-                    continue;
-                if (!IsSupportedConditionalFormat(formatDto))
-                    continue;
-
-                try
-                {
-                    sheet.ConditionalFormats.Add(new ConditionalFormat
-                    {
-                        AppliesTo = GridRange.Parse(formatDto.AppliesTo, sheet.Id),
-                        Priority = formatDto.Priority < 1 ? 1 : formatDto.Priority,
-                        RuleType = formatDto.RuleType,
-                        Operator = formatDto.Operator,
-                        Value1 = formatDto.Value1,
-                        Value2 = formatDto.Value2,
-                        FormatIfTrue = ToCellStyle(formatDto.FormatIfTrue),
-                        MinColor = formatDto.MinColor,
-                        MidColor = formatDto.MidColor,
-                        MaxColor = formatDto.MaxColor,
-                        UseThreeColorScale = formatDto.UseThreeColorScale,
-                        DataBarColor = formatDto.DataBarColor,
-                        AboveAverage = formatDto.AboveAverage,
-                        FormulaText = formatDto.FormulaText,
-                        TopBottomRank = formatDto.TopBottomRank,
-                        TopBottomPercent = formatDto.TopBottomPercent,
-                        TextRuleText = formatDto.TextRuleText,
-                        DateOccurringPeriod = formatDto.DateOccurringPeriod,
-                        StopIfTrue = formatDto.StopIfTrue,
-                        NativeAttributes = formatDto.NativeAttributes,
-                        NativeChildXmls = formatDto.NativeChildXmls,
-                        NativePayloadAttributes = formatDto.NativePayloadAttributes,
-                        NativePayloadChildXmls = formatDto.NativePayloadChildXmls,
-                        NativeContainerAttributes = formatDto.NativeContainerAttributes,
-                        NativeContainerChildXmls = formatDto.NativeContainerChildXmls
-                    });
-                }
-                catch (FormatException) { /* skip conditional formats with unparseable ranges */ }
-            }
+            LoadConditionalFormats(sheet, sDto.ConditionalFormats);
 
             foreach (var cDto in sDto.Cells ?? [])
             {
@@ -585,39 +546,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     .Where(IsSupportedDataValidation)
                     .Select(ToDataValidationDto)
                     .ToList(),
-                ConditionalFormats = s.ConditionalFormats
-                    .Where(format =>
-                        format.AppliesTo.Start.Sheet == s.Id &&
-                        format.AppliesTo.End.Sheet == s.Id &&
-                        IsSupportedConditionalFormat(format))
-                    .Select(format => new ConditionalFormatDto
-                    {
-                        AppliesTo = format.AppliesTo.ToString(),
-                        Priority = format.Priority < 1 ? 1 : format.Priority,
-                        RuleType = format.RuleType,
-                        Operator = format.Operator,
-                        Value1 = format.Value1,
-                        Value2 = format.Value2,
-                        FormatIfTrue = FromCellStyle(format.FormatIfTrue),
-                        MinColor = format.MinColor,
-                        MidColor = format.MidColor,
-                        MaxColor = format.MaxColor,
-                        UseThreeColorScale = format.UseThreeColorScale,
-                        DataBarColor = format.DataBarColor,
-                        AboveAverage = format.AboveAverage,
-                        FormulaText = format.FormulaText,
-                        TopBottomRank = format.TopBottomRank,
-                        TopBottomPercent = format.TopBottomPercent,
-                        TextRuleText = format.TextRuleText,
-                        DateOccurringPeriod = format.DateOccurringPeriod,
-                        StopIfTrue = format.StopIfTrue,
-                        NativeAttributes = format.NativeAttributes,
-                        NativeChildXmls = format.NativeChildXmls,
-                        NativePayloadAttributes = format.NativePayloadAttributes,
-                        NativePayloadChildXmls = format.NativePayloadChildXmls,
-                        NativeContainerAttributes = format.NativeContainerAttributes,
-                        NativeContainerChildXmls = format.NativeContainerChildXmls
-                    }).ToList(),
+                ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
                 Cells = s.GetUsedCells().Select(pair => new CellDto
                 {
                     Address   = pair.Key.ToA1(),
@@ -641,12 +570,6 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         JsonSerializer.Serialize(stream, dto, new JsonSerializerOptions { WriteIndented = true });
     }
-
-    private static bool IsSupportedConditionalFormat(ConditionalFormat format) =>
-        Enum.IsDefined(format.RuleType) && Enum.IsDefined(format.Operator);
-
-    private static bool IsSupportedConditionalFormat(ConditionalFormatDto format) =>
-        Enum.IsDefined(format.RuleType) && Enum.IsDefined(format.Operator);
 
     private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);
 
