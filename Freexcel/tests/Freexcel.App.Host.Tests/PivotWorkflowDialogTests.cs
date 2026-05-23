@@ -1012,6 +1012,7 @@ public sealed class PivotWorkflowDialogTests
             new[]
             {
                 "PivotWorkflowDialogs.cs",
+                "PivotCalculatedDialogs.cs",
                 "PivotTableOptionsDialog.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
