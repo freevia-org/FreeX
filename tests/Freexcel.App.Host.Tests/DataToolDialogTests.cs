@@ -204,6 +204,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogOpenedFromKeyboard_FocusesOriginalDataTypeChoice()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_delimitedButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_delimitedButton);");
+    }
+
+    [Fact]
     public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
     {
         TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
