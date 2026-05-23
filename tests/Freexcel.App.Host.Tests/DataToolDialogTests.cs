@@ -803,6 +803,36 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_TryAddReference_RejectsMalformedReferenceImmediately()
+    {
+        var sheetId = SheetId.New();
+
+        ConsolidateDialog.TryAddReference(
+                sheetId,
+                ["A1:B3"],
+                "nope",
+                out var unchanged,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        unchanged.Should().Equal("A1:B3");
+        error.Should().Be("Enter a valid source range: nope.");
+
+        ConsolidateDialog.TryAddReference(
+                sheetId,
+                ["A1:B3"],
+                "D5:E7",
+                out var updated,
+                out error)
+            .Should()
+            .BeTrue();
+
+        updated.Should().Equal("A1:B3", "D5:E7");
+        error.Should().BeNull();
+    }
+
+    [Fact]
     public void ConsolidateDialog_ExposesExcelStyleAllReferencesWorkflow()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
