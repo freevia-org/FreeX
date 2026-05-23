@@ -55,7 +55,8 @@ public sealed class SortDialogTests
     [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
 
         foreach (var content in new[]
         {
@@ -75,6 +76,7 @@ public sealed class SortDialogTests
     public void DialogLayout_ExposesExcelCustomSortFields()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
 
         source.Should().Contain("My data has _headers");
         source.Should().Contain("IsChecked = hasHeaders");
@@ -90,7 +92,7 @@ public sealed class SortDialogTests
         source.Should().Contain("On Top");
         source.Should().Contain("On Bottom");
         source.Should().Contain("CreateOrderColumn");
-        source.Should().Contain("BuildColorChoices");
+        planningSource.Should().Contain("BuildColorChoices");
         source.Should().Contain("UpdateColumnChoices");
         source.Should().Contain("SortOptionsDialog");
     }
