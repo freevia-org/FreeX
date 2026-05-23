@@ -374,7 +374,10 @@ public static class RibbonIconFactory
     private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
     {
         if (size <= 22)
+            yield return slug + "-small";
+        else
             yield return slug + "-large";
+
         yield return slug;
     }
 
