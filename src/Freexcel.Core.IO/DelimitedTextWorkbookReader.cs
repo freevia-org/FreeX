@@ -204,7 +204,12 @@ internal static class DelimitedTextWorkbookReader
                 "M/d/yyyy HH:mm",
                 "M/d/yyyy HH:mm:ss",
                 "M/d/yyyy h:mm tt",
-                "M/d/yyyy h:mm:ss tt"
+                "M/d/yyyy h:mm:ss tt",
+                "M/d/yy",
+                "M/d/yy HH:mm",
+                "M/d/yy HH:mm:ss",
+                "M/d/yy h:mm tt",
+                "M/d/yy h:mm:ss tt"
             ],
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
