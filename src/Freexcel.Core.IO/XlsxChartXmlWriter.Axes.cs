@@ -32,6 +32,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisLineColor,
                 chart.XAxisLineThickness,
                 chart.ShowXAxisLabels,
+                chart.XAxisLabelTextColor,
+                chart.XAxisLabelFontSize,
+                chart.XAxisLabelAngle,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
                 chartNs,
@@ -57,6 +60,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
+                chart.YAxisLabelTextColor,
+                chart.YAxisLabelFontSize,
+                chart.YAxisLabelAngle,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
                 chartNs,
@@ -85,6 +91,9 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisLineColor,
                     chart.YAxisLineThickness,
                     chart.ShowYAxisLabels,
+                    chart.YAxisLabelTextColor,
+                    chart.YAxisLabelFontSize,
+                    chart.YAxisLabelAngle,
                     chart.AxisTitleTextColor,
                     chart.AxisTitleFontSize,
                     chartNs,
@@ -115,6 +124,9 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLineColor,
             chart.YAxisLineThickness,
             chart.ShowYAxisLabels,
+            chart.YAxisLabelTextColor,
+            chart.YAxisLabelFontSize,
+            chart.YAxisLabelAngle,
             chart.AxisTitleTextColor,
             chart.AxisTitleFontSize,
             chartNs,
@@ -144,6 +156,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
+                chart.YAxisLabelTextColor,
+                chart.YAxisLabelFontSize,
+                chart.YAxisLabelAngle,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
                 chartNs,
@@ -167,6 +182,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels))),
+            ToAxisLabelTextProperties(chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
             new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
@@ -192,6 +208,9 @@ internal static partial class XlsxChartXmlWriter
         CellColor? lineColor,
         double lineThickness,
         bool showLabels,
+        CellColor? labelTextColor,
+        double labelFontSize,
+        double labelAngle,
         CellColor? axisTitleTextColor,
         double axisTitleFontSize,
         XNamespace chartNs,
@@ -216,6 +235,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels))),
+            ToAxisLabelTextProperties(labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
             new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
@@ -280,6 +300,25 @@ internal static partial class XlsxChartXmlWriter
 
     private static string ToXlsxTickLabelPosition(bool showLabels) =>
         showLabels ? "nextTo" : "none";
+
+    private static XElement? ToAxisLabelTextProperties(
+        CellColor? textColor,
+        double fontSize,
+        double angle,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (textColor is null && fontSize == 11 && angle == 0)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(angle, drawingNs),
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200)),
+                        ToSolidFill(null, textColor, drawingNs)))));
+    }
 
     private static XElement? ToAxisBoundXml(string elementName, double? value, XNamespace chartNs) =>
         value is { } numeric && double.IsFinite(numeric)
