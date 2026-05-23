@@ -159,4 +159,37 @@ public sealed class CsvFileAdapterTests
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\r\noffset\r\n");
     }
+
+    [Fact]
+    public void Save_QuotesFormulaLikeTextFieldsToPreserveLiteralText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("=A1*2"));
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"=A1*2\"\r\n");
+    }
+
+    [Fact]
+    public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("=A1*2"));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue("=A1*2"));
+    }
 }
