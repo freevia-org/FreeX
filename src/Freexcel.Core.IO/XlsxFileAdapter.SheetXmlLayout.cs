@@ -33,6 +33,7 @@ public sealed partial class XlsxFileAdapter
         uint? ActiveRow,
         uint? ActiveCol,
         WorksheetBackgroundImage? BackgroundImage,
+        XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
         HashSet<uint> GroupHiddenRows,
@@ -225,6 +226,7 @@ public sealed partial class XlsxFileAdapter
                 .Select(selection => selection.Attribute("activeCell")?.Value)
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
+        var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var chartParts = XlsxWorksheetDrawingPartReader.ReadChartParts(archive, worksheetPath, worksheetXml);
         var pictureParts = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, worksheetPath, worksheetXml);
         var (textBoxParts, shapeParts) = XlsxWorksheetDrawingPartReader.ReadShapeParts(archive, worksheetPath, worksheetXml);
@@ -269,6 +271,7 @@ public sealed partial class XlsxFileAdapter
             activeCell?.Row,
             activeCell?.Col,
             background,
+            headerFooterPictures,
             rowOutlineLevels,
             colOutlineLevels,
             groupHiddenRows,
