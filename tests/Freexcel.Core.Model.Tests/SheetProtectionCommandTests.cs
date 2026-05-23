@@ -362,7 +362,7 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
-    public void SetColumnWidthCommand_RejectsLayoutChangesWhenSheetIsProtected()
+    public void SetColumnWidthCommand_RejectsLayoutChangesWhenSheetIsProtectedWithoutPermission()
     {
         var (_, sheet, ctx) = Setup();
         sheet.IsProtected = true;
@@ -372,6 +372,58 @@ public class SheetProtectionCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.ColumnWidths.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new SetColumnWidthCommand(sheet.Id, 1, 1, 20).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ColumnWidths[1].Should().Be(20);
+    }
+
+    [Fact]
+    public void SetRowHeightCommand_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 30).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(30);
+    }
+
+    [Fact]
+    public void SetColumnsHiddenCommand_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new SetColumnsHiddenCommand(sheet.Id, 1, 1, hidden: true).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.HiddenCols.Should().Contain(1);
+    }
+
+    [Fact]
+    public void SetRowsHiddenCommand_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new SetRowsHiddenCommand(sheet.Id, 1, 1, hidden: true).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.HiddenRows.Should().Contain(1);
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
