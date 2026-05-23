@@ -666,6 +666,7 @@ public class XlsxCorpusRunnerTests
                 .ToArray(),
             workbook.CustomViews.Count,
             CaptureWorkbookMetadataSummary(workbook),
+            CaptureWorkbookCalculationSummary(workbook),
             workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
 
     private static WorkbookMetadataSummary CaptureWorkbookMetadataSummary(Workbook workbook) =>
@@ -728,6 +729,15 @@ public class XlsxCorpusRunnerTests
                         .ThenBy(cell => cell.Column)
                         .ToArray()))
                 .ToArray());
+
+    private static WorkbookCalculationSummary CaptureWorkbookCalculationSummary(Workbook workbook) =>
+        new(
+            workbook.CalculationMode,
+            workbook.FullCalculationOnLoad,
+            workbook.ForceFullCalculation,
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange);
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
@@ -1481,6 +1491,7 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<CustomViewSummary> CustomViews,
         int CustomViewCount,
         WorkbookMetadataSummary Metadata,
+        WorkbookCalculationSummary Calculation,
         IReadOnlyList<SheetSummary> Sheets);
 
     private sealed record WorkbookMetadataSummary(
@@ -1532,6 +1543,14 @@ public class XlsxCorpusRunnerTests
         uint Row,
         uint Column,
         ScalarValueSummary Value);
+
+    private sealed record WorkbookCalculationSummary(
+        WorkbookCalculationMode Mode,
+        bool FullCalculationOnLoad,
+        bool ForceFullCalculation,
+        bool IterativeCalculation,
+        int? MaxIterations,
+        double? MaxChange);
 
     private sealed record NamedRangeSummary(
         string Name,
