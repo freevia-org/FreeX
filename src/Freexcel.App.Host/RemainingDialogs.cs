@@ -428,7 +428,11 @@ public sealed class PageBreakDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         SeedDefault(defaultValue);
+        _insertRowButton.Checked += (_, _) => RefreshInputStates();
+        _insertColumnButton.Checked += (_, _) => RefreshInputStates();
+        _resetAllButton.Checked += (_, _) => RefreshInputStates();
         Content = CreateContent();
+        RefreshInputStates();
     }
 
     public static PageBreakDialogResult CreateClearResult() =>
@@ -502,6 +506,12 @@ public sealed class PageBreakDialog : Window
         stack.Children.Add(_resetAllButton);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return stack;
+    }
+
+    private void RefreshInputStates()
+    {
+        _rowBreakBox.IsEnabled = _insertRowButton.IsChecked == true;
+        _columnBreakBox.IsEnabled = _insertColumnButton.IsChecked == true;
     }
 
     private static StackPanel CreateNumberRow(string label, TextBox box)
