@@ -321,6 +321,13 @@ public sealed partial class Sheet
     /// <summary>Password hash for sheet protection. Null means no password required.</summary>
     public string? ProtectionPassword { get; set; }
 
+    /// <summary>Actions that remain available while the sheet is protected.</summary>
+    public List<SheetProtectionPermission> ProtectionPermissions { get; } =
+    [
+        SheetProtectionPermission.SelectLockedCells,
+        SheetProtectionPermission.SelectUnlockedCells
+    ];
+
     /// <summary>Ranges that remain editable while the sheet is protected.</summary>
     public List<GridRange> AllowEditRanges { get; } = [];
 
