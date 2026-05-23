@@ -61,6 +61,14 @@ public sealed partial class NativeJsonAdapter
         chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
         if (chart.Type != ChartType.Stock)
             chart.StockSubtype = StockChartSubtype.HighLowClose;
+        chart.BubbleScale = Math.Clamp(chart.BubbleScale, 0, 300);
+        chart.BubbleSizeRepresents = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.BubbleSizeRepresents, ChartBubbleSizeRepresents.Area);
+        if (chart.Type != ChartType.Bubble)
+        {
+            chart.BubbleScale = 100;
+            chart.ShowNegativeBubbles = false;
+            chart.BubbleSizeRepresents = ChartBubbleSizeRepresents.Area;
+        }
         if (chart.ThreeDView is { } threeDView)
         {
             threeDView.RotationX = ClampNullableInt(threeDView.RotationX, -90, 90);

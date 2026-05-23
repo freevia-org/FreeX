@@ -173,7 +173,8 @@ internal static partial class XlsxChartXmlWriter
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs),
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
-                BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs)),
+                BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs),
+                ToBubbleChartOptionXml(chart, chartNs)),
             ChartType.Pie => new XElement(chartNs + "pieChart",
                 ToFirstSliceAngleXml(chart, chartNs),
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
@@ -234,6 +235,17 @@ internal static partial class XlsxChartXmlWriter
         value.HasValue
             ? new XElement(chartNs + elementName, new XAttribute("val", value.Value ? "1" : "0"))
             : null;
+
+    private static IEnumerable<XElement> ToBubbleChartOptionXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.BubbleScale != 100)
+            yield return new XElement(chartNs + "bubbleScale",
+                new XAttribute("val", Math.Clamp(chart.BubbleScale, 0, 300)));
+        if (chart.ShowNegativeBubbles)
+            yield return new XElement(chartNs + "showNegBubbles", new XAttribute("val", "1"));
+        if (chart.BubbleSizeRepresents == ChartBubbleSizeRepresents.Width)
+            yield return new XElement(chartNs + "sizeRepresents", new XAttribute("val", "w"));
+    }
 
     private static XElement CreateLinePlotChart(
         ChartModel chart,
