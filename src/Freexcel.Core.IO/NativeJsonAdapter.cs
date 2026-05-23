@@ -296,7 +296,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             workbook.CustomViews.Add(new WorkbookCustomView(
                 viewDto.Name,
                 (viewDto.Sheets ?? []).Select(ToWorksheetCustomViewState).ToList(),
-                string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id));
+                string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id,
+                viewDto.IncludePrintSettings ?? true,
+                viewDto.IncludeHiddenRowsColumnsAndFilterSettings ?? true));
         }
 
         foreach (var watchDto in dto.WatchedCells ?? [])
@@ -392,6 +394,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             {
                 Name = view.Name,
                 Id = view.Id,
+                IncludePrintSettings = view.IncludePrintSettings,
+                IncludeHiddenRowsColumnsAndFilterSettings = view.IncludeHiddenRowsColumnsAndFilterSettings,
                 Sheets = view.Sheets.Select(ToCustomViewSheetDto).ToList()
             }).ToList(),
             WatchedCells = workbook.WatchedCells.Select(address =>
