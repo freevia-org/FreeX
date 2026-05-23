@@ -24,6 +24,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
     private readonly bool? _enableRefresh;
+    private readonly int? _missingItemsLimit;
+    private readonly bool _updateMissingItemsLimit;
     private readonly bool? _printTitles;
     private readonly bool? _printExpandCollapseButtons;
     private readonly bool? _showExpandCollapseButtons;
@@ -55,6 +57,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
         bool? enableRefresh = null,
+        int? missingItemsLimit = null,
+        bool updateMissingItemsLimit = false,
         bool? printTitles = null,
         bool? printExpandCollapseButtons = null,
         string? altTextTitle = null,
@@ -87,6 +91,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
         _enableRefresh = enableRefresh;
+        _missingItemsLimit = NormalizeMissingItemsLimit(missingItemsLimit);
+        _updateMissingItemsLimit = updateMissingItemsLimit;
         _printTitles = printTitles;
         _printExpandCollapseButtons = printExpandCollapseButtons;
         _showExpandCollapseButtons = showExpandCollapseButtons;
@@ -150,6 +156,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache.SaveData = saveSourceData;
             if (_enableRefresh is { } enableRefresh)
                 cache.EnableRefresh = enableRefresh;
+            if (_updateMissingItemsLimit)
+                cache.MissingItemsLimit = _missingItemsLimit;
         }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
@@ -189,6 +197,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? RefreshOnLoad,
         bool? SaveData,
         bool? EnableRefresh,
+        int? MissingItemsLimit,
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
         bool ShowExpandCollapseButtons,
@@ -216,6 +225,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
                 cache?.EnableRefresh,
+                cache?.MissingItemsLimit,
                 pivotTable.PrintTitles,
                 pivotTable.PrintExpandCollapseButtons,
                 pivotTable.ShowExpandCollapseButtons,
@@ -255,6 +265,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                     cache.SaveData = saveData;
                 if (EnableRefresh is { } enableRefresh)
                     cache.EnableRefresh = enableRefresh;
+                cache.MissingItemsLimit = MissingItemsLimit;
             }
         }
     }
@@ -268,5 +279,13 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     }
 
     private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+
+    private static int? NormalizeMissingItemsLimit(int? value) =>
+        value switch
+        {
+            null => null,
+            <= 0 => 0,
+            _ => 1_048_576
+        };
 }
 
