@@ -76,7 +76,7 @@ public static partial class ChartRenderer
                 categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? c.DisplayText : "");
 
         var model = new PlotModel { Title = chart.Title };
-        ApplyTitleStyle(model, chart);
+        ApplyTitleStyle(model, chart, theme);
         ApplyAreaStyle(model, chart, theme);
         ConfigureLegend(model, chart, theme);
         AddPivotChartFieldButtons(model, chart);
@@ -132,7 +132,7 @@ public static partial class ChartRenderer
         if (chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn)
         {
             var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme);
-            ApplyAxisBounds(stackedColumnModel, chart);
+            ApplyAxisBounds(stackedColumnModel, chart, theme);
             AddChartDataTableAnnotations(stackedColumnModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedColumnModel;
         }
@@ -140,7 +140,7 @@ public static partial class ChartRenderer
         if (chart.Type is ChartType.StackedBar or ChartType.PercentStackedBar)
         {
             var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme);
-            ApplyAxisBounds(stackedBarModel, chart);
+            ApplyAxisBounds(stackedBarModel, chart, theme);
             AddChartDataTableAnnotations(stackedBarModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return stackedBarModel;
         }
@@ -149,7 +149,7 @@ public static partial class ChartRenderer
         {
             var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, out var trendPoints);
             AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
-            ApplyAxisBounds(bubbleModel, chart);
+            ApplyAxisBounds(bubbleModel, chart, theme);
             AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
             return bubbleModel;
         }
@@ -444,7 +444,7 @@ public static partial class ChartRenderer
         }
 
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
-        ApplyAxisBounds(model, chart);
+        ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
         return model;
     }

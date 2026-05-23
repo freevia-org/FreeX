@@ -388,8 +388,12 @@ public partial class MainWindow
         if (name is null)
             return;
 
-        if (!TryExecuteCommand(new ApplyScenarioCommand(name), "Scenario Manager", out var outcome))
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Scenario Manager");
             return;
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         if (outcome.AffectedCells?.FirstOrDefault() is { } first)
