@@ -3404,6 +3404,8 @@
               Grid.Row="1" Grid.RowSpan="5"
               Panel.ZIndex="200"
               PreviewKeyDown="StartScreenOverlay_PreviewKeyDown"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
               Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="190"/>

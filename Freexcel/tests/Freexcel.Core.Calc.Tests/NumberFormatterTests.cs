@@ -209,7 +209,9 @@ public class NumberFormatterTests
     [InlineData("-[$\u20AC-407]#,##0.00", 1234.5, "-\u20AC1.234,50")]
     [InlineData("([$\u20AC-407]#,##0.00)", 1234.5, "(\u20AC1.234,50)")]
     [InlineData("[$\u20AC-407]* #,##0.00", 1234.5, "\u20AC 1.234,50")]
+    [InlineData("[$CHF-807]* #,##0.00", 1234.5, "CHF 1'234.50")]
     [InlineData("[$\u20AC-407]* \"-\"??", 0, "\u20AC -")]
+    [InlineData("[$CHF-807]* \"-\"??", 0, "CHF -")]
     public void CustomNumberSubset_PreservesVisibleCurrencyFromLocaleTokens(
         string format,
         double value,
