@@ -320,7 +320,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartFormatDialogs_RouteColorFieldsThroughColorPickerButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+        var source = ReadChartFormatDialogSource();
         var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         source.Should().Contain("AddColorText");
@@ -343,7 +343,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartFormatDialogs_GroupLongStacksIntoExcelLikeSections()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+        var source = ReadChartFormatDialogSource();
         var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         source.Should().Contain("CreateGroupBox(\"Fill & Line\"");
@@ -362,7 +362,7 @@ public sealed class ChartDialogTests
     {
         var source = string.Concat(
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs")));
+            ReadChartFormatDialogSource());
 
         foreach (var content in new[]
         {
@@ -387,6 +387,17 @@ public sealed class ChartDialogTests
         {
             source.Should().Contain(content);
         }
+    }
+
+    private static string ReadChartFormatDialogSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "ChartFormatDialogs.cs",
+                "ChartSeriesFormatDialog.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 
     [Fact]

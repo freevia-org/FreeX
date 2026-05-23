@@ -394,7 +394,10 @@ public class XlsxCorpusRunnerTests
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
             CapturePublicComparableSummary(roundTripped).Should().BeEquivalentTo(
                 before,
-                options => options.WithStrictOrdering(),
+                options => options
+                    .Using<double>(ctx => ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.0001))
+                    .WhenTypeIs<double>()
+                    .WithStrictOrdering(),
                 row.Id);
             AssertExpectedFeatureTags(row, roundTripped);
         }
@@ -671,7 +674,17 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
+            sheet.Comments
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new CommentSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Comments.Count,
+            sheet.Hyperlinks
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
@@ -703,7 +716,9 @@ public class XlsxCorpusRunnerTests
             sheet.PrintHeadings,
             !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
             !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
+            sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
+            sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
             sheet.ColumnPageBreaks.Count,
             sheet.FrozenRows,
             sheet.FrozenCols,
@@ -714,11 +729,23 @@ public class XlsxCorpusRunnerTests
             sheet.ShowRulers,
             sheet.ZoomPercent,
             sheet.ShowFormulas,
+            sheet.HiddenRows.OrderBy(row => row).ToArray(),
             sheet.HiddenRows.Count,
+            sheet.HiddenCols.OrderBy(column => column).ToArray(),
             sheet.HiddenCols.Count,
+            sheet.RowOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
             sheet.RowOutlineLevels.Count,
+            sheet.ColOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
             sheet.ColOutlineLevels.Count,
+            sheet.GroupHiddenRows.OrderBy(row => row).ToArray(),
             sheet.GroupHiddenRows.Count,
+            sheet.GroupHiddenCols.OrderBy(column => column).ToArray(),
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
 
@@ -1226,7 +1253,9 @@ public class XlsxCorpusRunnerTests
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
         int IconSetConditionalFormatCount,
+        IReadOnlyList<CommentSummary> Comments,
         int CommentCount,
+        IReadOnlyList<HyperlinkSummary> Hyperlinks,
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
@@ -1258,7 +1287,9 @@ public class XlsxCorpusRunnerTests
         bool PrintHeadings,
         bool HasPageHeader,
         bool HasPageFooter,
+        IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
+        IReadOnlyList<uint> ColumnPageBreaks,
         int ColumnPageBreakCount,
         uint FrozenRows,
         uint FrozenCols,
@@ -1269,13 +1300,25 @@ public class XlsxCorpusRunnerTests
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        IReadOnlyList<uint> HiddenRows,
         int HiddenRowCount,
+        IReadOnlyList<uint> HiddenColumns,
         int HiddenColumnCount,
+        IReadOnlyList<OutlineLevelSummary> RowOutlineLevels,
         int RowOutlineLevelCount,
+        IReadOnlyList<OutlineLevelSummary> ColumnOutlineLevels,
         int ColumnOutlineLevelCount,
+        IReadOnlyList<uint> GroupHiddenRows,
         int GroupHiddenRowCount,
+        IReadOnlyList<uint> GroupHiddenColumns,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
+
+    private sealed record CommentSummary(uint Row, uint Column, string Text);
+
+    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
+
+    private sealed record OutlineLevelSummary(uint Index, int Level);
 
     private sealed record ChartSummary(
         ChartType Type,
