@@ -153,12 +153,14 @@ internal static class PdfDocumentExporter
         const string noPrintScalingName = "/None";
         const string fitWindowKey = "/FitWindow";
         const string centerWindowKey = "/CenterWindow";
+        const string pickTrayByPdfSizeKey = "/PickTrayByPDFSize";
 
         pdf.PageLayout = PdfPageLayout.SinglePage;
         var viewerPreferences = GetOrCreateViewerPreferences(pdf);
         viewerPreferences.Elements.SetName(printScalingKey, noPrintScalingName);
         viewerPreferences.Elements.SetBoolean(fitWindowKey, true);
         viewerPreferences.Elements.SetBoolean(centerWindowKey, true);
+        viewerPreferences.Elements.SetBoolean(pickTrayByPdfSizeKey, true);
     }
 
     private static PdfDictionary GetOrCreateViewerPreferences(PdfDocument pdf)
