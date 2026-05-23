@@ -10,13 +10,14 @@ internal static partial class XlsxChartXmlWriter
         new(chartNs + "title",
             new XElement(chartNs + "tx",
                 new XElement(chartNs + "rich",
-                    new XElement(drawingNs + "p",
-                        new XElement(drawingNs + "r",
-                            ToTextRunProperties(null, chart.ChartTitleTextColor, chart.ChartTitleFontSize, drawingNs),
-                            new XElement(drawingNs + "t", chart.Title))))));
+                        new XElement(drawingNs + "p",
+                            new XElement(drawingNs + "r",
+                                ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, chart.ChartTitleFontSize, drawingNs),
+                                new XElement(drawingNs + "t", chart.Title))))));
 
     private static XElement? ToAxisTitleXml(
         string? title,
+        WorkbookThemeColorReference? textThemeColor,
         CellColor? textColor,
         double fontSize,
         XNamespace chartNs,
@@ -28,7 +29,7 @@ internal static partial class XlsxChartXmlWriter
                     new XElement(chartNs + "rich",
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
-                                ToTextRunProperties(null, textColor, fontSize, drawingNs),
+                                ToTextRunProperties(textThemeColor, textColor, fontSize, drawingNs),
                                 new XElement(drawingNs + "t", title))))));
 
     private static XElement? ToTextRunProperties(
