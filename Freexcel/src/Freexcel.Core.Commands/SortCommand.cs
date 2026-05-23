@@ -51,7 +51,7 @@ public sealed class SortCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.Sort) is { } protectedOutcome)
             return protectedOutcome;
 
         // Guard against inverted ranges — uint subtraction would wrap to ~4B
