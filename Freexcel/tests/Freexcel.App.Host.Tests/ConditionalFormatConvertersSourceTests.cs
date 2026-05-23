@@ -11,7 +11,7 @@ public sealed class ConditionalFormatConvertersSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find(
             "src",
             "Freexcel.App.Host",
-            "ManageConditionalFormatsDialog.cs"));
+            "ManageConditionalFormatsDialog.Helpers.cs"));
 
         source.Should().Contain("Binding.DoNothing");
         source.Should().NotContain("throw new NotSupportedException()");
