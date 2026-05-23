@@ -1,28 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Stock/Radar Chart">
-  <defs>
-    <style>
-      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
-      .b,.blue{fill:#0078d4}
-      .o,.orange{fill:#f7630c}
-      .y,.yellow,.paleyellow{fill:#ffb900}
-      .rd,.red{fill:#d32f2f}
-      .p,.purple{fill:#8b5cf6}
-      .w,.paper,.bg{fill:#ffffff}
-      .k,.gray{fill:#242424}
-      .f,.soft{fill:#f3f2f1}
-      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
-      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
-      .paleblue{fill:#dcecff}
-      .palered{fill:#ffd7d7}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><path class="s" d="M9.72 41.04H46.44M12.96 36.72l7.56-11.88l6.48 6.48l9.72-16.2l6.48 8.64"/><path stroke="#202124" stroke-width="1.8" d="M17.28 14.04v21.6M30.24 11.88v22.68M41.04 15.12v19.44"/>  </g>
+  <g><path d="M9.72 41.04H46.44M12.96 36.72l7.56-11.88l6.48 6.48l9.72-16.2l6.48 8.64" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path stroke="#202124" stroke-width="1.8" d="M17.28 14.04v21.6M30.24 11.88v22.68M41.04 15.12v19.44"/>  </g>
 </svg>
 

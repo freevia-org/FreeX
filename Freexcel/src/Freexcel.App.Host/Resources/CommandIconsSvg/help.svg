@@ -1,28 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Help">
-  <defs>
-    <style>
-      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
-      .b,.blue{fill:#0078d4}
-      .o,.orange{fill:#f7630c}
-      .y,.yellow,.paleyellow{fill:#ffb900}
-      .rd,.red{fill:#d32f2f}
-      .p,.purple{fill:#8b5cf6}
-      .w,.paper,.bg{fill:#ffffff}
-      .k,.gray{fill:#242424}
-      .f,.soft{fill:#f3f2f1}
-      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
-      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
-      .paleblue{fill:#dcecff}
-      .palered{fill:#ffd7d7}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><circle class="s" cx="27" cy="27" r="17.28"/><text class="t" x="27" y="35.1" text-anchor="middle" font-size="27">?</text>  </g>
+  <g><circle cx="27" cy="27" r="17.28" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><text x="27" y="35.1" text-anchor="middle" font-size="27" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" dominant-baseline="central">?</text>  </g>
 </svg>
 

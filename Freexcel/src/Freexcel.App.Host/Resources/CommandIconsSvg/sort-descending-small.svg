@@ -1,29 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  <defs>
-    <style>
-      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
-      .b,.blue{fill:#0078d4}
-      .o,.orange{fill:#f7630c}
-      .y,.yellow,.paleyellow{fill:#ffb900}
-      .rd,.red{fill:#d32f2f}
-      .p,.purple{fill:#8b5cf6}
-      .w,.paper,.bg{fill:#ffffff}
-      .k,.gray{fill:#242424}
-      .f,.soft{fill:#f3f2f1}
-      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
-      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
-      .paleblue{fill:#dcecff}
-      .palered{fill:#ffd7d7}
-      .none{fill:none}
-</style>
-  </defs>
-  <text class="t" x="6" y="6" font-size="5" >Z</text>
-  <text class="t" x="6" y="14" font-size="5" >A</text>
-  <path class="r" d="M13 5 L13 15" stroke-width="1"/>
-  <polygon class="g" points="11.5 12.6 13 15 14.5 12.6"/>
+  
+  <text x="6" y="6" font-size="5"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">Z</text>
+  <text x="6" y="14" font-size="5"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
+  <path d="M13 5 L13 15" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="11.5 12.6 13 15 14.5 12.6" fill="#107c41"/>
 </svg>
