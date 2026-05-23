@@ -1310,6 +1310,15 @@ internal static class XlsxCorpusFixtureFactory
         var sheet = workbook.AddSheet("Print");
         Set(sheet, "A1", new TextValue("Protected print fixture"));
         Set(sheet, "A2", new NumberValue(42));
+        sheet.DefaultColumnWidth = 11;
+        sheet.DefaultRowHeight = 22;
+        sheet.ColumnWidths[1] = 18;
+        sheet.RowHeights[2] = 28;
+        sheet.TabColor = new CellColor(0, 176, 80);
+        sheet.CodeName = "PrintSheet";
+        sheet.FullCalculationOnLoad = true;
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelCorpusSheet", 7));
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "fixture";
         sheet.AllowEditRanges.Add(Range(sheet, "A2", "B5"));
@@ -1354,6 +1363,12 @@ internal static class XlsxCorpusFixtureFactory
             ],
             IncludePrintSettings: true,
             IncludeHiddenRowsColumnsAndFilterSettings: true));
+        var hidden = workbook.AddSheet("Hidden Meta");
+        Set(hidden, "A1", new TextValue("Very hidden metadata fixture"));
+        hidden.IsHidden = true;
+        hidden.IsVeryHidden = true;
+        hidden.CodeName = "HiddenMeta";
+        hidden.TabColor = new CellColor(255, 192, 0);
         return workbook;
     }
 
