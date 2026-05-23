@@ -1039,6 +1039,8 @@ public class XlsxCorpusRunnerTests
         new(
             chart.Type,
             chart.Title ?? "",
+            chart.XAxisTitle ?? "",
+            chart.YAxisTitle ?? "",
             chart.ShowLegend,
             chart.IsPivotChart,
             chart.ChartStyleId,
@@ -1054,6 +1056,9 @@ public class XlsxCorpusRunnerTests
             chart.BarGapWidth,
             chart.BarOverlap,
             chart.VaryColorsByPoint,
+            chart.StockSubtype,
+            chart.ShowHighLowLines,
+            chart.ShowUpDownBars,
             CaptureChartDataTableSummary(chart.DataTable),
             CaptureChart3DViewSummary(chart.ThreeDView),
             new ChartRangeSummary(
@@ -1924,6 +1929,8 @@ public class XlsxCorpusRunnerTests
     private sealed record ChartSummary(
         ChartType Type,
         string Title,
+        string XAxisTitle,
+        string YAxisTitle,
         bool ShowLegend,
         bool IsPivotChart,
         int? ChartStyleId,
@@ -1939,6 +1946,9 @@ public class XlsxCorpusRunnerTests
         int? BarGapWidth,
         int? BarOverlap,
         bool? VaryColorsByPoint,
+        StockChartSubtype StockSubtype,
+        bool ShowHighLowLines,
+        bool ShowUpDownBars,
         ChartDataTableSummary? DataTable,
         Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
