@@ -35,7 +35,8 @@ public static partial class PivotTableRefreshService
             FillColor = palette.StripeFill
         });
 
-        var headerEndRow = pivotTable.TargetRange.Start.Row + (uint)Math.Max(1, pivotTable.ColumnFields.Count) - 1;
+        var bodyStart = GetPivotBodyStart(pivotTable);
+        var headerEndRow = bodyStart.Row + (uint)Math.Max(1, pivotTable.ColumnFields.Count) - 1;
         var subtotalRows = new HashSet<uint>();
         var grandTotalRows = new HashSet<uint>();
         for (var row = materialized.Start.Row; row <= materialized.End.Row; row++)
@@ -54,6 +55,9 @@ public static partial class PivotTableRefreshService
         {
             var cell = sheet.GetCell(row, col);
             if (cell is null)
+                continue;
+
+            if (row < bodyStart.Row)
                 continue;
 
             if (row <= headerEndRow)

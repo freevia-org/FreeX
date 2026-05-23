@@ -1298,6 +1298,32 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_StylesBodyHeadersBelowMaterializedPageFields()
+    {
+        var workbook = new Workbook("PivotRefreshPageFieldStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G8"),
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Q1"));
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().BeNull();
+        var bodyHeaderStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
+        bodyHeaderStyle.Bold.Should().BeTrue();
+        bodyHeaderStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+    }
+
+    [Fact]
     public void Refresh_GroupsDateRowFieldByMonth()
     {
         var workbook = new Workbook("PivotRefreshTest");
