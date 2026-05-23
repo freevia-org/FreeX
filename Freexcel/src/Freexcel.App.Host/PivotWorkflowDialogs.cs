@@ -1070,7 +1070,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool PrintExpandCollapseButtons = false,
     string? AltTextTitle = null,
     string? AltTextDescription = null,
-    int CompactRowLabelIndent = 1);
+    int CompactRowLabelIndent = 1,
+    bool ShowExpandCollapseButtons = true);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -1099,6 +1100,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
+    private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
     private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
     private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
     private readonly TextBox _altTextTitleBox = new();
@@ -1140,7 +1142,8 @@ public sealed class PivotTableOptionsDialog : Window
             printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
             altTextTitle: pivotTable.AltTextTitle,
             altTextDescription: pivotTable.AltTextDescription,
-            compactRowLabelIndent: pivotTable.CompactRowLabelIndent);
+            compactRowLabelIndent: pivotTable.CompactRowLabelIndent,
+            showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1162,7 +1165,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool printExpandCollapseButtons = false,
         string? altTextTitle = null,
         string? altTextDescription = null,
-        int compactRowLabelIndent = 1) =>
+        int compactRowLabelIndent = 1,
+        bool showExpandCollapseButtons = true) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1183,7 +1187,8 @@ public sealed class PivotTableOptionsDialog : Window
             printExpandCollapseButtons,
             NormalizeOptionalText(altTextTitle),
             NormalizeOptionalText(altTextDescription),
-            NormalizeCompactRowLabelIndent(compactRowLabelIndent));
+            NormalizeCompactRowLabelIndent(compactRowLabelIndent),
+            showExpandCollapseButtons);
 
     private DockPanel CreateContent()
     {
@@ -1245,6 +1250,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _columnHeadersBox);
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
+        AddCheckBox(stylePanel, _showExpandCollapseBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("PivotTable Style Options", stylePanel));
         return stack;
     }
@@ -1343,6 +1349,7 @@ public sealed class PivotTableOptionsDialog : Window
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
+        _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
         _printTitlesBox.IsChecked = result.PrintTitles;
         _printExpandCollapseBox.IsChecked = result.PrintExpandCollapseButtons;
         _altTextTitleBox.Text = result.AltTextTitle ?? "";
@@ -1375,7 +1382,8 @@ public sealed class PivotTableOptionsDialog : Window
             _printExpandCollapseBox.IsChecked == true,
             _altTextTitleBox.Text,
             _altTextDescriptionBox.Text,
-            ParseCompactRowLabelIndent(_compactIndentBox.Text));
+            ParseCompactRowLabelIndent(_compactIndentBox.Text),
+            _showExpandCollapseBox.IsChecked == true);
         DialogResult = true;
     }
 
