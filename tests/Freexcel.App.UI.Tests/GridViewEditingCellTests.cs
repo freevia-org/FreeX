@@ -25,4 +25,20 @@ public sealed class GridViewEditingCellTests
         GridView.ShouldDrawCellContent(cell, new CellAddress(sheetId, 4, 5))
             .Should().BeTrue();
     }
+
+    [Fact]
+    public void BuildOccupiedCellSet_TreatsEmptyEditedCellAsOccupied()
+    {
+        var sheetId = SheetId.New();
+        var cells = new[]
+        {
+            new DisplayCell(1, 1, new TextValue("long text"), "long text", null, StyleId.Default, null),
+            new DisplayCell(1, 2, null, "", null, StyleId.Default, null),
+        };
+
+        var occupied = GridView.BuildOccupiedCellSet(cells, new CellAddress(sheetId, 1, 2));
+
+        occupied.Should().Contain((1u, 1u));
+        occupied.Should().Contain((1u, 2u));
+    }
 }

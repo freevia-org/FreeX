@@ -18,6 +18,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-conditional-formatting-001",
         "generated-color-scales-001",
         "generated-data-bars-001",
+        "generated-icon-sets-001",
         "generated-text-boxes-shapes-001",
         "generated-images-sparklines-001",
         "generated-comments-hyperlinks-002",
@@ -78,6 +79,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-conditional-formatting-001" => CreateConditionalFormatting(),
         "generated-color-scales-001" => CreateColorScales(),
         "generated-data-bars-001" => CreateDataBars(),
+        "generated-icon-sets-001" => CreateIconSets(),
         "generated-text-boxes-shapes-001" => CreateTextBoxesAndShapes(),
         "generated-images-sparklines-001" => CreateImagesAndSparklines(),
         "generated-comments-hyperlinks-002" => CreateCommentsAndHyperlinks(),
@@ -262,6 +264,26 @@ internal static class XlsxCorpusFixtureFactory
 
     private static void ApplyPackageFixups(string id, ZipArchive archive)
     {
+        if (string.Equals(id, "generated-slicers-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySlicerTimelineFloatingDrawingFixup(
+                archive,
+                "Slicer Region",
+                "../slicers/slicer1.xml",
+                "http://schemas.microsoft.com/office/2007/relationships/slicer");
+            return;
+        }
+
+        if (string.Equals(id, "generated-timelines-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplySlicerTimelineFloatingDrawingFixup(
+                archive,
+                "Timeline Date",
+                "../timelines/timeline1.xml",
+                "http://schemas.microsoft.com/office/2011/relationships/timeline");
+            return;
+        }
+
         if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -321,6 +343,155 @@ internal static class XlsxCorpusFixtureFactory
         var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
         using var relOutput = workbookRelsReplacement.Open();
         workbookRelsXml.Save(relOutput);
+    }
+
+    private static void ApplySlicerTimelineFloatingDrawingFixup(
+        ZipArchive archive,
+        string objectName,
+        string nativePartTarget,
+        string nativeRelationshipType)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+        if (contentTypesEntry is null || worksheetEntry is null)
+            return;
+
+        XDocument contentTypes;
+        using (var stream = contentTypesEntry.Open())
+            contentTypes = XDocument.Load(stream);
+        if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
+                string.Equals(element.Attribute("PartName")?.Value, "/xl/drawings/drawing1.xml", StringComparison.OrdinalIgnoreCase)) != true)
+        {
+            contentTypes.Root?.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/drawings/drawing1.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.drawing+xml")));
+        }
+        EnsureContentTypeOverride(
+            contentTypes,
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "/xl/slicers/slicer1.xml"
+                : "/xl/timelines/timeline1.xml",
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.ms-excel.slicer+xml"
+                : "application/vnd.ms-excel.timeline+xml");
+        EnsureContentTypeOverride(
+            contentTypes,
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "/xl/slicerCaches/slicerCache1.xml"
+                : "/xl/timelineCaches/timelineCache1.xml",
+            nativePartTarget.Contains("/slicers/", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.ms-excel.slicerCache+xml"
+                : "application/vnd.ms-excel.timelineCache+xml");
+        ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+
+        var drawingRelId = "rIdFreexcelFloatingDrawing1";
+        XDocument worksheetXml;
+        using (var stream = worksheetEntry.Open())
+            worksheetXml = XDocument.Load(stream);
+        var root = worksheetXml.Root;
+        if (root is not null && root.Element(worksheetNs + "drawing") is null)
+            root.Add(new XElement(worksheetNs + "drawing", new XAttribute(officeRelNs + "id", drawingRelId)));
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+        var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadPackageXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(
+            worksheetRelsXml,
+            drawingRelId,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            "../drawings/drawing1.xml");
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+        ReplacePackageXml(archive, "xl/drawings/drawing1.xml", new XDocument(
+            new XElement(
+                spreadsheetDrawingNs + "wsDr",
+                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XElement(
+                    spreadsheetDrawingNs + "twoCellAnchor",
+                    new XElement(
+                        spreadsheetDrawingNs + "from",
+                        new XElement(spreadsheetDrawingNs + "col", "4"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                        new XElement(spreadsheetDrawingNs + "row", "2"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                    new XElement(
+                        spreadsheetDrawingNs + "to",
+                        new XElement(spreadsheetDrawingNs + "col", "8"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                        new XElement(spreadsheetDrawingNs + "row", "10"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                    new XElement(
+                        spreadsheetDrawingNs + "sp",
+                        new XElement(
+                            spreadsheetDrawingNs + "nvSpPr",
+                            new XElement(
+                                spreadsheetDrawingNs + "cNvPr",
+                                new XAttribute("id", "2"),
+                                new XAttribute("name", objectName)),
+                            new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+                        new XElement(
+                            spreadsheetDrawingNs + "spPr",
+                            new XElement(drawingNs + "prstGeom",
+                                new XAttribute("prst", "rect"),
+                                new XElement(drawingNs + "avLst")))),
+                    new XElement(spreadsheetDrawingNs + "clientData")))));
+
+        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        EnsureRelationship(drawingRelsXml, "rIdFreexcelNativeControl1", nativeRelationshipType, nativePartTarget);
+        ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+    }
+
+    private static void EnsureRelationship(XDocument relationshipsXml, string id, string type, string target)
+    {
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        relationshipsXml.Root?.Elements(packageRelNs + "Relationship")
+            .Where(element => string.Equals(element.Attribute("Id")?.Value, id, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        relationshipsXml.Root?.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", id),
+            new XAttribute("Type", type),
+            new XAttribute("Target", target)));
+    }
+
+    private static void EnsureContentTypeOverride(XDocument contentTypes, string partName, string contentType)
+    {
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
+                string.Equals(element.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase)) == true)
+        {
+            return;
+        }
+
+        contentTypes.Root?.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        document.Save(stream);
     }
 
     private static Workbook CreateGridBasic()
@@ -529,6 +700,32 @@ internal static class XlsxCorpusFixtureFactory
             DataBarMaxThresholdValue = "100",
             DataBarShowValue = false
         });
+        return workbook;
+    }
+
+    private static Workbook CreateIconSets()
+    {
+        var workbook = NewWorkbook("generated-icon-sets-001");
+        var sheet = workbook.AddSheet("Icon Sets");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 20));
+
+        var rule = new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "A1", "A5"),
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows",
+            IconSetShowValue = false,
+            IconSetReverse = true
+        };
+        rule.IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percent, "25"),
+            new CfThresholdModel(CfThresholdType.Percent, "50"),
+            new CfThresholdModel(CfThresholdType.Percent, "75")
+        ]);
+        sheet.ConditionalFormats.Add(rule);
         return workbook;
     }
 
@@ -879,15 +1076,55 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "A1", new TextValue("Month"));
         Set(sheet, "B1", new TextValue("Sales"));
         Set(sheet, "C1", new TextValue("Margin"));
+        Set(sheet, "D1", new TextValue("Open"));
+        Set(sheet, "E1", new TextValue("High"));
+        Set(sheet, "F1", new TextValue("Low"));
+        Set(sheet, "G1", new TextValue("Close"));
+        Set(sheet, "I1", new TextValue("Date"));
+        Set(sheet, "J1", new TextValue("Volume"));
+        Set(sheet, "K1", new TextValue("Open"));
+        Set(sheet, "L1", new TextValue("High"));
+        Set(sheet, "M1", new TextValue("Low"));
+        Set(sheet, "N1", new TextValue("Close"));
         Set(sheet, "A2", new TextValue("Jan"));
         Set(sheet, "A3", new TextValue("Feb"));
         Set(sheet, "A4", new TextValue("Mar"));
+        Set(sheet, "I2", new TextValue("Jan"));
+        Set(sheet, "I3", new TextValue("Feb"));
+        Set(sheet, "I4", new TextValue("Mar"));
         Set(sheet, "B2", new NumberValue(100));
         Set(sheet, "B3", new NumberValue(120));
         Set(sheet, "B4", new NumberValue(140));
         Set(sheet, "C2", new NumberValue(0.2));
         Set(sheet, "C3", new NumberValue(0.25));
         Set(sheet, "C4", new NumberValue(0.3));
+        Set(sheet, "D2", new NumberValue(101));
+        Set(sheet, "D3", new NumberValue(121));
+        Set(sheet, "D4", new NumberValue(139));
+        Set(sheet, "E2", new NumberValue(108));
+        Set(sheet, "E3", new NumberValue(128));
+        Set(sheet, "E4", new NumberValue(145));
+        Set(sheet, "F2", new NumberValue(98));
+        Set(sheet, "F3", new NumberValue(118));
+        Set(sheet, "F4", new NumberValue(135));
+        Set(sheet, "G2", new NumberValue(106));
+        Set(sheet, "G3", new NumberValue(126));
+        Set(sheet, "G4", new NumberValue(142));
+        Set(sheet, "J2", new NumberValue(1000));
+        Set(sheet, "J3", new NumberValue(1200));
+        Set(sheet, "J4", new NumberValue(1400));
+        Set(sheet, "K2", new NumberValue(101));
+        Set(sheet, "K3", new NumberValue(121));
+        Set(sheet, "K4", new NumberValue(139));
+        Set(sheet, "L2", new NumberValue(108));
+        Set(sheet, "L3", new NumberValue(128));
+        Set(sheet, "L4", new NumberValue(145));
+        Set(sheet, "M2", new NumberValue(98));
+        Set(sheet, "M3", new NumberValue(118));
+        Set(sheet, "M4", new NumberValue(135));
+        Set(sheet, "N2", new NumberValue(106));
+        Set(sheet, "N3", new NumberValue(126));
+        Set(sheet, "N4", new NumberValue(142));
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Column,
@@ -910,9 +1147,12 @@ internal static class XlsxCorpusFixtureFactory
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Stock,
-            DataRange = Range(sheet, "A1", "C4"),
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            DataRange = Range(sheet, "I1", "N4"),
             Title = "Stock View",
-            ShowLegend = true
+            ShowLegend = true,
+            ShowHighLowLines = true,
+            ShowUpDownBars = true
         });
         return workbook;
     }
