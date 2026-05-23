@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -17,21 +20,50 @@ public sealed record SortColorChoice(string Label);
 
 public sealed record SortDialogOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
-public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
+public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyPropertyChanged
 {
+    private uint _columnOffset;
+    private bool _ascending;
+    private string _sortOn = "Cell Values";
+    private string _targetColor = "";
+
     public SortDialogLevel(uint columnOffset, bool ascending)
     {
-        ColumnOffset = columnOffset;
-        Ascending = ascending;
+        _columnOffset = columnOffset;
+        _ascending = ascending;
     }
 
-    public uint ColumnOffset { get; set; }
+    public event PropertyChangedEventHandler? PropertyChanged;
 
-    public bool Ascending { get; set; }
+    public uint ColumnOffset
+    {
+        get => _columnOffset;
+        set => SetField(ref _columnOffset, value);
+    }
 
-    public string SortOn { get; set; } = "Cell Values";
+    public bool Ascending
+    {
+        get => _ascending;
+        set => SetField(ref _ascending, value);
+    }
 
-    public string TargetColor { get; set; } = "";
+    public string SortOn
+    {
+        get => _sortOn;
+        set
+        {
+            if (SetField(ref _sortOn, value))
+                OnPropertyChanged(nameof(OrderChoices));
+        }
+    }
+
+    public string TargetColor
+    {
+        get => _targetColor;
+        set => SetField(ref _targetColor, value);
+    }
+
+    public IReadOnlyList<SortDirectionChoice> OrderChoices => SortDialog.BuildOrderChoices(SortOn);
 
     public bool Equals(SortDialogLevel? other) =>
         other is not null &&
@@ -45,6 +77,18 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
     public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending, SortOn, TargetColor.ToUpperInvariant());
 
     public override string ToString() => $"Column offset {ColumnOffset}, {(Ascending ? "Ascending" : "Descending")}";
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private void OnPropertyChanged(string? propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 
 public sealed class SortDialog : Window
@@ -53,6 +97,12 @@ public sealed class SortDialog : Window
     [
         new("A to Z", true),
         new("Z to A", false)
+    ];
+
+    private static readonly IReadOnlyList<SortDirectionChoice> ColorDirectionChoices =
+    [
+        new("On Top", true),
+        new("On Bottom", false)
     ];
 
     private static readonly IReadOnlyList<SortOnChoice> SortOnChoices =
@@ -162,19 +212,7 @@ public sealed class SortDialog : Window
             },
             Width = new DataGridLength(140)
         });
-        list.Columns.Add(new DataGridComboBoxColumn
-        {
-            Header = "Order",
-            ItemsSource = DirectionChoices,
-            DisplayMemberPath = nameof(SortDirectionChoice.Label),
-            SelectedValuePath = nameof(SortDirectionChoice.Ascending),
-            SelectedValueBinding = new Binding(nameof(SortDialogLevel.Ascending))
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-            },
-            Width = new DataGridLength(150)
-        });
+        list.Columns.Add(CreateOrderColumn());
         list.Columns.Add(new DataGridComboBoxColumn
         {
             Header = "Color",
@@ -296,6 +334,11 @@ public sealed class SortDialog : Window
             })
             .ToList();
     }
+
+    public static IReadOnlyList<SortDirectionChoice> BuildOrderChoices(string? sortOn) =>
+        SortOnFromLabel(sortOn) is Freexcel.Core.Commands.SortOn.CellColor or Freexcel.Core.Commands.SortOn.FontColor
+            ? ColorDirectionChoices
+            : DirectionChoices;
 
     public static IReadOnlyList<SortDialogLevel> AddLevel(
         IEnumerable<SortDialogLevel> levels,
@@ -445,6 +488,34 @@ public sealed class SortDialog : Window
             : _headerCheck.IsChecked == true
             ? _columnChoices
             : _genericColumnChoices;
+    }
+
+    private static DataGridTemplateColumn CreateOrderColumn()
+    {
+        var column = new DataGridTemplateColumn
+        {
+            Header = "Order",
+            Width = new DataGridLength(150)
+        };
+        column.CellTemplate = CreateOrderTemplate(isReadOnly: true);
+        column.CellEditingTemplate = CreateOrderTemplate(isReadOnly: false);
+        return column;
+    }
+
+    private static DataTemplate CreateOrderTemplate(bool isReadOnly)
+    {
+        var combo = new FrameworkElementFactory(typeof(ComboBox));
+        combo.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(SortDialogLevel.OrderChoices)));
+        combo.SetValue(ItemsControl.DisplayMemberPathProperty, nameof(SortDirectionChoice.Label));
+        combo.SetValue(Selector.SelectedValuePathProperty, nameof(SortDirectionChoice.Ascending));
+        combo.SetBinding(Selector.SelectedValueProperty, new Binding(nameof(SortDialogLevel.Ascending))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+        });
+        combo.SetValue(UIElement.IsHitTestVisibleProperty, !isReadOnly);
+        combo.SetValue(Control.IsTabStopProperty, !isReadOnly);
+        return new DataTemplate { VisualTree = combo };
     }
 
     private static string GetHeaderLabel(Sheet sheet, GridRange range, uint offset, string fallbackColumnName)
