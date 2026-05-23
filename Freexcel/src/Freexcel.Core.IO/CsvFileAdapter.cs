@@ -35,7 +35,7 @@ public sealed class CsvFileAdapter : IFileAdapter
             for (uint c = startCol; c <= endCol; c++)
             {
                 usedCells.TryGetValue((r, c), out var cell);
-                var raw = cell is null ? "" : FormatValue(cell.Value);
+                var raw = cell is null ? "" : FormatCell(cell);
                 parts[c - startCol] = EscapeCsvField(raw, cell?.Value is TextValue);
             }
             writer.Write(string.Join(',', parts));
@@ -58,6 +58,11 @@ public sealed class CsvFileAdapter : IFileAdapter
 
     private static bool IsFormulaLikeText(string value) =>
         value[0] is '=' or '+' or '-' or '@';
+
+    private static string FormatCell(Cell cell) =>
+        cell.FormulaText is { } formulaText
+            ? $"={formulaText}"
+            : FormatValue(cell.Value);
 
     private static string FormatValue(ScalarValue value) => value switch
     {

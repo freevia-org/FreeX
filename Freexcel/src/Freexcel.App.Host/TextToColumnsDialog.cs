@@ -8,6 +8,10 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public sealed record TextToColumnsRangeSelectionRequest(
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public sealed partial class TextToColumnsDialog : Window
 {
     private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
@@ -43,6 +47,7 @@ public sealed partial class TextToColumnsDialog : Window
     private readonly IReadOnlyList<string> _previewRows;
     private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
     private readonly CellAddress _defaultDestination;
+    private readonly Action<TextToColumnsRangeSelectionRequest>? _requestRangeSelection;
     private readonly TextBlock _wizardHeader = new() { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
     private readonly TextBlock _wizardInstruction = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
     private Button? _backButton;
@@ -60,11 +65,16 @@ public sealed partial class TextToColumnsDialog : Window
     private int? _dragBreakIndex;
 
     public TextToColumnsDialogResult? Result { get; private set; }
+    public TextToColumnsRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public TextToColumnsDialog(IEnumerable<string>? previewRows = null, CellAddress? defaultDestination = null)
+    public TextToColumnsDialog(
+        IEnumerable<string>? previewRows = null,
+        CellAddress? defaultDestination = null,
+        Action<TextToColumnsRangeSelectionRequest>? requestRangeSelection = null)
     {
         _previewRows = NormalizePreviewRows(previewRows);
         _defaultDestination = defaultDestination ?? new CellAddress(SheetId.New(), 1, 1);
+        _requestRangeSelection = requestRangeSelection;
         _destinationBox.Text = _defaultDestination.ToA1();
 
         Title = "Text to Columns";
@@ -380,8 +390,18 @@ public sealed partial class TextToColumnsDialog : Window
         }
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
-        DialogReferencePicker.CreateEditor(textBox, automationName);
+    public static TextToColumnsRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
+        new(currentText.Trim(), CollapseDialog: true);
+
+    private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request =>
+            {
+                RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
+                _requestRangeSelection?.Invoke(RangeSelectionRequest);
+            });
 
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));

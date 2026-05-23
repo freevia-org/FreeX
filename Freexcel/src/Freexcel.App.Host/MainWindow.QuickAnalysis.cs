@@ -25,8 +25,20 @@ public partial class MainWindow
         var menu = new ContextMenu
         {
             PlacementTarget = SheetGrid,
-            Placement = PlacementMode.MousePoint
+            Placement = PlacementMode.RelativePoint
         };
+        if (SheetGrid.Viewport is { } viewport)
+        {
+            var anchor = QuickAnalysisMenuPlacementPlanner.BuildAnchor(
+                range,
+                viewport,
+                SheetGrid.ActualRowHeaderWidth,
+                SheetGrid.EffectiveColHeaderHeight);
+            menu.HorizontalOffset = anchor.X;
+            menu.VerticalOffset = anchor.Y;
+        }
+
+        menu.Opened += QuickAnalysisMenu_Opened;
         menu.Closed += (_, _) => SheetGrid.QuickAnalysisPreviewRange = null;
 
         string? currentGroup = null;
@@ -60,6 +72,19 @@ public partial class MainWindow
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>().Where(item => item.IsEnabled));
         menu.IsOpen = true;
+    }
+
+    private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        if (firstEnabledItem is null)
+            return;
+
+        firstEnabledItem.Focus();
+        Keyboard.Focus(firstEnabledItem);
     }
 
     private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
