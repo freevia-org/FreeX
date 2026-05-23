@@ -31,6 +31,22 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void HomeRibbon_KeepsPrimaryCommandsExpandedAtNormalNarrowWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(900);
+
+            harness.CollapsedRibbonGroupNames.Should().NotContain("Clipboard", harness.DebugRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Paste", "Cut", "Copy"],
+                "Excel keeps the primary Clipboard commands expanded at normal narrow window widths and collapses lower-priority groups first");
+        });
+    }
+
+    [Fact]
     public void HomeRibbon_CollapsesEditingBeforeLabelsClipAtWideWidths()
     {
         StaTestRunner.Run(() =>
@@ -104,6 +120,41 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveMenuHeaders("Charts").Should().Contain("Column Chart", harness.DebugActiveRibbonChildren);
             harness.CollapsedActiveMenuHeaders("Charts").Should().NotContain("Data Label Border", harness.DebugActiveRibbonChildren);
+        });
+    }
+
+    [Fact]
+    public void InsertRibbon_KeepsTablesExpandedAtNormalNarrowWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Insert", 900);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["PivotTable", "Table"],
+                "Excel keeps the first Insert groups expanded at normal narrow widths before collapsing gallery-heavy groups");
+        });
+    }
+
+    [Theory]
+    [InlineData("Page Layout", "Themes")]
+    [InlineData("Data", "Get & Transform")]
+    [InlineData("Review", "Proofing")]
+    [InlineData("View", "Workbook Views")]
+    public void RibbonTabs_KeepPrimaryGroupExpandedAtNormalNarrowWidths(string tab, string primaryGroup)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab(tab, 900);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                primaryGroup,
+                $"{tab} should collapse lower-priority groups before the first Excel-style primary group at normal narrow widths");
         });
     }
 
