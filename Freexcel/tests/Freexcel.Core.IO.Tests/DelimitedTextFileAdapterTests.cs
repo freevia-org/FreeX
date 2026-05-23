@@ -108,6 +108,22 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_IgnoresFieldsBeyondExcelColumnLimit()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        var fields = Enumerable.Repeat("", (int)CellAddress.MaxCol + 1).ToArray();
+        fields[CellAddress.MaxCol - 1] = "last";
+        fields[CellAddress.MaxCol] = "overflow";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(string.Join('\t', fields)));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, CellAddress.MaxCol)).Should().Be(new TextValue("last"));
+        sheet.GetCell(new CellAddress(sheet.Id, 1, CellAddress.MaxCol + 1)).Should().BeNull();
+    }
+
+    [Fact]
     public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');

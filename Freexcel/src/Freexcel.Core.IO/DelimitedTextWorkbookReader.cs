@@ -23,6 +23,9 @@ internal static class DelimitedTextWorkbookReader
 
             for (var i = 0; i < fields.Count; i++)
             {
+                if (i >= CellAddress.MaxCol)
+                    break;
+
                 var field = fields[i];
                 if (field.Length == 0)
                     continue;
