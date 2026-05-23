@@ -65,6 +65,25 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageOpenAndSave_UseFormatDescriptorRegistry()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters)");
+        backstageSource.Should().Contain("FileDialogFilterBuilder.BuildSaveFilter(_fileAdapters)");
+        backstageSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format)");
+        backstageSource.Should().Contain("_currentFilePath = result.OpenedAsTemplate ? null : path;");
+    }
+
+    [Fact]
+    public void GetData_IncludesDelimitedTextAdapters()
+    {
+        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\"");
+    }
+
+    [Fact]
     public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
