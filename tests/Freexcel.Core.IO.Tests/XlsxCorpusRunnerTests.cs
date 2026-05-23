@@ -853,6 +853,18 @@ public class XlsxCorpusRunnerTests
             sheet.PrintQualityDpi,
             sheet.PrintErrorValue,
             sheet.PrintComments,
+            sheet.DefaultColumnWidth,
+            sheet.DefaultRowHeight,
+            sheet.ColumnWidths
+                .OrderBy(pair => pair.Key)
+                .Where(pair => Math.Abs(pair.Value - sheet.DefaultColumnWidth) >= 0.01)
+                .Select(pair => new DimensionSummary(pair.Key, Math.Round(pair.Value, 2)))
+                .ToArray(),
+            sheet.RowHeights
+                .OrderBy(pair => pair.Key)
+                .Where(pair => Math.Abs(pair.Value - sheet.DefaultRowHeight) >= 0.01)
+                .Select(pair => new DimensionSummary(pair.Key, Math.Round(pair.Value, 2)))
+                .ToArray(),
             sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
             sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
@@ -871,6 +883,16 @@ public class XlsxCorpusRunnerTests
             sheet.ShowRulers,
             sheet.ZoomPercent,
             sheet.ShowFormulas,
+            sheet.FullCalculationOnLoad,
+            CapturePhoneticSummary(sheet.PhoneticProperties),
+            sheet.IsHidden,
+            sheet.IsVeryHidden,
+            sheet.CodeName ?? "",
+            sheet.TabColor is null ? "" : ToColorSummary(sheet.TabColor.Value),
+            sheet.CustomProperties
+                .OrderBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(property => new WorksheetCustomPropertySummary(property.Name, property.Id))
+                .ToArray(),
             sheet.HiddenRows.OrderBy(row => row).ToArray(),
             sheet.HiddenRows.Count,
             sheet.HiddenCols.OrderBy(column => column).ToArray(),
@@ -898,6 +920,14 @@ public class XlsxCorpusRunnerTests
                     CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
                 .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
+
+    private static PhoneticSummary? CapturePhoneticSummary(WorksheetPhoneticProperties? properties) =>
+        properties is null
+            ? null
+            : new PhoneticSummary(
+                properties.FontId ?? "",
+                properties.Type ?? "",
+                properties.Alignment ?? "");
 
     private static BackgroundImageSummary? CaptureBackgroundImageSummary(WorksheetBackgroundImage? background) =>
         background is null
@@ -1282,6 +1312,10 @@ public class XlsxCorpusRunnerTests
                     Cells = [],
                     HeaderFooterAlignWithMargins = true,
                     HeaderFooterScaleWithDocument = true,
+                    DefaultColumnWidth = 0,
+                    DefaultRowHeight = 0,
+                    ColumnWidths = [],
+                    RowHeights = [],
                     StyleOnlyCells = [],
                     StyleOnlyCellCount = 0
                 })
@@ -1657,6 +1691,10 @@ public class XlsxCorpusRunnerTests
         int? PrintQualityDpi,
         WorksheetPrintErrorValue PrintErrorValue,
         WorksheetPrintComments PrintComments,
+        double DefaultColumnWidth,
+        double DefaultRowHeight,
+        IReadOnlyList<DimensionSummary> ColumnWidths,
+        IReadOnlyList<DimensionSummary> RowHeights,
         IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
         IReadOnlyList<uint> ColumnPageBreaks,
@@ -1675,6 +1713,13 @@ public class XlsxCorpusRunnerTests
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        bool FullCalculationOnLoad,
+        PhoneticSummary? PhoneticProperties,
+        bool IsHidden,
+        bool IsVeryHidden,
+        string CodeName,
+        string TabColor,
+        IReadOnlyList<WorksheetCustomPropertySummary> CustomProperties,
         IReadOnlyList<uint> HiddenRows,
         int HiddenRowCount,
         IReadOnlyList<uint> HiddenColumns,
@@ -1725,6 +1770,12 @@ public class XlsxCorpusRunnerTests
     private sealed record OutlineLevelSummary(uint Index, int Level);
 
     private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
+
+    private sealed record DimensionSummary(uint Index, double Value);
+
+    private sealed record PhoneticSummary(string FontId, string Type, string Alignment);
+
+    private sealed record WorksheetCustomPropertySummary(string Name, int Id);
 
     private sealed record RepeatRangeSummary(uint Start, uint End);
 
