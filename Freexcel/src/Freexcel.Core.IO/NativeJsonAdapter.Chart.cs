@@ -110,6 +110,7 @@ public sealed partial class NativeJsonAdapter
                 BarGapWidth = chartDto.BarGapWidth,
                 BarOverlap = chartDto.BarOverlap,
                 VaryColorsByPoint = chartDto.VaryColorsByPoint,
+                StockSubtype = chartDto.StockSubtype,
                 LegendPosition = chartDto.LegendPosition,
                 LegendOverlay = chartDto.LegendOverlay,
                 ShowLegend = chartDto.ShowLegend,
@@ -267,6 +268,7 @@ public sealed partial class NativeJsonAdapter
         BarGapWidth = chart.BarGapWidth,
         BarOverlap = chart.BarOverlap,
         VaryColorsByPoint = chart.VaryColorsByPoint,
+        StockSubtype = chart.StockSubtype,
         LegendPosition = chart.LegendPosition,
         LegendOverlay = chart.LegendOverlay,
         ShowLegend = chart.ShowLegend,
@@ -370,6 +372,9 @@ public sealed partial class NativeJsonAdapter
         chart.DataLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelPosition, ChartDataLabelPosition.BestFit);
         chart.DataLabelSeparator = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelSeparator, ChartDataLabelSeparator.Comma);
         chart.DataLabelNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
+        if (chart.Type != ChartType.Stock)
+            chart.StockSubtype = StockChartSubtype.HighLowClose;
         chart.DataLabelBorderThickness = Math.Clamp(chart.DataLabelBorderThickness, 0, 10);
         chart.DataLabelFontSize = Math.Clamp(chart.DataLabelFontSize, 6, 72);
         chart.DataLabelAngle = Math.Clamp(chart.DataLabelAngle, -90, 90);
