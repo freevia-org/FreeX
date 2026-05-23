@@ -11,7 +11,7 @@ internal static class DelimitedTextWorkbookReader
         var workbook = new Workbook("Untitled");
         var sheet = workbook.AddSheet("Sheet1");
 
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        using var reader = CreateTextReader(stream);
         uint row = 1;
         var canReadSeparatorDirective = allowSeparatorDirective;
         while (TryReadRecord(reader, delimiter, out var fields))
@@ -149,6 +149,51 @@ internal static class DelimitedTextWorkbookReader
     }
 
     internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
+
+    private static TextReader CreateTextReader(Stream stream)
+    {
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        var bytes = memory.ToArray();
+
+        return new StringReader(DecodeText(bytes));
+    }
+
+    private static string DecodeText(byte[] bytes)
+    {
+        if (bytes.Length >= 3 &&
+            bytes[0] == 0xEF &&
+            bytes[1] == 0xBB &&
+            bytes[2] == 0xBF)
+        {
+            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        }
+
+        if (bytes.Length >= 2 &&
+            bytes[0] == 0xFF &&
+            bytes[1] == 0xFE)
+        {
+            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        }
+
+        if (bytes.Length >= 2 &&
+            bytes[0] == 0xFE &&
+            bytes[1] == 0xFF)
+        {
+            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        }
+
+        try
+        {
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                .GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding(1252).GetString(bytes);
+        }
+    }
 
     private static ScalarValue CoerceValue(string field)
     {
