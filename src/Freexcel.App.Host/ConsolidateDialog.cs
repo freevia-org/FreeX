@@ -110,6 +110,32 @@ public sealed class ConsolidateDialog : Window
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
         string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
 
+    public static bool TryAddReference(
+        SheetId sheetId,
+        IEnumerable<string> existingReferences,
+        string referenceText,
+        out IReadOnlyList<string> updatedReferences,
+        out string? error)
+    {
+        var references = existingReferences.Select(item => item.Trim()).Where(item => item.Length > 0).ToList();
+        updatedReferences = references;
+        error = null;
+
+        var reference = referenceText.Trim();
+        if (!ConsolidateInputParser.TryParseSourceRanges(reference, sheetId, out var ranges, out var invalidPart) ||
+            ranges.Count != 1)
+        {
+            error = string.IsNullOrWhiteSpace(invalidPart)
+                ? "Enter a valid source range."
+                : $"Enter a valid source range: {invalidPart}.";
+            return false;
+        }
+
+        references.Add(reference);
+        updatedReferences = references;
+        return true;
+    }
+
     public static ConsolidateDialogResult CreateResult(
         IEnumerable<GridRange> sourceRanges,
         CellAddress destinationCell,
@@ -225,11 +251,22 @@ public sealed class ConsolidateDialog : Window
 
     private void AddReferenceButton_Click(object sender, RoutedEventArgs e)
     {
-        var reference = _referenceBox.Text.Trim();
-        if (reference.Length == 0)
+        if (!TryAddReference(
+                _sheetId,
+                _referencesList.Items.Cast<string>(),
+                _referenceBox.Text,
+                out var references,
+                out var error))
+        {
+            MessageBox.Show(this, error ?? "Enter a valid source range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            _referenceBox.Focus();
+            _referenceBox.SelectAll();
             return;
+        }
 
-        _referencesList.Items.Add(reference);
+        _referencesList.Items.Clear();
+        foreach (var reference in references)
+            _referencesList.Items.Add(reference);
         _referenceBox.Clear();
     }
 
