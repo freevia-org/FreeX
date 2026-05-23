@@ -521,9 +521,9 @@ public static partial class BuiltInFunctions
         double salvage       = ToNumber(args[3]);
         double period        = ToNumber(args[4]);
         double rate          = ToNumber(args[5]);
-        int basis = args.Count > 6 && args[6] is not BlankValue ? (int)Math.Truncate(ToNumber(args[6])) : 0;
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
         // Compute life in years
         double life = 1.0 / rate;
@@ -565,9 +565,9 @@ public static partial class BuiltInFunctions
         double salvage       = ToNumber(args[3]);
         double period        = ToNumber(args[4]);
         double rate          = ToNumber(args[5]);
-        int basis = args.Count > 6 && args[6] is not BlankValue ? (int)Math.Truncate(ToNumber(args[6])) : 0;
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
         DateTime dp = SerialToDate(datePurchased);
         DateTime fp = SerialToDate(firstPeriod);
