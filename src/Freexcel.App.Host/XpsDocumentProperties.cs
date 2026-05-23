@@ -29,10 +29,10 @@ internal sealed record XpsDocumentProperties(
         if (properties is null)
             return;
 
-        package.PackageProperties.Title = properties.Title;
-        package.PackageProperties.Creator = properties.Creator;
-        package.PackageProperties.Subject = properties.Subject;
-        package.PackageProperties.Keywords = properties.Keywords;
+        package.PackageProperties.Title = Normalize(properties.Title);
+        package.PackageProperties.Creator = Normalize(properties.Creator);
+        package.PackageProperties.Subject = Normalize(properties.Subject);
+        package.PackageProperties.Keywords = Normalize(properties.Keywords);
     }
 
     private static string? Normalize(string? value) =>
