@@ -516,7 +516,7 @@ public sealed class MainWindowSourceHygieneTests
         var chartSourcePath = Path.Combine(appHostDirectory, "MainWindow.ChartCommands.cs");
 
         File.Exists(chartSourcePath).Should().BeTrue();
-        var chartSource = File.ReadAllText(chartSourcePath);
+        var chartSource = ReadChartCommandSource();
 
         mainSource.Should().NotContain("private void InsertChartButton_Click(");
         mainSource.Should().NotContain("private void InsertChartPickerBtn_Click(");
@@ -1103,7 +1103,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+        var source = ReadChartCommandSource();
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
@@ -1591,7 +1591,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ChartFormattingCommands_OpenExplicitFormatDialogs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+        var source = ReadChartCommandSource();
 
         source.Should().Contain("new ChartDataLabelsDialog(chart)");
         source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");
@@ -1651,7 +1651,17 @@ public sealed class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
     }
 
-    private static string ReadPivotCommandSource()
+
+    private static string ReadChartCommandSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "MainWindow.ChartCommands.cs",
+                "MainWindow.ChartAxisCommands.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }    private static string ReadPivotCommandSource()
     {
         return string.Join(
             "\n",
