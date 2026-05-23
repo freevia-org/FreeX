@@ -1603,12 +1603,31 @@ public sealed class PivotTableCommandTests
         sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
         var ctx = new SimpleCtx(workbook);
 
         var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         workbook.Slicers.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddSlicerCommand_RejectsProtectedPivotSheetWithoutEditObjectsPermission()
+    {
+        var workbook = new Workbook("AddSlicerObjectProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.Slicers.Should().BeEmpty();
     }
 
     [Fact]
@@ -1793,12 +1812,31 @@ public sealed class PivotTableCommandTests
         sheet.PivotTables.Add(CreateDateAmountPivot(sheet));
         sheet.IsProtected = true;
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
         var ctx = new SimpleCtx(workbook);
 
         var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         workbook.Timelines.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void AddTimelineCommand_RejectsProtectedPivotSheetWithoutEditObjectsPermission()
+    {
+        var workbook = new Workbook("AddTimelineObjectProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedTimelineData(sheet);
+        sheet.PivotTables.Add(CreateDateAmountPivot(sheet));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.Timelines.Should().BeEmpty();
     }
 
     [Fact]
