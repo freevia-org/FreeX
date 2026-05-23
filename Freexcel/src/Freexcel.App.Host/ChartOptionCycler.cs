@@ -106,6 +106,7 @@ public static class ChartOptionCycler
         {
             "line" => ChartType.Line,
             "pie" => ChartType.Pie,
+            "3d pie" or "three d pie" or "three-dimensional pie" => ChartType.ThreeDPie,
             "doughnut" or "donut" => ChartType.Doughnut,
             "bar" => ChartType.Bar,
             "stackedbar" or "stacked bar" => ChartType.StackedBar,

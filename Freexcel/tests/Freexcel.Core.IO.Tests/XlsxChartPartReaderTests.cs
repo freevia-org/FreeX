@@ -160,6 +160,24 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_Reads3DPieChartAsRenderable()
+    {
+        var sheetId = SheetId.New();
+        var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("pie3DChart"));
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.ThreeDPie);
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
+        chart.DataRange.Should().Be(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2)));
+        chart.FirstRowIsHeader.Should().BeTrue();
+        chart.FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryReadSupportedChart_DoesNotLetAdvancedExtensionOverrideDirectSupportedChart()
     {
         var sheetId = SheetId.New();

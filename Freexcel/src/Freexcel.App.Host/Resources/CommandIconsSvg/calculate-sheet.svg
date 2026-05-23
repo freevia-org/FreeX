@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Calculate Sheet">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><path fill="#f8fafc" stroke="#202124" stroke-width="1.7" d="M11.88 7.56h22.68l7.56 7.56v31.32H11.88z"/><text class="t" x="25.92" y="30.24" text-anchor="middle" font-size="12.96">fx</text><path fill="#f6d14a" stroke="#202124" stroke-width="1.3" d="M36.72 24.3l-4.32 9.72h4.86l-2.16 9.18l8.64-12.96h-4.86l2.7-5.94z"/>  </g>
+  <g><path fill="#f8fafc" stroke="#202124" stroke-width="1.7" d="M11.88 7.56h22.68l7.56 7.56v31.32H11.88z"/><text x="25.92" y="30.24" text-anchor="middle" font-size="12.96" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" dominant-baseline="central">fx</text><path fill="#f6d14a" stroke="#202124" stroke-width="1.3" d="M36.72 24.3l-4.32 9.72h4.86l-2.16 9.18l8.64-12.96h-4.86l2.7-5.94z"/>  </g>
 </svg>
 

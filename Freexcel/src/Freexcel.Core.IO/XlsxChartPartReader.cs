@@ -26,11 +26,14 @@ public static partial class XlsxChartPartReader
         var deferredAdvancedChart = HasDirectSupportedChart(plotArea) ? null : FindDeferredAdvancedChart(plotArea);
         var threeDBarChart = plotArea?.Element(ChartNs + "bar3DChart");
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
+        var threeDPieChart = plotArea?.Element(ChartNs + "pie3DChart");
         var pieChart = plotArea?.Element(ChartNs + "pieChart");
         var doughnutChart = plotArea?.Element(ChartNs + "doughnutChart");
         bool read;
         if (doughnutChart is not null)
             read = TryReadPieFamilyChart(chartXml, doughnutChart, sheetId, ChartType.Doughnut, out chart);
+        else if (threeDPieChart is not null)
+            read = TryReadPieFamilyChart(chartXml, threeDPieChart, sheetId, ChartType.ThreeDPie, out chart);
         else if (pieChart is not null)
             read = TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, out chart);
         else if (bubbleChart is not null)

@@ -1,21 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Cut">
-<defs><style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style></defs>
 <rect width="32" height="32" fill="none"/>
-<g>
-<path class="line" d="M10 8l12 16M22 8L10 24"/><circle class="line" cx="9" cy="9" r="2.75"/><circle class="line" cx="9" cy="23" r="2.75"/>
-</g>
+<path fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round" d="M10 8l12 16M22 8L10 24"/>
+<circle fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" cx="9" cy="9" r="2.75"/>
+<circle fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" cx="9" cy="23" r="2.75"/>
 </svg>

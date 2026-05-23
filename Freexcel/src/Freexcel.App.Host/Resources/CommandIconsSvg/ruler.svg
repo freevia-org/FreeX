@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Ruler">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><path class="s" d="M10.8 36.72l25.92-19.44l6.48 8.64l-25.92 19.44zM18.36 32.94l-3.78-4.86M24.3 28.62l-3.24-4.32M30.24 24.3l-3.78-4.86"/>  </g>
+  <g><path d="M10.8 36.72l25.92-19.44l6.48 8.64l-25.92 19.44zM18.36 32.94l-3.78-4.86M24.3 28.62l-3.24-4.32M30.24 24.3l-3.78-4.86" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>  </g>
 </svg>
 

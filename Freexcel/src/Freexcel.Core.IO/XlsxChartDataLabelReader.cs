@@ -70,6 +70,7 @@ internal static class XlsxChartDataLabelReader
             || element.Name == ChartNs + "radarChart"
             || element.Name == ChartNs + "stockChart"
             || element.Name == ChartNs + "bubbleChart"
+            || element.Name == ChartNs + "pie3DChart"
             || element.Name == ChartNs + "pieChart"
             || element.Name == ChartNs + "doughnutChart");
 
