@@ -138,6 +138,21 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForFractionalSecondDateTimesAndTimes()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17 09:30:15.250\t09:30:15.250\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 15, 250)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(new DateTimeValue(new TimeSpan(0, 9, 30, 15, 250).TotalDays));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForStandaloneAmPmTimes()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
