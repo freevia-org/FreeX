@@ -1269,7 +1269,8 @@ public sealed class DataToolDialogTests
     [Fact]
     public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.Planning.cs"));
         var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
         source.Should().Contain("_Select All");
