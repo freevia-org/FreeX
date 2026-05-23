@@ -396,6 +396,7 @@ public sealed class ChartDialogTests
             new[]
             {
                 "ChartFormatDialogs.cs",
+                "ChartDataLabelsDialog.cs",
                 "ChartErrorBarsDialog.cs",
                 "ChartTrendlineOptionsDialog.cs",
                 "ChartSeriesFormatDialog.cs"
