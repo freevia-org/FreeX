@@ -14,6 +14,7 @@ public enum PasteSpecialOperation
 public enum PasteSpecialContentKind
 {
     Default,
+    AllUsingSourceTheme,
     AllExceptBorders,
     AllMergingConditionalFormats,
     ValuesAndNumberFormats,
