@@ -32,6 +32,15 @@ public static partial class BuiltInFunctions
             ? new DateTime(1899, 12, 30).AddDays(serial + 1)
             : new DateTime(1899, 12, 30).AddDays(serial);
 
+    private static bool TryGetFinancialDate(double serial, out DateTime date)
+    {
+        date = default;
+        if (!double.IsFinite(serial) || serial < 0 || serial > 2958465.0)
+            return false;
+        date = SerialToDate(serial);
+        return true;
+    }
+
     private static double DateToSerial(DateTime d) =>
         d < new DateTime(1900, 3, 1)
             ? (d - new DateTime(1899, 12, 30)).TotalDays - 1
@@ -855,7 +864,8 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double price = CalcBondPrice(sd, md, rate, yld, redemption, frequency, basis);
         return NumberResult(price);
@@ -876,7 +886,8 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         // Newton-Raphson: find y such that Price(y) = pr
         double y = 0.1;
@@ -905,7 +916,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (discount <= 0 || redemption <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dcf = DayCountFraction(sd, md, basis);
         return NumberResult(redemption * (1 - discount * dcf));
@@ -924,7 +936,9 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity), id = SerialToDate(issue);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md) ||
+            !TryGetFinancialDate(issue, out DateTime id)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dim = DayCountFraction(id, md, basis);
         double dsm = DayCountFraction(sd, md, basis);
@@ -943,7 +957,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (pr <= 0 || redemption <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dcf = DayCountFraction(sd, md, basis);
         if (dcf <= 0) return ErrorValue.Num;
@@ -963,7 +978,9 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity), id = SerialToDate(issue);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md) ||
+            !TryGetFinancialDate(issue, out DateTime id)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         double dim = DayCountFraction(id, md, basis);
         double dsm = DayCountFraction(sd, md, basis);
