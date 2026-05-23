@@ -738,6 +738,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "A1", new NumberValue(1));
         Set(sheet, "B1", new NumberValue(2));
         Set(sheet, "C1", new NumberValue(3));
+        sheet.BackgroundImage = new WorksheetBackgroundImage(MinimalPngBytes(), "image/png", "corpus-background.png");
         sheet.Pictures.Add(new PictureModel
         {
             Name = "Corpus Image 1",
