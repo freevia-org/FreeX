@@ -631,6 +631,8 @@ public partial class MainWindow
         bool? showPropertiesInTooltips = null,
         bool? showClassicLayout = null,
         bool? mergeAndCenterLabels = null,
+        bool? showItemsWithNoDataOnRows = null,
+        bool? showItemsWithNoDataOnColumns = null,
         bool? pageOverThenDown = null,
         int? pageWrap = null)
     {
@@ -672,6 +674,8 @@ public partial class MainWindow
                     showPropertiesInTooltips,
                     showClassicLayout,
                     mergeAndCenterLabels,
+                    showItemsWithNoDataOnRows,
+                    showItemsWithNoDataOnColumns,
                     pageOverThenDown,
                     pageWrap),
                 "PivotTable Options"))
@@ -897,6 +901,8 @@ public partial class MainWindow
             showPropertiesInTooltips: result.ShowPropertiesInTooltips,
             showClassicLayout: result.ShowClassicLayout,
             mergeAndCenterLabels: result.MergeAndCenterLabels,
+            showItemsWithNoDataOnRows: result.ShowItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns: result.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: result.PageOverThenDown,
             pageWrap: result.PageWrap);
 
