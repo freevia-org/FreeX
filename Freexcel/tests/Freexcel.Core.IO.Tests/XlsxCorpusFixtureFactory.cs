@@ -975,6 +975,7 @@ internal static class XlsxCorpusFixtureFactory
     private static Workbook CreatePivotsWithFilters()
     {
         var workbook = NewWorkbook("generated-pivots-filters-002");
+        workbook.NumberFormatCatalog[165] = "#,##0.0 \"kg\"";
         var sheet = workbook.AddSheet("Pivot Filters");
         Set(sheet, "A1", new TextValue("Region"));
         Set(sheet, "B1", new TextValue("Category"));
@@ -1002,11 +1003,13 @@ internal static class XlsxCorpusFixtureFactory
             SourceSheetName = sheet.Name,
             SourceReference = "A1:C4",
             PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
-            RefreshOnLoad = true
+            RefreshOnLoad = true,
+            PreserveSourceSortFilter = false,
+            RefreshedBy = "Freexcel Corpus"
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
         cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
-        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4, ContainsNumber: true, MinValue: 80, MaxValue: 125));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 165, ContainsNumber: true, MinValue: 80, MaxValue: 125));
         workbook.PivotCaches.Add(cache);
 
         var style = new PivotTableStyleModel { Name = "FreexcelCorpusFilteredPivotStyle", AppliesToPivotTables = true };
@@ -1027,7 +1030,7 @@ internal static class XlsxCorpusFixtureFactory
         };
         pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
         pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
-        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 4));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 165, null, PivotShowValuesAs.None, null, null, "#,##0.0 \"kg\""));
         sheet.PivotTables.Add(pivot);
         return workbook;
     }
@@ -1348,7 +1351,11 @@ internal static class XlsxCorpusFixtureFactory
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 1);
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
-        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel", "Corpus", "2026");
+        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel &[Picture]", "Corpus", "2026");
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            new WorksheetHeaderFooterPicture(MinimalPngBytes(), "image/png", "header-logo.png", 96, 32),
+            null,
+            null);
         sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P", "");
         sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
         sheet.ViewTopRow = 4;
