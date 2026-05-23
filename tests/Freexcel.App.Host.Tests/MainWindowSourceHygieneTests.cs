@@ -1260,6 +1260,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void F6StatusBar_FocusesFirstZoomControlBeforeSliderFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        selectionSource.Should().Contain("return FocusStatusBar();");
+        selectionSource.Should().Contain("private bool FocusStatusBar()");
+        selectionSource.Should().Contain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
+        xaml.Should().Contain("x:Name=\"StatusZoomOutButton\"");
+        xaml.Should().Contain("x:Name=\"StatusZoomInButton\"");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
