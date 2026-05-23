@@ -2614,6 +2614,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_OmittedSearchMode_DefaultsFirstToLast()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,\"\",0,)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
     public void Xmatch_ExactMatch_ReturnsPosition()
     {
         var sheet = MakeSheet(
