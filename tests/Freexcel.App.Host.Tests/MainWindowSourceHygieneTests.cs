@@ -822,6 +822,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAccessUndoRedoButtons_ReflectCommandStackState()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+
+        source.Should().Contain("UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);");
+        source.Should().Contain("RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);");
+    }
+
+    [Fact]
     public void WorkbookUiStateController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
