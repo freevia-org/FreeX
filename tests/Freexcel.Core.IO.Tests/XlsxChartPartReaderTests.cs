@@ -9,6 +9,7 @@ public sealed class XlsxChartPartReaderTests
 {
     [Theory]
     [InlineData("surfaceChart", ChartType.Surface)]
+    [InlineData("surface3DChart", ChartType.ThreeDSurface)]
     [InlineData("treemapChart", ChartType.Treemap)]
     [InlineData("sunburstChart", ChartType.Sunburst)]
     [InlineData("histogramChart", ChartType.Histogram)]
@@ -24,7 +25,7 @@ public sealed class XlsxChartPartReaderTests
             .Should().BeTrue();
 
         chart.Type.Should().Be(expectedType);
-        ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        ChartTypeSupport.IsRenderable(chart.Type).Should().Be(chart.Type is ChartType.Surface or ChartType.ThreeDSurface);
         chart.DataRange.Should().Be(new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 4, 2)));
