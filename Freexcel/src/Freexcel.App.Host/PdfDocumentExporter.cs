@@ -152,6 +152,7 @@ internal static class PdfDocumentExporter
         const string printScalingKey = "/PrintScaling";
         const string noPrintScalingName = "/None";
 
+        pdf.PageLayout = PdfPageLayout.SinglePage;
         GetOrCreateViewerPreferences(pdf).Elements.SetName(printScalingKey, noPrintScalingName);
     }
 

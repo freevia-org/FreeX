@@ -450,6 +450,28 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_RequestsSinglePageInitialLayout()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 2);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadPageLayout(pdf).Should().Be("/SinglePage");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesRequestedPageRange()
     {
         StaTestRunner.Run(() =>
@@ -840,4 +862,7 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetName("/PrintScaling");
+
+    private static string? ReadPageLayout(PdfDocument pdf) =>
+        pdf.Internals.Catalog.Elements.GetName("/PageLayout");
 }

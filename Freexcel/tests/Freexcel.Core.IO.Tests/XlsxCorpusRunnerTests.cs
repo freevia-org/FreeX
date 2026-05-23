@@ -90,6 +90,28 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCorpusRows_IncludeDataValidationMessages()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("data-validation"))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("validation prompt/error message metadata should be covered by deterministic generated fixtures");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id))
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DataValidations)
+            .Should().Contain(validation =>
+                !string.IsNullOrWhiteSpace(validation.ErrorTitle) &&
+                !string.IsNullOrWhiteSpace(validation.ErrorMessage) &&
+                !string.IsNullOrWhiteSpace(validation.PromptTitle) &&
+                !string.IsNullOrWhiteSpace(validation.PromptMessage));
+    }
+
+    [Fact]
     public void GeneratedKnownGapRows_DeclareExpectedWarningsAndNotes()
     {
         var rows = ReadManifestRows()
@@ -630,6 +652,7 @@ public class XlsxCorpusRunnerTests
             sheet.CellCount,
             sheet.EnumerateCells().Count(item => item.Cell.HasFormula),
             sheet.MergedRegions.Count,
+            sheet.DataValidations.Select(CaptureDataValidationSummary).ToArray(),
             sheet.DataValidations.Count,
             sheet.ConditionalFormats.Count,
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
@@ -855,6 +878,23 @@ public class XlsxCorpusRunnerTests
             picture.IsVisible,
             picture.ContentType ?? "",
             picture.ImageBytes?.Length ?? 0);
+
+    private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
+        new(
+            validation.Type,
+            validation.Operator,
+            validation.Formula1 ?? "",
+            validation.Formula2 ?? "",
+            validation.AllowBlank,
+            validation.ShowDropdown,
+            validation.AlertStyle,
+            validation.ShowInputMessage,
+            validation.ShowErrorMessage,
+            validation.ErrorTitle ?? "",
+            validation.ErrorMessage ?? "",
+            validation.PromptTitle ?? "",
+            validation.PromptMessage ?? "",
+            ToRangeSummary(validation.AppliesTo));
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -1086,6 +1126,7 @@ public class XlsxCorpusRunnerTests
         int CellCount,
         int FormulaCount,
         int MergedRegionCount,
+        IReadOnlyList<DataValidationSummary> DataValidations,
         int DataValidationCount,
         int ConditionalFormatCount,
         int ColorScaleConditionalFormatCount,
@@ -1299,6 +1340,22 @@ public class XlsxCorpusRunnerTests
         bool IsVisible,
         string ContentType,
         int ImageByteCount);
+
+    private sealed record DataValidationSummary(
+        DvType Type,
+        DvOperator Operator,
+        string Formula1,
+        string Formula2,
+        bool AllowBlank,
+        bool ShowDropdown,
+        DvAlertStyle AlertStyle,
+        bool ShowInputMessage,
+        bool ShowErrorMessage,
+        string ErrorTitle,
+        string ErrorMessage,
+        string PromptTitle,
+        string PromptMessage,
+        ChartRangeSummary AppliesTo);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
