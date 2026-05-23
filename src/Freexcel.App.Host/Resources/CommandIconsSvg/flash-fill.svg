@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Flash Fill">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><path class="yellow" stroke="#202124" stroke-width="1.8" d="M30.24 6.48L14.04 29.16h11.88l-4.32 18.36l18.36-24.84h-12.96z"/>  </g>
+  <g><path stroke="#202124" stroke-width="1.8" d="M30.24 6.48L14.04 29.16h11.88l-4.32 18.36l18.36-24.84h-12.96z" fill="#ffb900"/>  </g>
 </svg>
 

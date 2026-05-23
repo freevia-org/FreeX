@@ -373,68 +373,13 @@ public static class RibbonIconFactory
 
     private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
     {
-        if (UseBaseHomeIconArtwork(slug))
-        {
-            yield return slug;
-            yield break;
-        }
+        if (size <= 22)
+            yield return slug + "-small";
+        else
+            yield return slug + "-large";
 
-        if (!monochrome)
-            yield return size <= 22 ? slug + "-small" : slug + "-large";
         yield return slug;
     }
-
-    private static bool UseBaseHomeIconArtwork(string slug) => slug switch
-    {
-        "paste" or
-        "cut" or
-        "copy" or
-        "format-painter" or
-        "bold" or
-        "italic" or
-        "underline" or
-        "double-underline" or
-        "strikethrough" or
-        "borders" or
-        "border-presets" or
-        "grow-font" or
-        "shrink-font" or
-        "increase-font-size" or
-        "decrease-font-size" or
-        "font-color" or
-        "fill-color" or
-        "theme-colors" or
-        "top-align" or
-        "middle-align" or
-        "bottom-align" or
-        "align-left" or
-        "center" or
-        "align-right" or
-        "orientation" or
-        "decrease-indent" or
-        "increase-indent" or
-        "wrap-text" or
-        "merge-center" or
-        "accounting-currency" or
-        "percent-style" or
-        "comma-style" or
-        "increase-decimal" or
-        "decrease-decimal" or
-        "conditional-formatting" or
-        "format-as-table" or
-        "cell-styles" or
-        "styles" or
-        "cells" or
-        "insert" or
-        "delete" or
-        "format" or
-        "editing" or
-        "sort" or
-        "find" or
-        "clear" or
-        "fill" => true,
-        _ => false
-    };
 
     private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath, double targetSize)
     {
@@ -442,31 +387,18 @@ public static class RibbonIconFactory
         if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
             return drawing;
 
-        // For 32×32 SVGs at small (≤22px) slots: scale content to 20×20 and compensate stroke widths
-        // so visual weight matches the natively-20px crisp icons.
-        var is32x32 = Math.Abs(bounds.Width - 32) < 0.5 && Math.Abs(bounds.Height - 32) < 0.5;
-        if (is32x32 && targetSize <= 22)
-        {
-            const double scale = 20.0 / 32.0; // 0.625
-            var mutableDrawing = drawing.IsFrozen ? (Drawing)drawing.Clone() : drawing;
-            ScalePenThicknesses(mutableDrawing, 1.0 / scale); // ×1.6: compensates for scale shrink
-            var scaledGroup = new DrawingGroup();
-            scaledGroup.Transform = new System.Windows.Media.ScaleTransform(scale, scale);
-            scaledGroup.Children.Add(mutableDrawing);
-            var group = new DrawingGroup();
-            group.Children.Add(new GeometryDrawing(Brushes.Transparent, null,
-                new RectangleGeometry(new Rect(0, 0, 20, 20))));
-            group.Children.Add(scaledGroup);
-            group.Freeze();
-            return group;
-        }
+        var designSize = bounds.Width;
+        var scale = targetSize / designSize;
+
+        var mutableDrawing = drawing.IsFrozen ? (Drawing)drawing.Clone() : drawing;
+        ScalePenThicknesses(mutableDrawing, 1.0 / scale);
 
         var normalGroup = new DrawingGroup();
         normalGroup.Children.Add(new GeometryDrawing(
             Brushes.Transparent,
             null,
             new RectangleGeometry(bounds)));
-        normalGroup.Children.Add(drawing);
+        normalGroup.Children.Add(mutableDrawing);
         normalGroup.Freeze();
         return normalGroup;
     }

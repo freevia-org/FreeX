@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Add Sheet">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><path fill="#f8fafc" stroke="#202124" stroke-width="1.7" d="M9.72 23.76h30.24v10.8H9.72z"/><circle class="green2" cx="29.16" cy="16.2" r="4.86"/><path stroke="#fff" stroke-width="1.5" d="M29.16 12.96v6.48M25.92 16.2h6.48"/>  </g>
+  <g><path fill="#f8fafc" stroke="#202124" stroke-width="1.7" d="M9.72 23.76h30.24v10.8H9.72z"/><circle cx="29.16" cy="16.2" r="4.86" fill="#dff6dd"/><path stroke="#fff" stroke-width="1.5" d="M29.16 12.96v6.48M25.92 16.2h6.48"/>  </g>
 </svg>
 

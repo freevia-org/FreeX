@@ -1722,17 +1722,6 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button Content="Background" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="BackgroundBtn_Click"
-                                        local:RibbonTooltip.Title="Background"
-                                        local:RibbonTooltip.KeyTip="BG"
-                                        local:RibbonTooltip.Description="Choose or clear a display-only worksheet background image.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Choose Background..." local:RibbonTooltip.KeyTip="C" Click="BackgroundChooseMenuItem_Click"/>
-                                            <MenuItem Header="Delete Background" local:RibbonTooltip.KeyTip="D" Click="BackgroundClearMenuItem_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Themes" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1789,10 +1778,6 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button Content="Scale" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
-                                        local:RibbonTooltip.Title="Scale to Fit"
-                                        local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Scale printed output by percentage or fit it to a fixed page count."/>
                                 <Button Content="Breaks" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreaksBtn_Click"
                                         local:RibbonTooltip.Title="Breaks"
                                         local:RibbonTooltip.KeyTip="B"
@@ -1802,6 +1787,17 @@
                                             <MenuItem Header="Insert Page Break" local:RibbonTooltip.KeyTip="I" Click="InsertPageBreakMenuItem_Click"/>
                                             <MenuItem Header="Remove Page Break" local:RibbonTooltip.KeyTip="R" Click="RemovePageBreakMenuItem_Click"/>
                                             <MenuItem Header="Reset All Page Breaks" local:RibbonTooltip.KeyTip="A" Click="ResetAllPageBreaksMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button Content="Background" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="BackgroundBtn_Click"
+                                        local:RibbonTooltip.Title="Background"
+                                        local:RibbonTooltip.KeyTip="BG"
+                                        local:RibbonTooltip.Description="Choose or clear a display-only worksheet background image.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Choose Background..." local:RibbonTooltip.KeyTip="C" Click="BackgroundChooseMenuItem_Click"/>
+                                            <MenuItem Header="Delete Background" local:RibbonTooltip.KeyTip="D" Click="BackgroundClearMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
@@ -1822,18 +1818,49 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Scale to Fit ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Scale" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
+                                        local:RibbonTooltip.Title="Scale to Fit"
+                                        local:RibbonTooltip.KeyTip="SF"
+                                        local:RibbonTooltip.Description="Scale printed output by percentage or fit it to a fixed page count."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Scale to Fit" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Sheet Options ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
-                                <CheckBox Content="Print Gridlines" Margin="4,3" Click="PrintGridlinesChk_Click"
-                                          local:RibbonTooltip.Title="Print Gridlines"
-                                          local:RibbonTooltip.KeyTip="PG"
-                                          local:RibbonTooltip.Description="Print worksheet gridlines on each page."/>
-                                <CheckBox Content="Print Headings"  Margin="4,3" Click="PrintHeadingsChk_Click"
-                                          local:RibbonTooltip.Title="Print Headings"
-                                          local:RibbonTooltip.KeyTip="PH"
-                                          local:RibbonTooltip.Description="Print row and column headings on each page."/>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
+                                    <TextBlock Text="Gridlines" FontSize="10" Margin="4,2,4,0" Foreground="#444"/>
+                                    <CheckBox x:Name="PageLayoutViewGridlinesChk" Content="View" Margin="4,1" IsChecked="True"
+                                              Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
+                                              local:RibbonTooltip.Title="View Gridlines"
+                                              local:RibbonTooltip.KeyTip="VG"
+                                              local:RibbonTooltip.Description="Show or hide cell gridlines on the worksheet."/>
+                                    <CheckBox x:Name="PageLayoutPrintGridlinesChk" Content="Print" Margin="4,1"
+                                              Click="PrintGridlinesChk_Click"
+                                              local:RibbonTooltip.Title="Print Gridlines"
+                                              local:RibbonTooltip.KeyTip="PG"
+                                              local:RibbonTooltip.Description="Print worksheet gridlines on each page."/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Headings" FontSize="10" Margin="4,2,4,0" Foreground="#444"/>
+                                    <CheckBox x:Name="PageLayoutViewHeadingsChk" Content="View" Margin="4,1" IsChecked="True"
+                                              Checked="ViewHeadersChk_Changed" Unchecked="ViewHeadersChk_Changed"
+                                              local:RibbonTooltip.Title="View Headings"
+                                              local:RibbonTooltip.KeyTip="VH"
+                                              local:RibbonTooltip.Description="Show or hide row and column headings."/>
+                                    <CheckBox x:Name="PageLayoutPrintHeadingsChk" Content="Print" Margin="4,1"
+                                              Click="PrintHeadingsChk_Click"
+                                              local:RibbonTooltip.Title="Print Headings"
+                                              local:RibbonTooltip.KeyTip="PH"
+                                              local:RibbonTooltip.Description="Print row and column headings on each page."/>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sheet Options" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1945,42 +1972,44 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Trace Precedents"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TracePrecedentsBtn_Click"
-                                        local:RibbonTooltip.Title="Trace Precedents"
-                                        local:RibbonTooltip.KeyTip="TP"
-                                        local:RibbonTooltip.Description="Show arrows pointing to the cells that supply values to the selected formula."/>
-                                <Button Content="Trace Dependents"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TraceDependentsBtn_Click"
-                                        local:RibbonTooltip.Title="Trace Dependents"
-                                        local:RibbonTooltip.KeyTip="TD"
-                                        local:RibbonTooltip.Description="Show arrows pointing to the cells that depend on the selected cell."/>
-                                <Button Content="Remove Arrows"     Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveArrowsBtn_Click"
-                                        local:RibbonTooltip.Title="Remove Arrows"
-                                        local:RibbonTooltip.KeyTip="RA"
-                                        local:RibbonTooltip.Description="Remove the tracer arrows added by Trace Precedents or Trace Dependents."/>
-                                <Button Content="Show Formulas"     Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShowFormulasBtn_Click"
-                                        local:RibbonTooltip.Title="Show Formulas"
-                                        local:RibbonTooltip.KeyTip="SF"
-                                        local:RibbonTooltip.Description="Display formulas in all cells instead of their calculated results."/>
-                                <Button Content="Error Checking"    Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ErrorCheckBtn_Click"
-                                        local:RibbonTooltip.Title="Error Checking"
-                                        local:RibbonTooltip.KeyTip="EC"
-                                        local:RibbonTooltip.Description="Check for common errors in the formulas on this sheet, or open error-checking options.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Error Checking..." local:RibbonTooltip.KeyTip="E" Click="ErrorCheckBtn_Click"/>
-                                            <MenuItem Header="Error Checking Options..." local:RibbonTooltip.KeyTip="O" Click="SsOptionsBtn_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button Content="Evaluate Formula"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="EvaluateFormulaBtn_Click"
-                                        local:RibbonTooltip.Title="Evaluate Formula"
-                                        local:RibbonTooltip.KeyTip="V"
-                                        local:RibbonTooltip.Description="Show the selected formula and its current calculated result."/>
-                                <Button Content="Watch Window"      Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="WatchWindowBtn_Click"
-                                        local:RibbonTooltip.Title="Watch Window"
-                                        local:RibbonTooltip.KeyTip="W"
-                                        local:RibbonTooltip.Description="Show watched cells and their current values."/>
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel VerticalAlignment="Center">
+                                    <Button Content="Trace Precedents"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TracePrecedentsBtn_Click"
+                                            local:RibbonTooltip.Title="Trace Precedents"
+                                            local:RibbonTooltip.KeyTip="TP"
+                                            local:RibbonTooltip.Description="Show arrows pointing to the cells that supply values to the selected formula."/>
+                                    <Button Content="Trace Dependents"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TraceDependentsBtn_Click"
+                                            local:RibbonTooltip.Title="Trace Dependents"
+                                            local:RibbonTooltip.KeyTip="TD"
+                                            local:RibbonTooltip.Description="Show arrows pointing to the cells that depend on the selected cell."/>
+                                    <Button Content="Remove Arrows"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveArrowsBtn_Click"
+                                            local:RibbonTooltip.Title="Remove Arrows"
+                                            local:RibbonTooltip.KeyTip="RA"
+                                            local:RibbonTooltip.Description="Remove the tracer arrows added by Trace Precedents or Trace Dependents."/>
+                                    <Button Content="Show Formulas"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShowFormulasBtn_Click"
+                                            local:RibbonTooltip.Title="Show Formulas"
+                                            local:RibbonTooltip.KeyTip="SF"
+                                            local:RibbonTooltip.Description="Display formulas in all cells instead of their calculated results."/>
+                                    <Button Content="Error Checking"    Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ErrorCheckBtn_Click"
+                                            local:RibbonTooltip.Title="Error Checking"
+                                            local:RibbonTooltip.KeyTip="EC"
+                                            local:RibbonTooltip.Description="Check for common errors in the formulas on this sheet, or open error-checking options.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Error Checking..." local:RibbonTooltip.KeyTip="E" Click="ErrorCheckBtn_Click"/>
+                                                <MenuItem Header="Error Checking Options..." local:RibbonTooltip.KeyTip="O" Click="SsOptionsBtn_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                    <Button Content="Evaluate Formula"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="EvaluateFormulaBtn_Click"
+                                            local:RibbonTooltip.Title="Evaluate Formula"
+                                            local:RibbonTooltip.KeyTip="V"
+                                            local:RibbonTooltip.Description="Show the selected formula and its current calculated result."/>
+                                    <Button Content="Watch Window"      Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="WatchWindowBtn_Click"
+                                            local:RibbonTooltip.Title="Watch Window"
+                                            local:RibbonTooltip.KeyTip="W"
+                                            local:RibbonTooltip.Description="Show watched cells and their current values."/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center">
                                     <Button Content="Add Watch" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AddWatchBtn_Click"
                                             local:RibbonTooltip.Title="Add Watch"
                                             local:RibbonTooltip.KeyTip="AW"
@@ -2355,19 +2384,19 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Normal" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
+                                <Button Content="Normal" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
                                         local:RibbonTooltip.Title="Normal"
                                         local:RibbonTooltip.KeyTip="N"
                                         local:RibbonTooltip.Description="Show the worksheet in the standard editing view."/>
-                                <Button Content="Page Break Preview" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
+                                <Button Content="Page Break Preview" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
                                         local:RibbonTooltip.Title="Page Break Preview"
                                         local:RibbonTooltip.KeyTip="P"
                                         local:RibbonTooltip.Description="Show manual page breaks and print area boundaries while editing."/>
-                                <Button Content="Page Layout" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
+                                <Button Content="Page Layout" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
                                         local:RibbonTooltip.Title="Page Layout"
                                         local:RibbonTooltip.KeyTip="L"
                                         local:RibbonTooltip.Description="Show the sheet with print layout boundaries."/>
-                                <Button Content="Custom Views" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
+                                <Button Content="Custom Views" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
                                         local:RibbonTooltip.Title="Custom Views"
                                         local:RibbonTooltip.KeyTip="C"
                                         local:RibbonTooltip.Description="View, add, show, and delete saved workbook views."/>
@@ -2474,11 +2503,11 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="New Window" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                <Button Content="New Window" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
                                         local:RibbonTooltip.Title="New Window"
                                         local:RibbonTooltip.KeyTip="NW"
                                         local:RibbonTooltip.Description="Deferred: requires multiple live windows over the same workbook session."/>
-                                <Button Content="Arrange All" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
+                                <Button Content="Arrange All" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
                                         local:RibbonTooltip.Title="Arrange All"
                                         local:RibbonTooltip.KeyTip="A"
                                         local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
@@ -2491,21 +2520,19 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <StackPanel VerticalAlignment="Center">
-                                    <Button Content="Side by Side" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                            local:RibbonTooltip.Title="View Side by Side"
-                                            local:RibbonTooltip.KeyTip="B"
-                                            local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
-                                    <Button Content="Sync Scrolling" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                            local:RibbonTooltip.Title="Synchronous Scrolling"
-                                            local:RibbonTooltip.KeyTip="SS"
-                                            local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
-                                    <Button Content="Reset Position" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                            local:RibbonTooltip.Title="Reset Window Position"
-                                            local:RibbonTooltip.KeyTip="RP"
-                                            local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
-                                </StackPanel>
-                                <Button Content="Switch Windows" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                <Button Content="Side by Side" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Side by Side"
+                                        local:RibbonTooltip.KeyTip="B"
+                                        local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
+                                <Button Content="Sync Scrolling" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Sync Scrolling"
+                                        local:RibbonTooltip.KeyTip="SS"
+                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
+                                <Button Content="Reset Position" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Reset Position"
+                                        local:RibbonTooltip.KeyTip="RP"
+                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
+                                <Button Content="Switch Windows" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
                                         local:RibbonTooltip.Title="Switch Windows"
                                         local:RibbonTooltip.KeyTip="W"
                                         local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
