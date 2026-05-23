@@ -10,9 +10,7 @@ public static partial class XlsxChartPartReader
     public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart)
     {
         chart = new ChartModel();
-        var plotArea = chartXml.Root?
-            .Element(ChartNs + "chart")?
-            .Element(ChartNs + "plotArea");
+        var plotArea = FindPlotArea(chartXml);
         var barCharts = plotArea?.Elements(ChartNs + "barChart").ToList() ?? [];
         var barChart = barCharts.FirstOrDefault();
         var lineCharts = plotArea?.Elements(ChartNs + "lineChart").ToList() ?? [];
@@ -81,4 +79,16 @@ public static partial class XlsxChartPartReader
         return read;
     }
 
+    private static XElement? FindPlotArea(XDocument chartXml)
+    {
+        var standardPlotArea = chartXml.Root?
+            .Element(ChartNs + "chart")?
+            .Element(ChartNs + "plotArea");
+        if (standardPlotArea is not null)
+            return standardPlotArea;
+
+        return chartXml.Root?
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "plotArea");
+    }
 }
