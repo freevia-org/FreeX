@@ -117,6 +117,31 @@ public sealed class SortCommandTests
     }
 
     [Fact]
+    public void SortCommand_CellFillColorTarget_MovesSelectedColorToTop()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var red = new CellColor(255, 0, 0);
+        var blueStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 0, 255) });
+        var redStyle = workbook.RegisterStyle(new CellStyle { FillColor = red });
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2));
+        SetStyledRow(sheet, 1, "Plain", StyleId.Default);
+        SetStyledRow(sheet, 2, "Blue", blueStyle);
+        SetStyledRow(sheet, 3, "Red 1", redStyle);
+        SetStyledRow(sheet, 4, "Red 2", redStyle);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true, SortOn.CellColor, red)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Red 1"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Red 2"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Plain"));
+        sheet.GetValue(4, 2).Should().Be(new TextValue("Blue"));
+    }
+
+    [Fact]
     public void SortCommand_CanSortRowsByFontColorDescending()
     {
         var workbook = new Workbook("test");
@@ -136,6 +161,31 @@ public sealed class SortCommandTests
         sheet.GetValue(1, 2).Should().Be(new TextValue("Red"));
         sheet.GetValue(2, 2).Should().Be(new TextValue("Blue"));
         sheet.GetValue(3, 2).Should().Be(new TextValue("Plain"));
+    }
+
+    [Fact]
+    public void SortCommand_FontColorTarget_MovesSelectedColorToBottom()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var blue = new CellColor(0, 0, 255);
+        var redStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(255, 0, 0) });
+        var blueStyle = workbook.RegisterStyle(new CellStyle { FontColor = blue });
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2));
+        SetStyledRow(sheet, 1, "Plain", StyleId.Default);
+        SetStyledRow(sheet, 2, "Blue 1", blueStyle);
+        SetStyledRow(sheet, 3, "Red", redStyle);
+        SetStyledRow(sheet, 4, "Blue 2", blueStyle);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, false, SortOn.FontColor, blue)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Plain"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Red"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Blue 1"));
+        sheet.GetValue(4, 2).Should().Be(new TextValue("Blue 2"));
     }
 
     private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)
