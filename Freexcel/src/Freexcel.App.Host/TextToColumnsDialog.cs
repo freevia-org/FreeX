@@ -10,6 +10,8 @@ namespace Freexcel.App.Host;
 
 public sealed partial class TextToColumnsDialog : Window
 {
+    private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
+
     private readonly RadioButton _delimitedButton = new() { Content = "_Delimited", IsChecked = true };
     private readonly RadioButton _fixedWidthButton = new() { Content = "Fi_xed width" };
     private readonly CheckBox _tabBox = new() { Content = "_Tab" };
@@ -267,7 +269,7 @@ public sealed partial class TextToColumnsDialog : Window
 
     private StackPanel CreateDateFormatRow()
     {
-        foreach (var value in new[] { "MDY", "DMY", "YMD" })
+        foreach (var value in DateColumnFormatLabels)
             _dateFormatBox.Items.Add(value);
         _dateFormatBox.SelectedIndex = 0;
 
@@ -756,17 +758,28 @@ public sealed partial class TextToColumnsDialog : Window
         {
             "DMY" => TextToColumnsColumnFormat.DateDMY,
             "YMD" => TextToColumnsColumnFormat.DateYMD,
+            "MYD" => TextToColumnsColumnFormat.DateMYD,
+            "DYM" => TextToColumnsColumnFormat.DateDYM,
+            "YDM" => TextToColumnsColumnFormat.DateYDM,
             _ => TextToColumnsColumnFormat.DateMDY
         };
 
     private static bool IsDateColumnFormat(TextToColumnsColumnFormat format) =>
-        format is TextToColumnsColumnFormat.DateMDY or TextToColumnsColumnFormat.DateDMY or TextToColumnsColumnFormat.DateYMD;
+        format is TextToColumnsColumnFormat.DateMDY
+            or TextToColumnsColumnFormat.DateDMY
+            or TextToColumnsColumnFormat.DateYMD
+            or TextToColumnsColumnFormat.DateMYD
+            or TextToColumnsColumnFormat.DateDYM
+            or TextToColumnsColumnFormat.DateYDM;
 
     private static string DateColumnFormatLabel(TextToColumnsColumnFormat format) =>
         format switch
         {
             TextToColumnsColumnFormat.DateDMY => "DMY",
             TextToColumnsColumnFormat.DateYMD => "YMD",
+            TextToColumnsColumnFormat.DateMYD => "MYD",
+            TextToColumnsColumnFormat.DateDYM => "DYM",
+            TextToColumnsColumnFormat.DateYDM => "YDM",
             _ => "MDY"
         };
 

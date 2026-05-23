@@ -110,6 +110,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var modelSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogModel.cs"));
+
+        foreach (var dateOrder in new[] { "MDY", "DMY", "YMD", "MYD", "DYM", "YDM" })
+        {
+            dialogSource.Should().Contain($"\"{dateOrder}\"");
+            modelSource.Should().Contain($"Date{dateOrder}");
+        }
+    }
+
+    [Fact]
     public void TextToColumnsDialog_UsesExcelWizardChromeAroundDelimitedFlow()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
