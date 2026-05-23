@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
+using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -12,8 +13,9 @@ public partial class MainWindow
 {
     private void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
+        string[] dataExtensions = [".csv", ".txt", ".tsv", ".tab"];
         var adapters = _fileAdapters
-            .Where(adapter => adapter.Extension is ".csv")
+            .Where(adapter => dataExtensions.Contains(adapter.Extension, StringComparer.OrdinalIgnoreCase))
             .ToList();
         if (adapters.Count == 0)
         {
@@ -21,12 +23,12 @@ public partial class MainWindow
             return;
         }
 
-        var filter = string.Join("|", adapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
+        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
         var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
         if (dialog.ShowDialog() != true) return;
 
         var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
-        var adapter = adapters.FirstOrDefault(a => a.Extension == ext);
+        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out _);
         if (adapter is null) return;
 
         try

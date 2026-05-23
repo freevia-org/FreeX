@@ -17,8 +17,7 @@ public static class FileSavePlanner
         if (string.IsNullOrWhiteSpace(extension))
             return false;
 
-        var adapter = adapters.FirstOrDefault(candidate =>
-            string.Equals(candidate.Extension, extension, StringComparison.OrdinalIgnoreCase));
+        var adapter = FileDialogFilterBuilder.FindSaveAdapter(adapters, extension, out _);
         if (adapter is null)
             return false;
 
