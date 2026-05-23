@@ -153,6 +153,7 @@ public sealed class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
         series.Items.Should().HaveCount(4);
+        series.Items.Select(item => item.Color).Should().OnlyHaveUniqueItems();
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Bottom);
         model.Axes.Should().Contain(axis => axis.Position == AxisPosition.Left);
     }
