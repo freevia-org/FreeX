@@ -115,11 +115,12 @@ public sealed class DataTableDialog : Window
         {
             Content = "...",
             Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
+            Margin = new Thickness(6, 0, 0, 0),
             Tag = textBox
         };
         AutomationProperties.SetName(pickerButton, automationName);
         pickerButton.Click += ReferencePickerButton_Click;
+        DockPanel.SetDock(pickerButton, Dock.Right);
         panel.Children.Add(pickerButton);
         panel.Children.Add(textBox);
         return panel;
