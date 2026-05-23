@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -105,7 +106,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_destinationBox");
         source.Should().Contain("_formatColumnBox");
         source.Should().Contain("BuildColumnFormats");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
     }
 
     [Fact]
@@ -552,6 +553,7 @@ public sealed class DataToolDialogTests
     public void AdvancedFilterDialog_ExposesExcelStyleModesAndReferencePickers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+        var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
@@ -563,13 +565,13 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = automationName");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        pickerSource.Should().Contain("Collapse dialog and select range");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().NotContain("Text = \"E1:F2\"");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
     }
 
     [Fact]
@@ -840,12 +842,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(grid, 1, \"_Column input cell:\", _columnInputBox");
         source.Should().NotContain("_formulaBox");
         source.Should().NotContain("_modeBox");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("DockPanel.SetDock(pickerButton, Dock.Right)");
-        source.Should().Contain("Margin = new Thickness(6, 0, 0, 0)");
+        source.Should().Contain("DialogReferencePicker.CreateEditor(textBox, automationName, new Thickness(6, 0, 0, 0), Dock.Right)");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
@@ -863,7 +863,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_My table has headers\"");
         source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("Select table range");
     }
 
@@ -884,6 +884,29 @@ public sealed class DataToolDialogTests
         result.Range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 3)));
         result.FirstRowHasHeaders.Should().BeFalse();
         result.TableStyleName.Should().Be("TableStyleMedium2");
+    }
+
+    [Fact]
+    public void DialogReferencePicker_RaisesSelectionRequestAndMarksCollapseAffordance()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var box = new TextBox { Text = "A1:C10" };
+            DialogReferencePickerRequest? captured = null;
+
+            var request = DialogReferencePicker.RequestSelection(
+                box,
+                "Select table range",
+                next => captured = next);
+
+            request.Target.Should().BeSameAs(box);
+            request.AutomationName.Should().Be("Select table range");
+            request.CurrentText.Should().Be("A1:C10");
+            captured.Should().Be(request);
+
+            var button = DialogReferencePicker.CreateButton(box, "Select table range");
+            button.ToolTip.Should().Be("Collapse dialog and select range");
+        });
     }
 
     [Fact]
