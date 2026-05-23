@@ -59,7 +59,11 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
             return new CommandOutcome(false, "PivotChart was not found.");
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
