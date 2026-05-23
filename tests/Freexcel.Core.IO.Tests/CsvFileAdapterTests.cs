@@ -192,4 +192,18 @@ public sealed class CsvFileAdapterTests
         cell!.FormulaText.Should().BeNull();
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
+
+    [Fact]
+    public void Save_WritesFormulaCellsAsExcelFormulaFields()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 2), "A1*2");
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("2,=A1*2\r\n");
+    }
 }
