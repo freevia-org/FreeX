@@ -269,6 +269,8 @@ public sealed class PivotWorkflowDialogTests
             showPropertiesInTooltips: false,
             showClassicLayout: true,
             mergeAndCenterLabels: true,
+            pageOverThenDown: true,
+            pageWrap: 4,
             compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
@@ -297,6 +299,8 @@ public sealed class PivotWorkflowDialogTests
             ShowPropertiesInTooltips: false,
             ShowClassicLayout: true,
             MergeAndCenterLabels: true,
+            PageOverThenDown: true,
+            PageWrap: 4,
             CompactRowLabelIndent: 3));
     }
 
@@ -359,6 +363,8 @@ public sealed class PivotWorkflowDialogTests
             ShowPropertiesInTooltips = false,
             ShowClassicLayout = true,
             MergeAndCenterLabels = true,
+            PageOverThenDown = true,
+            PageWrap = 2,
             CompactRowLabelIndent = 5
         };
 
@@ -387,6 +393,8 @@ public sealed class PivotWorkflowDialogTests
                 ShowPropertiesInTooltips: false,
                 ShowClassicLayout: true,
                 MergeAndCenterLabels: true,
+                PageOverThenDown: true,
+                PageWrap: 2,
                 CompactRowLabelIndent: 5));
     }
 

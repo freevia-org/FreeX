@@ -24,6 +24,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _showPropertiesInTooltips;
     private readonly bool? _showClassicLayout;
     private readonly bool? _mergeAndCenterLabels;
+    private readonly bool? _pageOverThenDown;
+    private readonly int? _pageWrap;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
@@ -77,7 +79,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? showContextualTooltips = null,
         bool? showPropertiesInTooltips = null,
         bool? showClassicLayout = null,
-        bool? mergeAndCenterLabels = null)
+        bool? mergeAndCenterLabels = null,
+        bool? pageOverThenDown = null,
+        int? pageWrap = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -101,6 +105,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showPropertiesInTooltips = showPropertiesInTooltips;
         _showClassicLayout = showClassicLayout;
         _mergeAndCenterLabels = mergeAndCenterLabels;
+        _pageOverThenDown = pageOverThenDown;
+        _pageWrap = pageWrap is { } wrap ? NormalizePageWrap(wrap) : null;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
@@ -156,6 +162,10 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowClassicLayout = showClassicLayout;
         if (_mergeAndCenterLabels is { } mergeAndCenterLabels)
             pivotTable.MergeAndCenterLabels = mergeAndCenterLabels;
+        if (_pageOverThenDown is { } pageOverThenDown)
+            pivotTable.PageOverThenDown = pageOverThenDown;
+        if (_pageWrap is { } pageWrap)
+            pivotTable.PageWrap = pageWrap;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
         if (_printTitles is { } printTitles)
@@ -223,6 +233,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowPropertiesInTooltips,
         bool ShowClassicLayout,
         bool MergeAndCenterLabels,
+        bool PageOverThenDown,
+        int PageWrap,
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
@@ -256,6 +268,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowPropertiesInTooltips,
                 pivotTable.ShowClassicLayout,
                 pivotTable.MergeAndCenterLabels,
+                pivotTable.PageOverThenDown,
+                pivotTable.PageWrap,
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
@@ -289,6 +303,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
             pivotTable.ShowClassicLayout = ShowClassicLayout;
             pivotTable.MergeAndCenterLabels = MergeAndCenterLabels;
+            pivotTable.PageOverThenDown = PageOverThenDown;
+            pivotTable.PageWrap = PageWrap;
             pivotTable.EmptyValueText = EmptyValueText;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
@@ -319,6 +335,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     }
 
     private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
+
+    private static int NormalizePageWrap(int pageWrap) => Math.Clamp(pageWrap, 0, 255);
 
     private static int? NormalizeMissingItemsLimit(int? value) =>
         value switch

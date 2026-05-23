@@ -810,6 +810,8 @@ public sealed class PivotTableCommandTests
             ShowContextualTooltips = false,
             ShowPropertiesInTooltips = false,
             ShowClassicLayout = true,
+            PageOverThenDown = true,
+            PageWrap = 3,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             AltTextTitle = "Existing title",
@@ -842,6 +844,8 @@ public sealed class PivotTableCommandTests
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
         pivot.ShowClassicLayout.Should().BeTrue();
+        pivot.PageOverThenDown.Should().BeTrue();
+        pivot.PageWrap.Should().Be(3);
         pivot.AutofitColumnsOnUpdate.Should().BeFalse();
         pivot.PreserveFormattingOnUpdate.Should().BeFalse();
         pivot.AltTextTitle.Should().Be("Existing title");
@@ -868,6 +872,8 @@ public sealed class PivotTableCommandTests
             ShowPropertiesInTooltips = true,
             ShowClassicLayout = false,
             MergeAndCenterLabels = false,
+            PageOverThenDown = false,
+            PageWrap = 0,
             PrintExpandCollapseButtons = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -889,6 +895,8 @@ public sealed class PivotTableCommandTests
             showContextualTooltips: false,
             showPropertiesInTooltips: false,
             showClassicLayout: true,
+            pageOverThenDown: true,
+            pageWrap: 4,
             printExpandCollapseButtons: false,
             showFieldHeaders: false);
 
@@ -899,6 +907,8 @@ public sealed class PivotTableCommandTests
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
         pivot.ShowClassicLayout.Should().BeTrue();
+        pivot.PageOverThenDown.Should().BeTrue();
+        pivot.PageWrap.Should().Be(4);
         pivot.PrintExpandCollapseButtons.Should().BeFalse();
         pivot.ShowFieldHeaders.Should().BeFalse();
 
@@ -909,6 +919,8 @@ public sealed class PivotTableCommandTests
         pivot.ShowContextualTooltips.Should().BeTrue();
         pivot.ShowPropertiesInTooltips.Should().BeTrue();
         pivot.ShowClassicLayout.Should().BeFalse();
+        pivot.PageOverThenDown.Should().BeFalse();
+        pivot.PageWrap.Should().Be(0);
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowFieldHeaders.Should().BeTrue();
     }
