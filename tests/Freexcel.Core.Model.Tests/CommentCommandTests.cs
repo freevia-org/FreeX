@@ -130,7 +130,7 @@ public class CommentCommandTests
     }
 
     [Fact]
-    public void ClearCommentsCommand_RejectsProtectedSheet()
+    public void ClearCommentsCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
     {
         var (_, sheet, ctx) = Setup();
         sheet.IsProtected = true;
@@ -142,6 +142,21 @@ public class CommentCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.Comments[addr].Should().Be("Keep");
+    }
+
+    [Fact]
+    public void ClearCommentsCommand_AllowsProtectedSheetWithEditObjectsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.Comments[addr] = "Clear me";
+
+        var outcome = new ClearCommentsCommand(sheet.Id, new GridRange(addr, addr)).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.Comments.Should().NotContainKey(addr);
     }
 
     [Fact]
@@ -209,7 +224,7 @@ public class CommentCommandTests
     }
 
     [Fact]
-    public void DeleteThreadedCommentCommand_RejectsProtectedSheet()
+    public void DeleteThreadedCommentCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
     {
         var (_, sheet, ctx) = Setup();
         sheet.IsProtected = true;
@@ -221,6 +236,21 @@ public class CommentCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("Keep", "Quinn"));
+    }
+
+    [Fact]
+    public void DeleteThreadedCommentCommand_AllowsProtectedSheetWithEditObjectsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[addr] = new ThreadedComment("Delete me", "Quinn");
+
+        var outcome = new DeleteThreadedCommentCommand(sheet.Id, addr).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ThreadedComments.Should().NotContainKey(addr);
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
