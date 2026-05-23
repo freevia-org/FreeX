@@ -339,10 +339,39 @@ public partial class MainWindow
         }
         else
         {
-            item.Click += (_, _) => InvokeRibbonButton(button);
+            item.Click += (_, _) =>
+            {
+                InvokeRibbonButton(button);
+                FocusCollapsedRibbonMenuPlacementTarget(item);
+            };
         }
 
         return item;
+    }
+
+    private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)
+    {
+        for (DependencyObject? current = item; current is not null; current = GetTreeParentForCollapsedRibbonMenu(current))
+        {
+            if (current is ContextMenu contextMenu &&
+                contextMenu.PlacementTarget is UIElement placementTarget)
+            {
+                placementTarget.Focus();
+                return;
+            }
+        }
+    }
+
+    private static DependencyObject? GetTreeParentForCollapsedRibbonMenu(DependencyObject element)
+    {
+        if (element is Visual)
+        {
+            var visualParent = VisualTreeHelper.GetParent(element);
+            if (visualParent is not null)
+                return visualParent;
+        }
+
+        return LogicalTreeHelper.GetParent(element);
     }
 
     private static void SynchronizeCollapsedRibbonMenuItems(ItemCollection items)
