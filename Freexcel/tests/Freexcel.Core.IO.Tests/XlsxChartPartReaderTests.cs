@@ -125,6 +125,37 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_RecognizesStandaloneChartExChartSpace()
+    {
+        var sheetId = SheetId.New();
+        var chartXml = XDocument.Parse("""
+            <cx:chartSpace xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
+                           xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <cx:chart>
+                <cx:plotArea>
+                  <cx:treemapChart>
+                    <cx:ser>
+                      <cx:tx><cx:strRef><cx:f>Sheet1!$B$1</cx:f></cx:strRef></cx:tx>
+                      <cx:cat><cx:strRef><cx:f>Sheet1!$A$2:$A$4</cx:f></cx:strRef></cx:cat>
+                      <cx:val><cx:numRef><cx:f>Sheet1!$B$2:$B$4</cx:f></cx:numRef></cx:val>
+                    </cx:ser>
+                  </cx:treemapChart>
+                </cx:plotArea>
+              </cx:chart>
+            </cx:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Treemap);
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        chart.DataRange.Should().Be(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2)));
+    }
+
+    [Fact]
     public void TryReadSupportedChart_Reads3DColumnChartAsRenderable()
     {
         var sheetId = SheetId.New();
