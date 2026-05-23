@@ -543,13 +543,50 @@ public partial class MainWindow
             return true;
         }
 
-        if (e.Key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End)
+        if (e.Key == Key.Tab)
         {
+            MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift
+                ? FocusNavigationDirection.Previous
+                : FocusNavigationDirection.Next);
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            var direction = e.Key switch
+            {
+                Key.Left => FocusNavigationDirection.Left,
+                Key.Right => FocusNavigationDirection.Right,
+                Key.Up => FocusNavigationDirection.Up,
+                Key.Down => FocusNavigationDirection.Down,
+                _ => FocusNavigationDirection.Next
+            };
+            MoveFocusedRibbonElement(focusedElement, direction);
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key is Key.Home or Key.End)
+        {
+            var direction = e.Key switch
+            {
+                Key.Home => FocusNavigationDirection.First,
+                Key.End => FocusNavigationDirection.Last,
+                _ => FocusNavigationDirection.Next
+            };
+            MoveFocusedRibbonElement(focusedElement, direction);
             e.Handled = true;
             return true;
         }
 
         return false;
+    }
+
+    private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)
+    {
+        return focusedElement is UIElement focusedUiElement &&
+               focusedUiElement.MoveFocus(new TraversalRequest(direction));
     }
 
     private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)

@@ -748,6 +748,10 @@ internal static class XlsxCorpusFixtureFactory
             ContentType = "image/png",
             Width = 120,
             Height = 80,
+            CropLeft = 0.05,
+            CropTop = 0.10,
+            CropRight = 0.05,
+            CropBottom = 0.10,
             AltText = "Corpus image"
         });
         sheet.Sparklines.Add(new SparklineModel
@@ -771,8 +775,8 @@ internal static class XlsxCorpusFixtureFactory
             Text = "Corpus note",
             Width = 200,
             Height = 90,
-            FillColor = new CellColor(255, 242, 204),
-            OutlineColor = new CellColor(112, 48, 160),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
             AltText = "Corpus text box"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
@@ -783,7 +787,9 @@ internal static class XlsxCorpusFixtureFactory
             Width = 140,
             Height = 90,
             FillColor = new CellColor(221, 235, 247),
-            OutlineColor = new CellColor(31, 78, 121),
+            GradientFillEndColor = new CellColor(189, 215, 238),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
+            HasShadowEffect = true,
             AltText = "Corpus ellipse"
         });
         return workbook;
@@ -798,7 +804,18 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "B1", new TextValue("Review"));
         Set(sheet, "B2", new TextValue("Follow-up"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel/docs";
+        sheet.HyperlinkMetadata[Addr(sheet, "A1")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open the Freexcel documentation");
         sheet.Hyperlinks[Addr(sheet, "A2")] = "mailto:review@example.com";
+        sheet.HyperlinkMetadata[Addr(sheet, "A2")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Send a workbook review note");
+        sheet.Hyperlinks[Addr(sheet, "B2")] = "Links Notes!A1";
+        sheet.HyperlinkMetadata[Addr(sheet, "B2")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to the documentation link",
+            "Links Notes!A1");
         sheet.Comments[Addr(sheet, "B1")] = "Check workbook fidelity notes.";
         sheet.Comments[Addr(sheet, "B2")] = "Confirm links survived round-trip.";
         return workbook;

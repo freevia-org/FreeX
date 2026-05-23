@@ -658,6 +658,10 @@ public class XlsxCorpusRunnerTests
             workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
+            workbook.PivotTableStyles
+                .OrderBy(style => style.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CapturePivotTableStyleSummary)
+                .ToArray(),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
             workbook.CustomViews
@@ -788,7 +792,7 @@ public class XlsxCorpusRunnerTests
             sheet.Hyperlinks
                 .OrderBy(pair => pair.Key.Row)
                 .ThenBy(pair => pair.Key.Col)
-                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .Select(pair => CaptureHyperlinkSummary(sheet, pair))
                 .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
@@ -936,6 +940,19 @@ public class XlsxCorpusRunnerTests
                 background.ContentType,
                 background.FileName ?? "",
                 background.ImageBytes.Length);
+
+    private static HyperlinkSummary CaptureHyperlinkSummary(Sheet sheet, KeyValuePair<CellAddress, string> pair)
+    {
+        sheet.HyperlinkMetadata.TryGetValue(pair.Key, out var metadata);
+        metadata ??= new HyperlinkMetadata();
+        return new HyperlinkSummary(
+            pair.Key.Row,
+            pair.Key.Col,
+            pair.Value,
+            metadata.LinkType,
+            metadata.ScreenTip,
+            metadata.Bookmark);
+    }
 
     private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
     {
@@ -1106,6 +1123,21 @@ public class XlsxCorpusRunnerTests
                     filter.IncludeBlank))
                 .ToArray());
 
+    private static PivotTableStyleSummary CapturePivotTableStyleSummary(PivotTableStyleModel style) =>
+        new(
+            style.Name,
+            style.AppliesToPivotTables,
+            style.AppliesToTables,
+            style.Elements
+                .OrderBy(element => element.Type, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(element => element.DifferentialFormatId)
+                .ThenBy(element => element.Size)
+                .Select(element => new PivotTableStyleElementSummary(
+                    element.Type,
+                    element.DifferentialFormatId,
+                    element.Size))
+                .ToArray());
+
     private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
         new(
             pivot.Name,
@@ -1196,7 +1228,11 @@ public class XlsxCorpusRunnerTests
             textBox.Width,
             textBox.Height,
             textBox.RotationDegrees,
-            textBox.IsVisible);
+            textBox.IsVisible,
+            textBox.FillColor,
+            textBox.OutlineColor,
+            textBox.FillThemeColor,
+            textBox.OutlineThemeColor);
 
     private static DrawingShapeSummary CaptureDrawingShapeSummary(DrawingShapeModel shape) =>
         new(
@@ -1208,7 +1244,13 @@ public class XlsxCorpusRunnerTests
             shape.Width,
             shape.Height,
             shape.RotationDegrees,
-            shape.IsVisible);
+            shape.IsVisible,
+            shape.FillColor,
+            shape.OutlineColor,
+            shape.GradientFillEndColor,
+            shape.FillThemeColor,
+            shape.OutlineThemeColor,
+            shape.HasShadowEffect);
 
     private static PictureSummary CapturePictureSummary(PictureModel picture) =>
         new(
@@ -1222,7 +1264,21 @@ public class XlsxCorpusRunnerTests
             picture.RotationDegrees,
             picture.IsVisible,
             picture.ContentType ?? "",
-            picture.ImageBytes?.Length ?? 0);
+            picture.ImageBytes?.Length ?? 0,
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom,
+            picture.IsLinkedToSourceRange,
+            picture.LinkedSourceRange is { } linkedSourceRange ? ToRangeSummary(linkedSourceRange) : null,
+            picture.LinkedSourceSheetName ?? "",
+            picture.SourceRowCount,
+            picture.SourceColumnCount,
+            picture.Cells
+                .OrderBy(cell => cell.RowOffset)
+                .ThenBy(cell => cell.ColumnOffset)
+                .Select(cell => new PictureCellSummary(cell.RowOffset, cell.ColumnOffset, cell.Text))
+                .ToArray());
 
     private static ConditionalFormatSummary CaptureConditionalFormatSummary(ConditionalFormat format) =>
         new(
@@ -1534,6 +1590,7 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<PivotCacheSummary> PivotCaches,
         int PivotCacheCount,
         int PivotCacheFieldCount,
+        IReadOnlyList<PivotTableStyleSummary> PivotTableStyles,
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
         IReadOnlyList<CustomViewSummary> CustomViews,
@@ -1765,7 +1822,13 @@ public class XlsxCorpusRunnerTests
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
 
-    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
+    private sealed record HyperlinkSummary(
+        uint Row,
+        uint Column,
+        string Target,
+        HyperlinkTargetKind LinkType,
+        string ScreenTip,
+        string Bookmark);
 
     private sealed record OutlineLevelSummary(uint Index, int Level);
 
@@ -1940,6 +2003,17 @@ public class XlsxCorpusRunnerTests
         string BaseItem,
         string NumberFormatCode);
 
+    private sealed record PivotTableStyleSummary(
+        string Name,
+        bool AppliesToPivotTables,
+        bool AppliesToTables,
+        IReadOnlyList<PivotTableStyleElementSummary> Elements);
+
+    private sealed record PivotTableStyleElementSummary(
+        string Type,
+        int? DifferentialFormatId,
+        int? Size);
+
     private sealed record SparklineSummary(
         SparklineKind Kind,
         ChartRangeSummary DataRange,
@@ -1955,7 +2029,11 @@ public class XlsxCorpusRunnerTests
         double Width,
         double Height,
         double RotationDegrees,
-        bool IsVisible);
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor);
 
     private sealed record DrawingShapeSummary(
         string Name,
@@ -1966,7 +2044,13 @@ public class XlsxCorpusRunnerTests
         double Width,
         double Height,
         double RotationDegrees,
-        bool IsVisible);
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        CellColor? GradientFillEndColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor,
+        bool HasShadowEffect);
 
     private sealed record PictureSummary(
         string Name,
@@ -1979,7 +2063,19 @@ public class XlsxCorpusRunnerTests
         double RotationDegrees,
         bool IsVisible,
         string ContentType,
-        int ImageByteCount);
+        int ImageByteCount,
+        double CropLeft,
+        double CropTop,
+        double CropRight,
+        double CropBottom,
+        bool IsLinkedToSourceRange,
+        ChartRangeSummary? LinkedSourceRange,
+        string LinkedSourceSheetName,
+        uint SourceRowCount,
+        uint SourceColumnCount,
+        IReadOnlyList<PictureCellSummary> Cells);
+
+    private sealed record PictureCellSummary(uint RowOffset, uint ColumnOffset, string Text);
 
     private sealed record DataValidationSummary(
         DvType Type,

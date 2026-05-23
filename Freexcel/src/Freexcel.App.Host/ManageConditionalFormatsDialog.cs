@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -8,6 +9,11 @@ using System.Windows.Shapes;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
+
+public sealed record ConditionalFormatAppliesToRangeSelectionRequest(
+    Guid RuleId,
+    string CurrentText,
+    bool CollapseDialog = true);
 
 /// <summary>
 /// "Manage Conditional Formatting Rules" dialog — lists all rules on a sheet,
@@ -20,6 +26,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private readonly Sheet _sheet;
     private readonly GridRange? _selection;
+    private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
 
     // Working copy — bound to the ListView
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
@@ -35,10 +42,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
 
-    public ManageConditionalFormatsDialog(Sheet sheet, GridRange? selection)
+    public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
+
+    public ManageConditionalFormatsDialog(
+        Sheet sheet,
+        GridRange? selection,
+        Action<ConditionalFormatAppliesToRangeSelectionRequest>? requestAppliesToRangeSelection = null)
     {
         _sheet     = sheet;
         _selection = selection;
+        _requestAppliesToRangeSelection = requestAppliesToRangeSelection;
 
         Title  = "Conditional Formatting Rules Manager";
         Width  = 560;
@@ -177,7 +190,9 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
         rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
         rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select Applies To range text");
+        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Collapse dialog and select Applies To range");
+        rangePickerFactory.SetValue(AutomationProperties.NameProperty, "Select Applies To range");
+        rangePickerFactory.SetValue(AutomationProperties.HelpTextProperty, "Collapse dialog and select a worksheet range for this conditional format rule.");
         rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
         rangePickerFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
         {
@@ -471,10 +486,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
     }
 
-    private static void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    public static ConditionalFormatAppliesToRangeSelectionRequest CreateAppliesToRangeSelectionRequest(
+        Guid ruleId,
+        string currentText) =>
+        new(ruleId, currentText.Trim(), CollapseDialog: true);
+
+    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not DependencyObject current)
             return;
+        var rule = (sender as FrameworkElement)?.DataContext as ConditionalFormat;
 
         while (current is not null)
         {
@@ -485,6 +506,11 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 {
                     rangeBox.Focus();
                     rangeBox.SelectAll();
+                    if (rule is not null)
+                    {
+                        AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest(rule.Id, rangeBox.Text);
+                        _requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest);
+                    }
                 }
                 return;
             }
