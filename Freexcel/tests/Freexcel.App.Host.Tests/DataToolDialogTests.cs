@@ -1191,6 +1191,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialogOpenedFromKeyboard_FocusesRangeBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rangeBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
     public void CreateTableDialog_ParsesRangeHeadersAndStyle()
     {
         var sheetId = SheetId.New();
