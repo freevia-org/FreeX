@@ -256,6 +256,20 @@ public sealed partial class SetChartLayoutCommand
             chart.ErrorBarValue = ClampFinite(options.ErrorBarValue.Value, 0, 1000);
         if (options.ErrorBarEndCaps is not null)
             chart.ErrorBarEndCaps = options.ErrorBarEndCaps.Value;
+        if (options.ErrorBarColor is not null)
+        {
+            chart.ErrorBarColor = options.ErrorBarColor;
+            chart.ErrorBarThemeColor = null;
+        }
+        if (options.ErrorBarThemeColor is not null)
+        {
+            chart.ErrorBarThemeColor = options.ErrorBarThemeColor;
+            chart.ErrorBarColor = null;
+        }
+        if (options.ErrorBarThickness is not null)
+            chart.ErrorBarThickness = ClampFinite(options.ErrorBarThickness.Value, 0.5, 10);
+        if (options.ErrorBarDashStyle is not null)
+            chart.ErrorBarDashStyle = ValidEnumOrDefault(options.ErrorBarDashStyle.Value, ChartLineDashStyle.Solid);
         if (options.ShowSecondaryAxis is not null)
             chart.ShowSecondaryAxis = options.ShowSecondaryAxis.Value;
         if (options.SecondaryAxisSeriesIndexes is not null)
