@@ -1196,7 +1196,11 @@ public class XlsxCorpusRunnerTests
             textBox.Width,
             textBox.Height,
             textBox.RotationDegrees,
-            textBox.IsVisible);
+            textBox.IsVisible,
+            textBox.FillColor,
+            textBox.OutlineColor,
+            textBox.FillThemeColor,
+            textBox.OutlineThemeColor);
 
     private static DrawingShapeSummary CaptureDrawingShapeSummary(DrawingShapeModel shape) =>
         new(
@@ -1208,7 +1212,13 @@ public class XlsxCorpusRunnerTests
             shape.Width,
             shape.Height,
             shape.RotationDegrees,
-            shape.IsVisible);
+            shape.IsVisible,
+            shape.FillColor,
+            shape.OutlineColor,
+            shape.GradientFillEndColor,
+            shape.FillThemeColor,
+            shape.OutlineThemeColor,
+            shape.HasShadowEffect);
 
     private static PictureSummary CapturePictureSummary(PictureModel picture) =>
         new(
@@ -1222,7 +1232,21 @@ public class XlsxCorpusRunnerTests
             picture.RotationDegrees,
             picture.IsVisible,
             picture.ContentType ?? "",
-            picture.ImageBytes?.Length ?? 0);
+            picture.ImageBytes?.Length ?? 0,
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom,
+            picture.IsLinkedToSourceRange,
+            picture.LinkedSourceRange is { } linkedSourceRange ? ToRangeSummary(linkedSourceRange) : null,
+            picture.LinkedSourceSheetName ?? "",
+            picture.SourceRowCount,
+            picture.SourceColumnCount,
+            picture.Cells
+                .OrderBy(cell => cell.RowOffset)
+                .ThenBy(cell => cell.ColumnOffset)
+                .Select(cell => new PictureCellSummary(cell.RowOffset, cell.ColumnOffset, cell.Text))
+                .ToArray());
 
     private static ConditionalFormatSummary CaptureConditionalFormatSummary(ConditionalFormat format) =>
         new(
@@ -1955,7 +1979,11 @@ public class XlsxCorpusRunnerTests
         double Width,
         double Height,
         double RotationDegrees,
-        bool IsVisible);
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor);
 
     private sealed record DrawingShapeSummary(
         string Name,
@@ -1966,7 +1994,13 @@ public class XlsxCorpusRunnerTests
         double Width,
         double Height,
         double RotationDegrees,
-        bool IsVisible);
+        bool IsVisible,
+        CellColor? FillColor,
+        CellColor? OutlineColor,
+        CellColor? GradientFillEndColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        WorkbookThemeColorReference? OutlineThemeColor,
+        bool HasShadowEffect);
 
     private sealed record PictureSummary(
         string Name,
@@ -1979,7 +2013,19 @@ public class XlsxCorpusRunnerTests
         double RotationDegrees,
         bool IsVisible,
         string ContentType,
-        int ImageByteCount);
+        int ImageByteCount,
+        double CropLeft,
+        double CropTop,
+        double CropRight,
+        double CropBottom,
+        bool IsLinkedToSourceRange,
+        ChartRangeSummary? LinkedSourceRange,
+        string LinkedSourceSheetName,
+        uint SourceRowCount,
+        uint SourceColumnCount,
+        IReadOnlyList<PictureCellSummary> Cells);
+
+    private sealed record PictureCellSummary(uint RowOffset, uint ColumnOffset, string Text);
 
     private sealed record DataValidationSummary(
         DvType Type,
