@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -65,6 +66,7 @@ public sealed class DataTableDialog : Window
         root.Children.Add(grid);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76));
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryParse(
@@ -173,6 +175,12 @@ public sealed class DataTableDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rowInputBox.Focus();
+        Keyboard.Focus(_rowInputBox);
     }
 
     private void Accept()
