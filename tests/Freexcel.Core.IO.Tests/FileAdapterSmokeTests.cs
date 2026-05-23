@@ -8400,7 +8400,10 @@ public partial class FileAdapterSmokeTests
             ErrorBarKind = ChartErrorBarKind.Percentage,
             ErrorBarDirection = ChartErrorBarDirection.Plus,
             ErrorBarValue = 12.5,
-            ErrorBarEndCaps = false
+            ErrorBarEndCaps = false,
+            ErrorBarThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            ErrorBarThickness = 2.25,
+            ErrorBarDashStyle = ChartLineDashStyle.Dot
         });
 
         var saved = new MemoryStream();
@@ -8416,6 +8419,12 @@ public partial class FileAdapterSmokeTests
         errorBars.Element(chartNs + "errValType")!.Attribute("val")!.Value.Should().Be("percentage");
         errorBars.Element(chartNs + "noEndCap")!.Attribute("val")!.Value.Should().Be("1");
         errorBars.Element(chartNs + "val")!.Attribute("val")!.Value.Should().Be("12.5");
+
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var line = errorBars.Element(chartNs + "spPr")!.Element(drawingNs + "ln")!;
+        line.Attribute("w")!.Value.Should().Be("28575");
+        line.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent2");
+        line.Element(drawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dot");
     }
 
     [Fact]
