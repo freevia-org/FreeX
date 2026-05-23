@@ -67,4 +67,19 @@ public sealed class CsvFileAdapterTests
         formulaCell.Should().NotBeNull();
         formulaCell!.FormulaText.Should().Be("A1*2");
     }
+
+    [Fact]
+    public void Save_WritesDateTimeValuesAsInvariantText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("2026-05-17,2026-05-17 09:30:00,09:30:00\r\n");
+    }
 }

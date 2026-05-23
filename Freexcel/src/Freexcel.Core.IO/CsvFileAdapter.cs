@@ -47,9 +47,21 @@ public sealed class CsvFileAdapter : IFileAdapter
     private static string FormatValue(ScalarValue value) => value switch
     {
         NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
+        DateTimeValue dt => FormatDateTimeValue(dt),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         TextValue t => t.Value,
         ErrorValue e => e.Code,
         _ => "",
     };
+
+    private static string FormatDateTimeValue(DateTimeValue value)
+    {
+        var dateTime = value.ToDateTime();
+        if (dateTime.Date == new DateTime(1899, 12, 30) && dateTime.TimeOfDay != TimeSpan.Zero)
+            return dateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
+        return dateTime.TimeOfDay == TimeSpan.Zero
+            ? dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : dateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
 }
