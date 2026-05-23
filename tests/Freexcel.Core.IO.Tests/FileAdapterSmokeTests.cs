@@ -5658,6 +5658,44 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesStandaloneChartExPackagePartAlongsideModelEdits()
+    {
+        var workbook = new Workbook("ChartExPackageRetention");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var adapter = new XlsxFileAdapter();
+        using var source = new MemoryStream();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: MinimalChartExTreemapXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 5, 1), new TextValue("Edited"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        chartXml.Root!.Name.LocalName.Should().Be("chartSpace");
+        chartXml.Root!.Name.NamespaceName.Should().Be("http://schemas.microsoft.com/office/drawing/2014/chartex");
+        chartXml.ToString().Should().Contain("treemapChart");
+        LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!)
+            .ToString()
+            .Should().Contain("../charts/chart1.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_ReadsEmbeddedColumnChartOneCellAnchorPackagePart()
     {
         var workbook = new Workbook("ChartPackageLoad");
