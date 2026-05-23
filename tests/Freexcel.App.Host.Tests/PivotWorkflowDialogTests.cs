@@ -52,7 +52,7 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("CreateReferenceEditor(textBox, automationName, editorMargin)");
         source.Should().Contain("Select PivotTable source range");
         source.Should().Contain("Select PivotTable location");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("UpdateDestinationState");
     }
 
@@ -120,7 +120,7 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("CreateReferenceEditor(_sourceBox");
         source.Should().Contain("Select PivotTable source range");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
     }
 
     [Fact]
