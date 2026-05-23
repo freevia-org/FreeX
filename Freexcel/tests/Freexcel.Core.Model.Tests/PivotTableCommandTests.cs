@@ -926,6 +926,50 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesShowItemsWithNoDataAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotShowItemsWithNoDataCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            ShowItemsWithNoDataOnRows = false,
+            ShowItemsWithNoDataOnColumns = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        pivot.ShowItemsWithNoDataOnColumns.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        pivot.ShowItemsWithNoDataOnRows.Should().BeFalse();
+        pivot.ShowItemsWithNoDataOnColumns.Should().BeFalse();
+    }
+
+    [Fact]
     public void ConfigurePivotTableOptionsCommand_UpdatesFormatOptionsAndUndoRestores()
     {
         var workbook = new Workbook("PivotFormatOptionsCommandTest");
