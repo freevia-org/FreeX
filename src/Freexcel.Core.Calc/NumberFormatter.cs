@@ -104,6 +104,11 @@ public static partial class NumberFormatter
                 inQuote = !inQuote;
                 sb.Append(c);
             }
+            else if (c == '\\' && !inQuote && i + 1 < format.Length)
+            {
+                sb.Append(c);
+                sb.Append(format[++i]);
+            }
             else if (c == '[' && !inQuote)
             {
                 inBracket = true;
