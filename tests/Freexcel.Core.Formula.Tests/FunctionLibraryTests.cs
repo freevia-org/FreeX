@@ -1061,6 +1061,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_EmptyFindTextUseScalarEndBoundary()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
     {
         var sheet = MakeSheet();
