@@ -32,6 +32,9 @@ public sealed partial class TextToColumnsDialog : Window
     private readonly RadioButton _formatGeneralButton = new() { Content = "_General", IsChecked = true };
     private readonly RadioButton _formatTextButton = new() { Content = "_Text" };
     private readonly RadioButton _formatSkipButton = new() { Content = "Do not import column (_skip)" };
+    private readonly TextBox _decimalSeparatorBox = new() { Text = ".", Width = 42 };
+    private readonly TextBox _thousandsSeparatorBox = new() { Text = ",", Width = 42 };
+    private readonly CheckBox _trailingMinusBox = new() { Content = "_Trailing minus for negative numbers" };
     private readonly ListView _previewGrid = new() { Height = 88 };
     private readonly IReadOnlyList<string> _previewRows;
     private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
@@ -242,6 +245,7 @@ public sealed partial class TextToColumnsDialog : Window
         root.Children.Add(_formatGeneralButton);
         root.Children.Add(_formatTextButton);
         root.Children.Add(_formatSkipButton);
+        root.Children.Add(CreateAdvancedOptionsPanel());
 
         return new GroupBox
         {
@@ -251,6 +255,65 @@ public sealed partial class TextToColumnsDialog : Window
             Margin = new Thickness(0, 10, 0, 0)
         };
     }
+
+    private GroupBox CreateAdvancedOptionsPanel()
+    {
+        var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddAdvancedLabel(grid, "_Decimal separator:", _decimalSeparatorBox, 0, 0);
+        AddAdvancedTextBox(grid, _decimalSeparatorBox, 0, 1);
+        AddAdvancedLabel(grid, "_Thousands separator:", _thousandsSeparatorBox, 0, 2);
+        AddAdvancedTextBox(grid, _thousandsSeparatorBox, 0, 3);
+        Grid.SetRow(_trailingMinusBox, 1);
+        Grid.SetColumnSpan(_trailingMinusBox, 4);
+        _trailingMinusBox.Margin = new Thickness(0, 8, 0, 0);
+        grid.Children.Add(_trailingMinusBox);
+
+        return new GroupBox
+        {
+            Header = "Advanced",
+            Content = grid,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+    }
+
+    private static void AddAdvancedLabel(Grid grid, string content, Control target, int row, int column)
+    {
+        var label = new Label
+        {
+            Content = content,
+            Target = target,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 4, 6, 0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        };
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, column);
+        grid.Children.Add(label);
+    }
+
+    private static void AddAdvancedTextBox(Grid grid, TextBox textBox, int row, int column)
+    {
+        textBox.Margin = new Thickness(0, 0, 12, 0);
+        Grid.SetRow(textBox, row);
+        Grid.SetColumn(textBox, column);
+        grid.Children.Add(textBox);
+    }
+
+    private TextToColumnsAdvancedOptions BuildAdvancedOptions() =>
+        new(NormalizeSeparator(_decimalSeparatorBox.Text, "."),
+            NormalizeSeparator(_thousandsSeparatorBox.Text, ","),
+            _trailingMinusBox.IsChecked == true);
+
+    private static string NormalizeSeparator(string? value, string fallback) =>
+        string.IsNullOrEmpty(value) ? fallback : value;
 
     private IReadOnlyList<TextToColumnsDelimiterKind> SelectedDelimiterKinds()
     {
@@ -277,14 +340,15 @@ public sealed partial class TextToColumnsDialog : Window
                 throw new ArgumentException("Enter a single destination cell, such as F2.");
 
             Result = _fixedWidthButton.IsChecked == true
-                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount))
+                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount), BuildAdvancedOptions())
                 : CreateResult(
                     SelectedDelimiterKinds(),
                     _customBox.Text,
                     SelectedTextQualifier(),
                     _treatConsecutiveDelimitersBox.IsChecked == true,
                     destination,
-                    BuildColumnFormats(_previewColumnCount));
+                    BuildColumnFormats(_previewColumnCount),
+                    BuildAdvancedOptions());
             DialogResult = true;
         }
         catch (Exception ex)
