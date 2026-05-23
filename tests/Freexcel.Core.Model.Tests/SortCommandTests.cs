@@ -94,6 +94,58 @@ public sealed class SortCommandTests
         sheet.GetValue(2, 2).Should().Be(new TextValue("A"));
     }
 
+    [Fact]
+    public void SortCommand_CanSortRowsByCellFillColor()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var redStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var blueStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(0, 0, 255) });
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        SetStyledRow(sheet, 1, "Plain", StyleId.Default);
+        SetStyledRow(sheet, 2, "Blue", blueStyle);
+        SetStyledRow(sheet, 3, "Red", redStyle);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, true, SortOn.CellColor)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Blue"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Red"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Plain"));
+    }
+
+    [Fact]
+    public void SortCommand_CanSortRowsByFontColorDescending()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var redStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(255, 0, 0) });
+        var blueStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0, 0, 255) });
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+        SetStyledRow(sheet, 1, "Plain", StyleId.Default);
+        SetStyledRow(sheet, 2, "Blue", blueStyle);
+        SetStyledRow(sheet, 3, "Red", redStyle);
+
+        var command = new SortCommand(sheet.Id, range, [new SortKey(0, false, SortOn.FontColor)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Red"));
+        sheet.GetValue(2, 2).Should().Be(new TextValue("Blue"));
+        sheet.GetValue(3, 2).Should().Be(new TextValue("Plain"));
+    }
+
+    private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)
+    {
+        var keyCell = Cell.FromValue(new TextValue(label));
+        keyCell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, row, 1), keyCell);
+        sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(label));
+    }
+
     private sealed class SimpleCtx(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook { get; } = workbook;
