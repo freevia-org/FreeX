@@ -188,6 +188,7 @@ public sealed class ObjectDialogTests
         FormatPictureDialog.TryCreateResult(
                 "320x180",
                 "45",
+                false,
                 "10, 5, 0, 20",
                 " Revenue chart ",
                 out var result,
@@ -200,6 +201,7 @@ public sealed class ObjectDialogTests
             320,
             180,
             45,
+            false,
             0.10,
             0.05,
             0,
@@ -218,11 +220,14 @@ public sealed class ObjectDialogTests
         source.Should().Contain("Header = \"_Crop\"");
         source.Should().Contain("Header = \"_Alt Text\"");
         source.Should().Contain("Content = \"_Lock aspect ratio\"");
+        source.Should().Contain("LockAspectRatio");
+        source.Should().Contain("_lockAspectRatioBox.IsChecked = picture.LockAspectRatio");
         source.Should().Contain("SyncAspectFromWidth");
         source.Should().Contain("SyncAspectFromHeight");
         source.Should().Contain("Crop is available for inserted image pictures.");
         drawingSource.Should().Contain("new FormatPictureDialog(picture)");
         drawingSource.Should().Contain("CreateFormatPictureCommand");
+        drawingSource.Should().Contain("new SetPictureLockAspectRatioCommand");
         drawingSource.Should().Contain("new SetPictureAltTextCommand");
         drawingSource.Should().Contain("new CompositeWorkbookCommand(\"Format Picture\", commands)");
     }
@@ -247,6 +252,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture)");
         source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture)");
         source.Should().Contain("_rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_lockAspectRatioBox.IsChecked = _initialResult.LockAspectRatio");
         source.Should().Contain("_cropLeftBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropLeft)");
         source.Should().Contain("_cropTopBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropTop)");
         source.Should().Contain("_cropRightBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropRight)");

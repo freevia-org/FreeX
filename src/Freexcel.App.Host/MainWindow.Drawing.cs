@@ -80,6 +80,7 @@ public partial class MainWindow
         {
             new ResizePictureCommand(sheetId, picture.Id, result.Width, result.Height),
             new RotatePictureCommand(sheetId, picture.Id, result.RotationDegrees),
+            new SetPictureLockAspectRatioCommand(sheetId, picture.Id, result.LockAspectRatio),
             new SetPictureAltTextCommand(sheetId, picture.Id, result.AltText)
         };
         if (picture.Kind == PictureKind.Image)
