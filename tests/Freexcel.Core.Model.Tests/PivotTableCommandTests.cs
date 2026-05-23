@@ -379,6 +379,42 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddPivotChartCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotChartProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotChartCommand(sheet.Id, "PivotTable1", ChartType.Column).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddPivotChartCommand_AllowsProtectedSheetWithObjectAndPivotReportPermissions()
+    {
+        var workbook = new Workbook("PivotChartProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotChartCommand(sheet.Id, "PivotTable1", ChartType.Column).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.Charts.Should().ContainSingle().Which.IsPivotChart.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChangePivotChartTypeCommand_ChangesTypeAndPreservesPivotBindingAndUndoRestores()
     {
         var workbook = new Workbook("PivotChartTypeCommandTest");
@@ -447,6 +483,31 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeFalse();
 
+        chart.Type.Should().Be(ChartType.Column);
+    }
+
+    [Fact]
+    public void ChangePivotChartTypeCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotChartTypeProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = Range(sheet, "D3", "E5"),
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 7
+        };
+        sheet.Charts.Add(chart);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new ChangePivotChartTypeCommand(sheet.Id, chart.Id, ChartType.Line).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
         chart.Type.Should().Be(ChartType.Column);
     }
 
