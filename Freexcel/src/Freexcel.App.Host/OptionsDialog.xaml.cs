@@ -140,6 +140,27 @@ public partial class OptionsDialog : Window
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
+    private void AutoCorrectOptionsButton_Click(object sender, RoutedEventArgs e) =>
+        ShowDeferredOptionsMessage(DeferredCommandMessages.AutoCorrectOptions());
+
+    private void AddLanguageButton_Click(object sender, RoutedEventArgs e) =>
+        ShowDeferredOptionsMessage(DeferredCommandMessages.EditingLanguages());
+
+    private void RibbonImportExportButton_Click(object sender, RoutedEventArgs e) =>
+        ShowDeferredOptionsMessage(DeferredCommandMessages.RibbonCustomizationImportExport());
+
+    private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e) =>
+        ShowDeferredOptionsMessage(DeferredCommandMessages.QuickAccessToolbarReset());
+
+    private void AddInsGoButton_Click(object sender, RoutedEventArgs e) =>
+        ShowDeferredOptionsMessage(DeferredCommandMessages.OfficeAddIns());
+
+    private void TrustCenterSettingsButton_Click(object sender, RoutedEventArgs e) =>
+        ShowDeferredOptionsMessage(DeferredCommandMessages.TrustCenterSettings());
+
+    private void ShowDeferredOptionsMessage(DeferredCommandMessage message) =>
+        MessageBox.Show(this, message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+
     private void PopulateErrorCheckingRules()
     {
         OptErrorCheckingRules.Children.Clear();
