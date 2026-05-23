@@ -104,6 +104,11 @@ public static partial class NumberFormatter
                 inQuote = !inQuote;
                 sb.Append(c);
             }
+            else if (c == '\\' && !inQuote && i + 1 < format.Length)
+            {
+                sb.Append(c);
+                sb.Append(format[++i]);
+            }
             else if (c == '[' && !inQuote)
             {
                 inBracket = true;
@@ -501,6 +506,15 @@ public static partial class NumberFormatter
             if (c == '"')
             {
                 inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                var escaped = format[++i];
+                if (!IsNumericPlaceholder(escaped))
+                    unquotedBuilder.Append('\\');
+                unquotedBuilder.Append(escaped);
                 continue;
             }
 

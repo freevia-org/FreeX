@@ -51,7 +51,9 @@ public sealed class SortDialog : Window
 
     private static readonly IReadOnlyList<SortOnChoice> SortOnChoices =
     [
-        new("Cell Values")
+        new("Cell Values"),
+        new("Cell Color"),
+        new("Font Color")
     ];
 
     private readonly ObservableCollection<SortDialogLevel> _levels;
@@ -194,9 +196,31 @@ public sealed class SortDialog : Window
                 _levels.Add(level);
             list.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
         };
+        var moveUp = new Button { Content = "Move _Up", Width = 86, Margin = new Thickness(8, 0, 8, 0) };
+        moveUp.Click += (_, _) =>
+        {
+            var selectedIndex = list.SelectedIndex < 0 ? 0 : list.SelectedIndex;
+            var updated = MoveLevel(_levels, selectedIndex, -1);
+            _levels.Clear();
+            foreach (var level in updated)
+                _levels.Add(level);
+            list.SelectedIndex = Math.Max(0, selectedIndex - 1);
+        };
+        var moveDown = new Button { Content = "Move Do_wn", Width = 92 };
+        moveDown.Click += (_, _) =>
+        {
+            var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
+            var updated = MoveLevel(_levels, selectedIndex, 1);
+            _levels.Clear();
+            foreach (var level in updated)
+                _levels.Add(level);
+            list.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
+        };
         helperRow.Children.Add(add);
         helperRow.Children.Add(remove);
         helperRow.Children.Add(copy);
+        helperRow.Children.Add(moveUp);
+        helperRow.Children.Add(moveDown);
         commandDock.Children.Add(helperRow);
         var options = new Button
         {
@@ -243,7 +267,7 @@ public sealed class SortDialog : Window
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels)
     {
         return NormalizeLevels(levels)
-            .Select(level => new SortKey(level.ColumnOffset, level.Ascending))
+            .Select(level => new SortKey(level.ColumnOffset, level.Ascending, SortOnFromLabel(level.SortOn)))
             .ToList();
     }
 
@@ -275,6 +299,17 @@ public sealed class SortDialog : Window
             updated.Insert(index + 1, new SortDialogLevel(level.ColumnOffset, level.Ascending));
         }
 
+        return updated;
+    }
+
+    public static IReadOnlyList<SortDialogLevel> MoveLevel(IEnumerable<SortDialogLevel> levels, int index, int direction)
+    {
+        var updated = NormalizeLevels(levels).ToList();
+        var targetIndex = index + Math.Sign(direction);
+        if (index < 0 || index >= updated.Count || targetIndex < 0 || targetIndex >= updated.Count)
+            return updated;
+
+        (updated[index], updated[targetIndex]) = (updated[targetIndex], updated[index]);
         return updated;
     }
 
@@ -367,6 +402,14 @@ public sealed class SortDialog : Window
 
         return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
     }
+
+    private static Freexcel.Core.Commands.SortOn SortOnFromLabel(string? label) =>
+        label switch
+        {
+            "Cell Color" => Freexcel.Core.Commands.SortOn.CellColor,
+            "Font Color" => Freexcel.Core.Commands.SortOn.FontColor,
+            _ => Freexcel.Core.Commands.SortOn.CellValues
+        };
 }
 
 public sealed class SortOptionsDialog : Window

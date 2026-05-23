@@ -192,10 +192,13 @@ public partial class FormatCellsDialog : Window
         PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight);
         PopulateBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, s.BorderBottom);
         PopulateBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, s.BorderLeft);
-        DlgBorderLineStyleBox.ItemsSource = Enum.GetNames(typeof(BorderStyle));
+        var borderStyleNames = Enum.GetNames(typeof(BorderStyle));
+        DlgBorderLineStyleBox.ItemsSource = borderStyleNames;
+        DlgBorderLineStyleList.ItemsSource = borderStyleNames;
         DlgBorderLineStyleBox.SelectedItem = s.BorderBottom.Style == BorderStyle.None
             ? nameof(BorderStyle.Thin)
             : s.BorderBottom.Style.ToString();
+        DlgBorderLineStyleList.SelectedItem = DlgBorderLineStyleBox.SelectedItem;
         DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.Color);
 
         DlgLockedCheck.IsChecked = s.Locked;
@@ -466,6 +469,12 @@ public partial class FormatCellsDialog : Window
         }
     }
 
+    private void DlgFillPatternSwatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string colorText })
+            DlgFillPatternColorBox.Text = colorText;
+    }
+
     private void DlgBorderLineColorSwatchButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string colorText })
@@ -538,7 +547,7 @@ public partial class FormatCellsDialog : Window
     }
 
     private BorderStyle SelectedBorderLineStyle()
-        => DlgBorderLineStyleBox.SelectedItem is string selectedStyle
+        => (DlgBorderLineStyleList.SelectedItem as string ?? DlgBorderLineStyleBox.SelectedItem as string) is string selectedStyle
             && Enum.TryParse(selectedStyle, out BorderStyle parsedStyle)
             && Enum.IsDefined(parsedStyle)
                 ? parsedStyle
@@ -584,9 +593,16 @@ public partial class FormatCellsDialog : Window
 
         DlgFillBackgroundPreview.Background = fillBrush;
         DlgFillSamplePreview.Background = fillBrush;
+        DlgFillPatternSamplePreview.Background = fillBrush;
         DlgFillSamplePreview.BorderBrush = patternStyle == CellFillPatternStyle.None
             ? SystemColors.ControlDarkBrush
             : BrushForColor(patternColor, Brushes.Black);
+        DlgFillPatternSamplePreview.BorderBrush = patternStyle == CellFillPatternStyle.None
+            ? SystemColors.ControlDarkBrush
+            : BrushForColor(patternColor, Brushes.Black);
+        DlgFillPatternSamplePreview.ToolTip = patternStyle == CellFillPatternStyle.None
+            ? "No fill pattern"
+            : $"{FillPatternLabel(patternStyle)} pattern";
         DlgFillSamplePreview.ToolTip = patternStyle == CellFillPatternStyle.None
             ? "No fill pattern"
             : $"{FillPatternLabel(patternStyle)} pattern";

@@ -139,6 +139,9 @@ public sealed class InsertFunctionDialog : Window
     public static string CreateFormula(string functionName) =>
         InsertFunctionCatalogPlanner.CreateFormula(functionName);
 
+    public static string CreateFormula(string functionName, IEnumerable<string?> arguments) =>
+        FunctionArgumentsDialog.CreateFormula(functionName, arguments);
+
     private void RefreshList()
     {
         _listBox.Items.Clear();
@@ -151,7 +154,11 @@ public sealed class InsertFunctionDialog : Window
     {
         if (_listBox.SelectedItem is InsertFunctionCatalogEntry entry)
         {
-            SelectedFormula = CreateFormula(entry.Name);
+            var argumentsDialog = new FunctionArgumentsDialog(entry) { Owner = this };
+            if (argumentsDialog.ShowDialog() != true || string.IsNullOrWhiteSpace(argumentsDialog.ResultFormula))
+                return;
+
+            SelectedFormula = argumentsDialog.ResultFormula;
             DialogResult = true;
         }
     }

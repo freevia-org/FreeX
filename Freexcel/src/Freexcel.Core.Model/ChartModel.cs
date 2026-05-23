@@ -25,7 +25,8 @@ public enum ChartType
     Waterfall,
     Funnel,
     Map,
-    ThreeDColumn
+    ThreeDColumn,
+    ThreeDBar
 }
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }

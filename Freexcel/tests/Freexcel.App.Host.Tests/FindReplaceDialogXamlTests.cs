@@ -95,6 +95,10 @@ public sealed class FindReplaceDialogXamlTests
             .Should()
             .Contain(["For_mat...", "Find _All"]);
 
+        AssertNamedButton(document, presentation, xaml, "FindFormatButton", "For_mat...", "FindFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceFindFormatButton", "For_mat...", "FindFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceWithFormatButton", "For_mat...", "ReplaceWithFormatButton_Click");
+
         AssertNamedElement(document, presentation, xaml, "DataGrid", "FindResultsGrid");
     }
 
@@ -148,6 +152,10 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("private void FindAll_Click");
         source.Should().Contain("FindReplaceTabs.SelectedItem = ReplaceTab");
         source.Should().Contain("CreateFindOptions()");
+        source.Should().Contain("RequiredFormat: _findFormatDiff");
+        source.Should().Contain("new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font)");
+        source.Should().Contain("FindFormatButton_Click");
+        source.Should().Contain("ReplaceWithFormatButton_Click");
         source.Should().Contain("OptionsExpander_Expanded");
         source.Should().Contain("OptionsExpander.Header = \"_Options <<\"");
         source.Should().Contain("OptionsExpander_Collapsed");
@@ -178,6 +186,21 @@ public sealed class FindReplaceDialogXamlTests
         document.Descendants(presentation + "CheckBox")
             .Single(element => element.Attribute(xaml + "Name")?.Value == controlName)
             .Attribute("Content")?.Value.Should().Be(content);
+    }
+
+    private static void AssertNamedButton(
+        XDocument document,
+        XNamespace presentation,
+        XNamespace xaml,
+        string controlName,
+        string content,
+        string clickHandler)
+    {
+        var button = document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == controlName);
+
+        button.Attribute("Content")?.Value.Should().Be(content);
+        button.Attribute("Click")?.Value.Should().Be(clickHandler);
     }
 
     private static void AssertComboBoxContainsExactly(

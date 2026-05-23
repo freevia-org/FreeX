@@ -57,6 +57,28 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void FunctionArgumentsDialog_ExposesExcelLikeArgumentMetadataForCommonFunctions()
+    {
+        FunctionArgumentsDialog.GetArgumentSpecs("IF")
+            .Select(argument => argument.Name)
+            .Should()
+            .Equal("Logical_test", "Value_if_true", "Value_if_false");
+
+        FunctionArgumentsDialog.GetArgumentSpecs("XLOOKUP")
+            .Select(argument => argument.Name)
+            .Should()
+            .StartWith(["Lookup_value", "Lookup_array", "Return_array"]);
+    }
+
+    [Fact]
+    public void FunctionArgumentsDialog_CreateFormula_UsesProvidedArgumentsAndTrimsTrailingBlanks()
+    {
+        FunctionArgumentsDialog.CreateFormula(" if ", ["A1>0", "\"Yes\"", ""])
+            .Should()
+            .Be("IF(A1>0, \"Yes\")");
+    }
+
+    [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
@@ -87,5 +109,7 @@ public sealed class InsertFunctionDialogTests
         source.Should().Contain("Select a _function:");
         source.Should().Contain("Formula syntax and help");
         source.Should().Contain("_Help on this function");
+        source.Should().Contain("FunctionArgumentsDialog");
+        source.Should().Contain("argumentsDialog.ResultFormula");
     }
 }

@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
@@ -537,9 +538,13 @@ public sealed class DataToolDialogTests
         ConsolidateDialog.HaveSameSize([first, second]).Should().BeTrue();
         ConsolidateDialog.HaveSameSize([first, different]).Should().BeFalse();
 
-        var result = ConsolidateDialog.CreateResult([first, second], new CellAddress(sheetId, 9, 1));
+        var result = ConsolidateDialog.CreateResult(
+            [first, second],
+            new CellAddress(sheetId, 9, 1),
+            ConsolidateFunction.Sum);
         result.SourceRanges.Should().Equal(first, second);
         result.DestinationCell.Should().Be(new CellAddress(sheetId, 9, 1));
+        result.Function.Should().Be(ConsolidateFunction.Sum);
     }
 
     [Fact]
@@ -559,6 +564,30 @@ public sealed class DataToolDialogTests
             new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
             new GridRange(new CellAddress(sheetId, 5, 4), new CellAddress(sheetId, 7, 5)));
         result.DestinationCell.Should().Be(new CellAddress(sheetId, 10, 7));
+        result.Function.Should().Be(ConsolidateFunction.Sum);
+    }
+
+    [Fact]
+    public void ConsolidateDialog_TryParse_CapturesSelectedFunctionAndOptions()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B3; D5:E7",
+            destinationCellText: "G10",
+            function: ConsolidateFunction.Average,
+            useTopRowLabels: true,
+            useLeftColumnLabels: true,
+            createLinksToSourceData: true,
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.Function.Should().Be(ConsolidateFunction.Average);
+        result.UseTopRowLabels.Should().BeTrue();
+        result.UseLeftColumnLabels.Should().BeTrue();
+        result.CreateLinksToSourceData.Should().BeTrue();
     }
 
     [Fact]
@@ -599,12 +628,16 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Top row");
         source.Should().Contain("_Left column");
         source.Should().Contain("Create _links to source data");
-        source.Should().Contain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
-        source.Should().Contain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
-        source.Should().Contain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
+        source.Should().Contain("Enum.GetValues<ConsolidateFunction>()");
+        source.Should().Contain("FunctionLabel(function)");
+        source.Should().Contain("ConsolidateFunction.CountNumbers => \"Count Numbers\"");
+        source.Should().Contain("SelectedFunction()");
+        source.Should().NotContain("DisableUnsupported(_functionBox, SumOnlyHelpText)");
+        source.Should().NotContain("DisableUnsupported(_topRowBox, LabelMatchingHelpText)");
+        source.Should().NotContain("DisableUnsupported(_leftColumnBox, LabelMatchingHelpText)");
         source.Should().Contain("DisableUnsupported(_createLinksBox, SourceLinksHelpText)");
-        source.Should().Contain("Only Sum consolidation is currently applied.");
-        source.Should().Contain("source ranges are consolidated by position");
+        source.Should().Contain("UseTopRowLabels");
+        source.Should().Contain("UseLeftColumnLabels");
         source.Should().Contain("consolidated values are written as results");
         source.Should().Contain("AutomationProperties.SetHelpText(control, helpText)");
     }

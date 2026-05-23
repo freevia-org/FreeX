@@ -1,7 +1,7 @@
 <Window x:Class="Freexcel.App.Host.FormatCellsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Format Cells" Width="620" Height="560"
+        Title="Format Cells" Width="700" Height="610"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -129,25 +129,55 @@
             <TabItem Header="F_ill">
                 <Grid Margin="8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="180"/>
+                        <ColumnDefinition Width="2.4*"/>
+                        <ColumnDefinition Width="1.1*"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <Grid Grid.Column="0" Margin="0,0,16,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <TextBlock Text="Background Color:" FontWeight="SemiBold" Margin="0,4,0,4"/>
-                        <UniformGrid x:Name="DlgFillPalettePanel" Columns="6" Rows="2" Margin="0,0,0,8">
-                            <Button Width="28" Height="22" ToolTip="No Fill" Tag="" Click="DlgFillSwatchButton_Click" Background="White" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="White" Tag="255,255,255" Click="DlgFillSwatchButton_Click" Background="White" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Yellow" Tag="255,255,0" Click="DlgFillSwatchButton_Click" Background="Yellow" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Green" Tag="146,208,80" Click="DlgFillSwatchButton_Click" Background="#92D050" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Blue" Tag="91,155,213" Click="DlgFillSwatchButton_Click" Background="#5B9BD5" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Red" Tag="255,0,0" Click="DlgFillSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Orange" Tag="237,125,49" Click="DlgFillSwatchButton_Click" Background="#ED7D31" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Purple" Tag="112,48,160" Click="DlgFillSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Light gray" Tag="217,217,217" Click="DlgFillSwatchButton_Click" Background="#D9D9D9" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Dark gray" Tag="89,89,89" Click="DlgFillSwatchButton_Click" Background="#595959" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="Black" Tag="0,0,0" Click="DlgFillSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
-                            <Button Width="28" Height="22" ToolTip="More Colors" Click="DlgFillColorPickerButton_Click" Content="..."/>
+                        <UniformGrid x:Name="DlgFillPalettePanel" Columns="10" Rows="6" Grid.Row="1" Margin="0,0,0,8">
+                            <Button Width="28" Height="20" ToolTip="No Fill" Tag="" Click="DlgFillSwatchButton_Click" Background="White" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="White" Tag="255,255,255" Click="DlgFillSwatchButton_Click" Background="White" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Black" Tag="0,0,0" Click="DlgFillSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Dark gray" Tag="89,89,89" Click="DlgFillSwatchButton_Click" Background="#595959" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Gray" Tag="128,128,128" Click="DlgFillSwatchButton_Click" Background="#808080" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Light gray" Tag="217,217,217" Click="DlgFillSwatchButton_Click" Background="#D9D9D9" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Dark Red" Tag="192,0,0" Click="DlgFillSwatchButton_Click" Background="#C00000" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Red" Tag="255,0,0" Click="DlgFillSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Orange" Tag="237,125,49" Click="DlgFillSwatchButton_Click" Background="#ED7D31" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Gold" Tag="255,192,0" Click="DlgFillSwatchButton_Click" Background="#FFC000" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Yellow" Tag="255,255,0" Click="DlgFillSwatchButton_Click" Background="Yellow" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Light Yellow" Tag="255,242,204" Click="DlgFillSwatchButton_Click" Background="#FFF2CC" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Dark Green" Tag="0,97,0" Click="DlgFillSwatchButton_Click" Background="#006100" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Green" Tag="146,208,80" Click="DlgFillSwatchButton_Click" Background="#92D050" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Light Green" Tag="226,239,218" Click="DlgFillSwatchButton_Click" Background="#E2EFDA" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Dark Blue" Tag="31,78,121" Click="DlgFillSwatchButton_Click" Background="#1F4E79" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Blue" Tag="91,155,213" Click="DlgFillSwatchButton_Click" Background="#5B9BD5" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Light Blue" Tag="221,235,247" Click="DlgFillSwatchButton_Click" Background="#DDEBF7" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Purple" Tag="112,48,160" Click="DlgFillSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="More Colors" Click="DlgFillColorPickerButton_Click" Content="..."/>
+                            <Button Width="28" Height="20" ToolTip="Accent teal" Tag="0,176,240" Click="DlgFillSwatchButton_Click" Background="#00B0F0" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent aqua" Tag="0,176,180" Click="DlgFillSwatchButton_Click" Background="#00B0B4" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent lime" Tag="112,173,71" Click="DlgFillSwatchButton_Click" Background="#70AD47" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent olive" Tag="84,130,53" Click="DlgFillSwatchButton_Click" Background="#548235" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent rose" Tag="255,199,206" Click="DlgFillSwatchButton_Click" Background="#FFC7CE" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent peach" Tag="244,176,132" Click="DlgFillSwatchButton_Click" Background="#F4B084" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent lavender" Tag="204,192,218" Click="DlgFillSwatchButton_Click" Background="#CCC0DA" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent slate" Tag="68,84,106" Click="DlgFillSwatchButton_Click" Background="#44546A" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent brown" Tag="131,60,12" Click="DlgFillSwatchButton_Click" Background="#833C0C" BorderBrush="Gray"/>
+                            <Button Width="28" Height="20" ToolTip="Accent tan" Tag="197,90,17" Click="DlgFillSwatchButton_Click" Background="#C55A11" BorderBrush="Gray"/>
                         </UniformGrid>
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
                         <Label Content="_Background Color:" Target="{Binding ElementName=DlgFillColorBox}" Padding="0" Margin="0,0,0,2"/>
                         <DockPanel>
                             <Button x:Name="DlgFillColorPickerButton" DockPanel.Dock="Right" Content="_Pick" Width="54" Margin="6,0,0,0" Click="DlgFillColorPickerButton_Click"/>
@@ -156,22 +186,50 @@
                         <Border x:Name="DlgFillBackgroundPreview" Height="22" Margin="0,4,60,0"
                                 BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                                 BorderThickness="1" Background="White"/>
-
-                        <Label Content="Pattern _Color:" Target="{Binding ElementName=DlgFillPatternColorBox}" Padding="0" Margin="0,10,0,2"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                        <TextBlock Text="Pattern Color:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <UniformGrid x:Name="DlgFillPatternColorPalettePanel" Columns="8" Rows="2" Margin="0,0,0,6">
+                            <Button Width="24" Height="19" ToolTip="Pattern black" Tag="0,0,0" Click="DlgFillPatternSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="Pattern gray" Tag="128,128,128" Click="DlgFillPatternSwatchButton_Click" Background="Gray" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="Pattern red" Tag="255,0,0" Click="DlgFillPatternSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="Pattern gold" Tag="255,192,0" Click="DlgFillPatternSwatchButton_Click" Background="#FFC000" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="Pattern green" Tag="0,176,80" Click="DlgFillPatternSwatchButton_Click" Background="#00B050" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="Pattern accent blue" Tag="0,112,192" Click="DlgFillPatternSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="Pattern purple" Tag="112,48,160" Click="DlgFillPatternSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
+                            <Button Width="24" Height="19" ToolTip="More Pattern Colors" Click="DlgFillPatternColorPickerButton_Click" Content="..."/>
+                        </UniformGrid>
+                        <Label Content="Pattern _Color:" Target="{Binding ElementName=DlgFillPatternColorBox}" Padding="0" Margin="0,0,0,2"/>
                         <DockPanel>
                             <Button x:Name="DlgFillPatternColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgFillPatternColorPickerButton_Click"/>
                             <TextBox x:Name="DlgFillPatternColorBox" Height="24" TextChanged="FillPreviewInput_Changed"/>
                         </DockPanel>
-                        <Label Content="Pattern _Style:" Target="{Binding ElementName=DlgFillPatternStyleBox}" Padding="0" Margin="0,8,0,2"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Row="3" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="150"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="Pattern Style:" FontWeight="SemiBold" Margin="0,0,0,2"/>
+                        <Label Content="Pattern _Style:" Target="{Binding ElementName=DlgFillPatternStyleBox}" Padding="0" Margin="0,0,0,2"/>
                         <ComboBox x:Name="DlgFillPatternStyleBox" Height="24" SelectionChanged="FillPreviewInput_Changed"/>
 
                         <CheckBox x:Name="DlgClearFillCheck" Content="_Clear fill" Margin="0,12,0,0" Checked="FillPreviewInput_Changed" Unchecked="FillPreviewInput_Changed"/>
-                    </StackPanel>
+                            </StackPanel>
+                            <Border x:Name="DlgFillPatternSamplePreview" Grid.Column="1" Height="62"
+                                    BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                                    BorderThickness="1" Background="White">
+                                <TextBlock Text="Pattern" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                    </Grid>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="Sample" FontWeight="SemiBold" Margin="0,4,0,2"/>
                         <Border x:Name="DlgFillSamplePreview"
                                 BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                                BorderThickness="1" Height="96" Padding="8" Background="White">
+                                BorderThickness="1" Height="146" Padding="8" Background="White">
                             <TextBlock Text="Sample" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
@@ -182,8 +240,8 @@
             <TabItem Header="_Border">
                 <Grid Margin="8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="120"/>
-                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="122"/>
+                        <ColumnDefinition Width="190"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
@@ -201,18 +259,22 @@
                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,12,0">
                         <TextBlock Text="Line" FontWeight="SemiBold" Margin="0,4,0,4"/>
                         <Label Content="_Style:" Target="{Binding ElementName=DlgBorderLineStyleBox}" Padding="0" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="DlgBorderLineStyleBox" Height="24" SelectionChanged="BorderPreviewInput_Changed"/>
+                        <ComboBox x:Name="DlgBorderLineStyleBox" Height="24" Visibility="Collapsed" SelectionChanged="BorderPreviewInput_Changed"/>
+                        <ListBox x:Name="DlgBorderLineStyleList" Height="124" SelectionChanged="BorderPreviewInput_Changed"/>
                         <Label Content="_Color:" Target="{Binding ElementName=DlgBorderLineColorBox}" Padding="0" Margin="0,8,0,2"/>
                         <DockPanel>
                             <Button x:Name="DlgBorderLineColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderLineColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderLineColorBox" Height="24" TextChanged="BorderPreviewInput_Changed"/>
                         </DockPanel>
-                        <UniformGrid Columns="5" Rows="1" Margin="0,6,0,0">
-                            <Button Width="24" Height="20" ToolTip="Black border" Tag="0,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
-                            <Button Width="24" Height="20" ToolTip="Red border" Tag="255,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
-                            <Button Width="24" Height="20" ToolTip="Blue border" Tag="0,112,192" Click="DlgBorderLineColorSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
-                            <Button Width="24" Height="20" ToolTip="Green border" Tag="0,176,80" Click="DlgBorderLineColorSwatchButton_Click" Background="#00B050" BorderBrush="Gray"/>
-                            <Button Width="24" Height="20" ToolTip="Gray border" Tag="128,128,128" Click="DlgBorderLineColorSwatchButton_Click" Background="Gray" BorderBrush="Gray"/>
+                        <UniformGrid x:Name="DlgBorderLinePalettePanel" Columns="8" Rows="2" Margin="0,6,0,0">
+                            <Button Width="22" Height="18" ToolTip="Black border" Tag="0,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="Gray border" Tag="128,128,128" Click="DlgBorderLineColorSwatchButton_Click" Background="Gray" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="Red border" Tag="255,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="Gold border" Tag="255,192,0" Click="DlgBorderLineColorSwatchButton_Click" Background="#FFC000" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="Green border" Tag="0,176,80" Click="DlgBorderLineColorSwatchButton_Click" Background="#00B050" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="Blue border" Tag="0,112,192" Click="DlgBorderLineColorSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="Purple border" Tag="112,48,160" Click="DlgBorderLineColorSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
+                            <Button Width="22" Height="18" ToolTip="More Border Colors" Click="DlgBorderLineColorPickerButton_Click" Content="..."/>
                         </UniformGrid>
                         <Border x:Name="DlgBorderLineColorPreview" Height="20" Margin="0,6,0,0"
                                 BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
@@ -221,25 +283,25 @@
 
                     <StackPanel Grid.Row="0" Grid.Column="2">
                         <TextBlock Text="Border" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,4,0,4"/>
-                        <Grid Width="190" Height="126" HorizontalAlignment="Center">
+                        <Grid Width="244" Height="164" HorizontalAlignment="Center">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="70"/>
-                                <RowDefinition Height="28"/>
+                                <RowDefinition Height="32"/>
+                                <RowDefinition Height="100"/>
+                                <RowDefinition Height="32"/>
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="34"/>
-                                <ColumnDefinition Width="122"/>
-                                <ColumnDefinition Width="34"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="144"/>
+                                <ColumnDefinition Width="50"/>
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="DlgBorderPreviewTopButton" Grid.Row="0" Grid.Column="1" Content="To_p" Click="DlgBorderPreviewTopButton_Click"/>
-                            <Button x:Name="DlgBorderPreviewLeftButton" Grid.Row="1" Grid.Column="0" Content="L_eft" Click="DlgBorderPreviewLeftButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewTopButton" Grid.Row="0" Grid.Column="1" Content="To_p" MinHeight="30" ToolTip="Apply top border" Click="DlgBorderPreviewTopButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewLeftButton" Grid.Row="1" Grid.Column="0" Content="L_eft" MinWidth="48" ToolTip="Apply left border" Click="DlgBorderPreviewLeftButton_Click"/>
                             <Border x:Name="DlgBorderPreviewArea" Grid.Row="1" Grid.Column="1"
                                     BorderBrush="Black" BorderThickness="1" Background="White">
                                 <TextBlock Text="Text" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
-                            <Button x:Name="DlgBorderPreviewRightButton" Grid.Row="1" Grid.Column="2" Content="Ri_ght" Click="DlgBorderPreviewRightButton_Click"/>
-                            <Button x:Name="DlgBorderPreviewBottomButton" Grid.Row="2" Grid.Column="1" Content="Botto_m" Click="DlgBorderPreviewBottomButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewRightButton" Grid.Row="1" Grid.Column="2" Content="Ri_ght" MinWidth="48" ToolTip="Apply right border" Click="DlgBorderPreviewRightButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewBottomButton" Grid.Row="2" Grid.Column="1" Content="Botto_m" MinHeight="30" ToolTip="Apply bottom border" Click="DlgBorderPreviewBottomButton_Click"/>
                         </Grid>
                     </StackPanel>
 

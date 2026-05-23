@@ -81,12 +81,14 @@ public sealed class PivotTableModel
     public bool RepeatItemLabels { get; set; } = true;
     public bool BlankLineAfterItems { get; set; }
     public PivotReportLayout ReportLayout { get; set; } = PivotReportLayout.Tabular;
+    public int CompactRowLabelIndent { get; set; } = 1;
     public string StyleName { get; set; } = "PivotStyleLight16";
     public bool ShowRowHeaders { get; set; } = true;
     public bool ShowColumnHeaders { get; set; } = true;
     public bool ShowRowStripes { get; set; }
     public bool ShowColumnStripes { get; set; }
     public string? EmptyValueText { get; set; }
+    public bool ShowExpandCollapseButtons { get; set; } = true;
     public bool PrintTitles { get; set; }
     public bool PrintExpandCollapseButtons { get; set; }
     public string? AltTextTitle { get; set; }

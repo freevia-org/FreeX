@@ -30,7 +30,7 @@ public sealed class WatchWindowMessageFormatterTests
 
         source.Should().Contain("Content = \"_Add Watch\"");
         source.Should().Contain("IsEnabled = _addWatch is not null");
-        source.Should().Contain("_addWatch?.Invoke()");
+        source.Should().Contain("AddWatchDialog");
         source.Should().Contain("Content = \"_Refresh\"");
         source.Should().Contain("Content = \"_Delete Watch\"");
         source.Should().Contain("Content = \"_Close\"");
@@ -43,8 +43,21 @@ public sealed class WatchWindowMessageFormatterTests
         var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormulaCommands.cs"));
 
         dialogSource.Should().Contain("Action? addWatch");
+        dialogSource.Should().Contain("Func<string>? getSelectionText");
         mainWindowSource.Should().Contain("AddWatchFromSelection(showMessage: false)");
         mainWindowSource.Should().Contain("AddWatchFromSelection(showMessage: true)");
+        mainWindowSource.Should().Contain("FormatRangeReference(range.Start, range.End)");
+    }
+
+    [Fact]
+    public void AddWatchDialog_ExposesSelectedRangePreview()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("public sealed class AddWatchDialog");
+        source.Should().Contain("Title = \"Add Watch\"");
+        source.Should().Contain("Selected range:");
+        source.Should().Contain("Content = \"_Add\"");
     }
 
     [Fact]
