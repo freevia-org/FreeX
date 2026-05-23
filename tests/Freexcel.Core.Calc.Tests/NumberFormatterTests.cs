@@ -78,6 +78,9 @@ public class NumberFormatterTests
     [InlineData("[>100]0.0;[<=100]0.00", 125, "125.0")]
     [InlineData("[>100]0.0;[<=100]0.00", 25, "25.00")]
     [InlineData("[<0]0.0;[=0]\"zero\";0.00", 0, "zero")]
+    [InlineData("[>=1E3]0,\"K\";0", 1500, "2K")]
+    [InlineData("[>=1E3]0,\"K\";0", 500, "500")]
+    [InlineData("[>=+100]0;0.00", 125, "125")]
     public void CustomNumberSubset_UsesConditionalSections(string format, double value, string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);
