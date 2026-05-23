@@ -101,6 +101,7 @@ public sealed partial class AutoFilterDialog : Window
     {
         Title = $"AutoFilter - {menuPlan.HeaderText}";
         _clearFilterButton.Content = $"_Clear Filter From \"{menuPlan.HeaderText}\"";
+        SetSortLabels(menuPlan.FilterKind);
         ShowFilterFamilyButton(menuPlan.FilterKind);
         var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
         if (criteriaSuggestions.Count > 0)
@@ -308,6 +309,21 @@ public sealed partial class AutoFilterDialog : Window
         _dateFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Date
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => ("Sort _Smallest to Largest", "Sort _Largest to Smallest"),
+            AutoFilterMenuFilterKind.Date => ("Sort _Oldest to Newest", "Sort _Newest to Oldest"),
+            _ => ("Sort _A to Z", "Sort _Z to A")
+        };
+
+    private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
+    {
+        var labels = GetSortLabels(filterKind);
+        _sortAscending.Content = labels.Ascending;
+        _sortDescending.Content = labels.Descending;
     }
 
     private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>
