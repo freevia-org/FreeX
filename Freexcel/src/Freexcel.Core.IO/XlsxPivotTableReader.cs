@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -161,6 +161,8 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showRowStripes"),
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showColStripes"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showHeaders", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDataTips", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showMemberPropertyTips", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDrill", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyWidthHeightFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveFormatting", defaultValue: true),
@@ -478,6 +480,8 @@ internal static partial class XlsxPivotTableReader
             ShowRowStripes = pending.ShowRowStripes,
             ShowColumnStripes = pending.ShowColumnStripes,
             ShowFieldHeaders = pending.ShowFieldHeaders,
+            ShowContextualTooltips = pending.ShowContextualTooltips,
+            ShowPropertiesInTooltips = pending.ShowPropertiesInTooltips,
             ShowExpandCollapseButtons = pending.ShowExpandCollapseButtons,
             AutofitColumnsOnUpdate = pending.AutofitColumnsOnUpdate,
             PreserveFormattingOnUpdate = pending.PreserveFormattingOnUpdate,
@@ -529,6 +533,8 @@ internal static partial class XlsxPivotTableReader
         bool ShowRowStripes,
         bool ShowColumnStripes,
         bool ShowFieldHeaders,
+        bool ShowContextualTooltips,
+        bool ShowPropertiesInTooltips,
         bool ShowExpandCollapseButtons,
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,

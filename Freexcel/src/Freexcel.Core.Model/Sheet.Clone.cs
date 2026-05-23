@@ -159,6 +159,8 @@ public sealed partial class Sheet
                 ShowRowStripes = pt.ShowRowStripes,
                 ShowColumnStripes = pt.ShowColumnStripes,
                 ShowFieldHeaders = pt.ShowFieldHeaders,
+                ShowContextualTooltips = pt.ShowContextualTooltips,
+                ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
                 EmptyValueText = pt.EmptyValueText,
                 AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
                 PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
