@@ -1003,7 +1003,9 @@ internal static class XlsxCorpusFixtureFactory
             SourceSheetName = sheet.Name,
             SourceReference = "A1:C4",
             PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
-            RefreshOnLoad = true
+            RefreshOnLoad = true,
+            PreserveSourceSortFilter = false,
+            RefreshedBy = "Freexcel Corpus"
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
         cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
