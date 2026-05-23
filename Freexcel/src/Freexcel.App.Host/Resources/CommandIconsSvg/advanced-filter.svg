@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Advanced Filter">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><path class="s" d="M7.56 10.8h38.88L31.32 28.08v11.88l-8.64 4.32v-16.2z"/><text class="tm" x="38.88" y="44.28" font-size="9.72">A</text>  </g>
+  <g><path d="M7.56 10.8h38.88L31.32 28.08v11.88l-8.64 4.32v-16.2z" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><text x="38.88" y="44.28" font-size="9.72" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">A</text>  </g>
 </svg>
 

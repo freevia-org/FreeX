@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Date/Time formats">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><rect class="paper" stroke="#202124" stroke-width="1.7" x="9.72" y="11.88" width="32.4" height="27"/><rect class="green2" x="9.72" y="11.88" width="32.4" height="7.56"/><text class="tm" x="17.28" y="31.32" font-size="8.64">12</text><text class="tm" x="29.7" y="31.32" font-size="8.64">AM</text>  </g>
+  <g><rect stroke="#202124" stroke-width="1.7" x="9.72" y="11.88" width="32.4" height="27" fill="#ffffff"/><rect x="9.72" y="11.88" width="32.4" height="7.56" fill="#dff6dd"/><text x="17.28" y="31.32" font-size="8.64" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">12</text><text x="29.7" y="31.32" font-size="8.64" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">AM</text>  </g>
 </svg>
 

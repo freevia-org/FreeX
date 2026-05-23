@@ -1,27 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .r{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g{fill:#107c41}
-      .g2{fill:#dff6dd}
-      .b{fill:#0078d4}
-      .o{fill:#f7630c}
-      .y{fill:#ffb900}
-      .rd{fill:#d32f2f}
-      .p{fill:#8b5cf6}
-      .w{fill:#ffffff}
-      .k{fill:#242424}
-      .f{fill:#f3f2f1}
-      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-</style>
-  </defs>
-  <rect class="f s" x="3" y="3" width="14" height="14" stroke-width="1"/>
-  <path class="s" d="M6.5 3 L6.5 17" stroke-width="0.7"/>
-  <path class="s" d="M10 3 L10 17" stroke-width="0.7"/>
-  <path class="s" d="M13.5 3 L13.5 17" stroke-width="0.7"/>
-  <path class="s" d="M3 6.5 L17 6.5" stroke-width="0.7"/>
-  <path class="s" d="M3 10 L17 10" stroke-width="0.7"/>
-  <path class="s" d="M3 13.5 L17 13.5" stroke-width="0.7"/>
-  <path class="b" d="M10 3 L10 17" stroke-width="1.2"/>
+  
+  <rect x="3" y="3" width="14" height="14" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6.5 3 L6.5 17" stroke-width="0.7" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 3 L10 17" stroke-width="0.7" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13.5 3 L13.5 17" stroke-width="0.7" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3 6.5 L17 6.5" stroke-width="0.7" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3 10 L17 10" stroke-width="0.7" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3 13.5 L17 13.5" stroke-width="0.7" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 3 L10 17" stroke-width="1.2" fill="#0078d4"/>
 </svg>

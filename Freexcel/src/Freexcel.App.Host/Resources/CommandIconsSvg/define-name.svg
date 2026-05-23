@@ -1,22 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Define Name">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#242424}
-      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#242424}
-      .green{fill:#107c41}
-      .green2{fill:#dff6dd}
-      .blue{fill:#0078d4}
-      .yellow{fill:#ffb900}
-      .orange{fill:#f7630c}
-      .red{fill:#d32f2f}
-      .purple{fill:#8b5cf6}
-      .gray{fill:#5c5c5c}
-      .paper{fill:#ffffff}
-      .none{fill:none}
-</style>
-  </defs>
+  
   <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.7" x="10.8" y="17.28" width="31.32" height="12.96"/><text class="tm" x="16.2" y="27" font-size="7.56">fx</text><circle class="green2" cx="41.04" cy="16.2" r="3.78"/>  </g>
+  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.7" x="10.8" y="17.28" width="31.32" height="12.96"/><text x="16.2" y="27" font-size="7.56" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">fx</text><circle cx="41.04" cy="16.2" r="3.78" fill="#dff6dd"/>  </g>
 </svg>
 
