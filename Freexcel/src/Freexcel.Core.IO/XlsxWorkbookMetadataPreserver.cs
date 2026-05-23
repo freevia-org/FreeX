@@ -20,7 +20,7 @@ internal static class XlsxWorkbookMetadataPreserver
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
         var sourceFileSharing = sourceWorkbookXml.Root?.Element(workbookNs + "fileSharing");
-        var sourceFileRecoveryProperties = sourceWorkbookXml.Root?.Element(workbookNs + "fileRecoveryPr");
+        var sourceFileRecoveryProperties = sourceWorkbookXml.Root?.Elements(workbookNs + "fileRecoveryPr").ToArray() ?? [];
         var sourceSmartTagProperties = sourceWorkbookXml.Root?.Element(workbookNs + "smartTagPr");
         var sourceSmartTagTypes = sourceWorkbookXml.Root?.Element(workbookNs + "smartTagTypes");
         var sourceFunctionGroups = sourceWorkbookXml.Root?.Element(workbookNs + "functionGroups");
@@ -37,7 +37,7 @@ internal static class XlsxWorkbookMetadataPreserver
             sourceExtensionList is null &&
             sourceFileVersion is null &&
             sourceFileSharing is null &&
-            sourceFileRecoveryProperties is null &&
+            sourceFileRecoveryProperties.Length == 0 &&
             sourceSmartTagProperties is null &&
             sourceSmartTagTypes is null &&
             sourceFunctionGroups is null &&
@@ -66,7 +66,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeChildBlock(sourceFileSharing, targetRoot, workbookNs + "fileSharing"))
             changed = true;
-        if (MergeChildBlock(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
+        if (MergeChildBlocks(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
             changed = true;
         if (MergeChildBlock(sourceSmartTagProperties, targetRoot, workbookNs + "smartTagPr"))
             changed = true;
@@ -105,6 +105,16 @@ internal static class XlsxWorkbookMetadataPreserver
             return false;
 
         targetRoot.Add(new XElement(sourceBlock));
+        return true;
+    }
+
+    private static bool MergeChildBlocks(IReadOnlyCollection<XElement> sourceBlocks, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlocks.Count == 0 || targetRoot.Element(blockName) is not null)
+            return false;
+
+        foreach (var sourceBlock in sourceBlocks)
+            targetRoot.Add(new XElement(sourceBlock));
         return true;
     }
 
