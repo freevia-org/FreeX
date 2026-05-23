@@ -259,6 +259,7 @@ public sealed class PivotWorkflowDialogTests
             emptyValueText: "  N/A  ",
             refreshOnOpen: true,
             saveSourceData: false,
+            enableRefresh: false,
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
             preserveFormattingOnUpdate: false,
@@ -300,14 +301,16 @@ public sealed class PivotWorkflowDialogTests
         {
             CacheId = 7,
             RefreshOnLoad = true,
-            SaveData = false
+            SaveData = false,
+            EnableRefresh = false
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
             .Should()
             .Match<PivotTableOptionsDialogResult>(result =>
                 result.RefreshOnOpen &&
-                !result.SaveSourceData);
+                !result.SaveSourceData &&
+                !result.EnableRefresh);
     }
 
     [Fact]
@@ -410,6 +413,7 @@ public sealed class PivotWorkflowDialogTests
             "_autofitColumnsBox",
             "_preserveFormattingBox",
             "_refreshOnOpenBox",
+            "_enableRefreshBox",
             "_showExpandCollapseBox",
             "_printTitlesBox",
             "_printExpandCollapseBox",
@@ -491,6 +495,7 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"_Autofit column widths on update\"",
             "Content = \"_Preserve cell formatting on update\"",
             "Content = \"_Refresh data when opening the file\"",
+            "Content = \"_Enable refresh\"",
             "Content = \"Show expand/collapse _buttons\"",
             "Content = \"Set print _titles\"",
             "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
@@ -517,6 +522,7 @@ public sealed class PivotWorkflowDialogTests
             emptyValueText: " - ",
             refreshOnOpen: true,
             saveSourceData: false,
+            enableRefresh: false,
             compactRowLabelIndent: 6,
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
@@ -529,6 +535,7 @@ public sealed class PivotWorkflowDialogTests
         result.ShowExpandCollapseButtons.Should().BeFalse();
         result.AutofitColumnsOnUpdate.Should().BeFalse();
         result.PreserveFormattingOnUpdate.Should().BeFalse();
+        result.EnableRefresh.Should().BeFalse();
         result.PrintTitles.Should().BeTrue();
         result.PrintExpandCollapseButtons.Should().BeTrue();
         result.CompactRowLabelIndent.Should().Be(6);
