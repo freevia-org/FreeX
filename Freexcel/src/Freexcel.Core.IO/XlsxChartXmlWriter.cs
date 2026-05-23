@@ -99,7 +99,7 @@ internal static partial class XlsxChartXmlWriter
             yield break;
         }
 
-        if (secondaryIndexes.Count > 0 && chart.Type == ChartType.Line)
+        if (secondaryIndexes.Count > 0 && chart.Type is ChartType.Line or ChartType.ThreeDLine)
         {
             var primaryLine = Enumerable.Range(0, seriesCount)
                 .Where(index => !secondaryIndexes.Contains(index))
@@ -150,6 +150,7 @@ internal static partial class XlsxChartXmlWriter
         chart.Type switch
         {
             ChartType.Line => CreateLinePlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.ThreeDLine => Create3DLinePlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Scatter => CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Radar => new XElement(chartNs + "radarChart",
                 new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
@@ -236,6 +237,16 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         new(chartNs + "lineChart",
+            BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
+            ToChartGuideLineXml(chart, chartNs));
+
+    private static XElement Create3DLinePlotChart(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool> includeSeries) =>
+        new(chartNs + "line3DChart",
             BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
             ToChartGuideLineXml(chart, chartNs));
 
@@ -578,6 +589,7 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.StackedBar
                 or ChartType.PercentStackedBar
                 or ChartType.Line
+                or ChartType.ThreeDLine
                 or ChartType.Scatter
                 or ChartType.Area
                 or ChartType.ThreeDArea
