@@ -202,7 +202,7 @@ public partial class FormatCellsDialog : Window
         DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.Color);
 
         DlgLockedCheck.IsChecked = s.Locked;
-        DlgHiddenCheck.IsChecked = false;
+        DlgHiddenCheck.IsChecked = s.Hidden;
 
         UpdateFontPreview();
         UpdateFillPreview();
@@ -421,6 +421,7 @@ public partial class FormatCellsDialog : Window
             BorderBottom:    borderBottom,
             BorderLeft:      borderLeft,
             Locked:          DlgLockedCheck.IsChecked,
+            Hidden:          DlgHiddenCheck.IsChecked,
             ClearFill:       clearFill ? true : null
         );
 

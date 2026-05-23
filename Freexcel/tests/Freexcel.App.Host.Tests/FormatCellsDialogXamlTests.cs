@@ -839,6 +839,7 @@ public sealed class FormatCellsDialogXamlTests
                 GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.Double);
                 GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "10,11,12";
                 GetControl<CheckBox>(dialog, "DlgLockedCheck").IsChecked = false;
+                GetControl<CheckBox>(dialog, "DlgHiddenCheck").IsChecked = true;
 
                 ClickOkForTest(dialog);
 
@@ -852,6 +853,7 @@ public sealed class FormatCellsDialogXamlTests
                 dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dotted, new CellColor(7, 8, 9)));
                 dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Double, new CellColor(10, 11, 12)));
                 dialog.ResultDiff.Locked.Should().BeFalse();
+                dialog.ResultDiff.Hidden.Should().BeTrue();
             }
             finally
             {
