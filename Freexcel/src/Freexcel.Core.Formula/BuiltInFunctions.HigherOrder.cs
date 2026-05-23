@@ -52,7 +52,10 @@ public static partial class BuiltInFunctions
         ScalarValue acc = args[0];
         var flat = rv.Flatten();
         foreach (var val in flat)
+        {
             acc = ctx.InvokeLambda(lambda, [acc, val]);
+            if (acc is RangeValue) return ErrorValue.Calc;
+        }
         return acc;
     }
 

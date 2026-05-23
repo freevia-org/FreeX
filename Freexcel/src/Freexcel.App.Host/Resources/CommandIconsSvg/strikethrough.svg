@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Strikethrough">
-
-<rect width="32" height="32" fill="none"/>
-<g transform="translate(16 16) scale(1.25) translate(-16 -16)">
-<text x="16" y="22" text-anchor="middle" font-size="17" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">S</text><path d="M9.5 16h13" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
+  <rect width="32" height="32" fill="none"/>
+  <text x="16" y="16.5" font-size="23" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">S</text>
+  <path d="M6.5 16.5H25.5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="square"/>
 </svg>
