@@ -321,7 +321,9 @@ public sealed class FormatCellsDialogXamlTests
             "DlgBorderPreviewTopButton",
             "DlgBorderPreviewRightButton",
             "DlgBorderPreviewBottomButton",
-            "DlgBorderPreviewLeftButton"
+            "DlgBorderPreviewLeftButton",
+            "DlgBorderPreviewInsideVertical",
+            "DlgBorderPreviewInsideHorizontal"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
     }
@@ -863,6 +865,60 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderPresetsExposeRangeBorderSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ListBox>(dialog, "DlgBorderLineStyleList").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "20,30,40";
+                InvokeDialogHandler(dialog, "DlgBorderPresetInsideButton_Click");
+                ClickOkForTest(dialog);
+
+                dialog.ResultBorderSelection.Clear.Should().BeFalse();
+                dialog.ResultBorderSelection.Outline.Should().BeNull();
+                dialog.ResultBorderSelection.Inside.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(20, 30, 40)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_OutlineAndNonePresetsExposeRangeBorderSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ListBox>(dialog, "DlgBorderLineStyleList").SelectedItem = nameof(BorderStyle.Thick);
+                GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "1,2,3";
+                InvokeDialogHandler(dialog, "DlgBorderPresetOutlineButton_Click");
+                ClickOkForTest(dialog);
+
+                dialog.ResultBorderSelection.Outline.Should().Be(new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)));
+                dialog.ResultBorderSelection.Inside.Should().BeNull();
+                dialog.ResultBorderSelection.Clear.Should().BeFalse();
+
+                InvokeDialogHandler(dialog, "DlgBorderPresetNoneButton_Click");
+                ClickOkForTest(dialog);
+                dialog.ResultBorderSelection.Clear.Should().BeTrue();
+                dialog.ResultBorderSelection.Outline.Should().BeNull();
+                dialog.ResultBorderSelection.Inside.Should().BeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsClearFillIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
@@ -922,5 +978,12 @@ public sealed class FormatCellsDialogXamlTests
             // The handler creates ResultDiff before setting DialogResult. Direct invocation on a modeless
             // test window reaches that WPF-only modal postcondition after the behavior under test runs.
         }
+    }
+
+    private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName)
+    {
+        var method = typeof(FormatCellsDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [dialog, new System.Windows.RoutedEventArgs()]);
     }
 }
