@@ -487,8 +487,8 @@ public sealed class PivotTableCommandTests
         pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(1);
         pivot.PageFields.Should().ContainSingle().Which.SelectedItem.Should().Be("A");
         pivot.DataFields.Should().ContainSingle().Which.SummaryFunction.Should().Be("count");
-        sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("Q1"));
-        sheet.GetCell(Addr(sheet, "F4"))!.Value.Should().Be(new NumberValue(1));
+        sheet.GetCell(Addr(sheet, "E6"))!.Value.Should().Be(new TextValue("Q1"));
+        sheet.GetCell(Addr(sheet, "F6"))!.Value.Should().Be(new NumberValue(1));
 
         command.Revert(ctx);
 
@@ -632,6 +632,82 @@ public sealed class PivotTableCommandTests
         pivot.Sorts.Should().BeEmpty();
         sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new TextValue("A"));
         sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableLayoutCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotLayoutCommandTest");
+        sheet.IsProtected = true;
+
+        var outcome = new ConfigurePivotTableLayoutCommand(
+            sheet.Id,
+            pivot.Name,
+            rowFields: [],
+            columnFields: [],
+            pageFields: [],
+            dataFields: [new PivotDataFieldModel(1, "Sum of Amount", "sum")]).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ConfigurePivotTableLayoutCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotLayoutCommandTest");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = new ConfigurePivotTableLayoutCommand(
+            sheet.Id,
+            pivot.Name,
+            rowFields: [],
+            columnFields: [],
+            pageFields: [],
+            dataFields: [new PivotDataFieldModel(1, "Sum of Amount", "sum")]).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        pivot.RowFields.Should().BeEmpty();
+        sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableViewCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotViewCommandTest");
+        sheet.IsProtected = true;
+
+        var outcome = new ConfigurePivotTableViewCommand(
+            sheet.Id,
+            pivot.Name,
+            labelFilters: [new PivotLabelFilterModel(0, PivotLabelFilterKind.Equals, "B")],
+            valueFilters: [],
+            sorts: []).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        pivot.LabelFilters.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableViewCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotViewCommandTest");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = new ConfigurePivotTableViewCommand(
+            sheet.Id,
+            pivot.Name,
+            labelFilters: [new PivotLabelFilterModel(0, PivotLabelFilterKind.Equals, "B")],
+            valueFilters: [],
+            sorts: []).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        pivot.LabelFilters.Should().ContainSingle().Which.Value.Should().Be("B");
+        sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new TextValue("B"));
     }
 
     [Fact]
@@ -1679,6 +1755,26 @@ public sealed class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
         sheet.SetCell(Addr(sheet, "A3"), new TextValue("B"));
         sheet.SetCell(Addr(sheet, "B3"), new NumberValue(20));
+    }
+
+    private static (Sheet Sheet, ICommandContext Context, PivotTableModel Pivot) CreateBasicPivotReport(string workbookName)
+    {
+        var workbook = new Workbook(workbookName);
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+        return (sheet, ctx, pivot);
     }
 
     private static void SeedTimelineData(Sheet sheet)
