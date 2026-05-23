@@ -120,6 +120,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+        if (name.Contains("add-ins")) return new(RibbonCommandIconKind.GetData);
+        if (name.Contains("3d map")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
         if (name.Contains("column chart") || name.Contains("bar chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("line chart") || name.Contains("trendline")) return new(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart);
         if (name.Contains("pie chart") || name.Contains("doughnut")) return new(RibbonCommandIconKind.ChartPie, RibbonCommandIconAccent.Chart);
@@ -129,6 +131,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("axis") || name.Contains("legend") || name.Contains("plot") || name.Contains("series")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("sparkline")) return new(RibbonCommandIconKind.Sparkline, RibbonCommandIconAccent.Chart);
+        if (name.Contains("slicer")) return new(RibbonCommandIconKind.Filter);
+        if (name.Contains("timeline")) return new(RibbonCommandIconKind.Date);
         if (name.Contains("link")) return new(RibbonCommandIconKind.Link);
         if (name.Contains("delete note") || name.Contains("delete comment")) return new(RibbonCommandIconKind.Delete);
         if (name.Contains("previous comment") || name.Contains("previous note")) return new(RibbonCommandIconKind.Previous);
@@ -136,10 +140,12 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("note") || name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
         if (name.Contains("symbol")) return new(RibbonCommandIconKind.Symbol);
         if (name.Contains("picture")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("shape")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("rectangle")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("ellipse")) return new(RibbonCommandIconKind.Ellipse);
         if (name == "line") return new(RibbonCommandIconKind.Line);
         if (name.Contains("text box")) return new(RibbonCommandIconKind.TextBox);
+        if (name.Contains("equation")) return new(RibbonCommandIconKind.Math);
         if (name.Contains("bring forward")) return new(RibbonCommandIconKind.BringForward);
         if (name.Contains("send backward")) return new(RibbonCommandIconKind.SendBackward);
         if (name.Contains("size")) return new(RibbonCommandIconKind.Size);
@@ -188,6 +194,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("calculate")) return new(RibbonCommandIconKind.Refresh);
 
         if (name.Contains("get data")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
+        if (name.Contains("quer")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
         if (name.Contains("refresh")) return new(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data);
         if (name.Contains("sort ascending")) return new(RibbonCommandIconKind.SortAscending);
         if (name.Contains("sort descending")) return new(RibbonCommandIconKind.SortDescending);
@@ -263,7 +270,12 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("table")) return new(RibbonCommandIconKind.Table);
         if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn);
         if (name.Contains("illustration")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("add-ins")) return new(RibbonCommandIconKind.GetData);
+        if (name.Contains("tour")) return new(RibbonCommandIconKind.ChartColumn);
         if (name.Contains("sparklines")) return new(RibbonCommandIconKind.Sparkline);
+        if (name.Contains("link")) return new(RibbonCommandIconKind.Link);
+        if (name.Contains("text")) return new(RibbonCommandIconKind.TextBox);
+        if (name.Contains("symbol")) return new(RibbonCommandIconKind.Symbol);
         if (name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("theme")) return new(RibbonCommandIconKind.Theme);
         if (name.Contains("function") || name.Contains("formula")) return new(RibbonCommandIconKind.Function);
@@ -271,12 +283,14 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("audit")) return new(RibbonCommandIconKind.Next);
         if (name.Contains("calculation")) return new(RibbonCommandIconKind.Refresh);
         if (name.Contains("sort") || name.Contains("filter")) return new(RibbonCommandIconKind.Filter);
+        if (name.Contains("quer")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("data")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("outline")) return new(RibbonCommandIconKind.Group);
         if (name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
         if (name.Contains("protect")) return new(RibbonCommandIconKind.Protect);
         if (name.Contains("view")) return new(RibbonCommandIconKind.Grid);
         if (name.Contains("zoom")) return new(RibbonCommandIconKind.Zoom);
+        if (name.Contains("macro")) return new(RibbonCommandIconKind.GetData);
 
         return new(RibbonCommandIconKind.Generic);
     }
@@ -307,9 +321,16 @@ public static class RibbonCommandPresentationPlanner
         name == "pivottable" ||
         name is "table" ||
         name.Contains("recommended chart") ||
+        name.Contains("recommended pivottable") ||
         name == "insert picture" ||
+        name == "pictures" ||
+        name == "shapes" ||
         name == "insert link" ||
         name.Contains("insert symbol") ||
+        name.Contains("insert slicer") ||
+        name.Contains("insert timeline") ||
+        name.Contains("header") ||
+        name.Contains("equation") ||
         name.Contains("text box") ||
         name.Contains("rectangle") ||
         name.Contains("ellipse") ||
