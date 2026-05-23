@@ -770,7 +770,8 @@ public static partial class BuiltInFunctions
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
         return NumberResult((sd - pcd).TotalDays);
@@ -784,7 +785,8 @@ public static partial class BuiltInFunctions
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out int basis)) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
         DateTime ncd = CouponDateAfter(sd, md, frequency);
@@ -802,7 +804,8 @@ public static partial class BuiltInFunctions
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime ncd = CouponDateAfter(sd, md, frequency);
         return NumberResult((ncd - sd).TotalDays);
@@ -816,7 +819,8 @@ public static partial class BuiltInFunctions
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime ncd = CouponDateAfter(sd, md, frequency);
         return NumberResult(DateToSerial(ncd));
@@ -830,7 +834,8 @@ public static partial class BuiltInFunctions
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         int months = 12 / frequency;
         int count = 0;
@@ -847,7 +852,8 @@ public static partial class BuiltInFunctions
         int frequency     = (int)Math.Truncate(ToNumber(args[2]));
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 3, out _)) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
         return NumberResult(DateToSerial(pcd));
