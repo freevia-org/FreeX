@@ -32,7 +32,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool PreserveFormattingOnUpdate = true,
     bool ShowFieldHeaders = true,
     bool ShowContextualTooltips = true,
-    bool ShowPropertiesInTooltips = true);
+    bool ShowPropertiesInTooltips = true,
+    bool ShowClassicLayout = false);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -57,6 +58,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _fieldHeadersBox = new() { Content = "Display field _captions and filter drop-downs", IsChecked = true };
     private readonly CheckBox _contextualTooltipsBox = new() { Content = "Show contextual _tooltips", IsChecked = true };
     private readonly CheckBox _propertiesInTooltipsBox = new() { Content = "Show _properties in tooltips", IsChecked = true };
+    private readonly CheckBox _classicLayoutBox = new() { Content = "_Classic PivotTable layout (enables dragging of fields in the grid)" };
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
@@ -116,7 +118,8 @@ public sealed class PivotTableOptionsDialog : Window
             preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate,
             showFieldHeaders: pivotTable.ShowFieldHeaders,
             showContextualTooltips: pivotTable.ShowContextualTooltips,
-            showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips);
+            showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
+            showClassicLayout: pivotTable.ShowClassicLayout);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -146,7 +149,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool preserveFormattingOnUpdate = true,
         bool showFieldHeaders = true,
         bool showContextualTooltips = true,
-        bool showPropertiesInTooltips = true) =>
+        bool showPropertiesInTooltips = true,
+        bool showClassicLayout = false) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -175,7 +179,8 @@ public sealed class PivotTableOptionsDialog : Window
             preserveFormattingOnUpdate,
             showFieldHeaders,
             showContextualTooltips,
-            showPropertiesInTooltips);
+            showPropertiesInTooltips,
+            showClassicLayout);
 
     private DockPanel CreateContent()
     {
@@ -238,6 +243,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _fieldHeadersBox);
         AddCheckBox(stylePanel, _contextualTooltipsBox);
         AddCheckBox(stylePanel, _propertiesInTooltipsBox);
+        AddCheckBox(stylePanel, _classicLayoutBox);
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         AddCheckBox(stylePanel, _showExpandCollapseBox);
@@ -334,6 +340,7 @@ public sealed class PivotTableOptionsDialog : Window
         _fieldHeadersBox.IsChecked = result.ShowFieldHeaders;
         _contextualTooltipsBox.IsChecked = result.ShowContextualTooltips;
         _propertiesInTooltipsBox.IsChecked = result.ShowPropertiesInTooltips;
+        _classicLayoutBox.IsChecked = result.ShowClassicLayout;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
@@ -384,7 +391,8 @@ public sealed class PivotTableOptionsDialog : Window
             _preserveFormattingBox.IsChecked == true,
             _fieldHeadersBox.IsChecked == true,
             _contextualTooltipsBox.IsChecked == true,
-            _propertiesInTooltipsBox.IsChecked == true);
+            _propertiesInTooltipsBox.IsChecked == true,
+            _classicLayoutBox.IsChecked == true);
         DialogResult = true;
     }
 
