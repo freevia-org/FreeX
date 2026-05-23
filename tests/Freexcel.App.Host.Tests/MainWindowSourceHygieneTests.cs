@@ -124,6 +124,24 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageContextMenu_UsesFocusedBackstageElementBeforeWorksheetFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        selectionSource.Should().Contain("if (commandShortcut == KeyboardCommandShortcut.OpenContextMenu && TryOpenFocusedBackstageContextMenu())");
+        selectionSource.IndexOf("TryOpenFocusedBackstageContextMenu()", StringComparison.Ordinal)
+            .Should().BeLessThan(selectionSource.IndexOf("ExecuteCommandShortcut(commandShortcut, sender, e);", StringComparison.Ordinal));
+        backstageSource.Should().Contain("private bool TryOpenFocusedBackstageContextMenu()");
+        backstageSource.Should().Contain("!IsStartScreenVisible()");
+        backstageSource.Should().Contain("Keyboard.FocusedElement is not FrameworkElement focusedElement");
+        backstageSource.Should().Contain("!IsInsideStartScreenOverlay(focusedElement)");
+        backstageSource.Should().Contain("focusedElement.ContextMenu is not { } menu");
+        backstageSource.Should().Contain("menu.PlacementTarget = focusedElement;");
+        backstageSource.Should().Contain("menu.IsOpen = true;");
+    }
+
+    [Fact]
     public void GetData_IncludesDelimitedTextAdapters()
     {
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
