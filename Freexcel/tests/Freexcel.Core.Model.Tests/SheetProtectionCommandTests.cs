@@ -288,7 +288,7 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
-    public void InsertRowsCommand_RejectsRowInsertionWhenSheetIsProtected()
+    public void InsertRowsCommand_RejectsRowInsertionWhenSheetIsProtectedWithoutPermission()
     {
         var (_, sheet, ctx) = Setup();
         sheet.IsProtected = true;
@@ -300,7 +300,69 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
-    public void SetColumnWidthCommand_RejectsLayoutChangesWhenSheetIsProtected()
+    public void InsertRowsCommand_AllowsProtectedSheetWithInsertRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("before"));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.InsertRows);
+
+        var outcome = new InsertRowsCommand(sheet.Id, beforeRow: 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(1, 1).Should().BeNull();
+        sheet.GetValue(2, 1).Should().Be(new TextValue("before"));
+    }
+
+    [Fact]
+    public void InsertColumnsCommand_AllowsProtectedSheetWithInsertColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("before"));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.InsertColumns);
+
+        var outcome = new InsertColumnsCommand(sheet.Id, beforeCol: 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(1, 1).Should().BeNull();
+        sheet.GetValue(1, 2).Should().Be(new TextValue("before"));
+    }
+
+    [Fact]
+    public void DeleteRowsCommand_AllowsProtectedSheetWithDeleteRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("delete"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("keep"));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.DeleteRows);
+
+        var outcome = new DeleteRowsCommand(sheet.Id, startRow: 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("keep"));
+        sheet.GetCell(2, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public void DeleteColumnsCommand_AllowsProtectedSheetWithDeleteColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("delete"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("keep"));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.DeleteColumns);
+
+        var outcome = new DeleteColumnsCommand(sheet.Id, startCol: 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("keep"));
+        sheet.GetCell(1, 2).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_RejectsLayoutChangesWhenSheetIsProtectedWithoutPermission()
     {
         var (_, sheet, ctx) = Setup();
         sheet.IsProtected = true;
@@ -310,6 +372,58 @@ public class SheetProtectionCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.ColumnWidths.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new SetColumnWidthCommand(sheet.Id, 1, 1, 20).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ColumnWidths[1].Should().Be(20);
+    }
+
+    [Fact]
+    public void SetRowHeightCommand_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 30).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(30);
+    }
+
+    [Fact]
+    public void SetColumnsHiddenCommand_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new SetColumnsHiddenCommand(sheet.Id, 1, 1, hidden: true).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.HiddenCols.Should().Contain(1);
+    }
+
+    [Fact]
+    public void SetRowsHiddenCommand_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new SetRowsHiddenCommand(sheet.Id, 1, 1, hidden: true).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.HiddenRows.Should().Contain(1);
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
