@@ -200,9 +200,23 @@ public static class RibbonAdaptiveLayoutPlanner
         double availableWidth,
         RibbonAdaptiveGroupState[] states)
     {
-        if (availableWidth <= 1600)
+        if (availableWidth <= 900)
         {
-            for (var i = 1; i < states.Length; i++)
+            for (var i = 0; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1120)
+        {
+            for (var i = 2; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1320)
+        {
+            for (var i = 3; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
         }
     }
@@ -258,7 +272,7 @@ public static class RibbonAdaptiveLayoutPlanner
             return;
         }
 
-        if (availableWidth <= 1800 &&
+        if (availableWidth <= 1300 &&
             TryFindGroupIndex(groupNames, "Styles", out var stylesIndex))
         {
             for (var i = stylesIndex; i < states.Length; i++)
@@ -266,10 +280,18 @@ public static class RibbonAdaptiveLayoutPlanner
             return;
         }
 
-        if (availableWidth <= 2000 &&
+        if (availableWidth <= 1500 &&
             TryFindGroupIndex(groupNames, "Cells", out var cellsIndex))
         {
             for (var i = cellsIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1700 &&
+            TryFindGroupIndex(groupNames, "Editing", out var editingIndex))
+        {
+            for (var i = editingIndex; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
         }
     }
