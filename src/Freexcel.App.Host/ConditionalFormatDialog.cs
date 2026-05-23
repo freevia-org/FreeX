@@ -46,6 +46,8 @@ public class ConditionalFormatDialog : Window
     private StackPanel? _descriptionHost;
     private CellStyle? _customFormatStyle;
     private ConditionalFormat? _existingRule;
+    private StackPanel _iconSetThresholdPanel = new();
+    private List<(ComboBox TypeBox, TextBox ValueBox)> _iconSetThresholdRows = [];
 
     private static readonly (string Label, Color FillColor, Color? FontColor, bool Bold)[] ColorOptions =
     [
@@ -208,11 +210,16 @@ public class ConditionalFormatDialog : Window
         }
         else if (isIconSet)
         {
-            Height = 230;
+            _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
+            _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
+
             inner.Children.Add(CreateAccessLabel("_Icon set:", _iconSetStyleBox));
             inner.Children.Add(_iconSetStyleBox);
             inner.Children.Add(_iconSetShowValueBox);
             inner.Children.Add(_iconSetReverseBox);
+            inner.Children.Add(new TextBlock { Text = "Thresholds:", Margin = new Thickness(0, 4, 0, 2) });
+            inner.Children.Add(_iconSetThresholdPanel);
 
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
@@ -333,6 +340,8 @@ public class ConditionalFormatDialog : Window
                 _iconSetStyleBox.SelectedItem = style;
                 _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
                 _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
+                var thresholds = existingRule.IconSetThresholds.Count > 0 ? existingRule.IconSetThresholds : null;
+                BuildIconSetThresholdPanel(style, thresholds);
             }
             else if (existingRule.RuleType == CfRuleType.DataBar)
             {
@@ -471,7 +480,18 @@ public class ConditionalFormatDialog : Window
                 cf.IconSetShowValue = _iconSetShowValueBox.IsChecked == true;
                 cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
                 cf.IconSetThresholds.Clear();
-                cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
+                if (_iconSetThresholdRows.Count > 0)
+                {
+                    foreach (var (typeBox, valueBox) in _iconSetThresholdRows)
+                    {
+                        var type = typeBox.SelectedItem is CfThresholdType t ? t : CfThresholdType.Percent;
+                        cf.IconSetThresholds.Add(new CfThresholdModel(type, BlankToNull(valueBox.Text)));
+                    }
+                }
+                else
+                {
+                    cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
+                }
             }
             else if (cf.RuleType == CfRuleType.DataBar)
             {
@@ -788,16 +808,20 @@ public class ConditionalFormatDialog : Window
         }
         else if (isIconSet)
         {
-            Height = 230;
             _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
             foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
             _iconSetStyleBox.SelectedIndex = 0;
+            _iconSetStyleBox.SelectionChanged += (_, _) => BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string);
             _iconSetShowValueBox = new CheckBox { Content = "_Show value", Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
             _iconSetReverseBox = new CheckBox { Content = "_Reverse icon order", Margin = new Thickness(0, 0, 0, 12) };
+            _iconSetThresholdPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            BuildIconSetThresholdPanel(_iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0]);
             inner.Children.Add(CreateAccessLabel("_Icon set:", _iconSetStyleBox));
             inner.Children.Add(_iconSetStyleBox);
             inner.Children.Add(_iconSetShowValueBox);
             inner.Children.Add(_iconSetReverseBox);
+            inner.Children.Add(new TextBlock { Text = "Thresholds:", Margin = new Thickness(0, 4, 0, 2) });
+            inner.Children.Add(_iconSetThresholdPanel);
             _value1Box = new TextBox();
             _value2Box = new TextBox();
             _value2Label = new Label();
@@ -923,6 +947,50 @@ public class ConditionalFormatDialog : Window
         "Formula" or "Use a Formula" => ExcelRuleShellTypes[5],
         _ => ExcelRuleShellTypes[1]
     };
+
+    private void BuildIconSetThresholdPanel(string? style, IReadOnlyList<CfThresholdModel>? existing = null)
+    {
+        _iconSetThresholdPanel.Children.Clear();
+        _iconSetThresholdRows.Clear();
+
+        var count = ConditionalFormatIconSetPlanner.GetIconCount(style);
+        var defaults = ConditionalFormatIconSetPlanner.CreateThresholds(style);
+
+        for (var i = 0; i < count; i++)
+        {
+            var threshold = existing is not null && i < existing.Count ? existing[i] : defaults[i];
+
+            var typeBox = new ComboBox
+            {
+                Width = 100,
+                Margin = new Thickness(6, 0, 6, 0),
+                ItemsSource = Enum.GetValues<CfThresholdType>(),
+                SelectedItem = threshold.Type
+            };
+            if (typeBox.SelectedIndex < 0) typeBox.SelectedIndex = 0;
+
+            var valueBox = new TextBox
+            {
+                Width = 80,
+                Text = threshold.Value ?? "",
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Padding = new Thickness(2)
+            };
+
+            _iconSetThresholdPanel.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 2, 0, 2),
+                Children =
+                {
+                    new TextBlock { Text = $"Icon {i + 1}  when  ≥", Width = 110, VerticalAlignment = System.Windows.VerticalAlignment.Center },
+                    typeBox,
+                    valueBox
+                }
+            });
+            _iconSetThresholdRows.Add((typeBox, valueBox));
+        }
+    }
 
     private static void AddVisualPreview(Panel panel, string ruleType)
     {

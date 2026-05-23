@@ -213,7 +213,7 @@ public static partial class BuiltInFunctions
 
         if (oldText.Length == 0) return TextResult(text);
 
-        if (args.Count > 3)
+        if (args.Count > 3 && args[3] is not BlankValue)
         {
             // Replace the Nth occurrence only
             if (args[3] is ErrorValue e3) return e3;
@@ -251,7 +251,7 @@ public static partial class BuiltInFunctions
         var findText   = ToText(args[0]);
         var withinText = ToText(args[1]);
         int startNum = 1;
-        if (args.Count > 2)
+        if (args.Count > 2 && args[2] is not BlankValue)
         {
             double rawStart = ToNumber(args[2]);
             if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
@@ -282,7 +282,7 @@ public static partial class BuiltInFunctions
         var findText   = ToText(args[0]);
         var withinText = ToText(args[1]);
         int startNum = 1;
-        if (args.Count > 2)
+        if (args.Count > 2 && args[2] is not BlankValue)
         {
             double rawStart = ToNumber(args[2]);
             if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;

@@ -81,6 +81,7 @@ public class NumberFormatterTests
     [InlineData("[>=1E3]0,\"K\";0", 1500, "2K")]
     [InlineData("[>=1E3]0,\"K\";0", 500, "500")]
     [InlineData("[>=+100]0;0.00", 125, "125")]
+    [InlineData("[ >= 100 ]0;0.00", 25, "25.00")]
     public void CustomNumberSubset_UsesConditionalSections(string format, double value, string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);
@@ -98,6 +99,8 @@ public class NumberFormatterTests
     [InlineData("[Color16]0.00", 2.5, "2.50", "#808080")]
     [InlineData("[Color46]0.00", 2.5, "2.50", "#FF6600")]
     [InlineData("[Color56]0.00", 2.5, "2.50", "#333333")]
+    [InlineData("[ Red ]0.00", 2.5, "2.50", "#FF0000")]
+    [InlineData("[ Color5 ]0.00", 2.5, "2.50", "#0070C0")]
     public void CustomNumberSubset_ReturnsColorFromConditionalSections(
         string format,
         double value,
