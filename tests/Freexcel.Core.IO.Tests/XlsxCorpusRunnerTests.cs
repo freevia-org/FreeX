@@ -956,6 +956,8 @@ public class XlsxCorpusRunnerTests
                 .ToArray(),
             sheet.HiddenRows.OrderBy(row => row).ToArray(),
             sheet.HiddenRows.Count,
+            sheet.FilterHiddenRows.OrderBy(row => row).ToArray(),
+            sheet.FilterHiddenRows.Count,
             sheet.HiddenCols.OrderBy(column => column).ToArray(),
             sheet.HiddenCols.Count,
             sheet.RowOutlineLevels
@@ -1095,6 +1097,15 @@ public class XlsxCorpusRunnerTests
             chart.DataLabelSeparator,
             chart.DataLabelNumberFormat,
             chart.ShowDataLabelCallouts,
+            chart.DataLabelFillColor is null ? "" : ToColorSummary(chart.DataLabelFillColor.Value),
+            chart.DataLabelFillThemeColor,
+            chart.DataLabelBorderColor is null ? "" : ToColorSummary(chart.DataLabelBorderColor.Value),
+            chart.DataLabelBorderThemeColor,
+            chart.DataLabelTextColor is null ? "" : ToColorSummary(chart.DataLabelTextColor.Value),
+            chart.DataLabelTextThemeColor,
+            chart.DataLabelBorderThickness,
+            chart.DataLabelFontSize,
+            chart.DataLabelAngle,
             chart.BarGapWidth,
             chart.BarOverlap,
             chart.VaryColorsByPoint,
@@ -1211,6 +1222,7 @@ public class XlsxCorpusRunnerTests
             table.ShowLastColumn,
             table.ShowRowStripes,
             table.ShowColumnStripes,
+            NormalizeXml(table.NativeSortStateXml),
             new ChartRangeSummary(
                 table.Range.Start.Row,
                 table.Range.Start.Col,
@@ -1230,7 +1242,14 @@ public class XlsxCorpusRunnerTests
                 .Select(filter => new StructuredTableFilterColumnSummary(
                     filter.ColumnId,
                     filter.Values.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    filter.IncludeBlank))
+                    filter.IncludeBlank,
+                    filter.NativeFilterXmls.Select(NormalizeXml).ToArray(),
+                    filter.NativeAttributes is null
+                        ? []
+                        : filter.NativeAttributes
+                            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                            .Select(pair => new NativeAttributeSummary(pair.Key, pair.Value))
+                            .ToArray()))
                 .ToArray());
 
     private static PivotTableStyleSummary CapturePivotTableStyleSummary(PivotTableStyleModel style) =>
@@ -1351,6 +1370,21 @@ public class XlsxCorpusRunnerTests
             .Replace("&[File]", "&F", StringComparison.OrdinalIgnoreCase)
             .Replace("&[Tab]", "&A", StringComparison.OrdinalIgnoreCase)
             .Replace("&[Path]", "&Z", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return "";
+
+        try
+        {
+            return XElement.Parse(xml).ToString(SaveOptions.DisableFormatting);
+        }
+        catch
+        {
+            return xml.Trim();
+        }
+    }
 
     private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
         new(
@@ -1922,6 +1956,8 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<WorksheetCustomPropertySummary> CustomProperties,
         IReadOnlyList<uint> HiddenRows,
         int HiddenRowCount,
+        IReadOnlyList<uint> FilterHiddenRows,
+        int FilterHiddenRowCount,
         IReadOnlyList<uint> HiddenColumns,
         int HiddenColumnCount,
         IReadOnlyList<OutlineLevelSummary> RowOutlineLevels,
@@ -2033,6 +2069,15 @@ public class XlsxCorpusRunnerTests
         ChartDataLabelSeparator DataLabelSeparator,
         ChartDataLabelNumberFormat DataLabelNumberFormat,
         bool ShowDataLabelCallouts,
+        string DataLabelFillColor,
+        WorkbookThemeColorReference? DataLabelFillThemeColor,
+        string DataLabelBorderColor,
+        WorkbookThemeColorReference? DataLabelBorderThemeColor,
+        string DataLabelTextColor,
+        WorkbookThemeColorReference? DataLabelTextThemeColor,
+        double DataLabelBorderThickness,
+        double DataLabelFontSize,
+        double DataLabelAngle,
         int? BarGapWidth,
         int? BarOverlap,
         bool? VaryColorsByPoint,
@@ -2097,6 +2142,7 @@ public class XlsxCorpusRunnerTests
         bool ShowLastColumn,
         bool ShowRowStripes,
         bool ShowColumnStripes,
+        string NativeSortStateXml,
         ChartRangeSummary Range,
         IReadOnlyList<StructuredTableColumnSummary> Columns,
         IReadOnlyList<StructuredTableFilterColumnSummary> FilterColumns);
@@ -2112,7 +2158,11 @@ public class XlsxCorpusRunnerTests
     private sealed record StructuredTableFilterColumnSummary(
         int ColumnId,
         IReadOnlyList<string> Values,
-        bool IncludeBlank);
+        bool IncludeBlank,
+        IReadOnlyList<string> NativeFilterXmls,
+        IReadOnlyList<NativeAttributeSummary> NativeAttributes);
+
+    private sealed record NativeAttributeSummary(string Name, string Value);
 
     private sealed record PivotTableSummary(
         string Name,
