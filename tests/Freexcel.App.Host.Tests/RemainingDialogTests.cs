@@ -100,6 +100,9 @@ public sealed class RemainingDialogTests
         source.Should().Contain("200");
         source.Should().Contain("100");
         source.Should().Contain("75");
+        source.Should().Contain("Height = 240");
+        source.Should().Contain("Header = \"Magnification\"");
+        source.Should().Contain("Grid.SetColumn(customChoices, 1)");
         source.Should().Contain("_fitSelectionButton");
         source.Should().Contain("Fit _selection");
         source.Should().Contain("_customZoomButton");
