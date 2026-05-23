@@ -467,6 +467,7 @@ public sealed partial class NativeJsonAdapter
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
         public bool? VaryColorsByPoint { get; set; }
+        public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
         public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
         public bool LegendOverlay { get; set; }
         public bool ShowLegend { get; set; } = true;

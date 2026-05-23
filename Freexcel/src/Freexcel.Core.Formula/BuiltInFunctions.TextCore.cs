@@ -258,13 +258,16 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
-        int startIdx = startNum - 1;
+        bool hasSurrogatePair = ContainsSurrogatePair(withinText);
+        int startIdx = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(withinText, startNum)
+            : startNum - 1;
         if (findText.Length == 0)
             return startIdx <= withinText.Length ? new NumberValue(startNum) : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
         int pos = withinText.IndexOf(findText, startIdx, StringComparison.Ordinal);
         if (pos < 0) return ErrorValue.Value;
-        return new NumberValue(pos + 1);
+        return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, pos) : pos + 1);
     }
 
     private static readonly ConcurrentDictionary<string, Regex> SearchCache = new();
@@ -284,7 +287,10 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
-        int startIdx = startNum - 1;
+        bool hasSurrogatePair = ContainsSurrogatePair(withinText);
+        int startIdx = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(withinText, startNum)
+            : startNum - 1;
         if (findText.Length == 0)
             return startIdx <= withinText.Length ? new NumberValue(startNum) : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
@@ -295,7 +301,7 @@ public static partial class BuiltInFunctions
         });
         var match = regex.Match(withinText, startIdx);
         if (!match.Success) return ErrorValue.Value;
-        return new NumberValue(match.Index + 1);
+        return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, match.Index) : match.Index + 1);
     }
 
     private static ScalarValue Mid(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -308,12 +314,69 @@ public static partial class BuiltInFunctions
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
         if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        if (ContainsSurrogatePair(text))
+            return MidTextWithSurrogatePairs(text, (int)rawStart, (int)rawLen);
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
         return TextResult(text.Substring(start, actualLen));
     }
+
+    private static bool ContainsSurrogatePair(string text)
+    {
+        for (int i = 0; i + 1 < text.Length; i++)
+            if (char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))
+                return true;
+        return false;
+    }
+
+    private static ScalarValue MidTextWithSurrogatePairs(string text, int startNum, int numChars)
+    {
+        int start = TextElementIndexFromOneBasedPosition(text, startNum);
+        if (start >= text.Length) return new TextValue("");
+
+        int end = AdvanceTextElements(text, start, numChars);
+        return TextResult(text[start..end]);
+    }
+
+    private static int TextElementIndexFromOneBasedPosition(string text, int position)
+    {
+        int index = 0;
+        for (int current = 1; current < position && index < text.Length; current++)
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+
+        return index;
+    }
+
+    private static int AdvanceTextElements(string text, int index, int count)
+    {
+        for (int taken = 0; taken < count && index < text.Length; taken++)
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+
+        return index;
+    }
+
+    private static int CountTextElements(string text)
+    {
+        int count = 0;
+        for (int index = 0; index < text.Length; count++)
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+
+        return count;
+    }
+
+    private static int OneBasedTextPositionFromUtf16Index(string text, int index)
+    {
+        int position = 1;
+        for (int i = 0; i < index && i < text.Length; position++)
+            i += IsSurrogatePairAt(text, i) ? 2 : 1;
+
+        return position;
+    }
+
+    private static bool IsSurrogatePairAt(string text, int index) =>
+        index + 1 < text.Length && char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
 
     private static ScalarValue Rept(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

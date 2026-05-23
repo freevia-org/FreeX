@@ -634,7 +634,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
-        return new NumberValue(ToText(args[0]).Length);
+        var text = ToText(args[0]);
+        return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
     }
 
     private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -647,7 +648,8 @@ public static partial class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        count = ExtendPastTrailingHighSurrogate(text, count);
+        if (ContainsSurrogatePair(text))
+            return TextResult(text[..AdvanceTextElements(text, 0, count)]);
         return TextResult(text[..count]);
     }
 
@@ -661,22 +663,10 @@ public static partial class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        int start = RetreatBeforeLeadingLowSurrogate(text, text.Length - count);
+        int start = ContainsSurrogatePair(text)
+            ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
+            : text.Length - count;
         return TextResult(text[start..]);
-    }
-
-    private static int ExtendPastTrailingHighSurrogate(string text, int length)
-    {
-        if (length > 0 && length < text.Length && char.IsHighSurrogate(text[length - 1]) && char.IsLowSurrogate(text[length]))
-            return length + 1;
-        return length;
-    }
-
-    private static int RetreatBeforeLeadingLowSurrogate(string text, int start)
-    {
-        if (start > 0 && start < text.Length && char.IsLowSurrogate(text[start]) && char.IsHighSurrogate(text[start - 1]))
-            return start - 1;
-        return start;
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -880,6 +870,7 @@ public static partial class BuiltInFunctions
     }
 
     private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
+    private const string RegexTextElement = @"(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\uD800-\uDFFF])";
 
     private static string WildcardToRegexPattern(string pattern, bool anchored = true)
     {
@@ -895,8 +886,8 @@ public static partial class BuiltInFunctions
 
             switch (ch)
             {
-                case '*': sb.Append(".*"); break;
-                case '?': sb.Append('.'); break;
+                case '*': sb.Append(RegexTextElement).Append('*'); break;
+                case '?': sb.Append(RegexTextElement); break;
                 default:  sb.Append(Regex.Escape(ch.ToString())); break;
             }
         }
@@ -1229,9 +1220,14 @@ public static partial class BuiltInFunctions
         int numChars = (int)rawNumChars;
         if (startNum < 1 || numChars < 0) return ErrorValue.Value;
 
-        int start = Math.Min(startNum - 1, text.Length);
+        bool hasSurrogatePair = ContainsSurrogatePair(text);
+        int start = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(text, startNum)
+            : Math.Min(startNum - 1, text.Length);
         var newText = ToText(args[3]);
-        int end = Math.Min(start + numChars, text.Length);
+        int end = hasSurrogatePair
+            ? AdvanceTextElements(text, start, numChars)
+            : Math.Min(start + numChars, text.Length);
         return TextResult(text[..start] + newText + text[end..]);
     }
 
