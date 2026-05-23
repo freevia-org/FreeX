@@ -607,9 +607,12 @@ public sealed class MainWindowSourceHygieneTests
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
         var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
         var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Editing.cs");
+        var dropdownSourcePath = Path.Combine(appHostDirectory, "MainWindow.EditingDropdowns.cs");
 
         File.Exists(editingSourcePath).Should().BeTrue();
+        File.Exists(dropdownSourcePath).Should().BeTrue();
         var editingSource = File.ReadAllText(editingSourcePath);
+        var dropdownSource = File.ReadAllText(dropdownSourcePath);
 
         mainSource.Should().NotContain("private void EnterEditMode(");
         mainSource.Should().NotContain("private void ShowInlineEditor(");
@@ -623,8 +626,6 @@ public sealed class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("private void EnterEditMode(");
         editingSource.Should().Contain("private void ShowInlineEditor(");
-        editingSource.Should().Contain("private void RefreshValidationDropdown(");
-        editingSource.Should().Contain("private void OpenActiveDropdown(");
         editingSource.Should().Contain("private void InlineEditor_KeyDown(");
         editingSource.Should().Contain("private void FormulaBar_KeyDown(");
         editingSource.Should().Contain("private bool CommitEdit(");
@@ -632,13 +633,17 @@ public sealed class MainWindowSourceHygieneTests
         editingSource.Should().Contain("private bool CommitPreparedEdits(");
         editingSource.Should().Contain("ExcelEditKeyPlanner");
         editingSource.Should().Contain("CellEntryParser");
+        dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
+        dropdownSource.Should().Contain("private void OpenActiveDropdown(");
+        dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
+        dropdownSource.Should().Contain("DataValidationService");
     }
 
     [Fact]
     public void InlineEditing_StartsWithCaretAtEndInsteadOfSelectingAll()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
-        var editingSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Editing.cs"));
+        var editingSource = ReadEditingSource();
 
         editingSource.Should().NotContain("_inlineEditor.SelectAll();");
         editingSource.Should().Contain("_inlineEditor.CaretIndex = _inlineEditor.Text.Length;");
@@ -1172,7 +1177,7 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source =
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+            ReadEditingSource();
 
         source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
         source.Should().Contain("OpenActiveDropdown();");
@@ -1367,7 +1372,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var source = ReadEditingSource();
 
         source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
         source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
@@ -1380,7 +1385,7 @@ public sealed class MainWindowSourceHygieneTests
     public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
-        var editingSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Editing.cs"));
+        var editingSource = ReadEditingSource();
         var dataFilterSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.DataFilterCommands.cs"));
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
@@ -1393,7 +1398,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_UsesExcelStyleMenuPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var source = ReadEditingSource();
         var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
         source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
@@ -1652,6 +1657,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
 
+
+    private static string ReadEditingSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "MainWindow.Editing.cs",
+                "MainWindow.EditingDropdowns.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
     private static string ReadChartCommandSource()
     {
         return string.Join(
@@ -1661,7 +1678,9 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.ChartCommands.cs",
                 "MainWindow.ChartAxisCommands.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
-    }    private static string ReadPivotCommandSource()
+    }
+
+    private static string ReadPivotCommandSource()
     {
         return string.Join(
             "\n",
