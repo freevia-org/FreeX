@@ -1339,6 +1339,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardSheetTabContextMenu_FocusesFirstEnabledMenuItem()
+    {
+        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
+
+        sheetTabsSource.Should().Contain("contextMenu.Opened += SheetTabContextMenu_Opened;");
+        sheetTabsSource.Should().Contain("private static void SheetTabContextMenu_Opened(object sender, RoutedEventArgs e)");
+        sheetTabsSource.Should().Contain("contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        sheetTabsSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+    }
+
+    [Fact]
     public void FocusedSheetTabs_HandleArrowNavigationBeforeWorksheetNavigation()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
