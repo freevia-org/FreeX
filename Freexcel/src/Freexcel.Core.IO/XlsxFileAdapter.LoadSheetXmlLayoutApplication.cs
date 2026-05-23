@@ -25,7 +25,17 @@ public sealed partial class XlsxFileAdapter
         sheet.ShowRulers = layout.ShowRulers;
         sheet.ZoomPercent = layout.ZoomPercent;
         sheet.ShowFormulas = layout.ShowFormulas;
+        if (layout.DefaultColumnWidth is { } defaultColumnWidth)
+            sheet.DefaultColumnWidth = defaultColumnWidth;
+        if (layout.DefaultRowHeight is { } defaultRowHeight)
+            sheet.DefaultRowHeight = defaultRowHeight;
         sheet.BackgroundImage = layout.BackgroundImage;
+        sheet.PageHeaderPictures = layout.HeaderFooterPictures.PageHeader;
+        sheet.PageFooterPictures = layout.HeaderFooterPictures.PageFooter;
+        sheet.FirstPageHeaderPictures = layout.HeaderFooterPictures.FirstPageHeader;
+        sheet.FirstPageFooterPictures = layout.HeaderFooterPictures.FirstPageFooter;
+        sheet.EvenPageHeaderPictures = layout.HeaderFooterPictures.EvenPageHeader;
+        sheet.EvenPageFooterPictures = layout.HeaderFooterPictures.EvenPageFooter;
         sheet.CodeName = layout.CodeName;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
@@ -79,7 +89,9 @@ public sealed partial class XlsxFileAdapter
                 AltText = textBoxPart.AltText,
                 RotationDegrees = textBoxPart.RotationDegrees,
                 FillColor = textBoxPart.FillColor,
-                OutlineColor = textBoxPart.OutlineColor
+                OutlineColor = textBoxPart.OutlineColor,
+                FillThemeColor = textBoxPart.FillThemeColor,
+                OutlineThemeColor = textBoxPart.OutlineThemeColor
             };
             XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
             textBox.IsSourceLoaded = true;
@@ -100,6 +112,8 @@ public sealed partial class XlsxFileAdapter
                 FillColor = shapePart.FillColor,
                 OutlineColor = shapePart.OutlineColor,
                 GradientFillEndColor = shapePart.GradientFillEndColor,
+                FillThemeColor = shapePart.FillThemeColor,
+                OutlineThemeColor = shapePart.OutlineThemeColor,
                 HasShadowEffect = shapePart.HasShadowEffect
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);

@@ -17,6 +17,17 @@ public sealed record PivotTableDialogResult(
     string DestinationRangeText,
     bool OpenFieldList);
 
+public enum PivotTableRangeSelectionTarget
+{
+    SourceRange,
+    DestinationRange
+}
+
+public sealed record PivotTableRangeSelectionRequest(
+    PivotTableRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public sealed class PivotTableDialog : Window
 {
     private readonly TextBox _sourceRangeBox = new();
@@ -25,11 +36,18 @@ public sealed class PivotTableDialog : Window
     private readonly RadioButton _newWorksheetButton = new() { Content = "_New worksheet", IsChecked = true };
     private readonly RadioButton _existingWorksheetButton = new() { Content = "_Existing worksheet" };
     private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable _Fields pane", IsChecked = true };
+    private readonly Action<PivotTableRangeSelectionRequest>? _requestRangeSelection;
 
     public PivotTableDialogResult Result { get; private set; }
+    public PivotTableRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public PivotTableDialog(Workbook workbook, SheetId sourceSheetId, GridRange sourceRange)
+    public PivotTableDialog(
+        Workbook workbook,
+        SheetId sourceSheetId,
+        GridRange sourceRange,
+        Action<PivotTableRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _requestRangeSelection = requestRangeSelection;
         var sourceRangeText = FormatRange(workbook, sourceSheetId, sourceRange);
         var destinationText = FormatDestination(workbook, sourceSheetId, sourceRange);
         Result = CreateResult(
@@ -55,6 +73,7 @@ public sealed class PivotTableDialog : Window
             "Table/_Range:",
             _sourceRangeBox,
             "Select PivotTable source range",
+            PivotTableRangeSelectionTarget.SourceRange,
             labelMargin: new Thickness(22, 0, 0, 4),
             editorMargin: new Thickness(22, 0, 0, 8));
 
@@ -71,6 +90,7 @@ public sealed class PivotTableDialog : Window
             "_Location:",
             _destinationRangeBox,
             "Select PivotTable location",
+            PivotTableRangeSelectionTarget.DestinationRange,
             labelMargin: new Thickness(22, 4, 0, 4),
             editorMargin: new Thickness(22, 0, 0, 12));
 
@@ -147,11 +167,12 @@ public sealed class PivotTableDialog : Window
         return value.Trim();
     }
 
-    private static void AddLabeledReferenceEditor(
+    private void AddLabeledReferenceEditor(
         Panel stack,
         string label,
         TextBox textBox,
         string automationName,
+        PivotTableRangeSelectionTarget target,
         Thickness labelMargin,
         Thickness editorMargin)
     {
@@ -162,33 +183,32 @@ public sealed class PivotTableDialog : Window
             Padding = new Thickness(0),
             Margin = labelMargin
         });
-        stack.Children.Add(CreateReferenceEditor(textBox, automationName, editorMargin));
+        stack.Children.Add(CreateReferenceEditor(textBox, automationName, target, editorMargin));
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName, Thickness margin)
+    public static PivotTableRangeSelectionRequest CreateRangeSelectionRequest(
+        PivotTableRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private DockPanel CreateReferenceEditor(
+        TextBox textBox,
+        string automationName,
+        PivotTableRangeSelectionTarget target,
+        Thickness margin)
     {
-        var panel = new DockPanel { Margin = margin };
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
+        var panel = DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request => RequestRangeSelection(target, request));
+        panel.Margin = margin;
         return panel;
     }
 
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    private void RequestRangeSelection(PivotTableRangeSelectionTarget target, DialogReferencePickerRequest request)
     {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
-
-        textBox.Focus();
-        textBox.SelectAll();
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 
     private void UpdateDestinationState()

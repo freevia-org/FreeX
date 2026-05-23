@@ -76,6 +76,90 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageOpen_FocusesHomeNavigationForKeyboardUsers()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("StartScreenOverlay.Visibility = Visibility.Visible;");
+        backstageSource.Should().Contain("FocusBackstageHomeNavigation();");
+        backstageSource.Should().Contain("private void FocusBackstageHomeNavigation()");
+        backstageSource.Should().Contain("SsHomeNavBtn.Focus();");
+        backstageSource.Should().Contain("Keyboard.Focus(SsHomeNavBtn);");
+    }
+
+    [Fact]
+    public void BackstageSidebar_UpDownKeysMoveThroughNavigation()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        xaml.Should().Contain("PreviewKeyDown=\"StartScreenOverlay_PreviewKeyDown\"");
+        xaml.Should().Contain("x:Name=\"StartScreenSidebar\"");
+        backstageSource.Should().Contain("private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)");
+        backstageSource.Should().Contain("IsDescendantOf(focusedElement, StartScreenSidebar)");
+        backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
+        backstageSource.Should().Contain("FocusNavigationDirection.Previous");
+        backstageSource.Should().Contain("FocusNavigationDirection.Next");
+        backstageSource.Should().Contain("focusedElement.MoveFocus(new TraversalRequest(direction));");
+    }
+
+    [Fact]
+    public void BackstageSidebar_HomeEndKeysMoveToNavigationEdges()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("e.Key is not (Key.Up or Key.Down or Key.Home or Key.End)");
+        backstageSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
+        backstageSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
+    }
+
+    [Fact]
+    public void BackstageOverlay_CyclesTabFocusWithinOverlay()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        xaml.Should().Contain("x:Name=\"StartScreenOverlay\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
+    }
+
+    [Fact]
+    public void BackstageContextMenu_UsesFocusedBackstageElementBeforeWorksheetFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        selectionSource.Should().Contain("if (commandShortcut == KeyboardCommandShortcut.OpenContextMenu && TryOpenFocusedBackstageContextMenu())");
+        selectionSource.IndexOf("TryOpenFocusedBackstageContextMenu()", StringComparison.Ordinal)
+            .Should().BeLessThan(selectionSource.IndexOf("ExecuteCommandShortcut(commandShortcut, sender, e);", StringComparison.Ordinal));
+        backstageSource.Should().Contain("private bool TryOpenFocusedBackstageContextMenu()");
+        backstageSource.Should().Contain("!IsStartScreenVisible()");
+        backstageSource.Should().Contain("Keyboard.FocusedElement is not FrameworkElement focusedElement");
+        backstageSource.Should().Contain("!IsInsideStartScreenOverlay(focusedElement)");
+        backstageSource.Should().Contain("focusedElement.ContextMenu is not { } menu");
+        backstageSource.Should().Contain("menu.PlacementTarget = focusedElement;");
+        backstageSource.Should().Contain("menu.IsOpen = true;");
+    }
+
+    [Fact]
+    public void BackstageF6_CyclesWithinOverlayBeforeWorkbookShellFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        const string backstageRoute = "if (IsStartScreenVisible() && TryHandleBackstageShellFocusCycle";
+        const string workbookFallback = "ExecuteCommandShortcut(commandShortcut, this, e);";
+
+        selectionSource.Should().Contain(backstageRoute);
+        selectionSource.IndexOf(backstageRoute, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(selectionSource.IndexOf(workbookFallback, StringComparison.Ordinal));
+        backstageSource.Should().Contain("private bool TryHandleBackstageShellFocusCycle(bool reverse)");
+        backstageSource.Should().Contain("IsInsideStartScreenOverlay(focusedElement)");
+        backstageSource.Should().Contain("StartScreenOverlay.MoveFocus");
+    }
+
+    [Fact]
     public void GetData_IncludesDelimitedTextAdapters()
     {
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
@@ -196,9 +280,13 @@ public sealed class MainWindowSourceHygieneTests
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
         var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
         var ribbonSourcePath = Path.Combine(appHostDirectory, "MainWindow.Ribbon.cs");
+        var ribbonAdaptiveSourcePath = Path.Combine(appHostDirectory, "MainWindow.RibbonAdaptive.cs");
 
         File.Exists(ribbonSourcePath).Should().BeTrue();
-        var ribbonSource = File.ReadAllText(ribbonSourcePath);
+        File.Exists(ribbonAdaptiveSourcePath).Should().BeTrue();
+        var ribbonSource =
+            File.ReadAllText(ribbonSourcePath) +
+            File.ReadAllText(ribbonAdaptiveSourcePath);
 
         mainSource.Should().NotContain("private void UpdateRibbonCompactMode(");
         mainSource.Should().NotContain("private void NormalizeRibbonSurface(");
@@ -480,7 +568,7 @@ public sealed class MainWindowSourceHygieneTests
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
-        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
 
@@ -607,9 +695,12 @@ public sealed class MainWindowSourceHygieneTests
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
         var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
         var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Editing.cs");
+        var dropdownSourcePath = Path.Combine(appHostDirectory, "MainWindow.EditingDropdowns.cs");
 
         File.Exists(editingSourcePath).Should().BeTrue();
+        File.Exists(dropdownSourcePath).Should().BeTrue();
         var editingSource = File.ReadAllText(editingSourcePath);
+        var dropdownSource = File.ReadAllText(dropdownSourcePath);
 
         mainSource.Should().NotContain("private void EnterEditMode(");
         mainSource.Should().NotContain("private void ShowInlineEditor(");
@@ -623,8 +714,6 @@ public sealed class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("private void EnterEditMode(");
         editingSource.Should().Contain("private void ShowInlineEditor(");
-        editingSource.Should().Contain("private void RefreshValidationDropdown(");
-        editingSource.Should().Contain("private void OpenActiveDropdown(");
         editingSource.Should().Contain("private void InlineEditor_KeyDown(");
         editingSource.Should().Contain("private void FormulaBar_KeyDown(");
         editingSource.Should().Contain("private bool CommitEdit(");
@@ -632,13 +721,17 @@ public sealed class MainWindowSourceHygieneTests
         editingSource.Should().Contain("private bool CommitPreparedEdits(");
         editingSource.Should().Contain("ExcelEditKeyPlanner");
         editingSource.Should().Contain("CellEntryParser");
+        dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
+        dropdownSource.Should().Contain("private void OpenActiveDropdown(");
+        dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
+        dropdownSource.Should().Contain("DataValidationService");
     }
 
     [Fact]
     public void InlineEditing_StartsWithCaretAtEndInsteadOfSelectingAll()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
-        var editingSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Editing.cs"));
+        var editingSource = ReadEditingSource();
 
         editingSource.Should().NotContain("_inlineEditor.SelectAll();");
         editingSource.Should().Contain("_inlineEditor.CaretIndex = _inlineEditor.Text.Length;");
@@ -814,6 +907,15 @@ public sealed class MainWindowSourceHygieneTests
         shellSource.Should().Contain("private static Thickness GetMaximizedSafeInset(");
         shellSource.Should().Contain("private void UndoQatBtn_Click(");
         shellSource.Should().Contain("private void RedoQatBtn_Click(");
+    }
+
+    [Fact]
+    public void QuickAccessUndoRedoButtons_ReflectCommandStackState()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+
+        source.Should().Contain("UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);");
+        source.Should().Contain("RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);");
     }
 
     [Fact]
@@ -1172,7 +1274,7 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source =
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+            ReadEditingSource();
 
         source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
         source.Should().Contain("OpenActiveDropdown();");
@@ -1209,12 +1311,113 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardWorksheetContextMenu_FocusesFirstEnabledMenuItem()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("menu.Opened += WorksheetContextMenu_Opened;");
+        source.Should().Contain("private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)");
+        source.Should().Contain("menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+    }
+
+    [Fact]
+    public void KeyboardContextMenu_RoutesFocusedSheetTabToSheetTabMenu()
+    {
+        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        contextMenuSource.Should().Contain("if (TryOpenFocusedSheetTabContextMenu())");
+        sheetTabsSource.Should().Contain("private bool TryOpenFocusedSheetTabContextMenu()");
+        sheetTabsSource.Should().Contain("Keyboard.FocusedElement is not DependencyObject focusedElement");
+        sheetTabsSource.Should().Contain("contextMenu.PlacementTarget = target;");
+        sheetTabsSource.Should().Contain("contextMenu.IsOpen = true;");
+        selectionSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
+        xaml.Should().Contain("Focusable=\"True\"");
+    }
+
+    [Fact]
+    public void KeyboardSheetTabContextMenu_FocusesFirstEnabledMenuItem()
+    {
+        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
+
+        sheetTabsSource.Should().Contain("contextMenu.Opened += SheetTabContextMenu_Opened;");
+        sheetTabsSource.Should().Contain("private static void SheetTabContextMenu_Opened(object sender, RoutedEventArgs e)");
+        sheetTabsSource.Should().Contain("contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        sheetTabsSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+    }
+
+    [Fact]
+    public void FocusedSheetTabs_HandleArrowNavigationBeforeWorksheetNavigation()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedSheetTabKeyboardNavigation(e))");
+        sheetTabsSource.Should().Contain("private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        sheetTabsSource.Should().Contain("Keyboard.Modifiers != ModifierKeys.None");
+        sheetTabsSource.Should().Contain("Key.Left => FocusAdjacentVisibleSheetTab(-1)");
+        sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
+        sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");
+        sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
+        sheetTabsSource.Should().Contain("FocusSheetTab(tab.Id);");
+    }
+
+    [Fact]
+    public void F6StatusBar_FocusesFirstZoomControlBeforeSliderFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        selectionSource.Should().Contain("return FocusStatusBar();");
+        selectionSource.Should().Contain("private bool FocusStatusBar()");
+        selectionSource.Should().Contain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
+        xaml.Should().Contain("x:Name=\"StatusZoomOutButton\"");
+        xaml.Should().Contain("x:Name=\"StatusZoomInButton\"");
+    }
+
+    [Fact]
+    public void FocusedStatusBar_TabTraversalIsNotHijackedByWorksheetMovement()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedStatusBarKeyboardNavigation(e))");
+        selectionSource.Should().Contain("private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        selectionSource.Should().Contain("!IsDescendantOf(focusedElement, StatusBarGrid)");
+        selectionSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
+        selectionSource.Should().Contain("new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift");
+        selectionSource.Should().Contain("FocusNavigationDirection.Previous");
+        selectionSource.Should().Contain("FocusNavigationDirection.Next");
+        selectionSource.Should().Contain("focusedElement.MoveFocus(request);");
+    }
+
+    [Fact]
+    public void FocusedRibbon_TabAndArrowKeysRequestFocusTraversal()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        selectionSource.Should().Contain("MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift");
+        selectionSource.Should().Contain("FocusNavigationDirection.Previous");
+        selectionSource.Should().Contain("FocusNavigationDirection.Next");
+        selectionSource.Should().Contain("Key.Left => FocusNavigationDirection.Left");
+        selectionSource.Should().Contain("Key.Right => FocusNavigationDirection.Right");
+        selectionSource.Should().Contain("Key.Up => FocusNavigationDirection.Up");
+        selectionSource.Should().Contain("Key.Down => FocusNavigationDirection.Down");
+        selectionSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
+        selectionSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
+        selectionSource.Should().Contain("private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)");
+        selectionSource.Should().Contain("focusedUiElement.MoveFocus(new TraversalRequest(direction));");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
-        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
         source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
         source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
@@ -1304,6 +1507,21 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_UsesKeyboardSelectionAnchorAndInitialMenuFocus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().NotContain("PlacementMode.MousePoint");
+        source.Should().Contain("Placement = PlacementMode.RelativePoint");
+        source.Should().Contain("QuickAnalysisMenuPlacementPlanner.BuildAnchor");
+        source.Should().Contain("menu.HorizontalOffset = anchor.X;");
+        source.Should().Contain("menu.VerticalOffset = anchor.Y;");
+        source.Should().Contain("menu.Opened += QuickAnalysisMenu_Opened;");
+        source.Should().Contain("private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)");
+        source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
@@ -1367,7 +1585,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var source = ReadEditingSource();
 
         source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
         source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
@@ -1380,7 +1598,7 @@ public sealed class MainWindowSourceHygieneTests
     public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
-        var editingSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Editing.cs"));
+        var editingSource = ReadEditingSource();
         var dataFilterSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.DataFilterCommands.cs"));
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
@@ -1393,7 +1611,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_UsesExcelStyleMenuPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var source = ReadEditingSource();
         var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
         source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, plan)");
@@ -1563,6 +1781,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScenarioShow_IsRepeatableForF4WithoutReopeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
+        dataSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        dataSource.Should().Contain("SetActiveCell(first);");
+        dataSource.Should().Contain("EnsureCellVisible(first);");
+    }
+
+    [Fact]
     public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
@@ -1619,6 +1848,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void CollapsedRibbonOverflowCommands_ReturnFocusToVisibleGroupButton()
+    {
+        var adaptiveSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+
+        adaptiveSource.Should().Contain("FocusCollapsedRibbonMenuPlacementTarget(item)");
+        adaptiveSource.Should().Contain("private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)");
+        adaptiveSource.Should().Contain("contextMenu.PlacementTarget is UIElement placementTarget");
+        adaptiveSource.Should().Contain("placementTarget.Focus();");
+    }
+
+    [Fact]
     public void StartupController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -1652,6 +1892,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
 
+
+    private static string ReadEditingSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "MainWindow.Editing.cs",
+                "MainWindow.EditingDropdowns.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
     private static string ReadChartCommandSource()
     {
         return string.Join(
@@ -1661,7 +1913,9 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.ChartCommands.cs",
                 "MainWindow.ChartAxisCommands.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
-    }    private static string ReadPivotCommandSource()
+    }
+
+    private static string ReadPivotCommandSource()
     {
         return string.Join(
             "\n",

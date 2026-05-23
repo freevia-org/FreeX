@@ -49,6 +49,9 @@ public sealed class AddChartCommand : IWorkbookCommand
             return new CommandOutcome(false, "Chart data range must include at least one data point.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         sheet.Charts.Add(_chart);
         _added = true;
         return new CommandOutcome(true, AffectedCells: [_chart.DataRange.Start]);
@@ -182,6 +185,9 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
             return new CommandOutcome(false, "Chart size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
         if (pivotTable is null)
@@ -243,7 +249,11 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
             return new CommandOutcome(false, "PivotChart was not found.");
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
@@ -293,7 +303,11 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
             return new CommandOutcome(false, "Chart was not found.");
 
@@ -345,7 +359,11 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
             return new CommandOutcome(false, "Chart was not found.");
         if (chart.IsPivotChart)
@@ -427,7 +445,11 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
             return new CommandOutcome(false, "Chart was not found.");
         if (chart.IsPivotChart)
@@ -493,10 +515,14 @@ public sealed class MoveChartCommand : IWorkbookCommand
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
             return new CommandOutcome(false, "Source sheet was not found.");
+        if (CommandGuards.RejectIfProtectedWithoutPermission(source, SheetProtectionPermission.EditObjects) is { } sourceProtectedOutcome)
+            return sourceProtectedOutcome;
 
         var target = ctx.Workbook.GetSheet(_targetSheetId);
         if (target is null)
             return new CommandOutcome(false, "Target sheet was not found.");
+        if (CommandGuards.RejectIfProtectedWithoutPermission(target, SheetProtectionPermission.EditObjects) is { } targetProtectedOutcome)
+            return targetProtectedOutcome;
 
         var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
@@ -559,6 +585,8 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
             return new CommandOutcome(false, "Source sheet was not found.");
+        if (CommandGuards.RejectIfProtectedWithoutPermission(source, SheetProtectionPermission.EditObjects) is { } sourceProtectedOutcome)
+            return sourceProtectedOutcome;
 
         var chart = source.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)

@@ -30,6 +30,7 @@ public static partial class NumberFormatter
 
         var denominatorPattern = Regex.Match(stripped, @"/(\?+)");
         int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
+        var (numeratorWidth, denominatorWidth) = GetFractionPlaceholderWidths(stripped, fixedDenominator);
 
         double absValue = Math.Abs(value);
         int whole = stripped.Contains('#') || stripped.Contains('0') ? (int)Math.Floor(absValue) : 0;
@@ -48,12 +49,41 @@ public static partial class NumberFormatter
         if (numerator == 0)
             return prefix + sign + (whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture)) + suffix;
 
-        string fraction = numerator.ToString(CultureInfo.InvariantCulture) + "/" +
-                          denominator.ToString(CultureInfo.InvariantCulture);
+        string fraction = FormatFractionPart(numerator, numeratorWidth, padLeft: true) + "/" +
+                          FormatFractionPart(denominator, denominatorWidth, padLeft: false);
         string number = whole > 0
             ? sign + whole.ToString(CultureInfo.InvariantCulture) + " " + fraction
             : sign + fraction;
         return prefix + number + suffix;
+    }
+
+    private static (int NumeratorWidth, int DenominatorWidth) GetFractionPlaceholderWidths(
+        string strippedFormat,
+        int? fixedDenominator)
+    {
+        var variableMatch = Regex.Match(strippedFormat, @"(?<numerator>\?+)/(?<denominator>\?+)");
+        if (variableMatch.Success)
+        {
+            return (
+                variableMatch.Groups["numerator"].Value.Length,
+                variableMatch.Groups["denominator"].Value.Length);
+        }
+
+        var fixedMatch = Regex.Match(strippedFormat, @"(?<numerator>\?+)$");
+        return (
+            fixedMatch.Success ? fixedMatch.Groups["numerator"].Value.Length : 0,
+            fixedDenominator?.ToString(CultureInfo.InvariantCulture).Length ?? 0);
+    }
+
+    private static string FormatFractionPart(int value, int width, bool padLeft)
+    {
+        var text = value.ToString(CultureInfo.InvariantCulture);
+        if (width <= 1)
+            return text;
+
+        return padLeft
+            ? text.PadLeft(width)
+            : text.PadRight(width);
     }
 
     private static (int Numerator, int Denominator) ApproximateFraction(double value, int maxDenominator)

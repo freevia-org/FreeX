@@ -61,6 +61,8 @@
                         <Button x:Name="SourcePickerButton" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
                                 AutomationProperties.Name="Select source range"
+                                AutomationProperties.HelpText="Collapse dialog and select a worksheet range for the validation source."
+                                ToolTip="Collapse dialog and select source range"
                                 Click="SourcePickerButton_Click"/>
                         <Button x:Name="UseSelectionButton" DockPanel.Dock="Right"
                                 Content="_Use Selection" Width="104" Margin="6,0,0,0"
@@ -73,6 +75,8 @@
                         <Button x:Name="SourcePicker2Button" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
                                 AutomationProperties.Name="Select maximum range"
+                                AutomationProperties.HelpText="Collapse dialog and select a worksheet range for the validation maximum."
+                                ToolTip="Collapse dialog and select maximum range"
                                 Click="SourcePicker2Button_Click"/>
                         <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
                                 Content="Use _Selection" Width="104" Margin="6,0,0,0"

@@ -9,6 +9,7 @@ public sealed record FormatPictureDialogResult(
     double Width,
     double Height,
     double RotationDegrees,
+    bool LockAspectRatio,
     double CropLeft,
     double CropTop,
     double CropRight,
@@ -25,7 +26,9 @@ public sealed class FormatPictureDialog : Window
     private readonly TextBox _cropTopBox = new();
     private readonly TextBox _cropRightBox = new();
     private readonly TextBox _cropBottomBox = new();
+    private readonly Button _resetCropButton = new() { Content = "Reset _Crop", MinWidth = 96, Margin = new Thickness(0, 0, 0, 8) };
     private readonly TextBox _altTextBox = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 86 };
+    private readonly FormatPictureDialogResult _initialResult;
     private readonly double _aspectRatio;
     private bool _updatingAspect;
 
@@ -33,15 +36,17 @@ public sealed class FormatPictureDialog : Window
 
     public FormatPictureDialog(PictureModel picture)
     {
-        Result = new FormatPictureDialogResult(
+        _initialResult = new FormatPictureDialogResult(
             picture.Width,
             picture.Height,
             picture.RotationDegrees,
+            picture.LockAspectRatio,
             picture.CropLeft,
             picture.CropTop,
             picture.CropRight,
             picture.CropBottom,
             picture.AltText);
+        Result = _initialResult;
         _aspectRatio = picture.Height > 0 ? picture.Width / picture.Height : 1;
         Title = "Format Picture";
         Width = 480;
@@ -53,6 +58,7 @@ public sealed class FormatPictureDialog : Window
         _widthBox.Text = picture.Width.ToString(CultureInfo.InvariantCulture);
         _heightBox.Text = picture.Height.ToString(CultureInfo.InvariantCulture);
         _rotationBox.Text = picture.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _lockAspectRatioBox.IsChecked = picture.LockAspectRatio;
         _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
         _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
         _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
@@ -72,12 +78,13 @@ public sealed class FormatPictureDialog : Window
     public static bool TryCreateResult(
         string sizeInput,
         string rotationInput,
+        bool lockAspectRatio,
         string cropInput,
         string? altText,
         out FormatPictureDialogResult result,
         out string? error)
     {
-        result = new FormatPictureDialogResult(0, 0, 0, 0, 0, 0, 0, null);
+        result = new FormatPictureDialogResult(0, 0, 0, true, 0, 0, 0, 0, null);
         error = null;
         if (!ObjectSizeDialog.TryParseSize(sizeInput, out var size))
         {
@@ -98,6 +105,7 @@ public sealed class FormatPictureDialog : Window
             size.Width,
             size.Height,
             rotation.Degrees,
+            lockAspectRatio,
             crop.Left,
             crop.Top,
             crop.Right,
@@ -109,7 +117,14 @@ public sealed class FormatPictureDialog : Window
     private void Accept()
     {
         var cropInput = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
-        if (!TryCreateResult($"{_widthBox.Text}x{_heightBox.Text}", _rotationBox.Text, cropInput, _altTextBox.Text, out var result, out var error))
+        if (!TryCreateResult(
+                $"{_widthBox.Text}x{_heightBox.Text}",
+                _rotationBox.Text,
+                _lockAspectRatioBox.IsChecked == true,
+                cropInput,
+                _altTextBox.Text,
+                out var result,
+                out var error))
         {
             MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -131,7 +146,7 @@ public sealed class FormatPictureDialog : Window
         tabs.Items.Add(new TabItem { Header = "_Alt Text", Content = CreateAltTextTab() });
         root.Children.Add(tabs);
 
-        var buttons = InsertChartDialog.CreateButtonRow(Accept);
+        var buttons = DialogButtonRowFactory.Create(Accept, 72);
         Grid.SetRow(buttons, 1);
         root.Children.Add(buttons);
         return root;
@@ -146,6 +161,9 @@ public sealed class FormatPictureDialog : Window
         Grid.SetColumn(_lockAspectRatioBox, 1);
         Grid.SetRow(_lockAspectRatioBox, 3);
         grid.Children.Add(_lockAspectRatioBox);
+        var resetSizeButton = new Button { Content = "Reset _Size", MinWidth = 96, Margin = new Thickness(0, 0, 0, 8) };
+        resetSizeButton.Click += (_, _) => ResetSizeToInitial();
+        AddButtonRow(grid, 4, resetSizeButton);
         return grid;
     }
 
@@ -156,14 +174,17 @@ public sealed class FormatPictureDialog : Window
         AddRow(grid, 1, "_Top:", _cropTopBox);
         AddRow(grid, 2, "_Right:", _cropRightBox);
         AddRow(grid, 3, "_Bottom:", _cropBottomBox);
+        _resetCropButton.Click += (_, _) => ResetCropToInitial();
+        AddButtonRow(grid, 4, _resetCropButton);
         if (!cropEnabled)
         {
+            _resetCropButton.IsEnabled = false;
             var note = new TextBlock
             {
                 Text = "Crop is available for inserted image pictures.",
                 Margin = new Thickness(0, 8, 0, 0)
             };
-            Grid.SetRow(note, 4);
+            Grid.SetRow(note, 5);
             Grid.SetColumn(note, 1);
             grid.Children.Add(note);
         }
@@ -188,7 +209,7 @@ public sealed class FormatPictureDialog : Window
         var grid = new Grid { Margin = new Thickness(12) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         return grid;
     }
@@ -203,6 +224,31 @@ public sealed class FormatPictureDialog : Window
         Grid.SetRow(box, row);
         Grid.SetColumn(box, 1);
         grid.Children.Add(box);
+    }
+
+    private static void AddButtonRow(Grid grid, int row, Button button)
+    {
+        Grid.SetRow(button, row);
+        Grid.SetColumn(button, 1);
+        grid.Children.Add(button);
+    }
+
+    private void ResetSizeToInitial()
+    {
+        _updatingAspect = true;
+        _widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture);
+        _heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture);
+        _rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _lockAspectRatioBox.IsChecked = _initialResult.LockAspectRatio;
+        _updatingAspect = false;
+    }
+
+    private void ResetCropToInitial()
+    {
+        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropLeft);
+        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropTop);
+        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropRight);
+        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropBottom);
     }
 
     private void SyncAspectFromWidth()

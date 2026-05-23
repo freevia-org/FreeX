@@ -21,6 +21,7 @@ public sealed record PivotTableOptionsDialogResult(
     bool RefreshOnOpen = false,
     bool SaveSourceData = true,
     bool EnableRefresh = true,
+    bool PreserveSourceSortFilter = true,
     int? MissingItemsLimit = null,
     bool PrintTitles = false,
     bool PrintExpandCollapseButtons = false,
@@ -35,6 +36,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowPropertiesInTooltips = true,
     bool ShowClassicLayout = false,
     bool MergeAndCenterLabels = false,
+    bool ShowItemsWithNoDataOnRows = false,
+    bool ShowItemsWithNoDataOnColumns = false,
     bool PageOverThenDown = false,
     int PageWrap = 0);
 
@@ -65,6 +68,8 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _contextualTooltipsBox = new() { Content = "Show contextual _tooltips", IsChecked = true };
     private readonly CheckBox _propertiesInTooltipsBox = new() { Content = "Show _properties in tooltips", IsChecked = true };
     private readonly CheckBox _classicLayoutBox = new() { Content = "_Classic PivotTable layout (enables dragging of fields in the grid)" };
+    private readonly CheckBox _showItemsWithNoDataRowsBox = new() { Content = "Show items with no data on _rows" };
+    private readonly CheckBox _showItemsWithNoDataColumnsBox = new() { Content = "Show items with no data on _columns" };
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
@@ -73,6 +78,11 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
     private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
+    private readonly CheckBox _preserveSourceSortFilterBox = new()
+    {
+        Content = "Preserve source sort and _filter settings",
+        IsChecked = true
+    };
     private readonly ComboBox _missingItemsLimitBox = new();
     private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
     private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
@@ -113,6 +123,7 @@ public sealed class PivotTableOptionsDialog : Window
             refreshOnOpen: cache?.RefreshOnLoad ?? false,
             saveSourceData: cache?.SaveData ?? true,
             enableRefresh: cache?.EnableRefresh ?? true,
+            preserveSourceSortFilter: cache?.PreserveSourceSortFilter ?? true,
             missingItemsLimit: cache?.MissingItemsLimit,
             printTitles: pivotTable.PrintTitles,
             printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
@@ -127,6 +138,8 @@ public sealed class PivotTableOptionsDialog : Window
             showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
             showClassicLayout: pivotTable.ShowClassicLayout,
             mergeAndCenterLabels: pivotTable.MergeAndCenterLabels,
+            showItemsWithNoDataOnRows: pivotTable.ShowItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns: pivotTable.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: pivotTable.PageOverThenDown,
             pageWrap: pivotTable.PageWrap);
 
@@ -147,6 +160,7 @@ public sealed class PivotTableOptionsDialog : Window
         bool refreshOnOpen = false,
         bool saveSourceData = true,
         bool enableRefresh = true,
+        bool preserveSourceSortFilter = true,
         int? missingItemsLimit = null,
         bool printTitles = false,
         bool printExpandCollapseButtons = false,
@@ -161,6 +175,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool showPropertiesInTooltips = true,
         bool showClassicLayout = false,
         bool mergeAndCenterLabels = false,
+        bool showItemsWithNoDataOnRows = false,
+        bool showItemsWithNoDataOnColumns = false,
         bool pageOverThenDown = false,
         int pageWrap = 0) =>
         new(
@@ -180,6 +196,7 @@ public sealed class PivotTableOptionsDialog : Window
             refreshOnOpen,
             saveSourceData,
             enableRefresh,
+            preserveSourceSortFilter,
             NormalizeMissingItemsLimit(missingItemsLimit),
             printTitles,
             printExpandCollapseButtons,
@@ -194,6 +211,8 @@ public sealed class PivotTableOptionsDialog : Window
             showPropertiesInTooltips,
             showClassicLayout,
             mergeAndCenterLabels,
+            showItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns,
             pageOverThenDown,
             NormalizePageWrap(pageWrap));
 
@@ -262,6 +281,8 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _contextualTooltipsBox);
         AddCheckBox(stylePanel, _propertiesInTooltipsBox);
         AddCheckBox(stylePanel, _classicLayoutBox);
+        AddCheckBox(stylePanel, _showItemsWithNoDataRowsBox);
+        AddCheckBox(stylePanel, _showItemsWithNoDataColumnsBox);
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         AddCheckBox(stylePanel, _showExpandCollapseBox);
@@ -276,7 +297,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _refreshOnOpenBox);
         AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, _enableRefreshBox);
-        AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
+        AddCheckBox(dataPanel, _preserveSourceSortFilterBox);
         AddLabeledControl(dataPanel, "Retain items _deleted from the data source", _missingItemsLimitBox, MissingItemsLimitLabels);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Data options", dataPanel));
         return stack;
@@ -362,6 +383,8 @@ public sealed class PivotTableOptionsDialog : Window
         _contextualTooltipsBox.IsChecked = result.ShowContextualTooltips;
         _propertiesInTooltipsBox.IsChecked = result.ShowPropertiesInTooltips;
         _classicLayoutBox.IsChecked = result.ShowClassicLayout;
+        _showItemsWithNoDataRowsBox.IsChecked = result.ShowItemsWithNoDataOnRows;
+        _showItemsWithNoDataColumnsBox.IsChecked = result.ShowItemsWithNoDataOnColumns;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
@@ -370,6 +393,7 @@ public sealed class PivotTableOptionsDialog : Window
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
         _enableRefreshBox.IsChecked = result.EnableRefresh;
+        _preserveSourceSortFilterBox.IsChecked = result.PreserveSourceSortFilter;
         _missingItemsLimitBox.SelectedItem = LabelForMissingItemsLimit(result.MissingItemsLimit);
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
         _printTitlesBox.IsChecked = result.PrintTitles;
@@ -401,6 +425,7 @@ public sealed class PivotTableOptionsDialog : Window
             _refreshOnOpenBox.IsChecked == true,
             _saveSourceDataBox.IsChecked == true,
             _enableRefreshBox.IsChecked == true,
+            _preserveSourceSortFilterBox.IsChecked == true,
             MissingItemsLimitForLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
             _printTitlesBox.IsChecked == true,
             _printExpandCollapseBox.IsChecked == true,
@@ -415,6 +440,8 @@ public sealed class PivotTableOptionsDialog : Window
             _propertiesInTooltipsBox.IsChecked == true,
             _classicLayoutBox.IsChecked == true,
             _mergeLabelsBox.IsChecked == true,
+            _showItemsWithNoDataRowsBox.IsChecked == true,
+            _showItemsWithNoDataColumnsBox.IsChecked == true,
             PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
             ParsePageWrap(_pageWrapBox.Text));
         DialogResult = true;

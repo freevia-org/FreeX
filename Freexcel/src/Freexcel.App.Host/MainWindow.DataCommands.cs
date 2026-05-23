@@ -57,6 +57,16 @@ public partial class MainWindow
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TextToColumnsDialog.CanConvertRange(range))
+        {
+            MessageBox.Show(
+                "Text to Columns works on one column at a time. Select a single column of cells and try again.",
+                "Text to Columns",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range), range.Start) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
@@ -135,7 +145,8 @@ public partial class MainWindow
         var genericColumns = sheet is null
             ? RemoveDuplicatesDialog.BuildColumnChoices(range)
             : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
-        var dialog = new RemoveDuplicatesDialog(columns, genericColumns) { Owner = this };
+        var hasHeaders = sheet is not null && RemoveDuplicatesDialog.GuessHasHeaders(sheet, range);
+        var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         RemoveDuplicateRowsCommand? command = null;
@@ -388,8 +399,12 @@ public partial class MainWindow
         if (name is null)
             return;
 
-        if (!TryExecuteCommand(new ApplyScenarioCommand(name), "Scenario Manager", out var outcome))
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Scenario Manager");
             return;
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         if (outcome.AffectedCells?.FirstOrDefault() is { } first)

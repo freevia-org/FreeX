@@ -1935,6 +1935,7 @@ public partial class FileAdapterSmokeTests
             ContentType = "image/png",
             Width = 90,
             Height = 60,
+            LockAspectRatio = false,
             RotationDegrees = 30,
             CropLeft = 0.1,
             CropTop = 0.2,
@@ -1956,6 +1957,7 @@ public partial class FileAdapterSmokeTests
         picture.ContentType.Should().Be("image/png");
         picture.Width.Should().Be(90);
         picture.Height.Should().Be(60);
+        picture.LockAspectRatio.Should().BeFalse();
         picture.RotationDegrees.Should().Be(30);
         picture.CropLeft.Should().Be(0.1);
         picture.CropTop.Should().Be(0.2);
@@ -5200,6 +5202,9 @@ public partial class FileAdapterSmokeTests
         var sheet = workbook.AddSheet("S1");
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "sheet-secret";
+        sheet.ProtectionPermissions.Clear();
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.SelectUnlockedCells);
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
         sheet.AllowEditRanges.Add(new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3)));
@@ -5216,6 +5221,9 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IsProtected.Should().BeTrue();
         loadedSheet.ProtectionPassword.Should().Be("sheet-secret");
+        loadedSheet.ProtectionPermissions.Should().Equal(
+            SheetProtectionPermission.SelectUnlockedCells,
+            SheetProtectionPermission.FormatCells);
         var allowEditRange = loadedSheet.AllowEditRanges.Should().ContainSingle().Subject;
         allowEditRange.Start.ToA1().Should().Be("B2");
         allowEditRange.End.ToA1().Should().Be("C3");
@@ -7472,6 +7480,94 @@ public partial class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.ShowXAxisLabels.Should().BeFalse();
         loadedChart.ShowYAxisLabels.Should().BeFalse();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartAxisLabelFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisLabelFormattingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales",
+            XAxisLabelTextColor = new CellColor(70, 70, 70),
+            XAxisLabelFontSize = 10,
+            XAxisLabelAngle = -45,
+            YAxisLabelTextColor = new CellColor(80, 80, 80),
+            YAxisLabelFontSize = 12,
+            YAxisLabelAngle = 90,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.XAxisLabelTextColor.Should().Be(new CellColor(70, 70, 70));
+        loadedChart.XAxisLabelFontSize.Should().Be(10);
+        loadedChart.XAxisLabelAngle.Should().Be(-45);
+        loadedChart.YAxisLabelTextColor.Should().Be(new CellColor(80, 80, 80));
+        loadedChart.YAxisLabelFontSize.Should().Be(12);
+        loadedChart.YAxisLabelAngle.Should().Be(90);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartTextThemeFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartTextThemeFormattingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales",
+            XAxisTitle = "Month",
+            YAxisTitle = "Amount",
+            ChartTitleTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2),
+            AxisTitleTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            XAxisLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            YAxisLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2, 0.1),
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ChartTitleTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2));
+        loadedChart.ChartTitleTextColor.Should().BeNull();
+        loadedChart.AxisTitleTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+        loadedChart.AxisTitleTextColor.Should().BeNull();
+        loadedChart.XAxisLabelTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1));
+        loadedChart.XAxisLabelTextColor.Should().BeNull();
+        loadedChart.YAxisLabelTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2, 0.1));
+        loadedChart.YAxisLabelTextColor.Should().BeNull();
     }
 
     [Fact]
@@ -9876,6 +9972,51 @@ public partial class FileAdapterSmokeTests
                 string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.Ordinal) &&
                 string.Equals(rel.Attribute("Target")?.Value, "../drawings/vmlDrawing1.vml", StringComparison.Ordinal));
         hasLegacyDrawingRelationship.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RegeneratesHeaderFooterDrawingWhenPictureChanges()
+    {
+        var workbook = new Workbook("HeaderFooterDrawingChangeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("header image"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddHeaderFooterLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var originalPicture = loadedSheet.PageHeaderPictures.Left!;
+        loadedSheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            originalPicture with { Width = originalPicture.Width + 24 },
+            null,
+            null);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/drawings/freexcelHeaderFooter1.vml").Should().NotBeNull();
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var relId = worksheetXml.Root!
+            .Element(worksheetNs + "legacyDrawingHF")!
+            .Attribute(relNs + "id")!
+            .Value;
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var target = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .First(rel => string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.Ordinal))
+            .Attribute("Target")!
+            .Value;
+        target.Should().Be("../drawings/freexcelHeaderFooter1.vml");
     }
 
     [Fact]
@@ -13057,6 +13198,7 @@ public partial class FileAdapterSmokeTests
             RefreshOnLoad = false,
             SaveData = false,
             EnableRefresh = false,
+            PreserveSourceSortFilter = false,
             MissingItemsLimit = 0,
             RefreshedVersion = 7,
             RefreshedBy = "Freexcel Tests"
@@ -13086,6 +13228,7 @@ public partial class FileAdapterSmokeTests
             cacheXml.Should().Contain("refreshOnLoad=\"0\"");
             cacheXml.Should().Contain("saveData=\"0\"");
             cacheXml.Should().Contain("enableRefresh=\"0\"");
+            cacheXml.Should().Contain("preserveSourceSortFilter=\"0\"");
             cacheXml.Should().Contain("missingItemsLimit=\"0\"");
             cacheXml.Should().Contain("refreshedVersion=\"7\"");
             cacheXml.Should().Contain("refreshedBy=\"Freexcel Tests\"");
@@ -13097,6 +13240,7 @@ public partial class FileAdapterSmokeTests
         loadedCache.RefreshOnLoad.Should().BeFalse();
         loadedCache.SaveData.Should().BeFalse();
         loadedCache.EnableRefresh.Should().BeFalse();
+        loadedCache.PreserveSourceSortFilter.Should().BeFalse();
         loadedCache.MissingItemsLimit.Should().Be(0);
         loadedCache.RefreshedVersion.Should().Be(7);
         loadedCache.RefreshedBy.Should().Be("Freexcel Tests");

@@ -17,12 +17,76 @@ public partial class MainWindow
         UpdateSsRecentList();
         ShowHomeView();
         StartScreenOverlay.Visibility = Visibility.Visible;
+        FocusBackstageHomeNavigation();
     }
 
     private void HideStartScreen()
     {
         StartScreenOverlay.Visibility = Visibility.Collapsed;
         SheetGrid.Focus();
+    }
+
+    private void FocusBackstageHomeNavigation()
+    {
+        SsHomeNavBtn.Focus();
+        Keyboard.Focus(SsHomeNavBtn);
+    }
+
+    private bool TryHandleBackstageShellFocusCycle(bool reverse)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
+            !IsInsideStartScreenOverlay(focusedElement))
+        {
+            FocusBackstageHomeNavigation();
+            return true;
+        }
+
+        var direction = reverse
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next;
+
+        if (StartScreenOverlay.MoveFocus(new TraversalRequest(direction)))
+            return true;
+
+        FocusBackstageHomeNavigation();
+        return true;
+    }
+
+    private void StartScreenOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None ||
+            Keyboard.FocusedElement is not UIElement focusedElement ||
+            !IsDescendantOf(focusedElement, StartScreenSidebar) ||
+            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+        {
+            return;
+        }
+
+        var direction = e.Key switch
+        {
+            Key.Up => FocusNavigationDirection.Previous,
+            Key.Down => FocusNavigationDirection.Next,
+            Key.Home => FocusNavigationDirection.First,
+            Key.End => FocusNavigationDirection.Last,
+            _ => FocusNavigationDirection.Next
+        };
+        focusedElement.MoveFocus(new TraversalRequest(direction));
+        e.Handled = true;
+    }
+
+    private bool TryOpenFocusedBackstageContextMenu()
+    {
+        if (!IsStartScreenVisible() ||
+            Keyboard.FocusedElement is not FrameworkElement focusedElement ||
+            !IsInsideStartScreenOverlay(focusedElement) ||
+            focusedElement.ContextMenu is not { } menu)
+        {
+            return false;
+        }
+
+        menu.PlacementTarget = focusedElement;
+        menu.IsOpen = true;
+        return true;
     }
 
     private void OpenPrintBackstage()

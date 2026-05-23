@@ -3195,6 +3195,7 @@
                                     <Border x:Name="TabBorder"
                                             CornerRadius="3,3,0,0" Padding="10,3,10,1"
                                             Cursor="Hand"
+                                            Focusable="True"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                             MouseMove="SheetTab_MouseMove"
                                             MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
@@ -3348,7 +3349,7 @@
                             MinWidth="210"
                             Background="{StaticResource FreexcelStatusSurfaceBrush}"
                             Panel.ZIndex="1">
-                    <Button Content="−" Width="18" Height="18" Margin="0,0,2,0"
+                    <Button x:Name="StatusZoomOutButton" Content="−" Width="18" Height="18" Margin="0,0,2,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
@@ -3362,7 +3363,7 @@
                             SmallChange="5" LargeChange="10"
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
-                    <Button Content="+" Width="18" Height="18" Margin="0,0,6,0"
+                    <Button x:Name="StatusZoomInButton" Content="+" Width="18" Height="18" Margin="0,0,6,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
@@ -3408,6 +3409,9 @@
         <Grid x:Name="StartScreenOverlay"
               Grid.Row="1" Grid.RowSpan="5"
               Panel.ZIndex="200"
+              PreviewKeyDown="StartScreenOverlay_PreviewKeyDown"
+              KeyboardNavigation.TabNavigation="Cycle"
+              KeyboardNavigation.ControlTabNavigation="Cycle"
               Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="190"/>
@@ -3415,7 +3419,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- ── Left sidebar ─────────────────────────────────────────── -->
-            <DockPanel Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
+            <DockPanel x:Name="StartScreenSidebar" Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
 
                 <!-- Back arrow -->
 	                <Button x:Name="SsBackBtn" DockPanel.Dock="Top"

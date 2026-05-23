@@ -298,6 +298,7 @@ public partial class MainWindow
             });
         }
 
+        menu.Opened += (_, _) => SynchronizeCollapsedRibbonMenuItems(menu.Items);
         return menu;
     }
 
@@ -314,7 +315,8 @@ public partial class MainWindow
         var item = new MenuItem
         {
             Header = title,
-            IsEnabled = button.IsEnabled
+            IsEnabled = button.IsEnabled,
+            Tag = button
         };
 
         var keyTip = RibbonTooltip.GetKeyTip(button);
@@ -337,10 +339,54 @@ public partial class MainWindow
         }
         else
         {
-            item.Click += (_, _) => InvokeRibbonButton(button);
+            item.Click += (_, _) =>
+            {
+                InvokeRibbonButton(button);
+                FocusCollapsedRibbonMenuPlacementTarget(item);
+            };
         }
 
         return item;
+    }
+
+    private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)
+    {
+        for (DependencyObject? current = item; current is not null; current = GetTreeParentForCollapsedRibbonMenu(current))
+        {
+            if (current is ContextMenu contextMenu &&
+                contextMenu.PlacementTarget is UIElement placementTarget)
+            {
+                placementTarget.Focus();
+                return;
+            }
+        }
+    }
+
+    private static DependencyObject? GetTreeParentForCollapsedRibbonMenu(DependencyObject element)
+    {
+        if (element is Visual)
+        {
+            var visualParent = VisualTreeHelper.GetParent(element);
+            if (visualParent is not null)
+                return visualParent;
+        }
+
+        return LogicalTreeHelper.GetParent(element);
+    }
+
+    private static void SynchronizeCollapsedRibbonMenuItems(ItemCollection items)
+    {
+        foreach (var item in items.OfType<MenuItem>())
+        {
+            if (item.Tag is ButtonBase sourceButton)
+            {
+                item.IsEnabled = sourceButton.IsEnabled;
+                if (sourceButton.ContextMenu is { } sourceMenu)
+                    SynchronizeClonedMenuItems(sourceMenu.Items, item.Items);
+            }
+
+            SynchronizeCollapsedRibbonMenuItems(item.Items);
+        }
     }
 
     private static object? CloneRibbonMenuItem(object source)

@@ -95,4 +95,15 @@ public sealed class ScenarioManagerDialogTests
         handlerSource.Should().Contain("SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
     }
+
+    [Fact]
+    public void DialogOpenedFromKeyboard_FocusesScenarioListOrNewNameField()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_scenarioList.Items.Count > 0 ? _scenarioList : _newNameBox");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
 }

@@ -65,7 +65,9 @@ public sealed class OpenWorkbookLoaderTests
                 workbook.AddSheet("Sheet1");
                 return workbook;
             });
-            var loader = new OpenWorkbookLoader(_ => { });
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                inspectXlsx: _ => new XlsxFeatureReport([]));
 
             var result = await loader.LoadAsync(
                 tempPath,
@@ -79,6 +81,94 @@ public sealed class OpenWorkbookLoaderTests
         finally
         {
             File.Delete(tempPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(".xlsx", false, true)]
+    [InlineData(".xlsm", false, false)]
+    [InlineData(".xltx", true, false)]
+    [InlineData(".xltm", true, false)]
+    public async Task LoadAsync_InspectsOpenXmlExcelVariants(string extension, bool opensAsTemplate, bool canSave)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var expectedReport = new XlsxFeatureReport([
+                new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin")
+            ]);
+            var adapter = new FakeAdapter(stream =>
+            {
+                using var reader = new StreamReader(stream);
+                reader.ReadToEnd().Should().Be("payload");
+                var workbook = new Workbook("Loaded");
+                workbook.AddSheet("Sheet1");
+                return workbook;
+            });
+            var inspected = false;
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                inspectXlsx: stream =>
+                {
+                    using var reader = new StreamReader(stream);
+                    reader.ReadToEnd().Should().Be("payload");
+                    inspected = true;
+                    return expectedReport;
+                });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                extension,
+                new FileFormatDescriptor(extension, "Excel Open XML", CanOpen: true, CanSave: canSave, opensAsTemplate),
+                new Progress<OpenProgressUpdate>());
+
+            inspected.Should().BeTrue();
+            result.FeatureReport.Should().BeSameAs(expectedReport);
+            result.OpenedAsTemplate.Should().Be(opensAsTemplate);
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(".csv")]
+    [InlineData(".txt")]
+    [InlineData(".tsv")]
+    [InlineData(".tab")]
+    public async Task LoadAsync_RenamesSingleSheetTextWorkbooksToExcelCompatibleFileName(string extension)
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        var fileNameWithoutExtension = "Very Long Sales [Draft] Import Name 2026";
+        var tempPath = Path.Combine(tempDirectory, $"{fileNameWithoutExtension}{extension}");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var adapter = new FakeAdapter(_ =>
+            {
+                var workbook = new Workbook("Loaded");
+                workbook.AddSheet("Sheet1");
+                return workbook;
+            });
+            var loader = new OpenWorkbookLoader(_ => { });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                extension,
+                new FileFormatDescriptor(extension, "Text", CanOpen: true, CanSave: false),
+                new Progress<OpenProgressUpdate>());
+
+            result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
+        }
+        finally
+        {
+            File.Delete(tempPath);
+            Directory.Delete(tempDirectory);
         }
     }
 

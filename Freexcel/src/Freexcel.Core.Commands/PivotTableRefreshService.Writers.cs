@@ -11,7 +11,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> headers,
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows)
     {
-        var start = pivotTable.TargetRange.Start;
+        var start = GetPivotBodyStart(pivotTable);
         var rowFields = pivotTable.RowFields.ToList();
         var rowFieldOutputColumns = RowFieldOutputColumnCount(pivotTable);
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
@@ -165,7 +165,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<string> headers,
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows)
     {
-        var start = pivotTable.TargetRange.Start;
+        var start = GetPivotBodyStart(pivotTable);
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
         {
             sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
@@ -191,7 +191,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
         IReadOnlyList<PivotFieldModel> columnFields)
     {
-        var start = pivotTable.TargetRange.Start;
+        var start = GetPivotBodyStart(pivotTable);
         var columnKeys = rows
             .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
             .Distinct()
@@ -315,7 +315,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
         IReadOnlyList<PivotFieldModel> columnFields)
     {
-        var start = pivotTable.TargetRange.Start;
+        var start = GetPivotBodyStart(pivotTable);
         var rowFields = pivotTable.RowFields.ToList();
         var rowFieldOutputColumns = RowFieldOutputColumnCount(pivotTable);
         var rowGroups = rows
@@ -458,5 +458,125 @@ public static partial class PivotTableRefreshService
                 }
             }
         }
+    }
+    private static void WritePageFields(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        var pageFields = pivotTable.PageFields.ToList();
+        if (pageFields.Count == 0)
+            return;
+
+        var start = pivotTable.TargetRange.Start;
+        var wrap = Math.Max(0, pivotTable.PageWrap);
+        for (var index = 0; index < pageFields.Count; index++)
+        {
+            var (rowOffset, colPairOffset) = GetPageFieldOffset(index, pageFields.Count, wrap, pivotTable.PageOverThenDown);
+            var field = pageFields[index];
+            sheet.SetCell(
+                new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset),
+                new TextValue(headers[field.SourceFieldIndex]));
+            sheet.SetCell(
+                new CellAddress(sheet.Id, start.Row + rowOffset, start.Col + colPairOffset + 1),
+                new TextValue(GetPageFieldSelectionText(field)));
+        }
+    }
+
+    private static (uint RowOffset, uint ColPairOffset) GetPageFieldOffset(
+        int index,
+        int pageFieldCount,
+        int wrap,
+        bool overThenDown)
+    {
+        if (overThenDown)
+        {
+            var fieldsPerRow = wrap <= 0 ? pageFieldCount : wrap;
+            return ((uint)(index / fieldsPerRow), (uint)((index % fieldsPerRow) * 2));
+        }
+
+        var rowsPerColumn = wrap <= 0 ? pageFieldCount : wrap;
+        return ((uint)(index % rowsPerColumn), (uint)((index / rowsPerColumn) * 2));
+    }
+
+    private static string GetPageFieldSelectionText(PivotFieldModel field)
+    {
+        if (field.SelectedItems is { Count: > 0 })
+            return field.SelectedItems.Count == 1 ? field.SelectedItems[0] : "(Multiple Items)";
+
+        return string.IsNullOrWhiteSpace(field.SelectedItem) ? "(All)" : field.SelectedItem;
+    }
+
+    private static void ApplyMergedRowLabels(Sheet sheet, PivotTableModel pivotTable)
+    {
+        if (!pivotTable.MergeAndCenterLabels ||
+            pivotTable.ReportLayout == PivotReportLayout.Compact ||
+            pivotTable.RowFields.Count <= 1)
+        {
+            return;
+        }
+
+        var materialized = GetMaterializedOutputRange(sheet, pivotTable);
+        var bodyStart = GetPivotBodyStart(pivotTable);
+        var rowLabelColumnCount = RowFieldOutputColumnCount(pivotTable);
+        if (rowLabelColumnCount <= 1 || materialized.End.Row <= bodyStart.Row + 1)
+            return;
+
+        for (var colOffset = 0; colOffset < rowLabelColumnCount - 1; colOffset++)
+            MergeRepeatedLabelsInColumn(sheet, materialized, bodyStart.Row + 1, bodyStart.Col + (uint)colOffset);
+    }
+
+    private static void MergeRepeatedLabelsInColumn(
+        Sheet sheet,
+        GridRange materialized,
+        uint firstBodyRow,
+        uint labelCol)
+    {
+        uint? spanStart = null;
+        string? spanText = null;
+        for (var row = firstBodyRow; row <= materialized.End.Row + 1; row++)
+        {
+            var text = row <= materialized.End.Row ? GetMergeableLabelText(sheet, row, labelCol) : null;
+            if (spanStart is not null &&
+                (!string.Equals(text, spanText, StringComparison.Ordinal) || text is null))
+            {
+                MergeLabelSpan(sheet, spanStart.Value, row - 1, labelCol);
+                spanStart = null;
+                spanText = null;
+            }
+
+            if (text is not null && spanStart is null)
+            {
+                spanStart = row;
+                spanText = text;
+            }
+        }
+    }
+
+    private static string? GetMergeableLabelText(Sheet sheet, uint row, uint col)
+    {
+        if (sheet.GetCell(row, col)?.Value is not TextValue text ||
+            string.IsNullOrWhiteSpace(text.Value) ||
+            IsPivotGrandTotalCaption(text.Value) ||
+            IsPivotSubtotalCaption(text.Value))
+        {
+            return null;
+        }
+
+        return text.Value;
+    }
+
+    private static void MergeLabelSpan(Sheet sheet, uint startRow, uint endRow, uint col)
+    {
+        if (endRow <= startRow)
+            return;
+
+        var region = new GridRange(
+            new CellAddress(sheet.Id, startRow, col),
+            new CellAddress(sheet.Id, endRow, col));
+        sheet.AddMergedRegion(region);
+
+        for (var row = startRow + 1; row <= endRow; row++)
+            sheet.ClearCell(row, col);
     }
 }

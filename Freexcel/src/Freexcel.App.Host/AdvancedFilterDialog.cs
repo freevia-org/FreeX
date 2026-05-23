@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -12,10 +13,23 @@ public sealed record AdvancedFilterDialogResult(
     bool UniqueRecordsOnly,
     GridRange? CopyToRange = null);
 
-public sealed class AdvancedFilterDialog : Window
+public enum AdvancedFilterRangeSelectionTarget
+{
+    ListRange,
+    CriteriaRange,
+    CopyTo
+}
+
+public sealed record AdvancedFilterRangeSelectionRequest(
+    AdvancedFilterRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
+public sealed partial class AdvancedFilterDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly Func<string, SheetId?> _resolveSheetId;
+    private readonly Action<AdvancedFilterRangeSelectionRequest>? _requestRangeSelection;
     private readonly TextBox _listRangeBox = new();
     private readonly TextBox _criteriaRangeBox = new();
     private readonly TextBox _copyToBox = new();
@@ -31,11 +45,17 @@ public sealed class AdvancedFilterDialog : Window
     };
 
     public AdvancedFilterDialogResult? Result { get; private set; }
+    public AdvancedFilterRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public AdvancedFilterDialog(SheetId sheetId, string defaultListRange, Func<string, SheetId?>? resolveSheetId = null)
+    public AdvancedFilterDialog(
+        SheetId sheetId,
+        string defaultListRange,
+        Func<string, SheetId?>? resolveSheetId = null,
+        Action<AdvancedFilterRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
         _resolveSheetId = resolveSheetId ?? (_ => null);
+        _requestRangeSelection = requestRangeSelection;
         Title = "Advanced Filter";
         Width = 420;
         Height = 340;
@@ -71,9 +91,9 @@ public sealed class AdvancedFilterDialog : Window
         var rangesGrid = new Grid();
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range");
-        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range");
-        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell");
+        AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range", AdvancedFilterRangeSelectionTarget.ListRange);
+        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
+        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo);
         content.Children.Add(rangesGrid);
         content.Children.Add(_copyToHint);
 
@@ -89,120 +109,25 @@ public sealed class AdvancedFilterDialog : Window
         content.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 14, 0, 0)));
         Content = root;
         UpdateCopyToState();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static bool TryParse(
-        SheetId currentSheetId,
-        string listRangeText,
-        string criteriaRangeText,
-        string? copyToCellText,
-        bool uniqueRecordsOnly,
-        Func<string, SheetId?>? resolveSheetId,
-        out AdvancedFilterDialogResult result,
-        out string? error)
-    {
-        result = default!;
-        error = null;
-        resolveSheetId ??= _ => null;
+    private DockPanel CreateReferenceEditor(
+        TextBox textBox,
+        string automationName,
+        AdvancedFilterRangeSelectionTarget target) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request => RequestRangeSelection(target, request));
 
-        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, listRangeText, resolveSheetId, out var listRange))
-        {
-            error = "Enter a valid list range.";
-            return false;
-        }
-
-        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
-        {
-            error = "Enter a valid criteria range.";
-            return false;
-        }
-
-        if (!AdvancedFilterInputParser.TryParseCopyDestinationRange(copyToCellText ?? "", currentSheetId, out var copyToRange))
-        {
-            error = "Enter a valid copy-to cell or one-row header range.";
-            return false;
-        }
-
-        result = new AdvancedFilterDialogResult(listRange, criteriaRange, copyToRange?.Start, uniqueRecordsOnly, copyToRange);
-        return true;
-    }
-
-    public static bool TryParse(
-        SheetId currentSheetId,
-        string listRangeText,
-        string criteriaRangeText,
-        string? copyToCellText,
-        bool uniqueRecordsOnly,
-        out AdvancedFilterDialogResult result,
-        out string? error) =>
-        TryParse(
-            currentSheetId,
-            listRangeText,
-            criteriaRangeText,
-            copyToCellText,
-            uniqueRecordsOnly,
-            resolveSheetId: null,
-            out result,
-            out error);
-
-    public static bool TryParse(
-        SheetId currentSheetId,
-        string listRangeText,
-        string criteriaRangeText,
-        string? copyToCellText,
-        bool copyToAnotherLocation,
-        bool uniqueRecordsOnly,
-        Func<string, SheetId?>? resolveSheetId,
-        out AdvancedFilterDialogResult result,
-        out string? error) =>
-        TryParse(
-            currentSheetId,
-            listRangeText,
-            criteriaRangeText,
-            copyToAnotherLocation ? copyToCellText : "",
-            uniqueRecordsOnly,
-            resolveSheetId,
-            out result,
-            out error);
-
-    public static bool TryParse(
-        SheetId currentSheetId,
-        string listRangeText,
-        string criteriaRangeText,
-        string? copyToCellText,
-        bool copyToAnotherLocation,
-        bool uniqueRecordsOnly,
-        out AdvancedFilterDialogResult result,
-        out string? error) =>
-        TryParse(
-            currentSheetId,
-            listRangeText,
-            criteriaRangeText,
-            copyToAnotherLocation ? copyToCellText : "",
-            uniqueRecordsOnly,
-            resolveSheetId: null,
-            out result,
-            out error);
-
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
-    {
-        var panel = new DockPanel();
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox,
-            ToolTip = automationName
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
-        return panel;
-    }
-
-    private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
+    private void AddReferenceRow(
+        Grid grid,
+        int row,
+        string label,
+        TextBox textBox,
+        string automationName,
+        AdvancedFilterRangeSelectionTarget target)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var labelBlock = new Label
@@ -217,20 +142,23 @@ public sealed class AdvancedFilterDialog : Window
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
-        var editor = CreateReferenceEditor(textBox, automationName);
+        var editor = CreateReferenceEditor(textBox, automationName, target);
         editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
         Grid.SetRow(editor, row);
         Grid.SetColumn(editor, 1);
         grid.Children.Add(editor);
     }
 
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    private void RequestRangeSelection(AdvancedFilterRangeSelectionTarget target, DialogReferencePickerRequest request)
     {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
+    }
 
-        textBox.Focus();
-        textBox.SelectAll();
+    private void FocusInitialKeyboardTarget()
+    {
+        _filterInPlaceButton.Focus();
+        Keyboard.Focus(_filterInPlaceButton);
     }
 
     private void UpdateCopyToState()

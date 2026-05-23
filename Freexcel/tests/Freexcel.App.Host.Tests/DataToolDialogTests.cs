@@ -1,4 +1,8 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -48,9 +52,27 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialog_AllowsOnlySingleColumnSelections()
+    {
+        var sheetId = SheetId.New();
+
+        TextToColumnsDialog.CanConvertRange(new GridRange(
+                new CellAddress(sheetId, 2, 1),
+                new CellAddress(sheetId, 8, 1)))
+            .Should()
+            .BeTrue();
+
+        TextToColumnsDialog.CanConvertRange(new GridRange(
+                new CellAddress(sheetId, 2, 1),
+                new CellAddress(sheetId, 8, 2)))
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("Original data type");
         source.Should().Contain("Content = \"_Delimited\"");
@@ -83,7 +105,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void TextToColumnsDialog_ExposesDelimiterPreviewAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var source = ReadTextToColumnsDialogSources();
 
         foreach (var content in new[]
         {
@@ -105,13 +127,65 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_destinationBox");
         source.Should().Contain("_formatColumnBox");
         source.Should().Contain("BuildColumnFormats");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("TextToColumnsRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void TextToColumnsRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        TextToColumnsDialog.CreateRangeSelectionRequest(" F2 ")
+            .Should()
+            .Be(new TextToColumnsRangeSelectionRequest("F2", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void TextToColumnsDestinationPicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var requests = new List<TextToColumnsRangeSelectionRequest>();
+            var dialog = new TextToColumnsDialog(
+                ["East,42"],
+                new CellAddress(sheetId, 2, 6),
+                requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select destination cell");
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new TextToColumnsRangeSelectionRequest("F2", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
+    {
+        var dialogSource = ReadTextToColumnsDialogSources();
+        var modelSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialogModel.cs"));
+
+        foreach (var dateOrder in new[] { "MDY", "DMY", "YMD", "MYD", "DYM", "YDM" })
+        {
+            dialogSource.Should().Contain($"\"{dateOrder}\"");
+            modelSource.Should().Contain($"Date{dateOrder}");
+        }
     }
 
     [Fact]
     public void TextToColumnsDialog_UsesExcelWizardChromeAroundDelimitedFlow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+        var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("Step {_wizardStep} of 3");
         source.Should().Contain("CreateWizardButtonRow");
@@ -281,6 +355,30 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_GuessesHeadersFromFirstRowShape()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(42));
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2));
+
+        RemoveDuplicatesDialog.GuessHasHeaders(sheet, range).Should().BeTrue();
+
+        var numericSheet = new Sheet(sheetId, "Numbers");
+        numericSheet.SetCell(new CellAddress(sheetId, 1, 1), new NumberValue(10));
+        numericSheet.SetCell(new CellAddress(sheetId, 1, 2), new NumberValue(20));
+        numericSheet.SetCell(new CellAddress(sheetId, 2, 1), new NumberValue(10));
+        numericSheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(30));
+
+        RemoveDuplicatesDialog.GuessHasHeaders(numericSheet, range).Should().BeFalse();
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_ExcludesHeaderRowOnlyWhenHeadersAreEnabled()
     {
         var sheetId = SheetId.New();
@@ -385,6 +483,17 @@ public sealed class DataToolDialogTests
         source.Should().Contain("SelectedItem = \"Sum\"");
         source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
         source.Should().Contain("_subtotalColumnPanel");
+    }
+
+    [Fact]
+    public void SubtotalDialogOpenedFromKeyboard_FocusesGroupColumnChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_groupColumnBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_groupColumnBox);");
     }
 
     [Fact]
@@ -552,6 +661,7 @@ public sealed class DataToolDialogTests
     public void AdvancedFilterDialog_ExposesExcelStyleModesAndReferencePickers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+        var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
@@ -563,13 +673,74 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = automationName");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+        pickerSource.Should().Contain("Collapse dialog and select range");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().NotContain("Text = \"E1:F2\"");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+    }
+
+    [Fact]
+    public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_filterInPlaceButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_filterInPlaceButton);");
+    }
+
+    [Fact]
+    public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
+            .Should()
+            .Be(new AdvancedFilterRangeSelectionRequest(
+                AdvancedFilterRangeSelectionTarget.CriteriaRange,
+                "E1:F4",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select list range", AdvancedFilterRangeSelectionTarget.ListRange, "A1:C12")]
+    [InlineData("Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange, "E1:F4")]
+    [InlineData("Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, "H1:J1")]
+    public void AdvancedFilterReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        AdvancedFilterRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<AdvancedFilterRangeSelectionRequest>();
+            var dialog = new AdvancedFilterDialog(SheetId.New(), " A1:C12 ", requestRangeSelection: requests.Add);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                textBoxes[1].Text = " E1:F4 ";
+                textBoxes[2].Text = " H1:J1 ";
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new AdvancedFilterRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -643,9 +814,39 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_TryAddReference_RejectsMalformedReferenceImmediately()
+    {
+        var sheetId = SheetId.New();
+
+        ConsolidateDialog.TryAddReference(
+                sheetId,
+                ["A1:B3"],
+                "nope",
+                out var unchanged,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        unchanged.Should().Equal("A1:B3");
+        error.Should().Be("Enter a valid source range: nope.");
+
+        ConsolidateDialog.TryAddReference(
+                sheetId,
+                ["A1:B3"],
+                "D5:E7",
+                out var updated,
+                out error)
+            .Should()
+            .BeTrue();
+
+        updated.Should().Equal("A1:B3", "D5:E7");
+        error.Should().BeNull();
+    }
+
+    [Fact]
     public void ConsolidateDialog_ExposesExcelStyleAllReferencesWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var source = ReadConsolidateDialogSources();
 
         source.Should().Contain("_referenceBox");
         source.Should().Contain("_referencesList");
@@ -661,12 +862,69 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceButton_Click");
         source.Should().Contain("DeleteReferenceButton_Click");
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_functionBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_functionBox);");
+    }
+
+    [Fact]
+    public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
+            .Should()
+            .Be(new ConsolidateRangeSelectionRequest(
+                ConsolidateRangeSelectionTarget.Reference,
+                "A1:B3",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select reference range", ConsolidateRangeSelectionTarget.Reference, "A1:B3")]
+    [InlineData("Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell, "G10")]
+    public void ConsolidateReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        ConsolidateRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<ConsolidateRangeSelectionRequest>();
+            var dialog = new ConsolidateDialog(SheetId.New(), " A1:B3 ", " G10 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new ConsolidateRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
     public void ConsolidateDialog_ExposesExcelStyleFunctionLabelsAndLinkOptions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var source = ReadConsolidateDialogSources();
 
         source.Should().Contain("_functionBox");
         source.Should().Contain("_topRowBox");
@@ -690,6 +948,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("CreateLinksToSourceData");
         source.Should().Contain("Write formulas that reference the source cells");
     }
+
+    private static string ReadConsolidateDialogSources() =>
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.Planning.cs"));
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
@@ -840,18 +1102,77 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(grid, 1, \"_Column input cell:\", _columnInputBox");
         source.Should().NotContain("_formulaBox");
         source.Should().NotContain("_modeBox");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
-        source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("DockPanel.SetDock(pickerButton, Dock.Right)");
-        source.Should().Contain("Margin = new Thickness(6, 0, 0, 0)");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
         source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
+    }
+
+    [Fact]
+    public void DataTableDialogOpenedFromKeyboard_FocusesRowInputCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rowInputBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_rowInputBox);");
+    }
+
+    [Fact]
+    public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
+            .Should()
+            .Be(new DataTableRangeSelectionRequest(
+                DataTableRangeSelectionTarget.ColumnInputCell,
+                "$C$1",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select row input cell", DataTableRangeSelectionTarget.RowInputCell, "A1")]
+    [InlineData("Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell, "C1")]
+    public void DataTableDialogReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        DataTableRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var requests = new List<DataTableRangeSelectionRequest>();
+            var dialog = new DataTableDialog(sheetId, range, requests.Add);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                textBoxes[0].Text = " A1 ";
+                textBoxes[1].Text = " C1 ";
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new DataTableRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -863,7 +1184,9 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_My table has headers\"");
         source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select table range");
     }
 
@@ -887,9 +1210,71 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialog_RangePickerRaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<CreateTableRangeSelectionRequest>();
+            var dialog = new CreateTableDialog(
+                SheetId.New(),
+                " A1:C12 ",
+                "TableStyleMedium2",
+                requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Where(button => Equals(button.Content, "..."))
+                    .Single();
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void CreateTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        CreateTableDialog.CreateRangeSelectionRequest(" A1:C12 ")
+            .Should()
+            .Be(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void DialogReferencePicker_RaisesSelectionRequestAndMarksCollapseAffordance()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var box = new TextBox { Text = "A1:C10" };
+            DialogReferencePickerRequest? captured = null;
+
+            var request = DialogReferencePicker.RequestSelection(
+                box,
+                "Select table range",
+                next => captured = next);
+
+            request.Target.Should().BeSameAs(box);
+            request.AutomationName.Should().Be("Select table range");
+            request.CurrentText.Should().Be("A1:C10");
+            captured.Should().Be(request);
+
+            var button = DialogReferencePicker.CreateButton(box, "Select table range");
+            button.ToolTip.Should().Be("Collapse dialog and select range");
+        });
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.Planning.cs"));
         var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
         source.Should().Contain("_Select All");
@@ -903,4 +1288,25 @@ public sealed class DataToolDialogTests
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
     }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
+    }
+
+    private static string ReadTextToColumnsDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.FixedWidth.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.ColumnFormats.cs")));
 }

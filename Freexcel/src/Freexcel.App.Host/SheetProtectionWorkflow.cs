@@ -39,7 +39,10 @@ public static class SheetProtectionWorkflow
         }
 
         return new SheetProtectionAction(
-            new ProtectSheetCommand(sheet.Id, result.Password),
+            new ProtectSheetCommand(
+                sheet.Id,
+                result.Password,
+                ProtectionDialogPlanner.ParseSheetPermissions(result.SelectedSheetPermissions)),
             "Protect Sheet",
             "Sheet is now protected.",
             result.SelectedSheetPermissions);

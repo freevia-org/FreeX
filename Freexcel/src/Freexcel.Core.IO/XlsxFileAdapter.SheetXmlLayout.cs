@@ -21,6 +21,8 @@ public sealed partial class XlsxFileAdapter
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        double? DefaultColumnWidth,
+        double? DefaultRowHeight,
         bool FullCalculationOnLoad,
         WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
@@ -31,6 +33,7 @@ public sealed partial class XlsxFileAdapter
         uint? ActiveRow,
         uint? ActiveCol,
         WorksheetBackgroundImage? BackgroundImage,
+        XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
         HashSet<uint> GroupHiddenRows,
@@ -213,6 +216,7 @@ public sealed partial class XlsxFileAdapter
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
+        var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
@@ -222,6 +226,7 @@ public sealed partial class XlsxFileAdapter
                 .Select(selection => selection.Attribute("activeCell")?.Value)
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
+        var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var chartParts = XlsxWorksheetDrawingPartReader.ReadChartParts(archive, worksheetPath, worksheetXml);
         var pictureParts = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, worksheetPath, worksheetXml);
         var (textBoxParts, shapeParts) = XlsxWorksheetDrawingPartReader.ReadShapeParts(archive, worksheetPath, worksheetXml);
@@ -252,6 +257,10 @@ public sealed partial class XlsxFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
+            ParseOptionalDouble(sheetFormatPr?.Attribute("defaultColWidth")?.Value),
+            ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is { } defaultRowHeightPoints
+                ? defaultRowHeightPoints * (96.0 / 72.0)
+                : null,
             XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
@@ -262,6 +271,7 @@ public sealed partial class XlsxFileAdapter
             activeCell?.Row,
             activeCell?.Col,
             background,
+            headerFooterPictures,
             rowOutlineLevels,
             colOutlineLevels,
             groupHiddenRows,
@@ -403,6 +413,13 @@ public sealed partial class XlsxFileAdapter
 
     private static int ParseZoomPercent(string? value) =>
         int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
+
+    private static double? ParseOptionalDouble(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
+        double.IsFinite(parsed) &&
+        parsed > 0
+            ? parsed
+            : null;
 
     private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
         value switch

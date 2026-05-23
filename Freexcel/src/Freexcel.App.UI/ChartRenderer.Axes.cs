@@ -7,7 +7,7 @@ namespace Freexcel.App.UI;
 
 public static partial class ChartRenderer
 {
-    private static void ApplyAxisBounds(PlotModel model, ChartModel chart)
+    private static void ApplyAxisBounds(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
         for (var index = 0; index < model.Axes.Count; index++)
         {
@@ -34,7 +34,7 @@ public static partial class ChartRenderer
 
             if (axis.Position is AxisPosition.Bottom or AxisPosition.Top)
             {
-                ApplyAxisTitleStyle(axis, chart);
+                ApplyAxisTitleStyle(axis, chart, theme);
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type))
                 {
                     if (chart.XAxisMinimum is { } minimum)
@@ -58,12 +58,12 @@ public static partial class ChartRenderer
                     chart.XAxisMinorGridlineColor,
                     chart.XAxisGridlineThickness);
                 ApplyTickAndLabelStyle(axis, chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle, chart.ShowXAxisLabels);
-                ApplyAxisLabelStyle(axis, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle);
+                ApplyAxisLabelStyle(axis, chart.ResolveXAxisLabelTextColor(theme), chart.XAxisLabelFontSize, chart.XAxisLabelAngle);
                 ApplyAxisLineStyle(axis, chart.XAxisLineColor, chart.XAxisLineThickness);
             }
             else if (axis.Position is AxisPosition.Left or AxisPosition.Right)
             {
-                ApplyAxisTitleStyle(axis, chart);
+                ApplyAxisTitleStyle(axis, chart, theme);
                 if (ChartTypeSupport.SupportsYAxisBounds(chart.Type))
                 {
                     if (chart.YAxisMinimum is { } minimum)
@@ -87,7 +87,7 @@ public static partial class ChartRenderer
                     chart.YAxisMinorGridlineColor,
                     chart.YAxisGridlineThickness);
                 ApplyTickAndLabelStyle(axis, chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle, chart.ShowYAxisLabels);
-                ApplyAxisLabelStyle(axis, chart.YAxisLabelTextColor, chart.YAxisLabelFontSize, chart.YAxisLabelAngle);
+                ApplyAxisLabelStyle(axis, chart.ResolveYAxisLabelTextColor(theme), chart.YAxisLabelFontSize, chart.YAxisLabelAngle);
                 ApplyAxisLineStyle(axis, chart.YAxisLineColor, chart.YAxisLineThickness);
             }
         }
@@ -104,17 +104,17 @@ public static partial class ChartRenderer
         model.PlotAreaBorderThickness = new OxyThickness(chart.PlotAreaBorderThickness);
     }
 
-    private static void ApplyTitleStyle(PlotModel model, ChartModel chart)
+    private static void ApplyTitleStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
         model.TitleFontSize = chart.ChartTitleFontSize;
-        if (chart.ChartTitleTextColor is { } titleColor)
+        if (chart.ResolveChartTitleTextColor(theme) is { } titleColor)
             model.TitleColor = OxyColor.FromRgb(titleColor.R, titleColor.G, titleColor.B);
     }
 
-    private static void ApplyAxisTitleStyle(Axis axis, ChartModel chart)
+    private static void ApplyAxisTitleStyle(Axis axis, ChartModel chart, WorkbookTheme theme)
     {
         axis.TitleFontSize = chart.AxisTitleFontSize;
-        if (chart.AxisTitleTextColor is { } titleColor)
+        if (chart.ResolveAxisTitleTextColor(theme) is { } titleColor)
             axis.TitleColor = OxyColor.FromRgb(titleColor.R, titleColor.G, titleColor.B);
     }
 

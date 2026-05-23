@@ -65,6 +65,29 @@ public sealed class PictureCommandTests
         picture.CropBottom.Should().Be(0);
     }
 
+    [Fact]
+    public void SetPictureLockAspectRatioCommand_SetsValueAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            LockAspectRatio = true
+        };
+        sheet.Pictures.Add(picture);
+
+        var command = new SetPictureLockAspectRatioCommand(sheet.Id, picture.Id, lockAspectRatio: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        picture.LockAspectRatio.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        picture.LockAspectRatio.Should().BeTrue();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

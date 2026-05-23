@@ -4,6 +4,17 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public enum DataValidationRangeSelectionTarget
+{
+    Formula1,
+    Formula2
+}
+
+public sealed record DataValidationRangeSelectionRequest(
+    DataValidationRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 /// <summary>
 /// Dialog for creating or editing a data validation rule.
 /// </summary>
@@ -11,19 +22,23 @@ public partial class DataValidationDialog : Window
 {
     /// <summary>Set to the resulting rule when the user clicks OK.</summary>
     public DataValidation? Result { get; private set; }
+    public string? LastValidationError { get; private set; }
     public bool ClearRequested { get; private set; }
     public bool ApplyToSameSettings { get; private set; }
     public string? SelectionSource { get; set; }
+    public DataValidationRangeSelectionRequest? RangeSelectionRequest { get; private set; }
     private readonly Guid _resultId = Guid.NewGuid();
+    private readonly Action<DataValidationRangeSelectionRequest>? _requestRangeSelection;
 
-    public DataValidationDialog()
+    public DataValidationDialog(Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
         ResetToDefaults(markClearRequested: false);
     }
 
-    public DataValidationDialog(DataValidation? existing)
-        : this()
+    public DataValidationDialog(DataValidation? existing, Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
+        : this(requestRangeSelection)
     {
         if (existing is null)
             return;
@@ -105,7 +120,7 @@ public partial class DataValidationDialog : Window
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
         Formula1Box.Visibility   = isAny ? Visibility.Collapsed : Visibility.Visible;
-        SourcePickerButton.Visibility = !isAny && !string.IsNullOrWhiteSpace(SelectionSource)
+        SourcePickerButton.Visibility = !isAny
             ? Visibility.Visible
             : Visibility.Collapsed;
         UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
@@ -117,7 +132,7 @@ public partial class DataValidationDialog : Window
                             (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag is "Between" or "NotBetween";
         Formula2Label.Visibility = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
         Formula2Box.Visibility   = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
-        SourcePicker2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
+        SourcePicker2Button.Visibility = showFormula2
             ? Visibility.Visible
             : Visibility.Collapsed;
         UseSelection2Button.Visibility = showFormula2 && !string.IsNullOrWhiteSpace(SelectionSource)
@@ -132,6 +147,18 @@ public partial class DataValidationDialog : Window
         var typeTag = (TypeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Any";
         var opTag   = (OperatorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
         var alertTag = (AlertStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Stop";
+
+        if (!TryValidateCriteriaInputs(typeTag, opTag, Formula1Box.Text, Formula2Box.Text, out var criteriaError))
+        {
+            LastValidationError = criteriaError;
+            MessageBox.Show(this, criteriaError, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            var target = RequiresSecondFormula(typeTag, opTag) && string.IsNullOrWhiteSpace(Formula2Box.Text)
+                ? Formula2Box
+                : Formula1Box;
+            target.Focus();
+            target.SelectAll();
+            return;
+        }
 
         var dvType = typeTag switch
         {
@@ -183,6 +210,7 @@ public partial class DataValidationDialog : Window
         };
         ApplyToSameSettings = SameSettingsBox.IsChecked == true;
         ClearRequested = ClearRequested && IsClearAllState(typeTag, opTag, alertTag);
+        LastValidationError = null;
 
         DialogResult = true;
         Close();
@@ -226,8 +254,7 @@ public partial class DataValidationDialog : Window
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula1Box.Text = SelectionSource;
 
-        Formula1Box.Focus();
-        Formula1Box.SelectAll();
+        RequestRangeSelection(DataValidationRangeSelectionTarget.Formula1, Formula1Box);
     }
 
     private void SourcePicker2Button_Click(object sender, RoutedEventArgs e)
@@ -235,14 +262,21 @@ public partial class DataValidationDialog : Window
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula2Box.Text = SelectionSource;
 
-        Formula2Box.Focus();
-        Formula2Box.SelectAll();
+        RequestRangeSelection(DataValidationRangeSelectionTarget.Formula2, Formula2Box);
     }
 
     private void UseSelection2Button_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula2Box.Text = SelectionSource;
+    }
+
+    private void RequestRangeSelection(DataValidationRangeSelectionTarget target, TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 
     private static void SelectComboItemByTag(ComboBox comboBox, string tag)
@@ -253,34 +287,4 @@ public partial class DataValidationDialog : Window
             ?? comboBox.Items[0];
     }
 
-    private static string TypeTag(DvType type) => type switch
-    {
-        DvType.List => "List",
-        DvType.WholeNumber => "WholeNumber",
-        DvType.Decimal => "Decimal",
-        DvType.Date => "Date",
-        DvType.Time => "Time",
-        DvType.TextLength => "TextLength",
-        DvType.Custom => "Custom",
-        _ => "Any"
-    };
-
-    private static string OperatorTag(DvOperator op) => op switch
-    {
-        DvOperator.NotBetween => "NotBetween",
-        DvOperator.Equal => "Equal",
-        DvOperator.NotEqual => "NotEqual",
-        DvOperator.GreaterThan => "GreaterThan",
-        DvOperator.LessThan => "LessThan",
-        DvOperator.GreaterThanOrEqual => "GreaterThanOrEqual",
-        DvOperator.LessThanOrEqual => "LessThanOrEqual",
-        _ => "Between"
-    };
-
-    private static string AlertStyleTag(DvAlertStyle style) => style switch
-    {
-        DvAlertStyle.Warning => "Warning",
-        DvAlertStyle.Information => "Information",
-        _ => "Stop"
-    };
 }

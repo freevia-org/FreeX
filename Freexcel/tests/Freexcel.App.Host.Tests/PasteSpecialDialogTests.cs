@@ -94,16 +94,27 @@ public sealed class PasteSpecialDialogTests
     [Fact]
     public void DialogButtons_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.cs"));
+        var source = ReadPasteSpecialDialogSources();
 
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
     }
 
     [Fact]
-    public void Layout_UsesExcelStyleGroupedPasteAndOperationSections()
+    public void DialogOpenedFromKeyboard_FocusesDefaultAllChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rbAll.Focus();");
+        source.Should().Contain("Keyboard.Focus(_rbAll);");
+    }
+
+    [Fact]
+    public void Layout_UsesExcelStyleGroupedPasteAndOperationSections()
+    {
+        var source = ReadPasteSpecialDialogSources();
 
         source.Should().Contain("Header = \"Paste\"");
         source.Should().Contain("Header = \"Operation\"");
@@ -118,4 +129,10 @@ public sealed class PasteSpecialDialogTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<RadioButton>().Subject;
     }
+
+    private static string ReadPasteSpecialDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.Controls.cs")));
 }

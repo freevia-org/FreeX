@@ -61,7 +61,10 @@
             <TextBox x:Name="RefersToBox" Grid.Column="1" IsReadOnly="True"
                      ToolTip="Selected name reference"/>
             <Button x:Name="RefersToPickerButton" Grid.Column="2" Content="..." Width="26" Margin="4,0,0,0"
-                    ToolTip="Select the referenced range text" Click="RefersToPickerButton_Click"/>
+                    ToolTip="Collapse dialog and select the referenced range"
+                    AutomationProperties.Name="Select referenced range"
+                    AutomationProperties.HelpText="Collapse dialog and select the referenced range from the worksheet."
+                    Click="RefersToPickerButton_Click"/>
         </Grid>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">

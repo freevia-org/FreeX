@@ -1,5 +1,9 @@
 using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 using System.Xml.Linq;
+using Freexcel.Core.Model;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -85,11 +89,18 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         document.Descendants(presentation + "ComboBox")
             .Select(element => element.Attributes().FirstOrDefault(a => a.Name.LocalName == "Name")?.Value)
             .Should()
             .Contain(["HeaderPresetBox", "FooterPresetBox"]);
+
+        var headerPresets = GetPresetContents(document, presentation, x, "HeaderPresetBox");
+        var footerPresets = GetPresetContents(document, presentation, x, "FooterPresetBox");
+
+        headerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Confidential, Page 1", "Date, Page 1", "File path"]);
+        footerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Time", "Date, Page 1", "File name"]);
     }
 
     [Fact]
@@ -109,10 +120,53 @@ public sealed class HeaderFooterDialogXamlTests
             .Attribute("Click")?.Value
             .Should()
             .Be("FormatPictureButton_Click");
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Content")?.Value == "For_mat picture")
+            .Attributes().FirstOrDefault(a => a.Name.LocalName == "Name")?.Value
+            .Should()
+            .Be("FormatPictureButton");
+        document.Descendants(presentation + "TextBlock")
+            .Any(element => element.Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "PictureTargetStatusText"))
+            .Should().BeTrue();
 
         source.Should().Contain("new OpenFileDialog");
         source.Should().Contain("HeaderFooterPictureFormatDialog");
         source.Should().Contain("SetPictureForActiveBox");
+        source.Should().Contain("UpdatePictureButtonState");
+        source.Should().Contain("Insert a picture in");
+    }
+
+    [Fact]
+    public void FormatPictureButton_TracksActiveSectionPictureState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Sheet(SheetId.New(), "Sheet1")
+            {
+                PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+                    Left: null,
+                    Center: new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 120, 48),
+                    Right: null)
+            };
+            var dialog = new HeaderFooterDialog(sheet);
+            dialog.Show();
+            try
+            {
+                var button = GetControl<Button>(dialog, "FormatPictureButton");
+                var status = GetControl<TextBlock>(dialog, "PictureTargetStatusText");
+                button.IsEnabled.Should().BeTrue();
+                status.Text.Should().Be("Target: center section has a picture.");
+
+                GetControl<TextBox>(dialog, "HeaderLeftBox").Focus();
+
+                button.IsEnabled.Should().BeFalse();
+                status.Text.Should().Be("Target: left section has no picture.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -125,6 +179,8 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("Content = \"_Reset\"");
         source.Should().Contain("CalculateLockedAspectHeight");
         source.Should().Contain("CalculateLockedAspectWidth");
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow(Accept)");
     }
 
     [Fact]
@@ -198,5 +254,75 @@ public sealed class HeaderFooterDialogXamlTests
     public void InsertToken_InsertsAtCaret()
     {
         HeaderFooterDialog.InsertToken("Page  of", caretIndex: 5, "&[Page]").Should().Be("Page &[Page] of");
+    }
+
+    [Fact]
+    public void OkButton_RemovesHeaderFooterPicturesWhenPictureTokenIsDeleted()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Sheet(SheetId.New(), "Sheet1")
+            {
+                PageHeader = new WorksheetHeaderFooter("", "&[Picture]", ""),
+                PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+                    Left: null,
+                    Center: new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 120, 48),
+                    Right: null),
+                PageFooter = new WorksheetHeaderFooter("&[Picture]", "", ""),
+                PageFooterPictures = new WorksheetHeaderFooterPictureSet(
+                    Left: new WorksheetHeaderFooterPicture([4, 5, 6], "image/png", "footer.png", 80, 40),
+                    Center: null,
+                    Right: null)
+            };
+            var dialog = new HeaderFooterDialog(sheet);
+            dialog.Show();
+            try
+            {
+                GetControl<TextBox>(dialog, "HeaderCenterBox").Text = "";
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+
+                dialog.HeaderPictures.Center.Should().BeNull();
+                dialog.FooterPictures.Left.Should().NotBeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    private static IReadOnlyList<string?> GetPresetContents(
+        XDocument document,
+        XNamespace presentation,
+        XNamespace x,
+        string comboBoxName) =>
+        document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == comboBoxName)
+            .Elements(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value)
+            .ToList();
+
+    private static T GetControl<T>(HeaderFooterDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(HeaderFooterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static void InvokePrivateAllowingNonModalDialogResult(HeaderFooterDialog dialog, string methodName)
+    {
+        var method = typeof(HeaderFooterDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
     }
 }

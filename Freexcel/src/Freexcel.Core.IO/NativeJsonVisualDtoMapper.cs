@@ -18,6 +18,7 @@ internal static class NativeJsonVisualDtoMapper
         ContentType = picture.ContentType,
         Width = PositiveFiniteOrDefault(picture.Width, 240),
         Height = PositiveFiniteOrDefault(picture.Height, 140),
+        LockAspectRatio = picture.LockAspectRatio,
         RotationDegrees = NormalizeRotation(picture.RotationDegrees),
         IsVisible = picture.IsVisible,
         CropLeft = SanitizeCropEdge(picture.CropLeft),
@@ -54,6 +55,7 @@ internal static class NativeJsonVisualDtoMapper
                 ContentType = pictureDto.ContentType,
                 Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
                 Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
+                LockAspectRatio = pictureDto.LockAspectRatio,
                 RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
                 IsVisible = pictureDto.IsVisible,
                 CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
@@ -225,6 +227,7 @@ internal class PictureDto
     public string? ContentType { get; set; }
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
+    public bool LockAspectRatio { get; set; } = true;
     public double RotationDegrees { get; set; }
     public bool IsVisible { get; set; } = true;
     public double CropLeft { get; set; }

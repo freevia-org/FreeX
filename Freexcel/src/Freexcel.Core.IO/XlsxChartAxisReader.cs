@@ -32,6 +32,8 @@ internal static class XlsxChartAxisReader
             ApplyAxisTitleFormatting(yAxis, chart);
             ApplyValueAxisProperties(xAxis, chart, useXAxis: true);
             ApplyValueAxisProperties(yAxis, chart, useXAxis: false);
+            ApplyAxisLabelFormatting(xAxis, chart, useXAxis: true);
+            ApplyAxisLabelFormatting(yAxis, chart, useXAxis: false);
             return;
         }
 
@@ -39,10 +41,12 @@ internal static class XlsxChartAxisReader
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
         ApplyAxisTitleFormatting(categoryAxis, chart);
         ApplyCategoryAxisProperties(categoryAxis, chart);
+        ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
         ApplyAxisTitleFormatting(valueAxis, chart);
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: false);
+        ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
     }
 
     public static ChartDataLabelNumberFormat FromXlsxNumberFormatCode(string? formatCode) =>
@@ -74,8 +78,89 @@ internal static class XlsxChartAxisReader
             chart.AxisTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var solidFill = runProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        {
+            chart.AxisTitleTextThemeColor = themeColor;
+            chart.AxisTitleTextColor = null;
+        }
+        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        {
             chart.AxisTitleTextColor = color;
+            chart.AxisTitleTextThemeColor = null;
+        }
+    }
+
+    private static void ApplyAxisLabelFormatting(XElement? axisElement, ChartModel chart, bool useXAxis)
+    {
+        var textProperties = axisElement?.Element(ChartNs + "txPr");
+        if (textProperties is null)
+            return;
+
+        var runProperties = textProperties
+            .Descendants(DrawingNs + "defRPr")
+            .Concat(textProperties.Descendants(DrawingNs + "rPr"))
+            .FirstOrDefault();
+
+        var textColor = TryReadTextColor(runProperties);
+        var textThemeColor = TryReadTextThemeColor(runProperties);
+        var fontSize = int.TryParse(runProperties?.Attribute("sz")?.Value, out var size)
+            ? Math.Clamp(size / 100.0, 6, 72)
+            : (double?)null;
+        var angle = int.TryParse(textProperties.Element(DrawingNs + "bodyPr")?.Attribute("rot")?.Value, out var rotation)
+            ? Math.Clamp(rotation / 60000.0, -90, 90)
+            : (double?)null;
+
+        if (useXAxis)
+        {
+            if (textThemeColor is { } themeColor)
+            {
+                chart.XAxisLabelTextThemeColor = themeColor;
+                chart.XAxisLabelTextColor = null;
+            }
+            else if (textColor is not null)
+            {
+                chart.XAxisLabelTextThemeColor = null;
+            }
+            if (textColor is { } color)
+                chart.XAxisLabelTextColor = color;
+            if (fontSize is { } labelFontSize)
+                chart.XAxisLabelFontSize = labelFontSize;
+            if (angle is { } labelAngle)
+                chart.XAxisLabelAngle = labelAngle;
+            return;
+        }
+
+        if (textThemeColor is { } yThemeColor)
+        {
+            chart.YAxisLabelTextThemeColor = yThemeColor;
+            chart.YAxisLabelTextColor = null;
+        }
+        else if (textColor is not null)
+        {
+            chart.YAxisLabelTextThemeColor = null;
+        }
+        if (textColor is { } yColor)
+            chart.YAxisLabelTextColor = yColor;
+        if (fontSize is { } yFontSize)
+            chart.YAxisLabelFontSize = yFontSize;
+        if (angle is { } yAngle)
+            chart.YAxisLabelAngle = yAngle;
+    }
+
+    private static CellColor? TryReadTextColor(XElement? runProperties)
+    {
+        var solidFill = runProperties?.Element(DrawingNs + "solidFill");
+        return solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color)
+            ? color
+            : null;
+    }
+
+    private static WorkbookThemeColorReference? TryReadTextThemeColor(XElement? runProperties)
+    {
+        var solidFill = runProperties?.Element(DrawingNs + "solidFill");
+        return solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor)
+            ? themeColor
+            : null;
     }
 
     private static XElement? FindAxisById(IEnumerable<XElement> axes, string? axisId)

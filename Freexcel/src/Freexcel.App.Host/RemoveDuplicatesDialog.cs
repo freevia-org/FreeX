@@ -8,7 +8,7 @@ public sealed record RemoveDuplicateColumnChoice(uint Offset, string Header, boo
 
 public sealed record RemoveDuplicatesDialogResult(IReadOnlyList<uint> SelectedColumnOffsets, bool HasHeaders = false);
 
-public sealed class RemoveDuplicatesDialog : Window
+public sealed partial class RemoveDuplicatesDialog : Window
 {
     private readonly List<CheckBox> _boxes = [];
     private readonly CheckBox _hasHeadersBox = new() { Content = "_My data has headers", IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
@@ -20,10 +20,12 @@ public sealed class RemoveDuplicatesDialog : Window
 
     public RemoveDuplicatesDialog(
         IEnumerable<RemoveDuplicateColumnChoice> columns,
-        IEnumerable<RemoveDuplicateColumnChoice>? genericColumns = null)
+        IEnumerable<RemoveDuplicateColumnChoice>? genericColumns = null,
+        bool hasHeaders = true)
     {
         _headerColumns = columns.ToList();
         _genericColumns = genericColumns?.ToList() ?? _headerColumns;
+        _hasHeadersBox.IsChecked = hasHeaders;
 
         Title = "Remove Duplicates";
         Width = 360;
@@ -66,71 +68,8 @@ public sealed class RemoveDuplicatesDialog : Window
         });
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
+        RefreshColumnLabels();
     }
-
-    public static IReadOnlyList<RemoveDuplicateColumnChoice> SelectAll(int columnCount) =>
-        BuildColumnChoices(columnCount, isSelected: true);
-
-    public static IReadOnlyList<RemoveDuplicateColumnChoice> SelectAll(IEnumerable<RemoveDuplicateColumnChoice> columns) =>
-        columns.Select(column => column with { IsSelected = true }).ToList();
-
-    public static IReadOnlyList<RemoveDuplicateColumnChoice> ClearAll(IEnumerable<RemoveDuplicateColumnChoice> columns) =>
-        columns.Select(column => column with { IsSelected = false }).ToList();
-
-    public static RemoveDuplicatesDialogResult CreateResult(IEnumerable<RemoveDuplicateColumnChoice> columns)
-    {
-        var offsets = columns
-            .Where(column => column.IsSelected)
-            .Select(column => column.Offset)
-            .ToList();
-        return new RemoveDuplicatesDialogResult(offsets);
-    }
-
-    public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
-    {
-        if (!hasHeaders || range.Start.Row >= range.End.Row)
-            return range;
-
-        return new GridRange(
-            new CellAddress(range.Start.Sheet, range.Start.Row + 1, range.Start.Col),
-            range.End);
-    }
-
-    private static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(int columnCount, bool isSelected)
-    {
-        if (columnCount < 0)
-            throw new ArgumentOutOfRangeException(nameof(columnCount), columnCount, "Column count cannot be negative.");
-
-        return Enumerable
-            .Range(0, columnCount)
-            .Select(index => new RemoveDuplicateColumnChoice((uint)index, $"Column {index + 1}", isSelected))
-            .ToList();
-    }
-
-    public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(GridRange range) =>
-        Enumerable
-            .Range(0, (int)range.ColCount)
-            .Select(index => new RemoveDuplicateColumnChoice((uint)index, $"Column {index + 1}", true))
-            .ToList();
-
-    public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(Sheet sheet, GridRange range) =>
-        BuildColumnChoices(sheet, range, hasHeaders: true);
-
-    public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(Sheet sheet, GridRange range, bool hasHeaders) =>
-        Enumerable
-            .Range(0, (int)range.ColCount)
-            .Select(index =>
-            {
-                var absoluteColumn = range.Start.Col + (uint)index;
-                var header = hasHeaders
-                    ? SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetCell(range.Start.Row, absoluteColumn)?.Value)
-                    : "";
-                if (string.IsNullOrWhiteSpace(header))
-                    header = $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
-
-                return new RemoveDuplicateColumnChoice((uint)index, header, true);
-            })
-            .ToList();
 
     private void RefreshColumnLabels()
     {

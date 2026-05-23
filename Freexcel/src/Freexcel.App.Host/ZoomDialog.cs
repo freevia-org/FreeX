@@ -8,7 +8,7 @@ public sealed record ZoomDialogResult(int ZoomPercent, bool FitSelection = false
 
 public sealed class ZoomDialog : Window
 {
-    private static readonly int[] ZoomPresets = [200, 100, 75, 50, 25];
+    private static readonly int[] ZoomPresets = [400, 200, 100, 75, 50, 25];
     private readonly TextBox _zoomBox = new();
     private readonly RadioButton _customZoomButton = new() { Content = "_Custom:", GroupName = "Zoom", IsChecked = true };
     private readonly RadioButton _fitSelectionButton = new() { Content = "Fit _selection", GroupName = "Zoom" };
@@ -109,7 +109,7 @@ public sealed class ZoomDialog : Window
         choices.Children.Add(customChoices);
         group.Content = choices;
         stack.Children.Add(group);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 }
