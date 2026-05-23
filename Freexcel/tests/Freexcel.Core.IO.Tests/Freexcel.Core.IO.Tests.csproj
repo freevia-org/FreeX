@@ -25,4 +25,8 @@
     <ProjectReference Include="..\..\src\Freexcel.Core.IO\Freexcel.Core.IO.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\Simple.xls" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
