@@ -64,12 +64,7 @@ public static partial class ChartRenderer
         if (valueColumnCount < 3 || closeCol > endCol)
             return model;
 
-        var series = new HighLowSeries
-        {
-            Title = "Stock",
-            StrokeThickness = 1.5,
-            Color = OxyColors.Black
-        };
+        var series = CreateStockPriceSeries(chart, hasOpenColumn);
 
         for (uint row = dataStartRow; row <= endRow; row++)
         {
@@ -90,6 +85,29 @@ public static partial class ChartRenderer
 
         model.Series.Add(series);
         return model;
+    }
+
+    private static HighLowSeries CreateStockPriceSeries(ChartModel chart, bool hasOpenColumn)
+    {
+        if (chart.ShowUpDownBars && hasOpenColumn)
+        {
+            return new CandleStickSeries
+            {
+                Title = "Stock",
+                StrokeThickness = 1.5,
+                Color = OxyColors.Black,
+                IncreasingColor = OxyColors.White,
+                DecreasingColor = OxyColors.Black,
+                CandleWidth = 0.55
+            };
+        }
+
+        return new HighLowSeries
+        {
+            Title = "Stock",
+            StrokeThickness = 1.5,
+            Color = OxyColors.Black
+        };
     }
 
     private static void AddStockVolumeSeries(
