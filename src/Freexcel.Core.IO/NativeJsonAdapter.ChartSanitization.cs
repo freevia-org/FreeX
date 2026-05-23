@@ -93,6 +93,10 @@ public sealed partial class NativeJsonAdapter
         chart.ErrorBarValue = Math.Clamp(chart.ErrorBarValue, 0, 1000);
         chart.ErrorBarThickness = Math.Clamp(chart.ErrorBarThickness, 0.5, 10);
         chart.ErrorBarDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarDashStyle, ChartLineDashStyle.Solid);
+        chart.DropLineThickness = Math.Clamp(chart.DropLineThickness, 0.5, 10);
+        chart.DropLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DropLineDashStyle, ChartLineDashStyle.Solid);
+        chart.HighLowLineThickness = Math.Clamp(chart.HighLowLineThickness, 0.5, 10);
+        chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;

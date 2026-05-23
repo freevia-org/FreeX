@@ -303,6 +303,14 @@ public sealed partial class SetChartLayoutCommand
         chart.ErrorBarThemeColor = snapshot.ErrorBarThemeColor;
         chart.ErrorBarThickness = snapshot.ErrorBarThickness ?? 1;
         chart.ErrorBarDashStyle = snapshot.ErrorBarDashStyle ?? ChartLineDashStyle.Solid;
+        chart.DropLineColor = snapshot.DropLineColor;
+        chart.DropLineThemeColor = snapshot.DropLineThemeColor;
+        chart.DropLineThickness = snapshot.DropLineThickness ?? 1;
+        chart.DropLineDashStyle = snapshot.DropLineDashStyle ?? ChartLineDashStyle.Solid;
+        chart.HighLowLineColor = snapshot.HighLowLineColor;
+        chart.HighLowLineThemeColor = snapshot.HighLowLineThemeColor;
+        chart.HighLowLineThickness = snapshot.HighLowLineThickness ?? 1;
+        chart.HighLowLineDashStyle = snapshot.HighLowLineDashStyle ?? ChartLineDashStyle.Solid;
         chart.ShowSecondaryAxis = snapshot.ShowSecondaryAxis ?? false;
         chart.SecondaryAxisSeriesIndexes = snapshot.SecondaryAxisSeriesIndexes?.ToList() ?? [];
         chart.ComboLineSeriesIndexes = snapshot.ComboLineSeriesIndexes?.ToList() ?? [];
