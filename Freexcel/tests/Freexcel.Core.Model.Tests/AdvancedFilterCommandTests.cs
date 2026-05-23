@@ -34,6 +34,49 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_InPlace_RejectsProtectedSheetWithoutUseAutoFilterPermission()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+        sheet.IsProtected = true;
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AdvancedFilter_InPlace_AllowsProtectedSheetWithUseAutoFilterPermission()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UseAutoFilter);
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: null,
+            UniqueRecordsOnly: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
+    }
+
+    [Fact]
     public void AdvancedFilter_CopyToLocation_CopiesHeadersAndMatchingRowsWithoutHidingSourceRows()
     {
         var (wb, sheet, ctx) = Setup();
@@ -62,6 +105,53 @@ public sealed class AdvancedFilterCommandTests
         sheet.GetCell(8, 1).Should().BeNull();
         sheet.GetCell(9, 1).Should().BeNull();
         sheet.GetCell(10, 1).Should().BeNull();
+    }
+
+    [Fact]
+    public void AdvancedFilter_CopyToLocation_AllowsProtectedSheetWhenDestinationCellsCanBeEdited()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+        sheet.AllowEditRanges.Add(ListRange(sheet, 8, 1, 10, 3));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UseAutoFilter);
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: Addr(sheet, 8, 1),
+            UniqueRecordsOnly: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(8, 1).Should().Be(new TextValue("Region"));
+        sheet.GetValue(9, 1).Should().Be(new TextValue("East"));
+        sheet.GetValue(10, 1).Should().Be(new TextValue("East"));
+    }
+
+    [Fact]
+    public void AdvancedFilter_CopyToLocation_RejectsProtectedSheetWhenDestinationCellsAreLocked()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Region");
+        Set(sheet, 2, 6, "East");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UseAutoFilter);
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: Addr(sheet, 8, 1),
+            UniqueRecordsOnly: false);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetCell(8, 1).Should().BeNull();
     }
 
     [Fact]
