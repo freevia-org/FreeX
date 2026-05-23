@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -12,59 +13,62 @@ public partial class MainWindow
 {
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
-        var issues = SpellCheckService.FindIssues(_workbook, _currentSheetId);
-        if (issues.Count == 0)
+        var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var ignoredIssues = new HashSet<(CellAddress Address, string Word)>();
+
+        while (true)
         {
-            MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var issue = issues[0];
-        SetActiveCell(issue.Address);
-        EnsureCellVisible(issue.Address);
-        UpdateViewport();
-
-        var dialog = new SpellCheckDialog(issue.Word, issue.Suggestion) { Owner = this };
-        if (dialog.ShowDialog() != true)
-            return;
-
-        if (dialog.Result.Action is SpellCheckDialogAction.Ignore or SpellCheckDialogAction.IgnoreAll)
-        {
-            MessageBox.Show("Spelling issues ignored.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        if (dialog.Result.Action == SpellCheckDialogAction.Add)
-        {
-            MessageBox.Show("Spelling issue skipped.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var replacement = dialog.Result.Replacement ?? issue.Suggestion;
-
-        if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
-        {
-            var edits = BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement);
-            if (edits.Count == 0)
+            var issues = SpellCheckService.FindIssues(_workbook, _currentSheetId)
+                .Where(issue => !ignoredWords.Contains(issue.Word))
+                .Where(issue => !ignoredIssues.Contains((issue.Address, issue.Word)))
+                .ToList();
+            if (issues.Count == 0)
             {
                 MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            if (!TryExecuteSpellCheckEdits(edits))
+            var issue = issues[0];
+            SetActiveCell(issue.Address);
+            EnsureCellVisible(issue.Address);
+            UpdateViewport();
+
+            var dialog = new SpellCheckDialog(issue.Word, issue.Suggestion) { Owner = this };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
+            {
+                ignoredIssues.Add((issue.Address, issue.Word));
+                continue;
+            }
+
+            if (dialog.Result.Action is SpellCheckDialogAction.IgnoreAll or SpellCheckDialogAction.Add)
+            {
+                ignoredWords.Add(issue.Word);
+                continue;
+            }
+
+            var replacement = dialog.Result.Replacement ?? issue.Suggestion;
+
+            if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
+            {
+                var edits = BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement);
+                if (edits.Count > 0 && !TryExecuteSpellCheckEdits(edits))
+                    return;
+
+                UpdateViewport();
+                RefreshStatusBar();
+                continue;
+            }
+
+            var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
+            if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
                 return;
 
             UpdateViewport();
             RefreshStatusBar();
-            return;
         }
-
-        var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-        if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
-            return;
-
-        UpdateViewport();
-        RefreshStatusBar();
     }
 
     private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckReplaceAllEdits(
