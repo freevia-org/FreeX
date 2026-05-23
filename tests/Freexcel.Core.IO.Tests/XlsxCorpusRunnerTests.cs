@@ -671,7 +671,17 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
+            sheet.Comments
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new CommentSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Comments.Count,
+            sheet.Hyperlinks
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .Select(pair => new HyperlinkSummary(pair.Key.Row, pair.Key.Col, pair.Value))
+                .ToArray(),
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
@@ -1226,7 +1236,9 @@ public class XlsxCorpusRunnerTests
         int ColorScaleConditionalFormatCount,
         int DataBarConditionalFormatCount,
         int IconSetConditionalFormatCount,
+        IReadOnlyList<CommentSummary> Comments,
         int CommentCount,
+        IReadOnlyList<HyperlinkSummary> Hyperlinks,
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
@@ -1276,6 +1288,10 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenRowCount,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
+
+    private sealed record CommentSummary(uint Row, uint Column, string Text);
+
+    private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
 
     private sealed record ChartSummary(
         ChartType Type,
