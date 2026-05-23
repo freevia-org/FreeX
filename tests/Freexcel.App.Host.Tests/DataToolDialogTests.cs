@@ -632,6 +632,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_filterInPlaceButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_filterInPlaceButton);");
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
