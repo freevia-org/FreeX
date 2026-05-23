@@ -815,6 +815,32 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_CompactReportLayoutAppliesConfiguredRowLabelIndent()
+    {
+        var workbook = new Workbook("PivotCompactIndentRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G8"),
+            ReportLayout = PivotReportLayout.Compact,
+            CompactRowLabelIndent = 3
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId).IndentLevel.Should().Be(3);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId).IndentLevel.Should().Be(3);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).IndentLevel.Should().Be(0);
+    }
+
+    [Fact]
     public void Refresh_CompactReportLayoutUsesSingleRowLabelColumnForMatrix()
     {
         var workbook = new Workbook("PivotCompactMatrixLayoutTest");

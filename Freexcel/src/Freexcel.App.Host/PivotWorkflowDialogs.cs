@@ -978,7 +978,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool PrintTitles = false,
     bool PrintExpandCollapseButtons = false,
     string? AltTextTitle = null,
-    string? AltTextDescription = null);
+    string? AltTextDescription = null,
+    int CompactRowLabelIndent = 1);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -996,6 +997,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _repeatItemLabelsBox = new() { Content = "_Repeat item labels" };
     private readonly CheckBox _blankLineBox = new() { Content = "Insert _blank line after each item" };
     private readonly ComboBox _reportLayoutBox = new();
+    private readonly TextBox _compactIndentBox = new() { Width = 60 };
     private readonly ComboBox _styleBox = new();
     private readonly CheckBox _rowHeadersBox = new() { Content = "Row _headers" };
     private readonly CheckBox _columnHeadersBox = new() { Content = "Column hea_ders" };
@@ -1046,7 +1048,8 @@ public sealed class PivotTableOptionsDialog : Window
             printTitles: pivotTable.PrintTitles,
             printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
             altTextTitle: pivotTable.AltTextTitle,
-            altTextDescription: pivotTable.AltTextDescription);
+            altTextDescription: pivotTable.AltTextDescription,
+            compactRowLabelIndent: pivotTable.CompactRowLabelIndent);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1067,7 +1070,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool printTitles = false,
         bool printExpandCollapseButtons = false,
         string? altTextTitle = null,
-        string? altTextDescription = null) =>
+        string? altTextDescription = null,
+        int compactRowLabelIndent = 1) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1087,7 +1091,8 @@ public sealed class PivotTableOptionsDialog : Window
             printTitles,
             printExpandCollapseButtons,
             NormalizeOptionalText(altTextTitle),
-            NormalizeOptionalText(altTextDescription));
+            NormalizeOptionalText(altTextDescription),
+            NormalizeCompactRowLabelIndent(compactRowLabelIndent));
 
     private DockPanel CreateContent()
     {
@@ -1112,6 +1117,7 @@ public sealed class PivotTableOptionsDialog : Window
         var stack = CreateTabPanel();
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
         AddLabeledControl(layoutPanel, "_Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
+        AddLabeledControl(layoutPanel, "When in compact form indent row labels", _compactIndentBox);
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);
         AddCheckBox(layoutPanel, _blankLineBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout section", layoutPanel));
@@ -1232,6 +1238,7 @@ public sealed class PivotTableOptionsDialog : Window
         _repeatItemLabelsBox.IsChecked = result.RepeatItemLabels;
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
+        _compactIndentBox.Text = result.CompactRowLabelIndent.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var styleNames = StyleNames.Contains(result.StyleName, StringComparer.OrdinalIgnoreCase)
             ? StyleNames
             : [..StyleNames, result.StyleName];
@@ -1276,11 +1283,19 @@ public sealed class PivotTableOptionsDialog : Window
             _printTitlesBox.IsChecked == true,
             _printExpandCollapseBox.IsChecked == true,
             _altTextTitleBox.Text,
-            _altTextDescriptionBox.Text);
+            _altTextDescriptionBox.Text,
+            ParseCompactRowLabelIndent(_compactIndentBox.Text));
         DialogResult = true;
     }
 
     private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
+
+    private static int ParseCompactRowLabelIndent(string? text) =>
+        int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
+            ? NormalizeCompactRowLabelIndent(value)
+            : 1;
+
+    private static int NormalizeCompactRowLabelIndent(int indent) => Math.Clamp(indent, 0, 15);
 
     private static string? NormalizeOptionalText(string? text)
     {
