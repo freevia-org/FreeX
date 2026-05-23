@@ -79,4 +79,46 @@ public sealed class RibbonIconFactorySvgTests
         project.Should().Contain(@"Resources\CommandIconsSvg\**\*.svg");
         project.Should().NotContain(@"Resources\CommandIcons\**\*.png");
     }
+
+    [Fact]
+    public void HomeRibbonLargeCommandArtwork_UsesDistinctSvgFiles()
+    {
+        var iconDirectory = Path.Combine(
+            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Freexcel.App.Host.csproj"))!,
+            "Resources",
+            "CommandIconsSvg");
+
+        var homeCommands = new[]
+        {
+            "paste-large.svg",
+            "conditional-formatting-large.svg",
+            "format-as-table-large.svg",
+            "cell-styles-large.svg",
+            "insert-large.svg",
+            "delete-large.svg",
+            "format-large.svg",
+            "autosum-large.svg",
+            "fill-large.svg",
+            "clear-large.svg",
+            "sort-large.svg",
+            "find-large.svg"
+        };
+
+        var normalizedArtwork = homeCommands
+            .Select(fileName =>
+            {
+                var path = Path.Combine(iconDirectory, fileName);
+                File.Exists(path).Should().BeTrue(path);
+                var text = File.ReadAllText(path)
+                    .ReplaceLineEndings(string.Empty);
+                return (fileName, text);
+            })
+            .ToList();
+
+        normalizedArtwork
+            .Select(item => item.text)
+            .Distinct(StringComparer.Ordinal)
+            .Should()
+            .HaveCount(homeCommands.Length);
+    }
 }
