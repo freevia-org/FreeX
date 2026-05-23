@@ -22,6 +22,7 @@ public sealed class OpenWorkbookLoader
         string path,
         IFileAdapter adapter,
         string extension,
+        FileFormatDescriptor format,
         IProgress<OpenProgressUpdate> progress)
     {
         var bytes = await ReadFileBytesWithProgressAsync(path, progress);
@@ -69,7 +70,8 @@ public sealed class OpenWorkbookLoader
         return new OpenWorkbookResult(
             workbook,
             featureReport,
-            Path.GetFileNameWithoutExtension(path));
+            Path.GetFileNameWithoutExtension(path),
+            format.OpensAsTemplate);
     }
 
     private static async Task<T> RunStageAsync<T>(
@@ -167,4 +169,5 @@ public sealed record OpenProgressUpdate(string Title, string Detail, double? Per
 public sealed record OpenWorkbookResult(
     Workbook Workbook,
     XlsxFeatureReport? FeatureReport,
-    string DisplayName);
+    string DisplayName,
+    bool OpenedAsTemplate);
