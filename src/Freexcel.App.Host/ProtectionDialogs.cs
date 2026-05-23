@@ -15,6 +15,10 @@ public sealed record ProtectionDialogResult(
     string? Password,
     IReadOnlyList<string> SelectedSheetPermissions);
 
+public sealed record AllowEditRangeSelectionRequest(
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public static class ProtectionDialogPlanner
 {
     private static readonly string[] DefaultSheetPermissions =
@@ -220,12 +224,18 @@ public sealed class AllowEditRangeDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
+    private readonly Action<AllowEditRangeSelectionRequest>? _requestRangeSelection;
 
     public GridRange Range { get; private set; }
+    public AllowEditRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public AllowEditRangeDialog(SheetId sheetId, string defaultRange)
+    public AllowEditRangeDialog(
+        SheetId sheetId,
+        string defaultRange,
+        Action<AllowEditRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
+        _requestRangeSelection = requestRangeSelection;
         Title = "Allow Users to Edit Ranges";
         Width = 430;
         Height = 230;
@@ -248,9 +258,12 @@ public sealed class AllowEditRangeDialog : Window
             Content = "...",
             Width = 28,
             Margin = new Thickness(0, 0, 6, 0),
-            ToolTip = "Select editable range"
+            ToolTip = "Collapse dialog and select editable range"
         };
         System.Windows.Automation.AutomationProperties.SetName(rangePicker, "Select editable range");
+        System.Windows.Automation.AutomationProperties.SetHelpText(
+            rangePicker,
+            "Collapse dialog and select the editable range from the worksheet.");
         rangePicker.Click += RangePicker_Click;
         DockPanel.SetDock(rangePicker, Dock.Right);
         rangePanel.Children.Add(rangePicker);
@@ -271,9 +284,14 @@ public sealed class AllowEditRangeDialog : Window
 
     private void RangePicker_Click(object sender, RoutedEventArgs e)
     {
+        RangeSelectionRequest = CreateRangeSelectionRequest(_rangeBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
         _rangeBox.Focus();
         _rangeBox.SelectAll();
     }
+
+    public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
+        new(currentText.Trim(), CollapseDialog: true);
 
     private void Accept()
     {
