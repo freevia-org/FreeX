@@ -84,6 +84,38 @@ public sealed class ShapeCommandTests
     }
 
     [Fact]
+    public void AddDrawingShapeCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 4, 2);
+
+        var outcome = new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.DrawingShapes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddDrawingShapeCommand_AllowsProtectedSheetWithEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 4, 2);
+
+        var outcome = new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.DrawingShapes.Should().ContainSingle();
+    }
+
+    [Fact]
     public void BringDrawingShapeForwardCommand_MovesShapeLaterAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -101,6 +133,24 @@ public sealed class ShapeCommandTests
 
         command.Revert(ctx);
 
+        sheet.DrawingShapes.Should().Equal(back, front);
+    }
+
+    [Fact]
+    public void BringDrawingShapeForwardCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Rectangle };
+        var front = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Ellipse };
+        sheet.DrawingShapes.Add(back);
+        sheet.DrawingShapes.Add(front);
+        sheet.IsProtected = true;
+
+        var outcome = new BringDrawingShapeForwardCommand(sheet.Id, back.Id).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
         sheet.DrawingShapes.Should().Equal(back, front);
     }
 
@@ -185,6 +235,23 @@ public sealed class ShapeCommandTests
     }
 
     [Fact]
+    public void ResizeDrawingShapeCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Width = 120, Height = 70 };
+        sheet.DrawingShapes.Add(shape);
+        sheet.IsProtected = true;
+
+        var outcome = new ResizeDrawingShapeCommand(sheet.Id, shape.Id, 160, 90).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        shape.Width.Should().Be(120);
+        shape.Height.Should().Be(70);
+    }
+
+    [Fact]
     public void SetDrawingShapeColorsCommand_SetsColorsAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -218,6 +285,30 @@ public sealed class ShapeCommandTests
         shape.OutlineColor.Should().Be(new CellColor(40, 50, 60));
         shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
         shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+    }
+
+    [Fact]
+    public void SetDrawingShapeColorsCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FillColor = new CellColor(10, 20, 30)
+        };
+        sheet.DrawingShapes.Add(shape);
+        sheet.IsProtected = true;
+
+        var outcome = new SetDrawingShapeColorsCommand(
+            sheet.Id,
+            shape.Id,
+            new CellColor(200, 210, 220),
+            null).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
     }
 
     [Fact]
