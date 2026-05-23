@@ -20,10 +20,12 @@ public sealed class RemoveDuplicatesDialog : Window
 
     public RemoveDuplicatesDialog(
         IEnumerable<RemoveDuplicateColumnChoice> columns,
-        IEnumerable<RemoveDuplicateColumnChoice>? genericColumns = null)
+        IEnumerable<RemoveDuplicateColumnChoice>? genericColumns = null,
+        bool hasHeaders = true)
     {
         _headerColumns = columns.ToList();
         _genericColumns = genericColumns?.ToList() ?? _headerColumns;
+        _hasHeadersBox.IsChecked = hasHeaders;
 
         Title = "Remove Duplicates";
         Width = 360;
@@ -66,6 +68,7 @@ public sealed class RemoveDuplicatesDialog : Window
         });
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
+        RefreshColumnLabels();
     }
 
     public static IReadOnlyList<RemoveDuplicateColumnChoice> SelectAll(int columnCount) =>
@@ -131,6 +134,29 @@ public sealed class RemoveDuplicatesDialog : Window
                 return new RemoveDuplicateColumnChoice((uint)index, header, true);
             })
             .ToList();
+
+    public static bool GuessHasHeaders(Sheet sheet, GridRange range)
+    {
+        if (range.Start.Row >= range.End.Row)
+            return false;
+
+        var textHeaders = 0;
+        var typedBodyValues = 0;
+        for (var column = range.Start.Col; column <= range.End.Col; column++)
+        {
+            var firstValue = sheet.GetCell(range.Start.Row, column)?.Value;
+            var secondValue = sheet.GetCell(range.Start.Row + 1, column)?.Value;
+            if (IsNonBlankText(firstValue))
+                textHeaders++;
+            if (secondValue is NumberValue or DateTimeValue or BoolValue)
+                typedBodyValues++;
+        }
+
+        return textHeaders > 0 && typedBodyValues > 0;
+    }
+
+    private static bool IsNonBlankText(ScalarValue? value) =>
+        value is TextValue text && !string.IsNullOrWhiteSpace(text.Value);
 
     private void RefreshColumnLabels()
     {

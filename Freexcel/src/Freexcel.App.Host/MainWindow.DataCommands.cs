@@ -145,7 +145,8 @@ public partial class MainWindow
         var genericColumns = sheet is null
             ? RemoveDuplicatesDialog.BuildColumnChoices(range)
             : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
-        var dialog = new RemoveDuplicatesDialog(columns, genericColumns) { Owner = this };
+        var hasHeaders = sheet is not null && RemoveDuplicatesDialog.GuessHasHeaders(sheet, range);
+        var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         RemoveDuplicateRowsCommand? command = null;
