@@ -1993,6 +1993,15 @@ public class FunctionLibraryTests
     // ── LN ────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Log_OmittedBase_DefaultsTo10()
+    {
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=LOG(1000,)", sheet);
+        result.Should().BeOfType<NumberValue>();
+        ((NumberValue)result).Value.Should().BeApproximately(3, 1e-10);
+    }
+
+    [Fact]
     public void Log_NonFiniteInput_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
