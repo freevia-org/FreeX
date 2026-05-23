@@ -7,6 +7,7 @@ public enum ChartType
     PercentStackedColumn,
     Line,
     Pie,
+    ThreeDPie,
     Doughnut,
     Bar,
     StackedBar,

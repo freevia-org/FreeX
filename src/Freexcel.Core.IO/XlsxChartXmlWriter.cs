@@ -54,7 +54,7 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static bool ShouldWriteChartAxes(ChartType chartType) =>
-        chartType is not ChartType.Pie and not ChartType.Doughnut;
+        chartType is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
 
     private static IEnumerable<XElement> ToPlotChartXml(
         ChartModel chart,
@@ -165,6 +165,9 @@ internal static partial class XlsxChartXmlWriter
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
                 BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs)),
             ChartType.Pie => new XElement(chartNs + "pieChart",
+                ToFirstSliceAngleXml(chart, chartNs),
+                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
+            ChartType.ThreeDPie => new XElement(chartNs + "pie3DChart",
                 ToFirstSliceAngleXml(chart, chartNs),
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
             ChartType.Doughnut => new XElement(chartNs + "doughnutChart",
@@ -575,6 +578,7 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Area
                 or ChartType.Bubble
                 or ChartType.Pie
+                or ChartType.ThreeDPie
                 or ChartType.Doughnut
                 or ChartType.Radar
                 or ChartType.Stock
