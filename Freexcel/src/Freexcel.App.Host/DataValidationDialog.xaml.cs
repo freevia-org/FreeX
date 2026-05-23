@@ -179,10 +179,27 @@ public partial class DataValidationDialog : Window
             ErrorMessage = ErrorMessageBox.Text.Trim(),
         };
         ApplyToSameSettings = SameSettingsBox.IsChecked == true;
+        ClearRequested = ClearRequested && IsClearAllState(typeTag, opTag, alertTag);
 
         DialogResult = true;
         Close();
     }
+
+    private bool IsClearAllState(string typeTag, string opTag, string alertTag) =>
+        typeTag == "Any"
+        && opTag == "Between"
+        && alertTag == "Stop"
+        && string.IsNullOrWhiteSpace(Formula1Box.Text)
+        && string.IsNullOrWhiteSpace(Formula2Box.Text)
+        && AllowBlankBox.IsChecked == true
+        && ShowDropdownBox.IsChecked == true
+        && SameSettingsBox.IsChecked != true
+        && ShowInputMessageBox.IsChecked == true
+        && ShowErrorMessageBox.IsChecked == true
+        && string.IsNullOrWhiteSpace(ErrorTitleBox.Text)
+        && string.IsNullOrWhiteSpace(PromptTitleBox.Text)
+        && string.IsNullOrWhiteSpace(PromptMessageBox.Text)
+        && string.IsNullOrWhiteSpace(ErrorMessageBox.Text);
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
