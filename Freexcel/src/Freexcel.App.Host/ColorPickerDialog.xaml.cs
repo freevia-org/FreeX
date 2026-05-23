@@ -11,7 +11,9 @@ public sealed record ColorPickerThemeColumn(string Name, IReadOnlyList<ColorPick
 public partial class ColorPickerDialog : Window
 {
     private bool _updatingText;
+    private bool _updatingSlider;
     private readonly CellColor? _currentColor;
+    private CellColor? _customSpectrumBaseColor;
 
     public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false)
     {
@@ -69,6 +71,17 @@ public partial class ColorPickerDialog : Window
             Swatch("#7030A0")
         };
 
+    public static IReadOnlyList<ColorPickerSwatch> BuildCustomSpectrumSwatches()
+    {
+        var hues = new[] { 0d, 30d, 60d, 120d, 180d, 210d, 240d, 300d };
+        var saturations = new[] { 1d, 0.85d, 0.7d, 0.55d, 0.4d, 0.25d };
+
+        return saturations
+            .SelectMany(saturation => hues.Select(hue => SwatchFromHsv(hue, saturation, 1d)))
+            .DistinctBy(swatch => swatch.Hex)
+            .ToList();
+    }
+
     public static bool TryParseColorText(string text, out CellColor color)
     {
         return ColorInputParser.TryParseColorText(text, out color);
@@ -93,6 +106,19 @@ public partial class ColorPickerDialog : Window
         }
 
         SelectColor(new CellColor(red, green, blue));
+    }
+
+    private void CustomLuminositySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_updatingSlider || _customSpectrumBaseColor is not { } baseColor)
+            return;
+
+        var factor = CustomLuminositySlider.Value / 100d;
+        SelectColor(new CellColor(
+            ScaleColorComponent(baseColor.R, factor),
+            ScaleColorComponent(baseColor.G, factor),
+            ScaleColorComponent(baseColor.B, factor)),
+            updateSpectrumBase: false);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -144,6 +170,9 @@ public partial class ColorPickerDialog : Window
 
         foreach (var swatch in BuildStandardSwatches())
             StandardColorsPanel.Children.Add(CreateSwatchButton(swatch));
+
+        foreach (var swatch in BuildCustomSpectrumSwatches())
+            CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch));
     }
 
     private Button CreateSwatchButton(ColorPickerSwatch swatch, string? groupName = null)
@@ -166,12 +195,20 @@ public partial class ColorPickerDialog : Window
     private void SwatchButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: CellColor color })
-            SelectColor(color);
+            SelectColor(color, updateSpectrumBase: ReferenceEquals(((Button)sender).Parent, CustomSpectrumPanel));
     }
 
-    private void SelectColor(CellColor color)
+    private void SelectColor(CellColor color, bool updateSpectrumBase = true)
     {
         SelectedColor = color;
+        if (updateSpectrumBase)
+        {
+            _customSpectrumBaseColor = color;
+            _updatingSlider = true;
+            CustomLuminositySlider.Value = 100;
+            _updatingSlider = false;
+        }
+
         SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         SetCustomColorText(color);
     }
@@ -203,6 +240,37 @@ public partial class ColorPickerDialog : Window
 
     private static SolidColorBrush ToBrush(CellColor color) =>
         new(Color.FromRgb(color.R, color.G, color.B));
+
+    private static ColorPickerSwatch SwatchFromHsv(double hue, double saturation, double value)
+    {
+        var chroma = value * saturation;
+        var huePrime = hue / 60d;
+        var x = chroma * (1d - Math.Abs((huePrime % 2d) - 1d));
+        var match = value - chroma;
+
+        var (red, green, blue) = huePrime switch
+        {
+            >= 0 and < 1 => (chroma, x, 0d),
+            >= 1 and < 2 => (x, chroma, 0d),
+            >= 2 and < 3 => (0d, chroma, x),
+            >= 3 and < 4 => (0d, x, chroma),
+            >= 4 and < 5 => (x, 0d, chroma),
+            _ => (chroma, 0d, x)
+        };
+
+        var color = new CellColor(
+            ToByte(red + match),
+            ToByte(green + match),
+            ToByte(blue + match));
+
+        return new ColorPickerSwatch(ColorInputParser.FormatHexColor(color), color);
+    }
+
+    private static byte ScaleColorComponent(byte component, double factor) =>
+        (byte)Math.Clamp((int)Math.Round(component * factor), 0, 255);
+
+    private static byte ToByte(double value) =>
+        (byte)Math.Clamp((int)Math.Round(value * 255d), 0, 255);
 
     private static Brush GetReadableBrush(CellColor color)
     {
