@@ -493,7 +493,7 @@ public partial class MainWindow
         else
         {
             var inputCell = dialog.Result.RowInputCell ?? dialog.Result.ColumnInputCell!.Value;
-            createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell);
+            createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell, dialog.Result.Orientation);
         }
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
