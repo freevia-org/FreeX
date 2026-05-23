@@ -661,6 +661,48 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotChartOptionsCommand_UpdatesDesignFlagsAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotChartOptionsDesignCommandTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            RoundedCorners = false,
+            ShowDataInHiddenRowsAndColumns = false,
+            BlankDisplayMode = ChartBlankDisplayMode.Gap
+        };
+        sheet.Charts.Add(chart);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            12,
+            showFieldButtons: true,
+            roundedCorners: true,
+            showHiddenData: true,
+            blankDisplayMode: ChartBlankDisplayMode.Zero);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.RoundedCorners.Should().BeTrue();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+
+        command.Revert(ctx);
+
+        chart.RoundedCorners.Should().BeFalse();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeFalse();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Gap);
+    }
+
+    [Fact]
     public void SetChartStyleCommand_UpdatesStyleAndUndoRestores()
     {
         var wb = new Workbook("test");
