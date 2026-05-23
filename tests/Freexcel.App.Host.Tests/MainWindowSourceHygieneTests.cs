@@ -1624,6 +1624,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void CollapsedRibbonOverflowCommands_ReturnFocusToVisibleGroupButton()
+    {
+        var adaptiveSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+
+        adaptiveSource.Should().Contain("FocusCollapsedRibbonMenuPlacementTarget(item)");
+        adaptiveSource.Should().Contain("private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)");
+        adaptiveSource.Should().Contain("contextMenu.PlacementTarget is UIElement placementTarget");
+        adaptiveSource.Should().Contain("placementTarget.Focus();");
+    }
+
+    [Fact]
     public void StartupController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
