@@ -6770,6 +6770,11 @@ public partial class FileAdapterSmokeTests
             var plotChart = chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle().Subject;
             if (expectedBarDirection is not null)
                 plotChart.Element(chartNs + "barDir")?.Attribute("val")?.Value.Should().Be(expectedBarDirection);
+            if (chartType is ChartType.Surface or ChartType.ThreeDSurface)
+            {
+                plotChart.Elements(chartNs + "axId").Should().HaveCount(3);
+                chartXml.Descendants(chartNs + "serAx").Should().ContainSingle();
+            }
             chartXml.Descendants(chartNs + "ser").Should().HaveCount(2);
         }
 
