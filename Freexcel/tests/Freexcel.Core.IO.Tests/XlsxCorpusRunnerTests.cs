@@ -702,6 +702,7 @@ public class XlsxCorpusRunnerTests
             sheet.DrawingShapes.Count,
             sheet.Pictures.Select(CapturePictureSummary).ToArray(),
             sheet.Pictures.Count,
+            CaptureBackgroundImageSummary(sheet.BackgroundImage),
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
             sheet.AllowEditRanges
@@ -712,8 +713,11 @@ public class XlsxCorpusRunnerTests
                 .Select(ToRangeSummary)
                 .ToArray(),
             sheet.AllowEditRanges.Count,
+            sheet.PrintArea.HasValue ? ToRangeSummary(sheet.PrintArea.Value) : null,
             sheet.PrintArea is not null,
+            sheet.PrintTitleRows.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleRows.Value) : null,
             sheet.PrintTitleRows is not null,
+            sheet.PrintTitleColumns.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleColumns.Value) : null,
             sheet.PrintTitleColumns is not null,
             sheet.PageOrientation,
             sheet.PaperSize,
@@ -763,6 +767,14 @@ public class XlsxCorpusRunnerTests
                     CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
                 .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
+
+    private static BackgroundImageSummary? CaptureBackgroundImageSummary(WorksheetBackgroundImage? background) =>
+        background is null
+            ? null
+            : new BackgroundImageSummary(
+                background.ContentType,
+                background.FileName ?? "",
+                background.ImageBytes.Length);
 
     private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
     {
@@ -909,6 +921,9 @@ public class XlsxCorpusRunnerTests
             range.End.Row,
             range.End.Col);
 
+    private static RepeatRangeSummary ToRepeatRangeSummary(WorksheetRepeatRange range) =>
+        new(range.Start, range.End);
+
     private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
         new(
             textBox.Name ?? "",
@@ -1030,7 +1045,11 @@ public class XlsxCorpusRunnerTests
         return summary with
         {
             Sheets = summary.Sheets
-                .Select(sheet => sheet with { StyleOnlyCellCount = 0 })
+                .Select(sheet => sheet with
+                {
+                    StyleOnlyCells = [],
+                    StyleOnlyCellCount = 0
+                })
                 .ToArray()
         };
     }
@@ -1288,12 +1307,16 @@ public class XlsxCorpusRunnerTests
         int DrawingShapeCount,
         IReadOnlyList<PictureSummary> Pictures,
         int PictureCount,
+        BackgroundImageSummary? BackgroundImage,
         bool HasBackgroundImage,
         bool IsProtected,
         IReadOnlyList<ChartRangeSummary> AllowEditRanges,
         int AllowEditRangeCount,
+        ChartRangeSummary? PrintArea,
         bool HasPrintArea,
+        RepeatRangeSummary? PrintTitleRows,
         bool HasPrintTitleRows,
+        RepeatRangeSummary? PrintTitleColumns,
         bool HasPrintTitleColumns,
         WorksheetPageOrientation PageOrientation,
         WorksheetPaperSize PaperSize,
@@ -1338,6 +1361,10 @@ public class XlsxCorpusRunnerTests
     private sealed record OutlineLevelSummary(uint Index, int Level);
 
     private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
+
+    private sealed record RepeatRangeSummary(uint Start, uint End);
+
+    private sealed record BackgroundImageSummary(string ContentType, string FileName, int ImageByteCount);
 
     private sealed record ChartSummary(
         ChartType Type,
