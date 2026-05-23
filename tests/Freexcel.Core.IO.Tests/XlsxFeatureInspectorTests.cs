@@ -72,7 +72,6 @@ public class XlsxFeatureInspectorTests
     }
 
     [Theory]
-    [InlineData("surfaceChart")]
     [InlineData("histogramChart")]
     [InlineData("waterfallChart")]
     [InlineData("treemapChart")]
@@ -101,6 +100,33 @@ public class XlsxFeatureInspectorTests
         var report = XlsxFeatureInspector.Inspect(package);
 
         report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
+    [Theory]
+    [InlineData("surfaceChart")]
+    [InlineData("surface3DChart")]
+    public void Inspect_SurfaceChartsWithSourceRanges_DoesNotReportUnsupportedChart(string chartElementName)
+    {
+        using var package = CreatePackageWithContent(("xl/charts/chart1.xml", $$"""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:{{chartElementName}}>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:{{chartElementName}}>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
     }
 
     [Fact]
