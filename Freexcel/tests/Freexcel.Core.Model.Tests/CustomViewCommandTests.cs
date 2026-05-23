@@ -43,6 +43,23 @@ public sealed class CustomViewCommandTests
     }
 
     [Fact]
+    public void SaveCustomViewCommand_CapturesExcelIncludeOptions()
+    {
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Sheet1");
+        var command = new SaveCustomViewCommand(
+            "No Print",
+            includePrintSettings: false,
+            includeHiddenRowsColumnsAndFilterSettings: true);
+
+        command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
+
+        var view = workbook.CustomViews.Should().ContainSingle().Subject;
+        view.IncludePrintSettings.Should().BeFalse();
+        view.IncludeHiddenRowsColumnsAndFilterSettings.Should().BeTrue();
+    }
+
+    [Fact]
     public void SaveCustomViewCommand_DropsSplitPaneStateWhenFrozenPanesArePresent()
     {
         var workbook = new Workbook("test");

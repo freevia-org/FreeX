@@ -126,7 +126,11 @@ internal static class XlsxWorkbookMetadataReader
                 var id = view.Attribute("guid")?.Value;
                 var name = view.Attribute("name")?.Value;
                 if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
-                    views.Add(new XlsxWorkbookCustomView(id, name));
+                    views.Add(new XlsxWorkbookCustomView(
+                        id,
+                        name,
+                        XlsxXmlAttributeReader.ReadBoolAttribute(view, "includePrintSettings", defaultValue: true),
+                        XlsxXmlAttributeReader.ReadBoolAttribute(view, "includeHiddenRowCol", defaultValue: true)));
             }
         }
         catch
@@ -161,5 +165,9 @@ internal sealed record WorkbookCalculationProperties(
     public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
 }
 
-internal sealed record XlsxWorkbookCustomView(string Id, string Name);
+internal sealed record XlsxWorkbookCustomView(
+    string Id,
+    string Name,
+    bool IncludePrintSettings = true,
+    bool IncludeHiddenRowsColumnsAndFilterSettings = true);
 
