@@ -225,6 +225,81 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteColumnWidthsCommand_RejectsProtectedSheetWithoutFormatColumnsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.ColumnWidths[1] = 18;
+        sheet.IsProtected = true;
+
+        var outcome = new PasteColumnWidthsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            destinationStartCol: 5).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ColumnWidths.Should().NotContainKey(5);
+    }
+
+    [Fact]
+    public void PasteColumnWidthsCommand_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.ColumnWidths[1] = 18;
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new PasteColumnWidthsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            destinationStartCol: 5).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ColumnWidths[5].Should().Be(18);
+    }
+
+    [Fact]
+    public void PasteConditionalFormatsCommand_RejectsProtectedSheetWithoutFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = sourceRange, RuleType = CfRuleType.CellValue });
+        sheet.IsProtected = true;
+
+        var outcome = new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 5, 5), transpose: false)
+            .Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ConditionalFormats.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void PasteConditionalFormatsCommand_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat { AppliesTo = sourceRange, RuleType = CfRuleType.CellValue });
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+
+        var outcome = new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 5, 5), transpose: false)
+            .Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ConditionalFormats.Should().HaveCount(2);
+        sheet.ConditionalFormats.Should().Contain(rule => rule.AppliesTo.Start.Row == 5 && rule.AppliesTo.Start.Col == 5);
+    }
+
+    [Fact]
     public void PasteCommentsCommand_CopiesCommentsAndUndoRestores()
     {
         var wb = new Workbook("test");

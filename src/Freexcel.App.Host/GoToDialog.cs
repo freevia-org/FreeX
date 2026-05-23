@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -106,6 +107,14 @@ public sealed partial class GoToDialog : Window
         buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _addressBox.Focus();
+        _addressBox.SelectAll();
+        Keyboard.Focus(_addressBox);
     }
 
     private void OpenSpecialDialog()

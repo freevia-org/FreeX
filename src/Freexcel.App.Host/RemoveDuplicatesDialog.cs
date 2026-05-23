@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -69,6 +70,13 @@ public sealed partial class RemoveDuplicatesDialog : Window
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
         RefreshColumnLabels();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _hasHeadersBox.Focus();
+        Keyboard.Focus(_hasHeadersBox);
     }
 
     private void RefreshColumnLabels()
