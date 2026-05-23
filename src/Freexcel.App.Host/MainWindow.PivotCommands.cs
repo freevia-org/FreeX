@@ -628,7 +628,8 @@ public partial class MainWindow
         bool? showFieldHeaders = null,
         bool? showContextualTooltips = null,
         bool? showPropertiesInTooltips = null,
-        bool? showClassicLayout = null)
+        bool? showClassicLayout = null,
+        bool? mergeAndCenterLabels = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -665,7 +666,8 @@ public partial class MainWindow
                     showFieldHeaders,
                     showContextualTooltips,
                     showPropertiesInTooltips,
-                    showClassicLayout),
+                    showClassicLayout,
+                    mergeAndCenterLabels),
                 "PivotTable Options"))
             return;
 
@@ -886,7 +888,8 @@ public partial class MainWindow
             showFieldHeaders: result.ShowFieldHeaders,
             showContextualTooltips: result.ShowContextualTooltips,
             showPropertiesInTooltips: result.ShowPropertiesInTooltips,
-            showClassicLayout: result.ShowClassicLayout);
+            showClassicLayout: result.ShowClassicLayout,
+            mergeAndCenterLabels: result.MergeAndCenterLabels);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {

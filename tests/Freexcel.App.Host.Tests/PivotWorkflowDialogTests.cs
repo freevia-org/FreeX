@@ -268,6 +268,7 @@ public sealed class PivotWorkflowDialogTests
             showContextualTooltips: false,
             showPropertiesInTooltips: false,
             showClassicLayout: true,
+            mergeAndCenterLabels: true,
             compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
@@ -295,6 +296,7 @@ public sealed class PivotWorkflowDialogTests
             ShowContextualTooltips: false,
             ShowPropertiesInTooltips: false,
             ShowClassicLayout: true,
+            MergeAndCenterLabels: true,
             CompactRowLabelIndent: 3));
     }
 
@@ -356,6 +358,7 @@ public sealed class PivotWorkflowDialogTests
             ShowContextualTooltips = false,
             ShowPropertiesInTooltips = false,
             ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
             CompactRowLabelIndent = 5
         };
 
@@ -383,6 +386,7 @@ public sealed class PivotWorkflowDialogTests
                 ShowContextualTooltips: false,
                 ShowPropertiesInTooltips: false,
                 ShowClassicLayout: true,
+                MergeAndCenterLabels: true,
                 CompactRowLabelIndent: 5));
     }
 
@@ -558,6 +562,7 @@ public sealed class PivotWorkflowDialogTests
             showContextualTooltips: false,
             showPropertiesInTooltips: false,
             showClassicLayout: true,
+            mergeAndCenterLabels: true,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
@@ -570,6 +575,7 @@ public sealed class PivotWorkflowDialogTests
         result.ShowContextualTooltips.Should().BeFalse();
         result.ShowPropertiesInTooltips.Should().BeFalse();
         result.ShowClassicLayout.Should().BeTrue();
+        result.MergeAndCenterLabels.Should().BeTrue();
         result.EnableRefresh.Should().BeFalse();
         result.MissingItemsLimit.Should().Be(0);
         result.PrintTitles.Should().BeTrue();
