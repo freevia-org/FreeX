@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
@@ -255,6 +256,42 @@ public sealed class HeaderFooterDialogXamlTests
         HeaderFooterDialog.InsertToken("Page  of", caretIndex: 5, "&[Page]").Should().Be("Page &[Page] of");
     }
 
+    [Fact]
+    public void OkButton_RemovesHeaderFooterPicturesWhenPictureTokenIsDeleted()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Sheet(SheetId.New(), "Sheet1")
+            {
+                PageHeader = new WorksheetHeaderFooter("", "&[Picture]", ""),
+                PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+                    Left: null,
+                    Center: new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 120, 48),
+                    Right: null),
+                PageFooter = new WorksheetHeaderFooter("&[Picture]", "", ""),
+                PageFooterPictures = new WorksheetHeaderFooterPictureSet(
+                    Left: new WorksheetHeaderFooterPicture([4, 5, 6], "image/png", "footer.png", 80, 40),
+                    Center: null,
+                    Right: null)
+            };
+            var dialog = new HeaderFooterDialog(sheet);
+            dialog.Show();
+            try
+            {
+                GetControl<TextBox>(dialog, "HeaderCenterBox").Text = "";
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+
+                dialog.HeaderPictures.Center.Should().BeNull();
+                dialog.FooterPictures.Left.Should().NotBeNull();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static IReadOnlyList<string?> GetPresetContents(
         XDocument document,
         XNamespace presentation,
@@ -273,5 +310,19 @@ public sealed class HeaderFooterDialogXamlTests
         var field = typeof(HeaderFooterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static void InvokePrivateAllowingNonModalDialogResult(HeaderFooterDialog dialog, string methodName)
+    {
+        var method = typeof(HeaderFooterDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
     }
 }
