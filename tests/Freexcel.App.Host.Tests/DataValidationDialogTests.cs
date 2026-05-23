@@ -17,8 +17,14 @@ public sealed class DataValidationDialogTests
 
         xaml.Should().Contain("x:Name=\"UseSelectionButton\"");
         xaml.Should().Contain("x:Name=\"UseSelection2Button\"");
+        xaml.Should().Contain("x:Name=\"SourcePickerButton\"");
+        xaml.Should().Contain("x:Name=\"SourcePicker2Button\"");
         xaml.Should().Contain("Click=\"UseSelectionButton_Click\"");
         xaml.Should().Contain("Click=\"UseSelection2Button_Click\"");
+        xaml.Should().Contain("Click=\"SourcePickerButton_Click\"");
+        xaml.Should().Contain("Click=\"SourcePicker2Button_Click\"");
+        xaml.Should().Contain("AutomationProperties.Name=\"Select source range\"");
+        xaml.Should().Contain("AutomationProperties.Name=\"Select maximum range\"");
     }
 
     [Fact]
@@ -36,6 +42,7 @@ public sealed class DataValidationDialogTests
                 GetControl<Label>(dialog, "Formula1Label").Content.Should().Be("_Minimum:");
                 GetControl<Label>(dialog, "Formula2Label").Visibility.Should().Be(Visibility.Visible);
                 GetControl<TextBox>(dialog, "Formula2Box").Visibility.Should().Be(Visibility.Visible);
+                GetControl<Button>(dialog, "SourcePicker2Button").Visibility.Should().Be(Visibility.Visible);
                 GetControl<Button>(dialog, "UseSelection2Button").Visibility.Should().Be(Visibility.Visible);
 
                 SelectComboItemByTag(GetControl<ComboBox>(dialog, "OperatorCombo"), "Equal");
@@ -43,6 +50,7 @@ public sealed class DataValidationDialogTests
                 GetControl<Label>(dialog, "Formula1Label").Content.Should().Be("_Value:");
                 GetControl<Label>(dialog, "Formula2Label").Visibility.Should().Be(Visibility.Collapsed);
                 GetControl<TextBox>(dialog, "Formula2Box").Visibility.Should().Be(Visibility.Collapsed);
+                GetControl<Button>(dialog, "SourcePicker2Button").Visibility.Should().Be(Visibility.Collapsed);
                 GetControl<Button>(dialog, "UseSelection2Button").Visibility.Should().Be(Visibility.Collapsed);
             }
             finally
@@ -301,6 +309,32 @@ public sealed class DataValidationDialogTests
                 InvokePrivate(dialog, "UseSelection2Button_Click");
 
                 GetControl<TextBox>(dialog, "Formula2Box").Text.Should().Be("=Sheet1!$B$2:$B$8");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SourcePicker2Button_PopulatesAndFocusesFormula2()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "=Sheet1!$C$2:$C$8" };
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "WholeNumber");
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "OperatorCombo"), "Between");
+
+                InvokePrivate(dialog, "SourcePicker2Button_Click");
+
+                var formula2Box = GetControl<TextBox>(dialog, "Formula2Box");
+                formula2Box.Text.Should().Be("=Sheet1!$C$2:$C$8");
+                formula2Box.IsKeyboardFocusWithin.Should().BeTrue();
+                formula2Box.SelectionLength.Should().Be(formula2Box.Text.Length);
             }
             finally
             {
