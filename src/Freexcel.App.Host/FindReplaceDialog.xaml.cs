@@ -113,7 +113,8 @@ public sealed partial class FindReplaceDialog : Window
             _getWorkbook(), _commandBus, search, ReplaceBox.Text,
             CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true);
+            matchEntireCell: MatchEntireBox.IsChecked == true,
+            replacementFormat: _replaceFormatDiff);
 
         StatusLabel.Text = count == 0 ? "No matches found." : $"Replaced {count} cell(s).";
         _results = [];
@@ -140,7 +141,8 @@ public sealed partial class FindReplaceDialog : Window
             search,
             ReplaceBox.Text,
             matchCase: MatchCaseBox.IsChecked == true,
-            matchEntireCell: MatchEntireBox.IsChecked == true);
+            matchEntireCell: MatchEntireBox.IsChecked == true,
+            replacementFormat: _replaceFormatDiff);
 
         if (!replaced)
         {
@@ -201,7 +203,8 @@ internal static class FindReplaceDialogPlanner
         string searchText,
         string replaceText,
         bool matchCase,
-        bool matchEntireCell)
+        bool matchEntireCell,
+        StyleDiff? replacementFormat = null)
     {
         if (string.IsNullOrEmpty(searchText))
             return false;
@@ -231,7 +234,20 @@ internal static class FindReplaceDialogPlanner
             ? new NumberValue(d)
             : new TextValue(newText);
 
-        var command = new EditCellsCommand(match.Address.Sheet, [(match.Address, Cell.FromValue(newValue))]);
+        IWorkbookCommand command = new EditCellsCommand(match.Address.Sheet, [(match.Address, Cell.FromValue(newValue))]);
+        if (replacementFormat is not null)
+        {
+            command = new CompositeWorkbookCommand(
+                "Replace",
+                [
+                    command,
+                    new ApplyStyleCommand(
+                        match.Address.Sheet,
+                        new GridRange(match.Address, match.Address),
+                        replacementFormat)
+                ]);
+        }
+
         commandBus.Execute(workbook.Id, command);
         return true;
     }

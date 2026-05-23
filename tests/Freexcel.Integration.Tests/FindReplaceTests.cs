@@ -187,6 +187,29 @@ public class FindReplaceTests
         sheet1.GetCell(a1)!.Value.Should().Be(new TextValue("bar"));
         sheet2.GetCell(a2)!.Value.Should().Be(new TextValue("foo"));
     }
+
+    [Fact]
+    public void ReplaceAll_AppliesReplacementFormatToChangedCellsOnly()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(a1, new TextValue("foo"));
+        sheet.SetCell(a2, new TextValue("other"));
+
+        var count = FindReplaceService.ReplaceAll(
+            wb,
+            commandBus,
+            "foo",
+            "bar",
+            replacementFormat: new StyleDiff(Bold: true, FillColor: new CellColor(255, 255, 0)));
+
+        count.Should().Be(1);
+        var replacedStyle = wb.GetStyle(sheet.GetCell(a1)!.StyleId);
+        replacedStyle.Bold.Should().BeTrue();
+        replacedStyle.FillColor.Should().Be(new CellColor(255, 255, 0));
+        wb.GetStyle(sheet.GetCell(a2)!.StyleId).Bold.Should().BeFalse();
+    }
 }
 
 /// <summary>Minimal ICommandContext for tests.</summary>
