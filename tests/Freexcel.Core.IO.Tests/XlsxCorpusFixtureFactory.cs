@@ -1295,6 +1295,12 @@ internal static class XlsxCorpusFixtureFactory
     private static Workbook CreateProtectionAndPageSetup()
     {
         var workbook = NewWorkbook("generated-protection-page-setup-001");
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        workbook.FullCalculationOnLoad = true;
+        workbook.ForceFullCalculation = true;
+        workbook.IterativeCalculation = true;
+        workbook.MaxCalculationIterations = 25;
+        workbook.MaxCalculationChange = 0.005;
         var sheet = workbook.AddSheet("Print");
         Set(sheet, "A1", new TextValue("Protected print fixture"));
         Set(sheet, "A2", new NumberValue(42));
