@@ -73,6 +73,13 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
     private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
+    private readonly CheckBox _preserveSourceSortFilterBox = new()
+    {
+        Content = "Preserve source sort and _filter settings",
+        IsChecked = true,
+        IsEnabled = false,
+        ToolTip = "Freexcel preserves existing pivot cache metadata when saving loaded workbooks; changing this option is not modeled yet."
+    };
     private readonly ComboBox _missingItemsLimitBox = new();
     private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
     private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
@@ -276,7 +283,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _refreshOnOpenBox);
         AddCheckBox(dataPanel, _saveSourceDataBox);
         AddCheckBox(dataPanel, _enableRefreshBox);
-        AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
+        AddCheckBox(dataPanel, _preserveSourceSortFilterBox);
         AddLabeledControl(dataPanel, "Retain items _deleted from the data source", _missingItemsLimitBox, MissingItemsLimitLabels);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Data options", dataPanel));
         return stack;

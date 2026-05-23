@@ -446,6 +446,7 @@ public sealed class PivotWorkflowDialogTests
             "_preserveFormattingBox",
             "_refreshOnOpenBox",
             "_enableRefreshBox",
+            "_preserveSourceSortFilterBox",
             "_missingItemsLimitBox",
             "_fieldHeadersBox",
             "_showExpandCollapseBox",
@@ -491,6 +492,19 @@ public sealed class PivotWorkflowDialogTests
             source.Should().Contain(content);
 
         source.Should().NotContain("Field list and buttons remain available");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_DisablesUnmodeledPreserveSourceSortFilterOption()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("private readonly CheckBox _preserveSourceSortFilterBox");
+        source.Should().Contain("Content = \"Preserve source sort and _filter settings\"");
+        source.Should().Contain("IsEnabled = false");
+        source.Should().Contain("changing this option is not modeled yet");
+        source.Should().Contain("AddCheckBox(dataPanel, _preserveSourceSortFilterBox)");
+        source.Should().NotContain("new CheckBox { Content = \"Preserve source sort and _filter settings\"");
     }
 
     [Fact]
