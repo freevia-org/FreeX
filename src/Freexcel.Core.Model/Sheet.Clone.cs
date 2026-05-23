@@ -244,6 +244,7 @@ public sealed partial class Sheet
                 DataBarShowValue     = cf.DataBarShowValue,
                 DataBarMinLength     = cf.DataBarMinLength,
                 DataBarMaxLength     = cf.DataBarMaxLength,
+                DataBarGradient      = cf.DataBarGradient,
                 AboveAverage         = cf.AboveAverage,
                 FormulaText          = cf.FormulaText,
                 IconSetStyle         = cf.IconSetStyle,
