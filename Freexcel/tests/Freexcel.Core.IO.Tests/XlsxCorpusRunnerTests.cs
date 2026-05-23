@@ -651,9 +651,9 @@ public class XlsxCorpusRunnerTests
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
-            workbook.Sheets.Select(CaptureSheetSummary).ToArray());
+            workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
 
-    private static SheetSummary CaptureSheetSummary(Sheet sheet) =>
+    private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
         new(
             sheet.Name,
             sheet.CellCount,
@@ -747,6 +747,14 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.OrderBy(column => column).ToArray(),
             sheet.GroupHiddenCols.Count,
+            sheet.GetStyleOnlyEntries()
+                .OrderBy(entry => entry.Key.Row)
+                .ThenBy(entry => entry.Key.Col)
+                .Select(entry => new StyleOnlyCellSummary(
+                    entry.Key.Row,
+                    entry.Key.Col,
+                    CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
+                .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
 
     private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
@@ -1312,6 +1320,7 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenRowCount,
         IReadOnlyList<uint> GroupHiddenColumns,
         int GroupHiddenColumnCount,
+        IReadOnlyList<StyleOnlyCellSummary> StyleOnlyCells,
         int StyleOnlyCellCount);
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
@@ -1319,6 +1328,8 @@ public class XlsxCorpusRunnerTests
     private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
 
     private sealed record OutlineLevelSummary(uint Index, int Level);
+
+    private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
 
     private sealed record ChartSummary(
         ChartType Type,
