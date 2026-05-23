@@ -112,7 +112,8 @@ public partial class MainWindow
                 range,
                 result.Destination ?? range.Start,
                 result.FixedWidthBreakPositions ?? [],
-                result.ColumnFormats)
+                result.ColumnFormats,
+                result.AdvancedOptions)
             : TextToColumnsPlanner.BuildEdits(
                 sheet,
                 range,
@@ -120,7 +121,8 @@ public partial class MainWindow
                 result.Delimiters,
                 result.TextQualifierChar,
                 result.TreatConsecutiveDelimitersAsOne,
-                result.ColumnFormats);
+                result.ColumnFormats,
+                result.AdvancedOptions);
     }
 
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
