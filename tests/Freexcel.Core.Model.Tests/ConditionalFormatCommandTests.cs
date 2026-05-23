@@ -63,6 +63,22 @@ public sealed class ConditionalFormatCommandTests
     }
 
     [Fact]
+    public void ApplyConditionalFormatCommand_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        var ctx = new SimpleCtx(wb);
+        var rule = NewRule(sheet.Id);
+
+        var outcome = new ApplyConditionalFormatCommand(sheet.Id, rule).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ConditionalFormats.Should().ContainSingle().Which.Should().BeSameAs(rule);
+    }
+
+    [Fact]
     public void ReplaceAllConditionalFormatsCommand_RejectsInvalidRulesBeforeClearingExistingRules()
     {
         var wb = new Workbook("test");
@@ -77,6 +93,22 @@ public sealed class ConditionalFormatCommandTests
 
         outcome.Success.Should().BeFalse();
         sheet.ConditionalFormats.Should().ContainSingle().Which.Should().BeSameAs(original);
+    }
+
+    [Fact]
+    public void ReplaceAllConditionalFormatsCommand_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        var ctx = new SimpleCtx(wb);
+        var replacement = NewRule(sheet.Id);
+
+        var outcome = new ReplaceAllConditionalFormatsCommand(sheet.Id, [replacement]).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ConditionalFormats.Should().ContainSingle().Which.Should().BeSameAs(replacement);
     }
 
     [Fact]
@@ -103,6 +135,24 @@ public sealed class ConditionalFormatCommandTests
             new CellAddress(sheet.Id, 50, 25));
         new ClearConditionalFormatsCommand(sheet.Id, clearRange).Apply(ctx);
 
+        sheet.ConditionalFormats.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClearConditionalFormatsCommand_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        var ctx = new SimpleCtx(wb);
+        sheet.ConditionalFormats.Add(NewRule(sheet.Id));
+
+        var outcome = new ClearConditionalFormatsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1))).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
         sheet.ConditionalFormats.Should().BeEmpty();
     }
 
