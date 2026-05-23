@@ -258,13 +258,16 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
-        int startIdx = startNum - 1;
+        bool hasSurrogatePair = ContainsSurrogatePair(withinText);
+        int startIdx = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(withinText, startNum)
+            : startNum - 1;
         if (findText.Length == 0)
             return startIdx <= withinText.Length ? new NumberValue(startNum) : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
         int pos = withinText.IndexOf(findText, startIdx, StringComparison.Ordinal);
         if (pos < 0) return ErrorValue.Value;
-        return new NumberValue(pos + 1);
+        return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, pos) : pos + 1);
     }
 
     private static readonly ConcurrentDictionary<string, Regex> SearchCache = new();
@@ -284,7 +287,10 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
-        int startIdx = startNum - 1;
+        bool hasSurrogatePair = ContainsSurrogatePair(withinText);
+        int startIdx = hasSurrogatePair
+            ? TextElementIndexFromOneBasedPosition(withinText, startNum)
+            : startNum - 1;
         if (findText.Length == 0)
             return startIdx <= withinText.Length ? new NumberValue(startNum) : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
@@ -295,7 +301,7 @@ public static partial class BuiltInFunctions
         });
         var match = regex.Match(withinText, startIdx);
         if (!match.Success) return ErrorValue.Value;
-        return new NumberValue(match.Index + 1);
+        return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, match.Index) : match.Index + 1);
     }
 
     private static ScalarValue Mid(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -349,6 +355,15 @@ public static partial class BuiltInFunctions
             index += IsSurrogatePairAt(text, index) ? 2 : 1;
 
         return index;
+    }
+
+    private static int OneBasedTextPositionFromUtf16Index(string text, int index)
+    {
+        int position = 1;
+        for (int i = 0; i < index && i < text.Length; position++)
+            i += IsSurrogatePairAt(text, i) ? 2 : 1;
+
+        return position;
     }
 
     private static bool IsSurrogatePairAt(string text, int index) =>
