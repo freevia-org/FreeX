@@ -260,6 +260,7 @@ public sealed class PivotWorkflowDialogTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            missingItemsLimit: 42,
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
             preserveFormattingOnUpdate: false,
@@ -282,6 +283,7 @@ public sealed class PivotWorkflowDialogTests
             true,
             false,
             false,
+            1_048_576,
             ShowExpandCollapseButtons: false,
             AutofitColumnsOnUpdate: false,
             PreserveFormattingOnUpdate: false,
@@ -302,7 +304,8 @@ public sealed class PivotWorkflowDialogTests
             CacheId = 7,
             RefreshOnLoad = true,
             SaveData = false,
-            EnableRefresh = false
+            EnableRefresh = false,
+            MissingItemsLimit = 0
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable, cache)
@@ -310,7 +313,8 @@ public sealed class PivotWorkflowDialogTests
             .Match<PivotTableOptionsDialogResult>(result =>
                 result.RefreshOnOpen &&
                 !result.SaveSourceData &&
-                !result.EnableRefresh);
+                !result.EnableRefresh &&
+                result.MissingItemsLimit == 0);
     }
 
     [Fact]
@@ -414,6 +418,7 @@ public sealed class PivotWorkflowDialogTests
             "_preserveFormattingBox",
             "_refreshOnOpenBox",
             "_enableRefreshBox",
+            "_missingItemsLimitBox",
             "_showExpandCollapseBox",
             "_printTitlesBox",
             "_printExpandCollapseBox",
@@ -450,7 +455,8 @@ public sealed class PivotWorkflowDialogTests
             "Data options",
             "Print options",
             "Alt Text",
-            "Preserve source sort and _filter settings"
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source"
         })
             source.Should().Contain(content);
 
@@ -467,6 +473,7 @@ public sealed class PivotWorkflowDialogTests
             "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
             "AddLabeledControl(layoutPanel, \"When in compact form indent row labels\", _compactIndentBox",
             "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
+            "AddLabeledControl(dataPanel, \"Retain items _deleted from the data source\", _missingItemsLimitBox",
             "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
             "AddLabeledControl(stylePanel, \"PivotTable _style\", _styleBox",
             "new Label",
@@ -523,6 +530,7 @@ public sealed class PivotWorkflowDialogTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            missingItemsLimit: 0,
             compactRowLabelIndent: 6,
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
@@ -536,6 +544,7 @@ public sealed class PivotWorkflowDialogTests
         result.AutofitColumnsOnUpdate.Should().BeFalse();
         result.PreserveFormattingOnUpdate.Should().BeFalse();
         result.EnableRefresh.Should().BeFalse();
+        result.MissingItemsLimit.Should().Be(0);
         result.PrintTitles.Should().BeTrue();
         result.PrintExpandCollapseButtons.Should().BeTrue();
         result.CompactRowLabelIndent.Should().Be(6);
