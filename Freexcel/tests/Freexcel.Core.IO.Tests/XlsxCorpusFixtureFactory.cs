@@ -1351,7 +1351,11 @@ internal static class XlsxCorpusFixtureFactory
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 1);
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
-        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel", "Corpus", "2026");
+        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel &[Picture]", "Corpus", "2026");
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            new WorksheetHeaderFooterPicture(MinimalPngBytes(), "image/png", "header-logo.png", 96, 32),
+            null,
+            null);
         sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P", "");
         sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
         sheet.ViewTopRow = 4;
