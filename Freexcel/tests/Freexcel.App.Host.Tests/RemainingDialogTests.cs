@@ -252,7 +252,7 @@ public sealed class RemainingDialogTests
     public void SingleInputMiniDialogs_UseAccessKeyedLabelsAndSharedButtonRows()
     {
         var remainingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
-        var objectSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var objectSource = ReadObjectDialogSources();
 
         remainingSource.Should().Contain("Format cells greater _than:");
         remainingSource.Should().Contain("Row _height:");
@@ -476,6 +476,12 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
     }
+
+    private static string ReadObjectDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
     private static T GetField<T>(object instance, string name)
         where T : class
     {
