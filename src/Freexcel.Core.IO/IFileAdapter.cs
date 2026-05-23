@@ -13,6 +13,12 @@ public interface IFileAdapter
     /// <summary>Human-readable format name for file dialogs.</summary>
     string FormatName { get; }
 
+    /// <summary>File formats this adapter can open and/or save.</summary>
+    IReadOnlyList<FileFormatDescriptor> Formats =>
+    [
+        new FileFormatDescriptor(Extension, FormatName)
+    ];
+
     /// <summary>Loads a workbook from the given stream.</summary>
     Freexcel.Core.Model.Workbook Load(System.IO.Stream stream);
 
