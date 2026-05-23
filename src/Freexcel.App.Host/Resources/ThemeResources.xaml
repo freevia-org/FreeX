@@ -3,7 +3,10 @@
     <SolidColorBrush x:Key="FreexcelGreenBrush" Color="#217346"/>
     <SolidColorBrush x:Key="FreexcelGreenDarkBrush" Color="#185C37"/>
     <SolidColorBrush x:Key="FreexcelTitleBarBrush" Color="#217346"/>
-    <SolidColorBrush x:Key="FreexcelTitleBarHoverBrush" Color="#2A8C57"/>
+    <SolidColorBrush x:Key="FreexcelTitleBarHoverBrush" Color="#2D8A57"/>
+    <SolidColorBrush x:Key="FreexcelTitleBarPressedBrush" Color="#185C37"/>
+    <SolidColorBrush x:Key="FreexcelTitleBarDisabledBrush" Color="#7FB89B"/>
+    <SolidColorBrush x:Key="FreexcelTitleBarButtonBorderBrush" Color="#55FFFFFF"/>
     <SolidColorBrush x:Key="FreexcelGreenSoftBrush" Color="#EAF4EF"/>
     <SolidColorBrush x:Key="FreexcelGreenPressedBrush" Color="#D6EADE"/>
     <SolidColorBrush x:Key="FreexcelTextBrush" Color="#1F1F1F"/>
