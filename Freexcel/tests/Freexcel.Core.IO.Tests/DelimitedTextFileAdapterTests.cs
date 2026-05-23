@@ -170,21 +170,6 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
-    public void Load_UsesExcelLikeTextCoercionForDayFirstMonthNameDateTimes()
-    {
-        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("17 May 2026 9:30\t17-May-26 9:45 PM\r\n"));
-
-        var workbook = adapter.Load(stream);
-        var sheet = workbook.Sheets.Single();
-
-        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
-            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
-        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
-            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 45, 0)));
-    }
-
-    [Fact]
     public void Load_UsesExcelLikeTextCoercionForMonthNameDateTimesWithoutCommas()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
@@ -197,6 +182,21 @@ public sealed class DelimitedTextFileAdapterTests
             .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
             .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 30, 15, 250)));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForDayFirstMonthNameDateTimes()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("17 May 2026 9:30\t17-May-26 9:45 PM\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 45, 0)));
     }
 
     [Fact]
