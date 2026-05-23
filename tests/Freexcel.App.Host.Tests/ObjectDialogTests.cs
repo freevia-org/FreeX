@@ -233,6 +233,9 @@ public sealed class ObjectDialogTests
         source.Should().Contain("Content = \"_End Color...\"");
         source.Should().Contain("new ColorPickerDialog(_startColor)");
         source.Should().Contain("new ColorPickerDialog(_endColor)");
+        source.Should().Contain("_startColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs()");
+        source.Should().Contain("_endColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs()");
+        source.Should().Contain("UpdateColorText()");
     }
 
     [Fact]

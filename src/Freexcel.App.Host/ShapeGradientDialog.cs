@@ -33,6 +33,8 @@ public sealed class ShapeGradientDialog : Window
         _endColorBox.Text = FormatColor(_endColor);
         _startColorButton.Click += StartColorButton_Click;
         _endColorButton.Click += EndColorButton_Click;
+        _startColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs();
+        _endColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs();
         UpdateColorText();
         Content = CreateContent();
     }
@@ -117,6 +119,16 @@ public sealed class ShapeGradientDialog : Window
 
     private void SyncGradientTextFromPickers()
     {
+        UpdateColorText();
+    }
+
+    private void SyncGradientTextFromInputs()
+    {
+        if (DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor))
+            _startColor = startColor;
+        if (DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
+            _endColor = endColor;
+
         UpdateColorText();
     }
 
