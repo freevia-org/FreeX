@@ -17,12 +17,19 @@ public partial class MainWindow
         UpdateSsRecentList();
         ShowHomeView();
         StartScreenOverlay.Visibility = Visibility.Visible;
+        FocusBackstageHomeNavigation();
     }
 
     private void HideStartScreen()
     {
         StartScreenOverlay.Visibility = Visibility.Collapsed;
         SheetGrid.Focus();
+    }
+
+    private void FocusBackstageHomeNavigation()
+    {
+        SsHomeNavBtn.Focus();
+        Keyboard.Focus(SsHomeNavBtn);
     }
 
     private void OpenPrintBackstage()
