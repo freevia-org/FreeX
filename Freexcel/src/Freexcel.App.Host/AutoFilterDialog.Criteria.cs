@@ -76,6 +76,15 @@ public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
             colorFilter);
     }
 
+    public static AutoFilterDialogResult CreateClearFilterResult() =>
+        new(
+            AutoFilterSortDirection.None,
+            [],
+            string.Empty,
+            string.Empty,
+            null,
+            AutoFilterDialogAction.ClearFilter);
+
     public static IReadOnlyList<AutoFilterDialogItem> GetResultItemsForSearchMode(
         IEnumerable<AutoFilterDialogItem> items,
         string? searchText,
