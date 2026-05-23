@@ -64,6 +64,30 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void ChartSummary_IncludesProtectionAndPrintSettings()
+    {
+        var sheetId = SheetId.New();
+        var baseline = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+        var withNativeMetadata = new ChartModel
+        {
+            Type = baseline.Type,
+            DataRange = baseline.DataRange,
+            Protection = new ChartProtectionModel { ChartObject = true, Data = false, Formatting = true, Selection = false, UserInterface = true },
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel { Left = 0.7, Right = 0.7, Top = 0.75, Bottom = 0.75, Header = 0.3, Footer = 0.3 },
+                PageSetup = new ChartPageSetupModel { PaperSize = "9", Orientation = "portrait", Copies = 2, BlackAndWhite = true, Draft = false }
+            }
+        };
+
+        CaptureChartSummary(withNativeMetadata).Should().NotBe(CaptureChartSummary(baseline));
+    }
+
+    [Fact]
     public void GeneratedCorpusRows_IncludeNamedVisualObjects()
     {
         var rows = ReadManifestRows()
@@ -1086,6 +1110,8 @@ public class XlsxCorpusRunnerTests
             chart.ShowDataLabelsOverMaximum,
             chart.AutoTitleDeleted,
             chart.ShowDataInHiddenRowsAndColumns,
+            CaptureChartProtectionSummary(chart.Protection),
+            CaptureChartPrintSettingsSummary(chart.PrintSettings),
             CaptureChartColorMapSummary(chart.ColorMapOverride),
             CaptureChartExternalDataSummary(chart.ExternalData),
             CaptureChartManualLayoutSummary(chart.PlotAreaLayout),
@@ -1147,6 +1173,44 @@ public class XlsxCorpusRunnerTests
                 dataTable.ShowVerticalBorder,
                 dataTable.ShowOutline,
                 dataTable.ShowLegendKeys);
+
+    private static ChartProtectionSummary? CaptureChartProtectionSummary(ChartProtectionModel? protection) =>
+        protection is null
+            ? null
+            : new ChartProtectionSummary(
+                protection.ChartObject,
+                protection.Data,
+                protection.Formatting,
+                protection.Selection,
+                protection.UserInterface);
+
+    private static ChartPrintSettingsSummary? CaptureChartPrintSettingsSummary(ChartPrintSettingsModel? printSettings) =>
+        printSettings is null
+            ? null
+            : new ChartPrintSettingsSummary(
+                CaptureChartPageMarginsSummary(printSettings.PageMargins),
+                CaptureChartPageSetupSummary(printSettings.PageSetup));
+
+    private static ChartPageMarginsSummary? CaptureChartPageMarginsSummary(ChartPageMarginsModel? pageMargins) =>
+        pageMargins is null
+            ? null
+            : new ChartPageMarginsSummary(
+                pageMargins.Left,
+                pageMargins.Right,
+                pageMargins.Top,
+                pageMargins.Bottom,
+                pageMargins.Header,
+                pageMargins.Footer);
+
+    private static ChartPageSetupSummary? CaptureChartPageSetupSummary(ChartPageSetupModel? pageSetup) =>
+        pageSetup is null
+            ? null
+            : new ChartPageSetupSummary(
+                pageSetup.PaperSize ?? "",
+                pageSetup.Orientation ?? "",
+                pageSetup.Copies,
+                pageSetup.BlackAndWhite,
+                pageSetup.Draft);
 
     private static ChartTrendlineSummary CaptureChartTrendlineSummary(ChartModel chart) =>
         new(
@@ -2183,6 +2247,8 @@ public class XlsxCorpusRunnerTests
         bool ShowDataLabelsOverMaximum,
         bool AutoTitleDeleted,
         bool ShowDataInHiddenRowsAndColumns,
+        ChartProtectionSummary? Protection,
+        ChartPrintSettingsSummary? PrintSettings,
         ChartColorMapSummary? ColorMapOverride,
         ChartExternalDataSummary? ExternalData,
         ChartManualLayoutSummary? PlotAreaLayout,
@@ -2334,6 +2400,32 @@ public class XlsxCorpusRunnerTests
         int? DepthPercent,
         bool? RightAngleAxes,
         int? Perspective);
+
+    private sealed record ChartProtectionSummary(
+        bool? ChartObject,
+        bool? Data,
+        bool? Formatting,
+        bool? Selection,
+        bool? UserInterface);
+
+    private sealed record ChartPrintSettingsSummary(
+        ChartPageMarginsSummary? PageMargins,
+        ChartPageSetupSummary? PageSetup);
+
+    private sealed record ChartPageMarginsSummary(
+        double? Left,
+        double? Right,
+        double? Top,
+        double? Bottom,
+        double? Header,
+        double? Footer);
+
+    private sealed record ChartPageSetupSummary(
+        string PaperSize,
+        string Orientation,
+        int? Copies,
+        bool? BlackAndWhite,
+        bool? Draft);
 
     private sealed record ChartRangeSummary(
         uint StartRow,

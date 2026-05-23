@@ -9,6 +9,17 @@ public static partial class RibbonIconFactory
 {
     private const double Artboard = 24;
 
+    public static int ResolveCommandIconPixelSizeForDpi(double logicalSize, double dpiScale)
+    {
+        if (double.IsNaN(logicalSize) || double.IsInfinity(logicalSize) || logicalSize <= 0 ||
+            double.IsNaN(dpiScale) || double.IsInfinity(dpiScale) || dpiScale <= 0)
+        {
+            return 1;
+        }
+
+        return Math.Max(1, (int)Math.Round(logicalSize * dpiScale, MidpointRounding.AwayFromZero));
+    }
+
     public static FrameworkElement CreateCommandIcon(
         string commandName,
         RibbonCommandIcon fallbackIcon,
