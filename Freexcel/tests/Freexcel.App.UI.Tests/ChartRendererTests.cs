@@ -132,7 +132,7 @@ public sealed class ChartRendererTests
         var sheetId = SheetId.New();
         var chart = new ChartModel
         {
-            Type = ChartType.Surface,
+            Type = ChartType.ThreeDSurface,
             DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
         };
 
