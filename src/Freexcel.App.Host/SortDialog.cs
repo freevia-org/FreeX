@@ -403,12 +403,12 @@ public sealed class SortDialog : Window
         return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
     }
 
-    private static SortOn SortOnFromLabel(string? label) =>
+    private static Freexcel.Core.Commands.SortOn SortOnFromLabel(string? label) =>
         label switch
         {
-            "Cell Color" => SortOn.CellColor,
-            "Font Color" => SortOn.FontColor,
-            _ => SortOn.CellValues
+            "Cell Color" => Freexcel.Core.Commands.SortOn.CellColor,
+            "Font Color" => Freexcel.Core.Commands.SortOn.FontColor,
+            _ => Freexcel.Core.Commands.SortOn.CellValues
         };
 }
 
