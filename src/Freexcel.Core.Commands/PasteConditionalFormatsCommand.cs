@@ -27,7 +27,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
 
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
         var targetSheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(targetSheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(targetSheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
         var pastedRules = sourceSheet.ConditionalFormats
