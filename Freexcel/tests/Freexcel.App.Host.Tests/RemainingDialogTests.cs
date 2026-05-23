@@ -62,7 +62,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void FillSeriesStepDialog_CreateResult_CapturesExcelSeriesOptions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("enum FillSeriesDirection");
         source.Should().Contain("enum FillSeriesType");
@@ -94,7 +94,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ZoomDialog_ExposesExcelPresetPercentsAndCustomPercent()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("ZoomPresets");
         source.Should().Contain("200");
@@ -133,7 +133,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void PageBreakDialog_ExposesExplicitExcelStyleActionsInsteadOfCommandText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
         var pageBreakSource = source[source.IndexOf("public sealed class PageBreakDialog", StringComparison.Ordinal)..];
 
         pageBreakSource.Should().Contain("Insert _row page break");
@@ -261,7 +261,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SparklineDialog_ExposesRangePickerButtonsForDataAndLocation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("_dataRangePickerButton");
         source.Should().Contain("_locationPickerButton");
@@ -272,7 +272,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SparklineDialog_LabelsEditableControlsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
         source.Should().Contain("new Label { Content = \"_Location:\", Target = _locationBox");
@@ -294,7 +294,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void UnhideSheetDialog_LabelsSheetPickerWithAccessKeyTarget()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("new Label { Content = \"_Sheet:\", Target = _sheetBox");
     }
@@ -302,7 +302,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void UnhideSheetDialog_UsesNonEditableSelectionList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("private readonly ListBox _sheetBox");
         source.Should().Contain("_sheetBox.SelectedItem");
@@ -337,7 +337,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SpellCheckDialog_UsesExcelLikeNotInDictionarySuggestionsAndChangeToLayout()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("private readonly TextBox _notInDictionaryBox");
         source.Should().Contain("private readonly ListBox _suggestionsBox");
@@ -352,7 +352,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SpellCheckDialog_ExposesExcelLikeIgnoreChangeAndAddActions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var source = ReadRemainingDialogSources();
 
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("Content = \"_Ignore\"");
@@ -397,4 +397,14 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Close Preview\"");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
     }
-}
+
+    private static string ReadRemainingDialogSources()
+    {
+        return string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FillSeriesStepDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
+    }}
