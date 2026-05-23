@@ -67,7 +67,8 @@ public sealed class ChartDialogTests
             "Area",
             "X Y (Scatter)",
             "Stock",
-            "Radar");
+            "Radar",
+            "Surface");
         categories.Should().OnlyContain(category => category.Options.All(option => ChartTypeSupport.IsRenderable(option.Type)));
         categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
@@ -89,6 +90,9 @@ public sealed class ChartDialogTests
         categories.Single(category => category.Name == "Area").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Area,
             ChartType.ThreeDArea);
+        categories.Single(category => category.Name == "Surface").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Surface,
+            ChartType.ThreeDSurface);
     }
 
     [Fact]

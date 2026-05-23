@@ -295,7 +295,9 @@ public static class RibbonCommandPresentationPlanner
                 "bubble chart" or
                 "area chart" or
                 "radar chart" or
-                "stock chart";
+                "stock chart" or
+                "surface chart" or
+                "3d surface chart";
 
     private static bool IsLargeRibbonCommand(string name) =>
         name == "paste" ||
