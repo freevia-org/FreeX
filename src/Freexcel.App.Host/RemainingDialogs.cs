@@ -225,7 +225,7 @@ public sealed class PageBreakDialog : Window
         stack.Children.Add(CreateNumberRow("_Column:", _columnBreakBox));
         _resetAllButton.Margin = new Thickness(0, 4, 0, 12);
         stack.Children.Add(_resetAllButton);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 
@@ -339,7 +339,7 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.Margin = new Thickness(0, 0, 0, 12);
         _sheetBox.MinHeight = 64;
         stack.Children.Add(_sheetBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         Content = stack;
     }
 
