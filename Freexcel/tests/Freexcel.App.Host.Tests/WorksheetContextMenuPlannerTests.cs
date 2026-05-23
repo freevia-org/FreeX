@@ -123,6 +123,42 @@ public sealed class WorksheetContextMenuPlannerTests
     }
 
     [Fact]
+    public void BuildCommands_DisablesTargetSpecificEntriesWhenCellHasNoMatchingMetadata()
+    {
+        var state = new WorksheetContextMenuState(
+            HasThreadedComment: false,
+            HasNote: false,
+            HasHyperlink: false);
+
+        var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
+
+        commands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ClearHyperlinks).IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildCommands_EnablesTargetSpecificEntriesWhenCellHasMatchingMetadata()
+    {
+        var state = new WorksheetContextMenuState(
+            HasThreadedComment: true,
+            HasNote: true,
+            HasHyperlink: true);
+
+        var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
+
+        commands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ClearHyperlinks).IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildCommands_ForPictureTargetIncludesExcelObjectCommands()
     {
         var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Picture);
