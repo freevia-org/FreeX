@@ -110,7 +110,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ShapeGradientDialog_LabelsStopRgbEditorsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
 
         source.Should().Contain("Gradient stops");
         source.Should().Contain("AddStopRow(grid, 0, \"Stop 1 _color (RGB):\", _startColorBox");
@@ -195,7 +195,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ExposesExcelStyleTabsAndAspectRatioControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
         var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
         source.Should().Contain("public sealed class FormatPictureDialog");
@@ -225,7 +225,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ShapeGradientDialog_ExposesColorPickerButtonsForStartAndEndColors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
 
         source.Should().Contain("_startColorButton");
         source.Should().Contain("_endColorButton");

@@ -34,10 +34,10 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
                 ToSeriesTitleXml(chart, sheet, col, chartNs),
-                chart.Type == ChartType.Line || forceLineShapeProperties
+                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs)
                     : ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
-                chart.Type == ChartType.Line || forceLineShapeProperties
+                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs)
                     : null,
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
@@ -495,7 +495,7 @@ internal static partial class XlsxChartXmlWriter
     private static bool SupportsErrorBars(ChartType chartType) =>
         chartType is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or
             ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or
-            ChartType.Line or ChartType.Scatter or ChartType.Area or ChartType.ThreeDArea;
+            ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter or ChartType.Area or ChartType.ThreeDArea;
 
     private static string ToXlsxErrorBarKind(ChartErrorBarKind kind) =>
         kind switch
