@@ -610,6 +610,18 @@ public class PhaseCFinancialTests
     // ── EFFECT/NOMINAL edge cases ─────────────────────────────────────────
 
     [Fact]
+    public void BondAndAccrualFunctions_InvalidBasis_ReturnNumError()
+    {
+        CalcError("PRICE(43831,45658,0.1,0.1,100,1,5)").Should().Be("#NUM!");
+        CalcError("YIELD(43831,45658,0.1,100,100,1,-1)").Should().Be("#NUM!");
+        CalcError("PRICEMAT(43831,44197,43831,0.05,0.05,1E309)").Should().Be("#NUM!");
+        CalcError("YIELDMAT(43831,44197,43831,0.05,100,5)").Should().Be("#NUM!");
+        CalcError("DURATION(43831,45656,0.08,0.06,2,-1)").Should().Be("#NUM!");
+        CalcError("MDURATION(43831,45656,0.08,0.06,2,1E309)").Should().Be("#NUM!");
+        CalcError("ACCRINT(43831,43831,44197,0.05,1000,2,5)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
     {
         double r = 0.12;
