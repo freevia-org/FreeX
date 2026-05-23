@@ -162,6 +162,25 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("??", 5, " 5")]
+    [InlineData("???", 12, " 12")]
+    [InlineData("??0", 5, "  5")]
+    [InlineData("??0", 1234, "1234")]
+    [InlineData("0.??", 1.2, "1.2 ")]
+    [InlineData("0.??", 1, "1.  ")]
+    [InlineData("??0.??", 12.3, " 12.3 ")]
+    [InlineData("\"ID \"??0.??", 12.3, "ID  12.3 ")]
+    public void CustomNumberSubset_FormatsQuestionPlaceholdersAsAlignmentSpaces(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[$\u20AC-407]#,##0.00", 1234.5, "\u20AC1.234,50")]
     [InlineData("[$\u00A3-809] #,##0.00", 1234.5, "\u00A3 1,234.50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
