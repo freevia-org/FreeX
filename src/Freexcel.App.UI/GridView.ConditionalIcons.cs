@@ -34,6 +34,19 @@ public partial class GridView
         return !string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null;
     }
 
+    public static HashSet<(uint Row, uint Col)> BuildOccupiedCellSet(IEnumerable<DisplayCell> cells, CellAddress? editingCell)
+    {
+        var occupied = new HashSet<(uint Row, uint Col)>(
+            cells
+                .Where(c => !string.IsNullOrEmpty(c.DisplayText) || c.ConditionalIcon is not null)
+                .Select(c => (c.Row, c.Col)));
+
+        if (editingCell is { } address)
+            occupied.Add((address.Row, address.Col));
+
+        return occupied;
+    }
+
     private static void DrawConditionalIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
     {
         var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(ResolveConditionalIconColor(icon))!;
