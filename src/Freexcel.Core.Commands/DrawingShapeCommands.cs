@@ -37,6 +37,9 @@ public sealed class AddDrawingShapeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Shape size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         sheet.DrawingShapes.Add(_shape);
         _added = true;
         return new CommandOutcome(true, AffectedCells: [_shape.Anchor]);
@@ -70,6 +73,9 @@ public sealed class BringDrawingShapeForwardCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var index = sheet.DrawingShapes.FindIndex(shape => shape.Id == _shapeId);
         if (index < 0)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -116,6 +122,9 @@ public sealed class SendDrawingShapeBackwardCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var index = sheet.DrawingShapes.FindIndex(shape => shape.Id == _shapeId);
         if (index < 0)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -170,6 +179,9 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Shape size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -216,6 +228,9 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Shape rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -272,6 +287,9 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -326,6 +344,9 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -372,6 +393,9 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var shape = sheet.DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
@@ -390,4 +414,10 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
         shape.HasShadowEffect = _previous;
         _applied = false;
     }
+}
+
+internal static class DrawingShapeCommandGuards
+{
+    public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
+        CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
 }
