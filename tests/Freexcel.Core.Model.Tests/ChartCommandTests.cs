@@ -631,6 +631,34 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotChartOptionsCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ChartStyleId = 4
+        };
+        sheet.Charts.Add(chart);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+
+        var outcome = new ConfigurePivotChartOptionsCommand(sheet.Id, chart.Id, 12, showFieldButtons: false).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        chart.ChartStyleId.Should().Be(4);
+        chart.ShowPivotChartFieldButtons.Should().BeTrue();
+    }
+
+    [Fact]
     public void ConfigurePivotChartOptionsCommand_PreservesIndividualButtonsWhenCallerOmitsThem()
     {
         var wb = new Workbook("test");
