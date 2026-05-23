@@ -601,6 +601,26 @@ public class ExportPlannerTests
         package.PackageProperties.Keywords.Should().Be("Freexcel, spreadsheet");
     }
 
+    [Fact]
+    public void XpsDocumentProperties_TrimsAndSkipsBlankPackageProperties()
+    {
+        using var stream = new MemoryStream();
+        using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
+
+        XpsDocumentProperties.ApplyToPackage(
+            package,
+            new XpsDocumentProperties(
+                Title: "  Quarterly Review  ",
+                Creator: "\tFinance Team\t",
+                Subject: "   ",
+                Keywords: "Freexcel, spreadsheet  "));
+
+        package.PackageProperties.Title.Should().Be("Quarterly Review");
+        package.PackageProperties.Creator.Should().Be("Finance Team");
+        package.PackageProperties.Subject.Should().BeNull();
+        package.PackageProperties.Keywords.Should().Be("Freexcel, spreadsheet");
+    }
+
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
 
