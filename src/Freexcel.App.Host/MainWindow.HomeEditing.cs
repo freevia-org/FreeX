@@ -195,7 +195,7 @@ public partial class MainWindow
 
         if (dialog.SelectedSpecialKind is { } specialKind)
         {
-            SelectGoToSpecialMatches(specialKind, showEmptyMessage: true);
+            SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true);
             return;
         }
 
@@ -211,22 +211,28 @@ public partial class MainWindow
         var dialog = new GoToSpecialDialog { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        SelectGoToSpecialMatches(dialog.SelectedKind, showEmptyMessage: true, sheet, range);
+        SelectGoToSpecialMatches(dialog.SelectedKind, dialog.SelectedOptions, showEmptyMessage: true, sheet, range);
     }
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage)
+        => SelectGoToSpecialMatches(kind, null, showEmptyMessage);
+
+    private void SelectGoToSpecialMatches(GoToSpecialKind kind, GoToSpecialOptions? options, bool showEmptyMessage)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
         var range = SheetGrid.SelectedRange ?? sheet.GetUsedRange() ??
             new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
 
-        SelectGoToSpecialMatches(kind, showEmptyMessage, sheet, range);
+        SelectGoToSpecialMatches(kind, options, showEmptyMessage, sheet, range);
     }
 
     private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage, Sheet sheet, GridRange range)
+        => SelectGoToSpecialMatches(kind, null, showEmptyMessage, sheet, range);
+
+    private void SelectGoToSpecialMatches(GoToSpecialKind kind, GoToSpecialOptions? options, bool showEmptyMessage, Sheet sheet, GridRange range)
     {
-        var matches = GoToSpecialService.Find(_workbook, sheet, range, kind, range.Start);
+        var matches = GoToSpecialService.Find(_workbook, sheet, range, kind, range.Start, options);
         if (matches.Count == 0)
         {
             if (showEmptyMessage)

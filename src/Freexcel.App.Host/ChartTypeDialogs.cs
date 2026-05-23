@@ -40,6 +40,7 @@ public static class ChartTypePickerPlanner
         new(ChartType.Scatter, "Scatter", true),
         new(ChartType.Bubble, "Bubble"),
         new(ChartType.Area, "Area"),
+        new(ChartType.ThreeDArea, "3D Area"),
         new(ChartType.Radar, "Radar"),
         new(ChartType.Stock, "Stock")
     ];
@@ -69,7 +70,7 @@ public static class ChartTypePickerPlanner
                 ("Line", [ChartType.Line]),
                 ("Pie", [ChartType.Pie, ChartType.ThreeDPie, ChartType.Doughnut]),
                 ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar]),
-                ("Area", [ChartType.Area]),
+                ("Area", [ChartType.Area, ChartType.ThreeDArea]),
                 ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),
                 ("Stock", [ChartType.Stock]),
                 ("Radar", [ChartType.Radar])

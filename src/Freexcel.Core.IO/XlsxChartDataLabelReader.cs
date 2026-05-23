@@ -67,6 +67,7 @@ internal static class XlsxChartDataLabelReader
             || element.Name == ChartNs + "lineChart"
             || element.Name == ChartNs + "scatterChart"
             || element.Name == ChartNs + "areaChart"
+            || element.Name == ChartNs + "area3DChart"
             || element.Name == ChartNs + "radarChart"
             || element.Name == ChartNs + "stockChart"
             || element.Name == ChartNs + "bubbleChart"
