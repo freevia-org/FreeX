@@ -170,6 +170,46 @@ public sealed class RotatePictureCommand : IWorkbookCommand
     }
 }
 
+public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _pictureId;
+    private readonly bool _lockAspectRatio;
+    private bool _previousLockAspectRatio;
+    private bool _applied;
+
+    public string Label => "Picture Lock Aspect Ratio";
+
+    public SetPictureLockAspectRatioCommand(SheetId sheetId, Guid pictureId, bool lockAspectRatio)
+    {
+        _sheetId = sheetId;
+        _pictureId = pictureId;
+        _lockAspectRatio = lockAspectRatio;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null)
+            return new CommandOutcome(false, "Picture was not found.");
+
+        _previousLockAspectRatio = picture.LockAspectRatio;
+        picture.LockAspectRatio = _lockAspectRatio;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null) return;
+        picture.LockAspectRatio = _previousLockAspectRatio;
+        _applied = false;
+    }
+}
+
 public sealed class SetPictureCropCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

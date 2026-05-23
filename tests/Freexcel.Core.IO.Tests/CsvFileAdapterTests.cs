@@ -105,6 +105,17 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForCurrencyValues()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"$1,234.50\",($42.25)\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(1234.5));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-42.25));
+    }
+
+    [Fact]
     public void Save_WritesDateTimeValuesAsInvariantText()
     {
         var workbook = new Workbook("Book1");
