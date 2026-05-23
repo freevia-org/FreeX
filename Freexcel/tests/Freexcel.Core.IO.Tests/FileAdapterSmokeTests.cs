@@ -4127,6 +4127,7 @@ public partial class FileAdapterSmokeTests
             RuleType    = CfRuleType.CellValue,
             Operator    = CfOperator.GreaterThan,
             Value1      = "5",
+            StopIfTrue = true,
             FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
         };
         sheet.ConditionalFormats.Add(cf);
@@ -4141,6 +4142,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ConditionalFormats.Should().NotBeEmpty("CF rule must survive XLSX round-trip");
         var rule = loadedSheet.ConditionalFormats[0];
         rule.RuleType.Should().Be(CfRuleType.CellValue);
+        rule.StopIfTrue.Should().BeTrue();
     }
 
     [Fact]
