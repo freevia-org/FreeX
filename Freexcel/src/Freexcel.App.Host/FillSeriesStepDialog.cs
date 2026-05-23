@@ -106,7 +106,7 @@ public sealed class FillSeriesStepDialog : Window
         stack.Children.Add(CreateHorizontalRow(_dayButton, _weekdayButton, _monthButton, _yearButton));
         stack.Children.Add(CreateLabeledTextBox("Step _value:", _stepBox));
         stack.Children.Add(CreateLabeledTextBox("Stop _value:", _stopBox));
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 
