@@ -260,6 +260,7 @@ public sealed class PivotWorkflowDialogTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            preserveSourceSortFilter: false,
             missingItemsLimit: 42,
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
@@ -288,6 +289,7 @@ public sealed class PivotWorkflowDialogTests
             PivotReportLayout.Outline,
             "N/A",
             true,
+            false,
             false,
             false,
             1_048_576,
@@ -319,6 +321,7 @@ public sealed class PivotWorkflowDialogTests
             RefreshOnLoad = true,
             SaveData = false,
             EnableRefresh = false,
+            PreserveSourceSortFilter = false,
             MissingItemsLimit = 0
         };
 
@@ -328,6 +331,7 @@ public sealed class PivotWorkflowDialogTests
                 result.RefreshOnOpen &&
                 !result.SaveSourceData &&
                 !result.EnableRefresh &&
+                !result.PreserveSourceSortFilter &&
                 result.MissingItemsLimit == 0);
     }
 
@@ -495,15 +499,16 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableOptionsDialog_DisablesUnmodeledPreserveSourceSortFilterOption()
+    public void PivotTableOptionsDialog_ModelsPreserveSourceSortFilterOption()
     {
         var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("private readonly CheckBox _preserveSourceSortFilterBox");
         source.Should().Contain("Content = \"Preserve source sort and _filter settings\"");
-        source.Should().Contain("IsEnabled = false");
-        source.Should().Contain("changing this option is not modeled yet");
+        source.Should().Contain("PreserveSourceSortFilter");
         source.Should().Contain("AddCheckBox(dataPanel, _preserveSourceSortFilterBox)");
+        source.Should().NotContain("IsEnabled = false");
+        source.Should().NotContain("changing this option is not modeled yet");
         source.Should().NotContain("new CheckBox { Content = \"Preserve source sort and _filter settings\"");
     }
 

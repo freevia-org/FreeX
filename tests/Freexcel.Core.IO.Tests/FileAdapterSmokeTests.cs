@@ -13057,6 +13057,7 @@ public partial class FileAdapterSmokeTests
             RefreshOnLoad = false,
             SaveData = false,
             EnableRefresh = false,
+            PreserveSourceSortFilter = false,
             MissingItemsLimit = 0,
             RefreshedVersion = 7,
             RefreshedBy = "Freexcel Tests"
@@ -13086,6 +13087,7 @@ public partial class FileAdapterSmokeTests
             cacheXml.Should().Contain("refreshOnLoad=\"0\"");
             cacheXml.Should().Contain("saveData=\"0\"");
             cacheXml.Should().Contain("enableRefresh=\"0\"");
+            cacheXml.Should().Contain("preserveSourceSortFilter=\"0\"");
             cacheXml.Should().Contain("missingItemsLimit=\"0\"");
             cacheXml.Should().Contain("refreshedVersion=\"7\"");
             cacheXml.Should().Contain("refreshedBy=\"Freexcel Tests\"");
@@ -13097,6 +13099,7 @@ public partial class FileAdapterSmokeTests
         loadedCache.RefreshOnLoad.Should().BeFalse();
         loadedCache.SaveData.Should().BeFalse();
         loadedCache.EnableRefresh.Should().BeFalse();
+        loadedCache.PreserveSourceSortFilter.Should().BeFalse();
         loadedCache.MissingItemsLimit.Should().Be(0);
         loadedCache.RefreshedVersion.Should().Be(7);
         loadedCache.RefreshedBy.Should().Be("Freexcel Tests");

@@ -378,6 +378,9 @@ public partial class MainWindow
         if (TryHandleFocusedSheetTabKeyboardNavigation(e))
             return;
 
+        if (TryHandleFocusedStatusBarKeyboardNavigation(e))
+            return;
+
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
         {
             var button = fontToggleShortcut switch
@@ -547,6 +550,26 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is not UIElement focusedElement ||
+            !IsDescendantOf(focusedElement, StatusBarGrid) ||
+            Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
+        {
+            return false;
+        }
+
+        if (e.Key != Key.Tab)
+            return false;
+
+        var request = new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next);
+        focusedElement.MoveFocus(request);
+        e.Handled = true;
+        return true;
     }
 
     private bool IsInsideRibbonSurface(DependencyObject element)
