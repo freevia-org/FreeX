@@ -1174,7 +1174,47 @@ internal static class XlsxCorpusFixtureFactory
             ShowDataInHiddenRowsAndColumns = true,
             ShowLegend = true,
             ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            DataLabelSeparator = ChartDataLabelSeparator.Semicolon,
+            DataLabelNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowDataLabelCallouts = true,
             LegendPosition = ChartLegendPosition.Bottom,
+            Uses1904DateSystem = true,
+            Language = "en-US",
+            ShowDataLabelsOverMaximum = true,
+            AutoTitleDeleted = true,
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                UseMasterColorMapping = false,
+                OverrideMappings = { ["accent1"] = "accent2" }
+            },
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternalData1",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "../externalLinks/externalLink1.xml",
+                TargetMode = "External",
+                AutoUpdate = true
+            },
+            PlotAreaLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner",
+                XMode = "factor",
+                YMode = "factor",
+                WidthMode = "factor",
+                HeightMode = "factor",
+                X = 0.1,
+                Y = 0.2,
+                Width = 0.8,
+                Height = 0.6
+            },
+            LegendLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner",
+                X = 0.72,
+                Y = 0.1,
+                Height = 0.7
+            },
             DataTable = new ChartDataTableModel
             {
                 ShowHorizontalBorder = true,
