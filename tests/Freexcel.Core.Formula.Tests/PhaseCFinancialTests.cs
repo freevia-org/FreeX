@@ -622,6 +622,28 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void BondPriceYieldFunctions_DateSerialOutsideExcelRange_ReturnNumError()
+    {
+        CalcError("PRICE(2958466,2958467,0.1,0.1,100,1)").Should().Be("#NUM!");
+        CalcError("YIELD(2958466,2958467,0.1,100,100,1)").Should().Be("#NUM!");
+        CalcError("PRICEDISC(2958466,2958467,0.05,100)").Should().Be("#NUM!");
+        CalcError("YIELDDISC(2958466,2958467,95,100)").Should().Be("#NUM!");
+        CalcError("PRICEMAT(2958466,2958467,2958466,0.05,0.05)").Should().Be("#NUM!");
+        CalcError("YIELDMAT(2958466,2958467,2958466,0.05,100)").Should().Be("#NUM!");
+    }
+
+    [Fact]
+    public void BondPriceYieldFunctions_NegativeDateSerial_ReturnNumError()
+    {
+        CalcError("PRICE(-1,45658,0.1,0.1,100,1)").Should().Be("#NUM!");
+        CalcError("YIELD(-1,45658,0.1,100,100,1)").Should().Be("#NUM!");
+        CalcError("PRICEDISC(-1,44197,0.05,100)").Should().Be("#NUM!");
+        CalcError("YIELDDISC(-1,44197,95,100)").Should().Be("#NUM!");
+        CalcError("PRICEMAT(-1,44197,-1,0.05,0.05)").Should().Be("#NUM!");
+        CalcError("YIELDMAT(-1,44197,-1,0.05,100)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
     {
         double r = 0.12;
