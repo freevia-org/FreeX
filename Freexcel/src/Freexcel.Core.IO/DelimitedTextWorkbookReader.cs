@@ -140,6 +140,8 @@ internal static class DelimitedTextWorkbookReader
             return new NumberValue(percentage);
         if (TryParseIsoDateTime(field, out var dateTime))
             return DateTimeValue.FromDateTime(dateTime);
+        if (TryParseTime(field, out var time))
+            return new DateTimeValue(time.TotalDays);
         if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return new NumberValue(number);
 
@@ -174,6 +176,15 @@ internal static class DelimitedTextWorkbookReader
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out dateTime);
+    }
+
+    private static bool TryParseTime(string field, out TimeSpan time)
+    {
+        return TimeSpan.TryParseExact(
+            field.Trim(),
+            ["h\\:mm", "hh\\:mm", "h\\:mm\\:ss", "hh\\:mm\\:ss"],
+            CultureInfo.InvariantCulture,
+            out time);
     }
 
     private static bool TryReadFormula(string field, out string formulaText)
