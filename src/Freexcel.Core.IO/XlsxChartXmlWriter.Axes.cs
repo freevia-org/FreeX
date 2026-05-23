@@ -149,6 +149,9 @@ internal static partial class XlsxChartXmlWriter
                 chartNs,
                 drawingNs);
         }
+
+        if (chart.Type is ChartType.Surface or ChartType.ThreeDSurface)
+            yield return ToSeriesAxisXml(chartNs);
     }
 
     private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
@@ -215,6 +218,19 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels))),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
+            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
+
+    private static XElement ToSeriesAxisXml(XNamespace chartNs) =>
+        new(chartNs + "serAx",
+            new XElement(chartNs + "axId", new XAttribute("val", SeriesAxisId)),
+            new XElement(chartNs + "scaling",
+                new XElement(chartNs + "orientation", new XAttribute("val", "minMax"))),
+            new XElement(chartNs + "delete", new XAttribute("val", "0")),
+            new XElement(chartNs + "axPos", new XAttribute("val", "r")),
+            new XElement(chartNs + "majorTickMark", new XAttribute("val", "none")),
+            new XElement(chartNs + "minorTickMark", new XAttribute("val", "none")),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", "nextTo")),
+            new XElement(chartNs + "crossAx", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
 
     private static XElement? ToAxisGridlinesXml(
