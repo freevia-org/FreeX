@@ -46,6 +46,14 @@ public sealed class LegacyXlsFileAdapterTests
     }
 
     [Fact]
+    public void Load_MapsLegacyTimeOnlyCellsToDateTimeValues()
+    {
+        var value = MapLegacyXlsValue(new TimeSpan(9, 30, 0));
+
+        value.Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+    }
+
+    [Fact]
     public void Save_IsNotSupported()
     {
         var adapter = new LegacyXlsFileAdapter();
