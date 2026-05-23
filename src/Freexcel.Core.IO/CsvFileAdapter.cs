@@ -77,11 +77,12 @@ public sealed class CsvFileAdapter : IFileAdapter
     private static string FormatDateTimeValue(DateTimeValue value)
     {
         var dateTime = value.ToDateTime();
+        var hasFractionalSeconds = dateTime.Ticks % TimeSpan.TicksPerSecond != 0;
         if (dateTime.Date == new DateTime(1899, 12, 30) && dateTime.TimeOfDay != TimeSpan.Zero)
-            return dateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            return dateTime.ToString(hasFractionalSeconds ? "HH:mm:ss.FFFFFFF" : "HH:mm:ss", CultureInfo.InvariantCulture);
 
         return dateTime.TimeOfDay == TimeSpan.Zero
             ? dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-            : dateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            : dateTime.ToString(hasFractionalSeconds ? "yyyy-MM-dd HH:mm:ss.FFFFFFF" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
     }
 }
