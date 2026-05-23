@@ -1770,6 +1770,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ScenarioShow_IsRepeatableForF4WithoutReopeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
+        dataSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        dataSource.Should().Contain("SetActiveCell(first);");
+        dataSource.Should().Contain("EnsureCellVisible(first);");
+    }
+
+    [Fact]
     public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
