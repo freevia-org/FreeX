@@ -702,6 +702,7 @@ public class XlsxCorpusRunnerTests
             sheet.DrawingShapes.Count,
             sheet.Pictures.Select(CapturePictureSummary).ToArray(),
             sheet.Pictures.Count,
+            CaptureBackgroundImageSummary(sheet.BackgroundImage),
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
             sheet.AllowEditRanges
@@ -766,6 +767,14 @@ public class XlsxCorpusRunnerTests
                     CaptureStyleSummary(workbook.GetStyle(entry.StyleId))))
                 .ToArray(),
             sheet.GetStyleOnlyEntries().Count());
+
+    private static BackgroundImageSummary? CaptureBackgroundImageSummary(WorksheetBackgroundImage? background) =>
+        background is null
+            ? null
+            : new BackgroundImageSummary(
+                background.ContentType,
+                background.FileName ?? "",
+                background.ImageBytes.Length);
 
     private static NamedRangeSummary CaptureNamedRangeSummary(Workbook workbook, string name, GridRange range)
     {
@@ -1294,6 +1303,7 @@ public class XlsxCorpusRunnerTests
         int DrawingShapeCount,
         IReadOnlyList<PictureSummary> Pictures,
         int PictureCount,
+        BackgroundImageSummary? BackgroundImage,
         bool HasBackgroundImage,
         bool IsProtected,
         IReadOnlyList<ChartRangeSummary> AllowEditRanges,
@@ -1349,6 +1359,8 @@ public class XlsxCorpusRunnerTests
     private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
 
     private sealed record RepeatRangeSummary(uint Start, uint End);
+
+    private sealed record BackgroundImageSummary(string ContentType, string FileName, int ImageByteCount);
 
     private sealed record ChartSummary(
         ChartType Type,
