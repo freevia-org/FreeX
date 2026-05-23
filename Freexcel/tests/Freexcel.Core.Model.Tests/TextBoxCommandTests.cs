@@ -62,6 +62,38 @@ public sealed class TextBoxCommandTests
     }
 
     [Fact]
+    public void AddTextBoxCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 2, 3);
+
+        var outcome = new AddTextBoxCommand(sheet.Id, anchor, "Notes").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.TextBoxes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddTextBoxCommand_AllowsProtectedSheetWithEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 2, 3);
+
+        var outcome = new AddTextBoxCommand(sheet.Id, anchor, "Notes").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.TextBoxes.Should().ContainSingle();
+    }
+
+    [Fact]
     public void ResizeTextBoxCommand_SetsSizeAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -121,6 +153,23 @@ public sealed class TextBoxCommandTests
     }
 
     [Fact]
+    public void ResizeTextBoxCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1), Text = "Note", Width = 180, Height = 80 };
+        sheet.TextBoxes.Add(textBox);
+        sheet.IsProtected = true;
+
+        var outcome = new ResizeTextBoxCommand(sheet.Id, textBox.Id, 220, 120).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        textBox.Width.Should().Be(180);
+        textBox.Height.Should().Be(80);
+    }
+
+    [Fact]
     public void SetTextBoxColorsCommand_SetsColorsAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -155,6 +204,31 @@ public sealed class TextBoxCommandTests
         textBox.OutlineColor.Should().Be(new CellColor(40, 50, 60));
         textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
         textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+    }
+
+    [Fact]
+    public void SetTextBoxColorsCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Note",
+            FillColor = new CellColor(10, 20, 30)
+        };
+        sheet.TextBoxes.Add(textBox);
+        sheet.IsProtected = true;
+
+        var outcome = new SetTextBoxColorsCommand(
+            sheet.Id,
+            textBox.Id,
+            new CellColor(240, 250, 255),
+            null).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        textBox.FillColor.Should().Be(new CellColor(10, 20, 30));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
