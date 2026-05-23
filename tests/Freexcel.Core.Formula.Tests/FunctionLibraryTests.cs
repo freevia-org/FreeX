@@ -1108,6 +1108,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Search_WildcardQuestionTreatsSurrogatePairAsSingleCharacter()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=SEARCH(\"?x\",\"😀x\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"??\",\"😀\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Search_TildeEscapesWildcard_MatchesLiteralQuestion()
     {
         var sheet = MakeSheet();
