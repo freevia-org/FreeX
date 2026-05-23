@@ -95,6 +95,21 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithSingleDigitHours()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17 9:30\t2026-05-17T9:30:15.250\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 15, 250)));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForUsSlashDatesWithFourDigitYears()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
@@ -135,6 +150,21 @@ public sealed class DelimitedTextFileAdapterTests
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new DateTimeValue(new TimeSpan(21, 45, 15).TotalDays));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForFractionalSecondDateTimesAndTimes()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17 09:30:15.250\t09:30:15.250\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 15, 250)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(new DateTimeValue(new TimeSpan(0, 9, 30, 15, 250).TotalDays));
     }
 
     [Fact]
