@@ -65,7 +65,9 @@ public sealed class OpenWorkbookLoaderTests
                 workbook.AddSheet("Sheet1");
                 return workbook;
             });
-            var loader = new OpenWorkbookLoader(_ => { }, _ => new XlsxFeatureReport([]));
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                inspectXlsx: _ => new XlsxFeatureReport([]));
 
             var result = await loader.LoadAsync(
                 tempPath,
@@ -83,33 +85,35 @@ public sealed class OpenWorkbookLoaderTests
     }
 
     [Theory]
-    [InlineData(".xlsx")]
-    [InlineData(".xlsm")]
-    [InlineData(".xltx")]
-    [InlineData(".xltm")]
-    public async Task LoadAsync_InspectsOpenXmlExcelPackageFormats(string extension)
+    [InlineData(".xlsx", false, true)]
+    [InlineData(".xlsm", false, false)]
+    [InlineData(".xltx", true, false)]
+    [InlineData(".xltm", true, false)]
+    public async Task LoadAsync_InspectsOpenXmlExcelVariants(string extension, bool opensAsTemplate, bool canSave)
     {
         var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
         await File.WriteAllTextAsync(tempPath, "payload");
         try
         {
-            var adapter = new FakeAdapter(_ =>
+            var expectedReport = new XlsxFeatureReport([
+                new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin")
+            ]);
+            var adapter = new FakeAdapter(stream =>
             {
+                using var reader = new StreamReader(stream);
+                reader.ReadToEnd().Should().Be("payload");
                 var workbook = new Workbook("Loaded");
                 workbook.AddSheet("Sheet1");
                 return workbook;
             });
-            var inspectCalled = false;
-            var expectedReport = new XlsxFeatureReport([
-                new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin")
-            ]);
+            var inspected = false;
             var loader = new OpenWorkbookLoader(
                 _ => { },
-                stream =>
+                inspectXlsx: stream =>
                 {
-                    inspectCalled = true;
                     using var reader = new StreamReader(stream);
                     reader.ReadToEnd().Should().Be("payload");
+                    inspected = true;
                     return expectedReport;
                 });
 
@@ -117,11 +121,12 @@ public sealed class OpenWorkbookLoaderTests
                 tempPath,
                 adapter,
                 extension,
-                new FileFormatDescriptor(extension, "Excel Package", CanOpen: true, CanSave: extension == ".xlsx"),
+                new FileFormatDescriptor(extension, "Excel Open XML", CanOpen: true, CanSave: canSave, opensAsTemplate),
                 new Progress<OpenProgressUpdate>());
 
-            inspectCalled.Should().BeTrue();
+            inspected.Should().BeTrue();
             result.FeatureReport.Should().BeSameAs(expectedReport);
+            result.OpenedAsTemplate.Should().Be(opensAsTemplate);
         }
         finally
         {
