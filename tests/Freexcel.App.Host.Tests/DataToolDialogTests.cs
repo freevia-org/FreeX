@@ -1,5 +1,7 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -877,6 +879,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("Select table range");
     }
 
@@ -897,6 +901,44 @@ public sealed class DataToolDialogTests
         result.Range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 3)));
         result.FirstRowHasHeaders.Should().BeFalse();
         result.TableStyleName.Should().Be("TableStyleMedium2");
+    }
+
+    [Fact]
+    public void CreateTableDialog_RangePickerRaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<CreateTableRangeSelectionRequest>();
+            var dialog = new CreateTableDialog(
+                SheetId.New(),
+                " A1:C12 ",
+                "TableStyleMedium2",
+                requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Where(button => Equals(button.Content, "..."))
+                    .Single();
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void CreateTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        CreateTableDialog.CreateRangeSelectionRequest(" A1:C12 ")
+            .Should()
+            .Be(new CreateTableRangeSelectionRequest("A1:C12", CollapseDialog: true));
     }
 
     [Fact]
@@ -938,5 +980,19 @@ public sealed class DataToolDialogTests
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 }
