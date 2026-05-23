@@ -336,6 +336,38 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void AddChartCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(wb);
+        var range = CreateChartRange(sheet);
+
+        var outcome = new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddChartCommand_AllowsProtectedSheetWithEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+        var ctx = new SimpleCtx(wb);
+        var range = CreateChartRange(sheet);
+
+        var outcome = new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.Charts.Should().ContainSingle();
+    }
+
+    [Fact]
     public void AddChartCommand_ReplacesInvalidChartTypeWithColumn()
     {
         var wb = new Workbook("test");
@@ -760,6 +792,23 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void SetChartStyleCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        sheet.IsProtected = true;
+
+        var outcome = new SetChartStyleCommand(sheet.Id, chart.Id, 5).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        chart.ChartStyleId.Should().BeNull();
+    }
+
+    [Fact]
     public void ChangeChartSourceCommand_UpdatesNormalChartSourceAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -842,6 +891,25 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void MoveChartCommand_RejectsProtectedSourceWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var target = wb.AddSheet("Dashboard");
+        var ctx = new SimpleCtx(wb);
+        var range = CreateChartRange(source);
+        new AddChartCommand(source.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+        source.IsProtected = true;
+
+        var outcome = new MoveChartCommand(source.Id, chart.Id, target.Id).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        source.Charts.Should().Contain(chart);
+        target.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
     public void MoveChartToNewSheetCommand_CreatesSheetAndUndoRemovesIt()
     {
         var wb = new Workbook("test");
@@ -865,6 +933,26 @@ public sealed class ChartCommandTests
 
         wb.Sheets.Should().NotContain(sheet => sheet.Name == "Sales Chart");
         source.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = CreateChartRange(sheet);
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+        sheet.IsProtected = true;
+
+        var outcome = new SetChartLayoutCommand(
+            sheet.Id,
+            chart.Id,
+            new ChartLayoutOptions(Title: "Blocked")).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        chart.Title.Should().Be("Sales");
     }
 
     [Fact]
@@ -2086,6 +2174,11 @@ public sealed class ChartCommandTests
         sheet.Charts[0].ExplodedSliceIndex.Should().Be(-1);
         sheet.Charts[0].ExplodedSliceDistance.Should().Be(0.2);
     }
+
+    private static GridRange CreateChartRange(Sheet sheet) =>
+        new(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
