@@ -632,7 +632,7 @@ public partial class MainWindow
                 return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
 
             case ShellFocusTarget.StatusBar:
-                return ZoomSlider.Focus();
+                return FocusStatusBar();
 
             default:
                 FocusSheetGridIfNeeded();
@@ -652,6 +652,11 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    private bool FocusStatusBar()
+    {
+        return StatusZoomOutButton.Focus() || ZoomSlider.Focus();
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
