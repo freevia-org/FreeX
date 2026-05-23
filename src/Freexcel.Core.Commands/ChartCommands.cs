@@ -187,6 +187,8 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
             return protectedOutcome;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
+            return pivotProtectedOutcome;
 
         var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
             string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
@@ -252,6 +254,8 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
             return protectedOutcome;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
+            return pivotProtectedOutcome;
 
         var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
