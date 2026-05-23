@@ -230,6 +230,7 @@ public class CellStyleTests
         s.FillColor.Should().BeNull();
         s.NumberFormat.Should().Be("General");
         s.Locked.Should().BeTrue();
+        s.Hidden.Should().BeFalse();
     }
 
     [Fact]

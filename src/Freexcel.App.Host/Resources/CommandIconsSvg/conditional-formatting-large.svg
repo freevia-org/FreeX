@@ -1,10 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  
-  <rect x="4.8" y="4.8" width="22.4" height="22.4" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M10.4 4.8 L10.4 27.2" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M16 4.8 L16 27.2" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M21.6 4.8 L21.6 27.2" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4.8 10.4 L27.2 10.4" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4.8 16 L27.2 16" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4.8 21.6 L27.2 21.6" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Conditional Formatting">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="5.5" width="21" height="21" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1"/>
+  <path d="M5.5 12.5H26.5M5.5 19.5H26.5M12.5 5.5V26.5M19.5 5.5V26.5" fill="none" stroke="#242424" stroke-width="1"/>
+  <rect x="6.5" y="6.5" width="5" height="5" fill="#f7630c"/>
+  <rect x="13.5" y="13.5" width="5" height="5" fill="#ffb900"/>
+  <rect x="20.5" y="20.5" width="5" height="5" fill="#107c41"/>
 </svg>
