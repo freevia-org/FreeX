@@ -55,6 +55,8 @@ public sealed partial class FindReplaceDialog : Window
     private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
     private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
+    private void ChooseFindFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromSelectedResult(ref _findFormatDiff);
+    private void ChooseReplaceWithFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromSelectedResult(ref _replaceFormatDiff);
     private void FindClearFormatButton_Click(object sender, RoutedEventArgs e)
     {
         _findFormatDiff = null;
@@ -200,6 +202,26 @@ public sealed partial class FindReplaceDialog : Window
         UpdateFormatStateButtons();
     }
 
+    private void PickFormatFromSelectedResult(ref StyleDiff? target)
+    {
+        if (FindResultsGrid.SelectedItem is not FindResultRow row)
+        {
+            StatusLabel.Text = "Select a result cell to choose its format.";
+            return;
+        }
+
+        var diff = FindReplaceDialogPlanner.CreateFormatDiffFromCell(_getWorkbook(), row.Address);
+        if (diff is null)
+        {
+            StatusLabel.Text = "No cell format found.";
+            return;
+        }
+
+        target = diff;
+        StatusLabel.Text = "Format chosen from selected cell.";
+        UpdateFormatStateButtons();
+    }
+
     private void UpdateFormatStateButtons()
     {
         SetFormatState(_findFormatDiff is not null, "Find format is set", FindFormatButton, FindClearFormatButton);
@@ -226,6 +248,13 @@ internal static class FindReplaceDialogPlanner
         results
             .Select(result => CreateFindResultRow(workbook, result))
             .ToList();
+
+    public static StyleDiff? CreateFormatDiffFromCell(Workbook workbook, CellAddress address)
+    {
+        var sheet = workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        return cell is null ? null : StyleDiff.FromStyle(workbook.GetStyle(cell.StyleId));
+    }
 
     private static FindResultRow CreateFindResultRow(Workbook workbook, FindResult result)
     {
