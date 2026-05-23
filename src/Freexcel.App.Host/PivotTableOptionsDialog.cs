@@ -36,6 +36,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowPropertiesInTooltips = true,
     bool ShowClassicLayout = false,
     bool MergeAndCenterLabels = false,
+    bool ShowItemsWithNoDataOnRows = false,
+    bool ShowItemsWithNoDataOnColumns = false,
     bool PageOverThenDown = false,
     int PageWrap = 0);
 
@@ -66,6 +68,8 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _contextualTooltipsBox = new() { Content = "Show contextual _tooltips", IsChecked = true };
     private readonly CheckBox _propertiesInTooltipsBox = new() { Content = "Show _properties in tooltips", IsChecked = true };
     private readonly CheckBox _classicLayoutBox = new() { Content = "_Classic PivotTable layout (enables dragging of fields in the grid)" };
+    private readonly CheckBox _showItemsWithNoDataRowsBox = new() { Content = "Show items with no data on _rows" };
+    private readonly CheckBox _showItemsWithNoDataColumnsBox = new() { Content = "Show items with no data on _columns" };
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
@@ -134,6 +138,8 @@ public sealed class PivotTableOptionsDialog : Window
             showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
             showClassicLayout: pivotTable.ShowClassicLayout,
             mergeAndCenterLabels: pivotTable.MergeAndCenterLabels,
+            showItemsWithNoDataOnRows: pivotTable.ShowItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns: pivotTable.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: pivotTable.PageOverThenDown,
             pageWrap: pivotTable.PageWrap);
 
@@ -169,6 +175,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool showPropertiesInTooltips = true,
         bool showClassicLayout = false,
         bool mergeAndCenterLabels = false,
+        bool showItemsWithNoDataOnRows = false,
+        bool showItemsWithNoDataOnColumns = false,
         bool pageOverThenDown = false,
         int pageWrap = 0) =>
         new(
@@ -203,6 +211,8 @@ public sealed class PivotTableOptionsDialog : Window
             showPropertiesInTooltips,
             showClassicLayout,
             mergeAndCenterLabels,
+            showItemsWithNoDataOnRows,
+            showItemsWithNoDataOnColumns,
             pageOverThenDown,
             NormalizePageWrap(pageWrap));
 
@@ -271,6 +281,8 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _contextualTooltipsBox);
         AddCheckBox(stylePanel, _propertiesInTooltipsBox);
         AddCheckBox(stylePanel, _classicLayoutBox);
+        AddCheckBox(stylePanel, _showItemsWithNoDataRowsBox);
+        AddCheckBox(stylePanel, _showItemsWithNoDataColumnsBox);
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         AddCheckBox(stylePanel, _showExpandCollapseBox);
@@ -371,6 +383,8 @@ public sealed class PivotTableOptionsDialog : Window
         _contextualTooltipsBox.IsChecked = result.ShowContextualTooltips;
         _propertiesInTooltipsBox.IsChecked = result.ShowPropertiesInTooltips;
         _classicLayoutBox.IsChecked = result.ShowClassicLayout;
+        _showItemsWithNoDataRowsBox.IsChecked = result.ShowItemsWithNoDataOnRows;
+        _showItemsWithNoDataColumnsBox.IsChecked = result.ShowItemsWithNoDataOnColumns;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
@@ -426,6 +440,8 @@ public sealed class PivotTableOptionsDialog : Window
             _propertiesInTooltipsBox.IsChecked == true,
             _classicLayoutBox.IsChecked == true,
             _mergeLabelsBox.IsChecked == true,
+            _showItemsWithNoDataRowsBox.IsChecked == true,
+            _showItemsWithNoDataColumnsBox.IsChecked == true,
             PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
             ParsePageWrap(_pageWrapBox.Text));
         DialogResult = true;
