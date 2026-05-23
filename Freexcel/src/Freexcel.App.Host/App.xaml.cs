@@ -58,6 +58,7 @@ public partial class App : Application
         services.AddSingleton<RecalcEngine>();
         services.AddSingleton<IViewportService, ViewportService>();
         services.AddSingleton<IFileAdapter, XlsxFileAdapter>();
+        services.AddSingleton<IFileAdapter, LegacyXlsFileAdapter>();
         services.AddSingleton<IFileAdapter, CsvFileAdapter>();
         services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t'));
         services.AddSingleton<IFileAdapter>(_ => new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t'));
