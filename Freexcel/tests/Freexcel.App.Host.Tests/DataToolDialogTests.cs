@@ -856,6 +856,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_functionBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_functionBox);");
+    }
+
+    [Fact]
     public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
