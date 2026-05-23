@@ -179,6 +179,17 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToSpecialDialogOpenedFromKeyboard_FocusesFirstChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToSpecialDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_buttons.FirstOrDefault()?.Focus();");
+        source.Should().Contain("Keyboard.Focus(firstButton);");
+    }
+
+    [Fact]
     public void MainWindow_GoToSpecialPassesDialogValueTypeOptionsToService()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));

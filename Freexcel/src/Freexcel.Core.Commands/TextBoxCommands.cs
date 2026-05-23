@@ -35,6 +35,9 @@ public sealed class AddTextBoxCommand : IWorkbookCommand
             return new CommandOutcome(false, "Text box size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         sheet.TextBoxes.Add(_textBox);
         _added = true;
         return new CommandOutcome(true, AffectedCells: [_textBox.Anchor]);
@@ -76,6 +79,9 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
             return new CommandOutcome(false, "Text box size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
         if (textBox is null)
             return new CommandOutcome(false, "Text box was not found.");
@@ -122,6 +128,9 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
             return new CommandOutcome(false, "Text box rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
         if (textBox is null)
             return new CommandOutcome(false, "Text box was not found.");
@@ -177,6 +186,9 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         var textBox = sheet.TextBoxes.FirstOrDefault(item => item.Id == _textBoxId);
         if (textBox is null)
             return new CommandOutcome(false, "Text box was not found.");
@@ -204,4 +216,10 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         textBox.OutlineThemeColor = _previousOutlineThemeColor;
         _applied = false;
     }
+}
+
+internal static class TextBoxCommandGuards
+{
+    public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
+        CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
 }
