@@ -31,6 +31,8 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Area)]
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.ThreeDColumn)]
+    [InlineData(ChartType.ThreeDBar)]
     public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -47,7 +49,6 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void AdvancedChartTypes_AreRecognizedButNotRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
@@ -352,7 +353,6 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
     [InlineData(ChartType.Map)]
-    [InlineData(ChartType.ThreeDColumn)]
     public void AddChartCommand_RejectsDeferredChartFamilies(ChartType type)
     {
         var wb = new Workbook("test");
@@ -618,6 +618,88 @@ public sealed class ChartCommandTests
         chart.ShowPivotChartReportFilterButtons.Should().BeFalse();
         chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
         chart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ConfigurePivotChartOptionsCommand_UpdatesDataTableAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotChartOptionsDataTableCommandTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            DataTable = new ChartDataTableModel { ShowLegendKeys = false }
+        };
+        sheet.Charts.Add(chart);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            12,
+            showFieldButtons: true,
+            showDataTable: true,
+            showDataTableLegendKeys: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeTrue();
+        chart.DataTable.ShowHorizontalBorder.Should().BeTrue();
+        chart.DataTable.ShowVerticalBorder.Should().BeTrue();
+        chart.DataTable.ShowOutline.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        chart.DataTable.Should().NotBeNull();
+        chart.DataTable!.ShowLegendKeys.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ConfigurePivotChartOptionsCommand_UpdatesDesignFlagsAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotChartOptionsDesignCommandTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            RoundedCorners = false,
+            ShowDataInHiddenRowsAndColumns = false,
+            BlankDisplayMode = ChartBlankDisplayMode.Gap
+        };
+        sheet.Charts.Add(chart);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            12,
+            showFieldButtons: true,
+            roundedCorners: true,
+            showHiddenData: true,
+            blankDisplayMode: ChartBlankDisplayMode.Zero);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.RoundedCorners.Should().BeTrue();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+
+        command.Revert(ctx);
+
+        chart.RoundedCorners.Should().BeFalse();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeFalse();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Gap);
     }
 
     [Fact]

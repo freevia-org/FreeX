@@ -145,6 +145,13 @@ public class NumberFormatterTests
     [InlineData("0\\ kg", 12, "12 kg")]
     [InlineData("\\#0", 12, "#12")]
     [InlineData("0\\,", 12, "12,")]
+    [InlineData("0\\;", 12, "12;")]
+    [InlineData("\"ID \"\\0", 12, "ID 0")]
+    [InlineData("\"ID \"\\#", 12, "ID #")]
+    [InlineData("\"ID \"\\?", 12, "ID ?")]
+    [InlineData("\"ID \"\\#0", 12, "ID #12")]
+    [InlineData("\"ID \"0\\%0", 0.12, "ID 0%0")]
+    [InlineData("\"ID \"0\\,0", 12, "ID 1,2")]
     [InlineData("0,,", 1234567, "1")]
     [InlineData("0.0,", 12345, "12.3")]
     public void CustomNumberSubset_HandlesEscapedLiteralsAndCommaScaling(string format, double value, string expected)

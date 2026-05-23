@@ -30,7 +30,8 @@ public sealed record FindOptions(
     FindWithin Within = FindWithin.Workbook,
     SheetId? CurrentSheetId = null,
     FindSearchOrder SearchOrder = FindSearchOrder.ByRows,
-    FindLookIn LookIn = FindLookIn.Values);
+    FindLookIn LookIn = FindLookIn.Values,
+    StyleDiff? RequiredFormat = null);
 
 /// <summary>Search and replace service. Replace goes through ICommandBus for undo support.</summary>
 public static class FindReplaceService
@@ -72,7 +73,7 @@ public static class FindReplaceService
                     ? text.Equals(searchText, comparison)
                     : text.Contains(searchText, comparison);
 
-                if (isMatch)
+                if (isMatch && MatchesRequiredFormat(workbook, sheet, addr, options.RequiredFormat))
                     sheetResults.Add(new FindResult(addr, text));
             }
 
@@ -210,6 +211,53 @@ public static class FindReplaceService
                 yield return (addr, text);
         }
     }
+
+    private static bool MatchesRequiredFormat(Workbook workbook, Sheet sheet, CellAddress address, StyleDiff? requiredFormat)
+    {
+        if (requiredFormat is null)
+            return true;
+
+        var styleId = sheet.GetCell(address)?.StyleId
+            ?? sheet.GetStyleOnly(address.Row, address.Col)
+            ?? StyleId.Default;
+        var style = workbook.GetStyle(styleId);
+
+        return Matches(requiredFormat.Bold, style.Bold)
+            && Matches(requiredFormat.Italic, style.Italic)
+            && Matches(requiredFormat.Underline, style.Underline)
+            && Matches(requiredFormat.Strikethrough, style.Strikethrough)
+            && Matches(requiredFormat.Superscript, style.Superscript)
+            && Matches(requiredFormat.Subscript, style.Subscript)
+            && Matches(requiredFormat.FontName, style.FontName)
+            && Matches(requiredFormat.FontSize, style.FontSize)
+            && Matches(requiredFormat.FontColor, style.FontColor)
+            && Matches(requiredFormat.FillColor, style.FillColor)
+            && Matches(requiredFormat.FillPatternStyle, style.FillPatternStyle)
+            && Matches(requiredFormat.FillPatternColor, style.FillPatternColor)
+            && Matches(requiredFormat.HAlign, style.HorizontalAlignment)
+            && Matches(requiredFormat.VAlign, style.VerticalAlignment)
+            && Matches(requiredFormat.WrapText, style.WrapText)
+            && Matches(requiredFormat.ShrinkToFit, style.ShrinkToFit)
+            && Matches(requiredFormat.NumberFormat, style.NumberFormat)
+            && Matches(requiredFormat.DoubleUnderline, style.DoubleUnderline)
+            && Matches(requiredFormat.IndentLevel, style.IndentLevel)
+            && Matches(requiredFormat.TextRotation, style.TextRotation)
+            && Matches(requiredFormat.BorderTop, style.BorderTop)
+            && Matches(requiredFormat.BorderRight, style.BorderRight)
+            && Matches(requiredFormat.BorderBottom, style.BorderBottom)
+            && Matches(requiredFormat.BorderLeft, style.BorderLeft)
+            && Matches(requiredFormat.Locked, style.Locked);
+    }
+
+    private static bool Matches<T>(T? expected, T actual)
+        where T : struct
+        => expected is null || EqualityComparer<T>.Default.Equals(expected.Value, actual);
+
+    private static bool Matches(string? expected, string actual) =>
+        expected is null || string.Equals(expected, actual, StringComparison.Ordinal);
+
+    private static bool Matches(CellColor? expected, CellColor? actual) =>
+        expected is null || expected.Equals(actual);
 
     private static string? GetDisplayText(ScalarValue value) => value switch
     {

@@ -28,12 +28,14 @@ public static class ChartTypePickerPlanner
         new(ChartType.Column, "Clustered Column", true),
         new(ChartType.StackedColumn, "Stacked Column"),
         new(ChartType.PercentStackedColumn, "100% Stacked Column"),
+        new(ChartType.ThreeDColumn, "3D Column"),
         new(ChartType.Line, "Line", true),
         new(ChartType.Pie, "Pie", true),
         new(ChartType.Doughnut, "Doughnut"),
         new(ChartType.Bar, "Clustered Bar", true),
         new(ChartType.StackedBar, "Stacked Bar"),
         new(ChartType.PercentStackedBar, "100% Stacked Bar"),
+        new(ChartType.ThreeDBar, "3D Bar"),
         new(ChartType.Scatter, "Scatter", true),
         new(ChartType.Bubble, "Bubble"),
         new(ChartType.Area, "Area"),
@@ -62,10 +64,10 @@ public static class ChartTypePickerPlanner
         var supported = GetSupportedOptions();
         return new (string Name, ChartType[] Types)[]
             {
-                ("Column", [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn]),
+                ("Column", [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.ThreeDColumn]),
                 ("Line", [ChartType.Line]),
                 ("Pie", [ChartType.Pie, ChartType.Doughnut]),
-                ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar]),
+                ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar]),
                 ("Area", [ChartType.Area]),
                 ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),
                 ("Stock", [ChartType.Stock]),

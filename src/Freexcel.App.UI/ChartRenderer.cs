@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using OxyPlot;
@@ -167,7 +168,7 @@ public static partial class ChartRenderer
             string seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((startRow, col), out var hdr)
                 ? hdr.DisplayText : $"Series {seriesIndex + 1}";
 
-            if (chart.Type == ChartType.Column)
+            if (chart.Type is ChartType.Column or ChartType.ThreeDColumn)
             {
                 if (!model.Axes.Any())
                 {
@@ -225,7 +226,7 @@ public static partial class ChartRenderer
                     firstSeriesPoints = trendPoints;
                 model.Series.Add(series);
             }
-            else if (chart.Type == ChartType.Bar)
+            else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
             {
                 var catAxis = new CategoryAxis { Position = AxisPosition.Left };
                 catAxis.Labels.AddRange(categories);
@@ -395,165 +396,6 @@ public static partial class ChartRenderer
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart);
         return model;
-    }
-
-    private static PlotModel BuildRadarModel(
-        ChartModel chart,
-        PlotModel model,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        IReadOnlyList<string> categories,
-        uint dataStartRow,
-        uint endRow,
-        uint dataStartCol,
-        uint endCol,
-        uint headerRow,
-        WorkbookTheme theme)
-    {
-        model.PlotType = PlotType.Polar;
-        var pointCount = Math.Max(1, categories.Count);
-        model.Axes.Add(new AngleAxis
-        {
-            StartAngle = 90,
-            EndAngle = 450,
-            Minimum = 0,
-            Maximum = 360,
-            MajorStep = 360.0 / pointCount,
-            MinorStep = 360.0 / pointCount,
-            LabelFormatter = angle =>
-            {
-                var index = (int)Math.Round((((angle % 360) + 360) % 360) / (360.0 / pointCount));
-                index %= pointCount;
-                return index >= 0 && index < categories.Count ? categories[index] : "";
-            }
-        });
-        model.Axes.Add(new MagnitudeAxis { Minimum = 0, Title = chart.YAxisTitle });
-
-        for (uint col = dataStartCol; col <= endCol; col++)
-        {
-            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol);
-            var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var header)
-                ? header.DisplayText
-                : $"Series {seriesIndex + 1}";
-            var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-            series.MarkerType = MarkerType.Circle;
-
-            DataPoint? firstPoint = null;
-            var i = 0;
-            for (uint row = dataStartRow; row <= endRow; row++, i++)
-            {
-                if (!cellLookup.TryGetValue((row, col), out var cell) ||
-                    !double.TryParse(cell.DisplayText, out var value))
-                    continue;
-
-                var point = new DataPoint(i * 360.0 / pointCount, value);
-                firstPoint ??= point;
-                series.Points.Add(point);
-            }
-
-            if (firstPoint is { } closedPoint && series.Points.Count > 1)
-                series.Points.Add(closedPoint);
-
-            model.Series.Add(series);
-        }
-
-        return model;
-    }
-
-    private static PlotModel BuildStockModel(
-        ChartModel chart,
-        PlotModel model,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        IReadOnlyList<string> categories,
-        uint dataStartRow,
-        uint endRow,
-        uint dataStartCol,
-        uint endCol,
-        uint headerRow,
-        WorkbookTheme theme)
-    {
-        model.Axes.Add(new LinearAxis
-        {
-            Position = AxisPosition.Bottom,
-            Title = chart.XAxisTitle,
-            Minimum = -0.5,
-            Maximum = Math.Max(0.5, categories.Count - 0.5),
-            MajorStep = 1,
-            MinorStep = 1,
-            LabelFormatter = value =>
-            {
-                var index = (int)Math.Round(value);
-                return index >= 0 && index < categories.Count ? categories[index] : "";
-            }
-        });
-        model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
-
-        var valueColumnCount = endCol >= dataStartCol ? endCol - dataStartCol + 1 : 0;
-        var hasVolumeColumn = chart.StockSubtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose;
-        var hasOpenColumn = chart.StockSubtype is StockChartSubtype.OpenHighLowClose or StockChartSubtype.VolumeOpenHighLowClose ||
-                            (!hasVolumeColumn && valueColumnCount >= 4);
-        var volumeOffset = hasVolumeColumn ? 1u : 0u;
-        var requiredValueColumns = volumeOffset + (hasOpenColumn ? 4u : 3u);
-        if (valueColumnCount < requiredValueColumns)
-            return model;
-
-        if (hasVolumeColumn)
-            AddStockVolumeSeries(model, cellLookup, dataStartRow, endRow, dataStartCol);
-
-        var openCol = hasOpenColumn ? dataStartCol + volumeOffset : (uint?)null;
-        var highCol = dataStartCol + volumeOffset + (hasOpenColumn ? 1u : 0u);
-        var lowCol = highCol + 1;
-        var closeCol = highCol + 2;
-        if (valueColumnCount < 3 || closeCol > endCol)
-            return model;
-
-        var series = new HighLowSeries
-        {
-            Title = "Stock",
-            StrokeThickness = 1.5,
-            Color = OxyColors.Black
-        };
-
-        for (uint row = dataStartRow; row <= endRow; row++)
-        {
-            var index = row - dataStartRow;
-            if (!TryGetNumericCell(cellLookup, row, highCol, out var high) ||
-                !TryGetNumericCell(cellLookup, row, lowCol, out var low) ||
-                !TryGetNumericCell(cellLookup, row, closeCol, out var close))
-                continue;
-
-            var open = openCol is { } parsedOpenCol && TryGetNumericCell(cellLookup, row, parsedOpenCol, out var parsedOpen)
-                ? parsedOpen
-                : close;
-            series.Items.Add(new HighLowItem(index, high, low, open, close));
-        }
-
-        model.Series.Add(series);
-        return model;
-    }
-
-    private static void AddStockVolumeSeries(
-        PlotModel model,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        uint dataStartRow,
-        uint endRow,
-        uint volumeCol)
-    {
-        var series = new RectangleBarSeries
-        {
-            Title = "Volume",
-            FillColor = OxyColor.FromArgb(90, 91, 155, 213),
-            StrokeColor = OxyColor.FromArgb(140, 91, 155, 213),
-            StrokeThickness = 0.5
-        };
-
-        var i = 0;
-        for (uint row = dataStartRow; row <= endRow; row++, i++)
-        {
-            if (TryGetNumericCell(cellLookup, row, volumeCol, out var volume))
-                series.Items.Add(new RectangleBarItem(i - 0.35, 0, i + 0.35, volume));
-        }
-
-        model.Series.Add(series);
     }
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)
@@ -770,68 +612,6 @@ public static partial class ChartRenderer
         value = 0;
         return cellLookup.TryGetValue((row, col), out var cell) &&
                double.TryParse(cell.DisplayText, out value);
-    }
-
-    private static PlotModel BuildBubbleModel(
-        ChartModel chart,
-        PlotModel model,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        IReadOnlyList<string> categories,
-        uint dataStartRow,
-        uint endRow,
-        uint dataStartCol,
-        uint endCol,
-        uint headerRow,
-        WorkbookTheme theme,
-        out List<DataPoint> trendPoints)
-    {
-        model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
-        model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
-        trendPoints = [];
-
-        var xCol = chart.DataRange.Start.Col;
-        var seriesIndex = 0;
-        for (var yCol = xCol + 1; yCol <= endCol; yCol += 2)
-        {
-            var sizeCol = yCol + 1;
-            if (sizeCol > endCol)
-                continue;
-
-            var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, yCol), out var hdr)
-                ? hdr.DisplayText
-                : $"Series {seriesIndex + 1}";
-            var series = new ScatterSeries
-            {
-                Title = seriesName,
-                MarkerType = MarkerType.Circle,
-                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
-                LabelMargin = ToLabelMargin(chart.DataLabelPosition)
-            };
-            ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
-            ApplyNativeDataLabelStyle(series, chart, theme);
-
-            var fallbackIndex = 0;
-            for (uint row = dataStartRow; row <= endRow; row++, fallbackIndex++)
-            {
-                if (!TryGetNumericCell(cellLookup, row, xCol, out var x))
-                    x = fallbackIndex;
-                if (!TryGetNumericCell(cellLookup, row, yCol, out var y))
-                    continue;
-                var size = TryGetNumericCell(cellLookup, row, sizeCol, out var rawSize)
-                    ? Math.Max(1, Math.Abs(rawSize))
-                    : 5;
-                series.Points.Add(new ScatterPoint(x, y, size));
-                if (seriesIndex == 0)
-                    trendPoints.Add(new DataPoint(x, y));
-                if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, ChartDataLabelFormatter.GetCategory(categories, fallbackIndex), x, y, y);
-            }
-
-            model.Series.Add(series);
-            seriesIndex++;
-        }
-
-        return model;
     }
 
     private static (double[] PositiveTotals, double[] NegativeTotals) CalculateStackedPercentTotals(

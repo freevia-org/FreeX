@@ -159,6 +159,19 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyMinimumSize()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            Quality: ExportQuality.MinimumSize);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Selection; minimum size is PDF-only; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeEntireWorkbook()
     {
         var options = new ExportOptions(
@@ -507,6 +520,36 @@ public class ExportPlannerTests
                 pdf.Info.Subject.Should().BeEmpty();
                 pdf.Info.Keywords.Should().BeEmpty();
                 pdf.Info.Creator.Should().Be("Freexcel");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_TrimsDocumentPropertiesBeforeWriting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var properties = new PdfDocumentProperties(
+                Title: "  Quarterly Review  ",
+                Author: "\tFinance Team\t",
+                Subject: "  Workbook export",
+                Keywords: "Freexcel, spreadsheet  ");
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, properties);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().Be("Quarterly Review");
+                pdf.Info.Author.Should().Be("Finance Team");
+                pdf.Info.Subject.Should().Be("Workbook export");
+                pdf.Info.Keywords.Should().Be("Freexcel, spreadsheet");
             }
             finally
             {

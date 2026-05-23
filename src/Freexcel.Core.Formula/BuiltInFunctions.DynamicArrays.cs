@@ -347,6 +347,12 @@ public static partial class BuiltInFunctions
             count = 0;
             return false;
         }
+        if (raw > int.MaxValue || raw <= int.MinValue)
+        {
+            start = 0;
+            count = 0;
+            return false;
+        }
 
         int requested = (int)raw;
         if (requested == 0)
@@ -734,6 +740,11 @@ public static partial class BuiltInFunctions
 
         double rawWrapCount = ToNumber(args[1]);
         if (!double.IsFinite(rawWrapCount)) return false;
+        if (rawWrapCount > int.MaxValue || rawWrapCount <= int.MinValue)
+        {
+            error = ErrorValue.Num;
+            return false;
+        }
         wrapCount = (int)rawWrapCount;
         if (wrapCount < 1)
         {
@@ -781,6 +792,7 @@ public static partial class BuiltInFunctions
         }
 
         if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
+        if ((long)rowCount * colCount > 1_000_000) return ErrorValue.Value;
 
         var padWith = args.Count > 3 ? args[3] : ErrorValue.NA;
         var result = CreateFilledRange(rowCount, colCount, padWith);

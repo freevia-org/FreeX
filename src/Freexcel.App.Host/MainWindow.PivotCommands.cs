@@ -174,8 +174,12 @@ public partial class MainWindow
             return;
         }
 
+        var dialog = new PivotChartTypeDialog(ChartType.Column) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
         if (!TryExecuteCommand(
-                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, ChartType.Column, $"{pivotTable.Name} Chart"),
+                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, dialog.Result.ChartType, $"{pivotTable.Name} Chart"),
                 "Insert PivotChart"))
             return;
 
@@ -252,7 +256,12 @@ public partial class MainWindow
                     dialog.Result.ShowFieldButtons,
                     dialog.Result.ShowReportFilterButtons,
                     dialog.Result.ShowAxisFieldButtons,
-                    dialog.Result.ShowValueFieldButtons),
+                    dialog.Result.ShowValueFieldButtons,
+                    dialog.Result.ShowDataTable,
+                    dialog.Result.ShowDataTableLegendKeys,
+                    dialog.Result.RoundedCorners,
+                    dialog.Result.ShowHiddenData,
+                    dialog.Result.BlankDisplayMode),
                 "PivotChart Options"))
             return;
 
@@ -723,10 +732,13 @@ public partial class MainWindow
         bool updateEmptyValueText = false,
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
-        bool printTitles = false,
-        bool printExpandCollapseButtons = false,
+        bool? printTitles = null,
+        bool? printExpandCollapseButtons = null,
         string? altTextTitle = null,
-        string? altTextDescription = null)
+        string? altTextDescription = null,
+        int? compactRowLabelIndent = null,
+        bool updateAltText = false,
+        bool? showExpandCollapseButtons = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -751,7 +763,10 @@ public partial class MainWindow
                     printTitles,
                     printExpandCollapseButtons,
                     altTextTitle,
-                    altTextDescription),
+                    altTextDescription,
+                    compactRowLabelIndent,
+                    updateAltText,
+                    showExpandCollapseButtons),
                 "PivotTable Options"))
             return;
 
@@ -960,7 +975,10 @@ public partial class MainWindow
             result.PrintTitles,
             result.PrintExpandCollapseButtons,
             result.AltTextTitle,
-            result.AltTextDescription);
+            result.AltTextDescription,
+            result.CompactRowLabelIndent,
+            updateAltText: true,
+            showExpandCollapseButtons: result.ShowExpandCollapseButtons);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {

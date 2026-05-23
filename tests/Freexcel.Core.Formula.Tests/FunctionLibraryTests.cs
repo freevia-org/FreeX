@@ -182,6 +182,27 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_IndexLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,0,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,-1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Vlookup_IndexBeyondTable_ReturnsRefError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,3,FALSE)", sheet).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
     public void Vlookup_DateKey_ExactMatchesDateSerial()
     {
         var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
@@ -256,6 +277,27 @@ public class FunctionLibraryTests
     public void Hlookup_TableArgumentError_PropagatesError()
     {
         _eval.Evaluate("=HLOOKUP(\"b\",NA(),2,FALSE)", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_IndexLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new TextValue("ten")));
+
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,0,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,-1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Hlookup_IndexBeyondTable_ReturnsRefError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new TextValue("ten")));
+
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,3,FALSE)", sheet).Should().Be(ErrorValue.Ref);
     }
 
     [Fact]
@@ -1467,6 +1509,13 @@ public class FunctionLibraryTests
     }
 
     // ── EDATE ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Weekday_SerialOutsideExcelDateRange_ReturnsNumError()
+    {
+        _eval.Evaluate("=WEEKDAY(2958466)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WEEKDAY(10000000000)", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
 
     [Fact]
     public void Weekday_ReturnTypeError_PropagatesError()
@@ -4490,6 +4539,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sequence_HugeFiniteDimensions_ReturnsValueError()
+    {
+        _eval.Evaluate("=SEQUENCE(2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(1,2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(-2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEQUENCE(1,-2147483648)", MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sequence_NonFiniteStart_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
@@ -5057,6 +5115,19 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TakeAndDrop_HugeFiniteSliceCount_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+
+        _eval.Evaluate("=TAKE(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TAKE(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DROP(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Drop_AllRows_ReturnsCalcError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
@@ -5194,6 +5265,17 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
         _eval.Evaluate("=CHOOSECOLS(A1:A1,2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void ChooserowsAndChoosecols_HugeFiniteIndex_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new TextValue("A")), (2,1,new TextValue("B")));
+
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -5435,6 +5517,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_HugeFiniteWrapCount_ReturnsNumError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        _eval.Evaluate("=WRAPROWS(A1:A1,2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPROWS(A1:A1,-2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPCOLS(A1:A1,2147483648)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WRAPCOLS(A1:A1,-2147483648)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void Wrapcols_TwoDimensionalArray_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -5529,6 +5622,14 @@ public class FunctionLibraryTests
     }
 
     // ── UNIQUE ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Expand_TooManyCells_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        _eval.Evaluate("=EXPAND(A1,1000001,1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact] public void Sort_SortIndexError_PropagatesError()
     {

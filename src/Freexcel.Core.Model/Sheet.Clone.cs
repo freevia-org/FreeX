@@ -152,12 +152,18 @@ public sealed partial class Sheet
                 RepeatItemLabels = pt.RepeatItemLabels,
                 BlankLineAfterItems = pt.BlankLineAfterItems,
                 ReportLayout = pt.ReportLayout,
+                CompactRowLabelIndent = pt.CompactRowLabelIndent,
                 StyleName = pt.StyleName,
                 ShowRowHeaders = pt.ShowRowHeaders,
                 ShowColumnHeaders = pt.ShowColumnHeaders,
                 ShowRowStripes = pt.ShowRowStripes,
                 ShowColumnStripes = pt.ShowColumnStripes,
-                EmptyValueText = pt.EmptyValueText
+                EmptyValueText = pt.EmptyValueText,
+                ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
+                PrintTitles = pt.PrintTitles,
+                PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
+                AltTextTitle = pt.AltTextTitle,
+                AltTextDescription = pt.AltTextDescription
             };
             clonedPt.RowFields.AddRange(pt.RowFields);
             clonedPt.ColumnFields.AddRange(pt.ColumnFields);

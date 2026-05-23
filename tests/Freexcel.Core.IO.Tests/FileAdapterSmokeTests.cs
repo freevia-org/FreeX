@@ -6709,9 +6709,14 @@ public partial class FileAdapterSmokeTests
     }
 
     [Theory]
-    [InlineData(ChartType.Radar, "radarChart")]
-    [InlineData(ChartType.Stock, "stockChart")]
-    public void XlsxAdapter_Save_WritesEmbeddedRadarAndStockChartPackagePart(ChartType chartType, string expectedElementName)
+    [InlineData(ChartType.Radar, "radarChart", null)]
+    [InlineData(ChartType.Stock, "stockChart", null)]
+    [InlineData(ChartType.ThreeDColumn, "bar3DChart", "col")]
+    [InlineData(ChartType.ThreeDBar, "bar3DChart", "bar")]
+    public void XlsxAdapter_Save_WritesEmbeddedRadarStockAnd3DChartPackagePart(
+        ChartType chartType,
+        string expectedElementName,
+        string? expectedBarDirection)
     {
         var workbook = new Workbook("RadarStockChartPackageSave");
         var sheet = workbook.AddSheet("Sheet1");
@@ -6745,7 +6750,9 @@ public partial class FileAdapterSmokeTests
         {
             var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-            chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle();
+            var plotChart = chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle().Subject;
+            if (expectedBarDirection is not null)
+                plotChart.Element(chartNs + "barDir")?.Attribute("val")?.Value.Should().Be(expectedBarDirection);
             chartXml.Descendants(chartNs + "ser").Should().HaveCount(2);
         }
 
@@ -12651,6 +12658,8 @@ public partial class FileAdapterSmokeTests
             CacheId = 1,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
+            CompactRowLabelIndent = 4,
+            ShowExpandCollapseButtons = false,
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             AltTextTitle = "Sales pivot",
@@ -12678,7 +12687,9 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("dataFields");
             pivotXml.Root!.Attribute("itemPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("showDrill")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("indent")!.Value.Should().Be("4");
             pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
             pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
         }
@@ -12689,6 +12700,8 @@ public partial class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        loadedPivot.CompactRowLabelIndent.Should().Be(4);
+        loadedPivot.ShowExpandCollapseButtons.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
         loadedPivot.PrintExpandCollapseButtons.Should().BeTrue();
         loadedPivot.AltTextTitle.Should().Be("Sales pivot");
