@@ -22,6 +22,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _showFieldHeaders;
     private readonly bool? _showContextualTooltips;
     private readonly bool? _showPropertiesInTooltips;
+    private readonly bool? _showClassicLayout;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
@@ -73,7 +74,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? preserveFormattingOnUpdate = null,
         bool? showFieldHeaders = null,
         bool? showContextualTooltips = null,
-        bool? showPropertiesInTooltips = null)
+        bool? showPropertiesInTooltips = null,
+        bool? showClassicLayout = null)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -95,6 +97,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showFieldHeaders = showFieldHeaders;
         _showContextualTooltips = showContextualTooltips;
         _showPropertiesInTooltips = showPropertiesInTooltips;
+        _showClassicLayout = showClassicLayout;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
@@ -146,6 +149,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowContextualTooltips = showContextualTooltips;
         if (_showPropertiesInTooltips is { } showPropertiesInTooltips)
             pivotTable.ShowPropertiesInTooltips = showPropertiesInTooltips;
+        if (_showClassicLayout is { } showClassicLayout)
+            pivotTable.ShowClassicLayout = showClassicLayout;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
         if (_printTitles is { } printTitles)
@@ -211,6 +216,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowFieldHeaders,
         bool ShowContextualTooltips,
         bool ShowPropertiesInTooltips,
+        bool ShowClassicLayout,
         string? EmptyValueText,
         bool? RefreshOnLoad,
         bool? SaveData,
@@ -242,6 +248,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowFieldHeaders,
                 pivotTable.ShowContextualTooltips,
                 pivotTable.ShowPropertiesInTooltips,
+                pivotTable.ShowClassicLayout,
                 pivotTable.EmptyValueText,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
@@ -273,6 +280,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowFieldHeaders = ShowFieldHeaders;
             pivotTable.ShowContextualTooltips = ShowContextualTooltips;
             pivotTable.ShowPropertiesInTooltips = ShowPropertiesInTooltips;
+            pivotTable.ShowClassicLayout = ShowClassicLayout;
             pivotTable.EmptyValueText = EmptyValueText;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;

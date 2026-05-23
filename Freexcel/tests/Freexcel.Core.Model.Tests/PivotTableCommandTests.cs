@@ -808,6 +808,7 @@ public sealed class PivotTableCommandTests
             ShowExpandCollapseButtons = false,
             ShowContextualTooltips = false,
             ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             AltTextTitle = "Existing title",
@@ -838,6 +839,7 @@ public sealed class PivotTableCommandTests
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
+        pivot.ShowClassicLayout.Should().BeTrue();
         pivot.AutofitColumnsOnUpdate.Should().BeFalse();
         pivot.PreserveFormattingOnUpdate.Should().BeFalse();
         pivot.AltTextTitle.Should().Be("Existing title");
@@ -862,6 +864,7 @@ public sealed class PivotTableCommandTests
             ShowExpandCollapseButtons = true,
             ShowContextualTooltips = true,
             ShowPropertiesInTooltips = true,
+            ShowClassicLayout = false,
             PrintExpandCollapseButtons = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -881,6 +884,7 @@ public sealed class PivotTableCommandTests
             showExpandCollapseButtons: false,
             showContextualTooltips: false,
             showPropertiesInTooltips: false,
+            showClassicLayout: true,
             printExpandCollapseButtons: false,
             showFieldHeaders: false);
 
@@ -889,6 +893,7 @@ public sealed class PivotTableCommandTests
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
+        pivot.ShowClassicLayout.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeFalse();
         pivot.ShowFieldHeaders.Should().BeFalse();
 
@@ -897,6 +902,7 @@ public sealed class PivotTableCommandTests
         pivot.ShowExpandCollapseButtons.Should().BeTrue();
         pivot.ShowContextualTooltips.Should().BeTrue();
         pivot.ShowPropertiesInTooltips.Should().BeTrue();
+        pivot.ShowClassicLayout.Should().BeFalse();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowFieldHeaders.Should().BeTrue();
     }
