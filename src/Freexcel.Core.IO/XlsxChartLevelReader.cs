@@ -27,6 +27,7 @@ internal static class XlsxChartLevelReader
         XlsxChartFormattingReader.ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
         var plotArea = chartElement?.Element(ChartNs + "plotArea");
         chart.PlotAreaLayout = XlsxChartMetadataReader.ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
+        chart.ThreeDView = Read3DView(chartElement?.Element(ChartNs + "view3D"));
         chart.DataTable = ReadChartDataTable(plotArea?.Element(ChartNs + "dTable"));
         XlsxChartFormattingReader.ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
         XlsxChartAxisReader.ApplyAxisMetadata(plotArea, chart);
@@ -67,6 +68,31 @@ internal static class XlsxChartLevelReader
             ShowOutline = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showOutline")?.Attribute("val")?.Value),
             ShowLegendKeys = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showKeys")?.Attribute("val")?.Value)
         };
+    }
+
+    private static Chart3DViewModel? Read3DView(XElement? view3D)
+    {
+        if (view3D is null)
+            return null;
+
+        var result = new Chart3DViewModel
+        {
+            RotationX = XlsxChartScalarReader.ReadOptionalInt(view3D.Element(ChartNs + "rotX")?.Attribute("val")?.Value),
+            HeightPercent = XlsxChartScalarReader.ReadOptionalInt(view3D.Element(ChartNs + "hPercent")?.Attribute("val")?.Value),
+            RotationY = XlsxChartScalarReader.ReadOptionalInt(view3D.Element(ChartNs + "rotY")?.Attribute("val")?.Value),
+            DepthPercent = XlsxChartScalarReader.ReadOptionalInt(view3D.Element(ChartNs + "depthPercent")?.Attribute("val")?.Value),
+            RightAngleAxes = XlsxChartScalarReader.ReadOptionalBool(view3D.Element(ChartNs + "rAngAx")?.Attribute("val")?.Value),
+            Perspective = XlsxChartScalarReader.ReadOptionalInt(view3D.Element(ChartNs + "perspective")?.Attribute("val")?.Value)
+        };
+
+        return result.RotationX is null
+            && result.HeightPercent is null
+            && result.RotationY is null
+            && result.DepthPercent is null
+            && result.RightAngleAxes is null
+            && result.Perspective is null
+                ? null
+                : result;
     }
 
     private static void ApplyLegendFormatting(XElement legend, ChartModel chart)
