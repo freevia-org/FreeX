@@ -400,6 +400,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
     }
 
     private static bool IsSupportedPicture(PictureModel picture) =>
+        !picture.IsSourceLoaded &&
         picture.Kind == PictureKind.Image &&
         picture.ImageBytes is { Length: > 0 } &&
         double.IsFinite(picture.Width) &&
@@ -408,12 +409,14 @@ internal static class XlsxWorksheetDrawingObjectWriter
         picture.Height > 0;
 
     private static bool IsSupportedTextBox(TextBoxModel textBox) =>
+        !textBox.IsSourceLoaded &&
         double.IsFinite(textBox.Width) &&
         double.IsFinite(textBox.Height) &&
         textBox.Width > 0 &&
         textBox.Height > 0;
 
     private static bool IsSupportedShape(DrawingShapeModel shape) =>
+        !shape.IsSourceLoaded &&
         Enum.IsDefined(shape.Kind) &&
         double.IsFinite(shape.Width) &&
         double.IsFinite(shape.Height) &&

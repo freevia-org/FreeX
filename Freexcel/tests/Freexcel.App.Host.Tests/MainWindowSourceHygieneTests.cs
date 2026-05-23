@@ -491,7 +491,7 @@ public sealed class MainWindowSourceHygieneTests
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
-        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
 
