@@ -28,6 +28,9 @@ public enum TextToColumnsColumnFormat
 {
     General,
     Text,
+    DateMDY,
+    DateDMY,
+    DateYMD,
     Skip
 }
 

@@ -31,6 +31,8 @@ public sealed partial class TextToColumnsDialog : Window
     private readonly ComboBox _formatColumnBox = new() { Width = 110, Margin = new Thickness(0, 0, 10, 0) };
     private readonly RadioButton _formatGeneralButton = new() { Content = "_General", IsChecked = true };
     private readonly RadioButton _formatTextButton = new() { Content = "_Text" };
+    private readonly RadioButton _formatDateButton = new() { Content = "_Date:" };
+    private readonly ComboBox _dateFormatBox = new() { Width = 72, Margin = new Thickness(8, 0, 0, 0) };
     private readonly RadioButton _formatSkipButton = new() { Content = "Do not import column (_skip)" };
     private readonly TextBox _decimalSeparatorBox = new() { Text = ".", Width = 42 };
     private readonly TextBox _thousandsSeparatorBox = new() { Text = ",", Width = 42 };
@@ -94,6 +96,12 @@ public sealed partial class TextToColumnsDialog : Window
         _formatColumnBox.SelectionChanged += (_, _) => SyncColumnFormatControls();
         _formatGeneralButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.General);
         _formatTextButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Text);
+        _formatDateButton.Checked += (_, _) => StoreSelectedColumnFormat(SelectedDateColumnFormat());
+        _dateFormatBox.SelectionChanged += (_, _) =>
+        {
+            if (_formatDateButton.IsChecked == true)
+                StoreSelectedColumnFormat(SelectedDateColumnFormat());
+        };
         _formatSkipButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.Skip);
 
         var root = new DockPanel { Margin = new Thickness(12) };
@@ -244,6 +252,7 @@ public sealed partial class TextToColumnsDialog : Window
         root.Children.Add(row);
         root.Children.Add(_formatGeneralButton);
         root.Children.Add(_formatTextButton);
+        root.Children.Add(CreateDateFormatRow());
         root.Children.Add(_formatSkipButton);
         root.Children.Add(CreateAdvancedOptionsPanel());
 
@@ -254,6 +263,18 @@ public sealed partial class TextToColumnsDialog : Window
             Padding = new Thickness(8),
             Margin = new Thickness(0, 10, 0, 0)
         };
+    }
+
+    private StackPanel CreateDateFormatRow()
+    {
+        foreach (var value in new[] { "MDY", "DMY", "YMD" })
+            _dateFormatBox.Items.Add(value);
+        _dateFormatBox.SelectedIndex = 0;
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(_formatDateButton);
+        row.Children.Add(_dateFormatBox);
+        return row;
     }
 
     private GroupBox CreateAdvancedOptionsPanel()
@@ -731,6 +752,8 @@ public sealed partial class TextToColumnsDialog : Window
         {
             _formatGeneralButton.IsChecked = format == TextToColumnsColumnFormat.General;
             _formatTextButton.IsChecked = format == TextToColumnsColumnFormat.Text;
+            _formatDateButton.IsChecked = IsDateColumnFormat(format);
+            _dateFormatBox.SelectedItem = DateColumnFormatLabel(format);
             _formatSkipButton.IsChecked = format == TextToColumnsColumnFormat.Skip;
         }
         finally
@@ -750,6 +773,25 @@ public sealed partial class TextToColumnsDialog : Window
         else
             _columnFormats[columnIndex] = format;
     }
+
+    private TextToColumnsColumnFormat SelectedDateColumnFormat() =>
+        (_dateFormatBox.SelectedItem as string) switch
+        {
+            "DMY" => TextToColumnsColumnFormat.DateDMY,
+            "YMD" => TextToColumnsColumnFormat.DateYMD,
+            _ => TextToColumnsColumnFormat.DateMDY
+        };
+
+    private static bool IsDateColumnFormat(TextToColumnsColumnFormat format) =>
+        format is TextToColumnsColumnFormat.DateMDY or TextToColumnsColumnFormat.DateDMY or TextToColumnsColumnFormat.DateYMD;
+
+    private static string DateColumnFormatLabel(TextToColumnsColumnFormat format) =>
+        format switch
+        {
+            TextToColumnsColumnFormat.DateDMY => "DMY",
+            TextToColumnsColumnFormat.DateYMD => "YMD",
+            _ => "MDY"
+        };
 
     private IReadOnlyList<TextToColumnsColumnFormat> BuildColumnFormats(int columnCount)
     {
