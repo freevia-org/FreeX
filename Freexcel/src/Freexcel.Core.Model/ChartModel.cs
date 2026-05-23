@@ -45,6 +45,8 @@ public enum ChartTrendlineType { Linear, Exponential, Logarithmic, Power, Moving
 
 public enum ChartLineDashStyle { Solid, Dash, Dot }
 
+public enum ChartBubbleSizeRepresents { Area, Width }
+
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
@@ -219,6 +221,9 @@ public sealed class ChartModel
     public int? BarGapWidth { get; set; }
     public int? BarOverlap { get; set; }
     public bool? VaryColorsByPoint { get; set; }
+    public int BubbleScale { get; set; } = 100;
+    public bool ShowNegativeBubbles { get; set; }
+    public ChartBubbleSizeRepresents BubbleSizeRepresents { get; set; } = ChartBubbleSizeRepresents.Area;
     public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
