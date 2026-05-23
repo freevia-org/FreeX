@@ -105,7 +105,8 @@ public static class FindReplaceService
         string searchText,
         string replaceText,
         bool matchCase = false,
-        bool matchEntireCell = false)
+        bool matchEntireCell = false,
+        StyleDiff? replacementFormat = null)
         => ReplaceAll(
             workbook,
             commandBus,
@@ -113,7 +114,8 @@ public static class FindReplaceService
             replaceText,
             new FindOptions(LookIn: FindLookIn.Values),
             matchCase,
-            matchEntireCell);
+            matchEntireCell,
+            replacementFormat);
 
     public static int ReplaceAll(
         Workbook workbook,
@@ -122,7 +124,8 @@ public static class FindReplaceService
         string replaceText,
         FindOptions options,
         bool matchCase = false,
-        bool matchEntireCell = false)
+        bool matchEntireCell = false,
+        StyleDiff? replacementFormat = null)
     {
         if (options.LookIn is not FindLookIn.Values)
             return 0;
@@ -164,7 +167,18 @@ public static class FindReplaceService
 
         foreach (var (sheetId, edits) in editsBySheet)
         {
-            var command = new EditCellsCommand(sheetId, edits);
+            var commands = new List<IWorkbookCommand> { new EditCellsCommand(sheetId, edits) };
+            if (replacementFormat is not null)
+            {
+                commands.AddRange(edits.Select(edit => new ApplyStyleCommand(
+                    sheetId,
+                    new GridRange(edit.Address, edit.Address),
+                    replacementFormat)));
+            }
+
+            var command = commands.Count == 1
+                ? commands[0]
+                : new CompositeWorkbookCommand("Replace All", commands);
             commandBus.Execute(workbook.Id, command);
         }
 
