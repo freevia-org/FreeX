@@ -103,6 +103,7 @@ public sealed partial class NativeJsonAdapter
         public string? TabColor { get; set; }
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
+        public List<SheetProtectionPermission> ProtectionPermissions { get; set; } = [];
         public List<WorksheetCustomPropertyDto> CustomProperties { get; set; } = [];
         public List<UIntDoubleDto> RowHeights { get; set; } = [];
         public List<UIntDoubleDto> ColumnWidths { get; set; } = [];

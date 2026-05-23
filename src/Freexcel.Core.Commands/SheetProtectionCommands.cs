@@ -7,15 +7,29 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly string? _password;
+    private readonly IReadOnlyList<SheetProtectionPermission> _permissions;
     private bool _previousProtected;
     private string? _previousPassword;
+    private List<SheetProtectionPermission>? _previousPermissions;
 
     public string Label => "Protect Sheet";
 
     public ProtectSheetCommand(SheetId sheetId, string? password)
+        : this(
+            sheetId,
+            password,
+            [SheetProtectionPermission.SelectLockedCells, SheetProtectionPermission.SelectUnlockedCells])
+    {
+    }
+
+    public ProtectSheetCommand(
+        SheetId sheetId,
+        string? password,
+        IReadOnlyList<SheetProtectionPermission> permissions)
     {
         _sheetId = sheetId;
         _password = password;
+        _permissions = permissions;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -23,8 +37,12 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
+        _previousPermissions = sheet.ProtectionPermissions.ToList();
         sheet.IsProtected = true;
         sheet.ProtectionPassword = string.IsNullOrEmpty(_password) ? null : _password;
+        sheet.ProtectionPermissions.Clear();
+        foreach (var permission in _permissions.Where(Enum.IsDefined).Distinct())
+            sheet.ProtectionPermissions.Add(permission);
         return new CommandOutcome(true);
     }
 
@@ -33,6 +51,9 @@ public sealed class ProtectSheetCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         sheet.IsProtected = _previousProtected;
         sheet.ProtectionPassword = _previousPassword;
+        sheet.ProtectionPermissions.Clear();
+        foreach (var permission in _previousPermissions ?? [])
+            sheet.ProtectionPermissions.Add(permission);
     }
 }
 
@@ -42,6 +63,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private bool _previousProtected;
     private string? _previousPassword;
+    private List<SheetProtectionPermission>? _previousPermissions;
 
     public string Label => "Unprotect Sheet";
 
@@ -55,6 +77,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         _previousProtected = sheet.IsProtected;
         _previousPassword = sheet.ProtectionPassword;
+        _previousPermissions = sheet.ProtectionPermissions.ToList();
         sheet.IsProtected = false;
         sheet.ProtectionPassword = null;
         return new CommandOutcome(true);
@@ -65,6 +88,9 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         sheet.IsProtected = _previousProtected;
         sheet.ProtectionPassword = _previousPassword;
+        sheet.ProtectionPermissions.Clear();
+        foreach (var permission in _previousPermissions ?? [])
+            sheet.ProtectionPermissions.Add(permission);
     }
 }
 

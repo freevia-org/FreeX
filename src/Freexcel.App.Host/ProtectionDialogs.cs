@@ -21,33 +21,33 @@ public sealed record AllowEditRangeSelectionRequest(
 
 public static class ProtectionDialogPlanner
 {
-    private static readonly string[] DefaultSheetPermissions =
+    private static readonly (string Label, SheetProtectionPermission Permission)[] SheetPermissionChoices =
     [
-        "Select locked cells",
-        "Select unlocked cells",
-        "Format cells",
-        "Format columns",
-        "Format rows",
-        "Insert columns",
-        "Insert rows",
-        "Insert hyperlinks",
-        "Delete columns",
-        "Delete rows",
-        "Sort",
-        "Use AutoFilter",
-        "Use PivotTable reports",
-        "Edit objects",
-        "Edit scenarios"
+        ("Select locked cells", SheetProtectionPermission.SelectLockedCells),
+        ("Select unlocked cells", SheetProtectionPermission.SelectUnlockedCells),
+        ("Format cells", SheetProtectionPermission.FormatCells),
+        ("Format columns", SheetProtectionPermission.FormatColumns),
+        ("Format rows", SheetProtectionPermission.FormatRows),
+        ("Insert columns", SheetProtectionPermission.InsertColumns),
+        ("Insert rows", SheetProtectionPermission.InsertRows),
+        ("Insert hyperlinks", SheetProtectionPermission.InsertHyperlinks),
+        ("Delete columns", SheetProtectionPermission.DeleteColumns),
+        ("Delete rows", SheetProtectionPermission.DeleteRows),
+        ("Sort", SheetProtectionPermission.Sort),
+        ("Use AutoFilter", SheetProtectionPermission.UseAutoFilter),
+        ("Use PivotTable reports", SheetProtectionPermission.UsePivotTableReports),
+        ("Edit objects", SheetProtectionPermission.EditObjects),
+        ("Edit scenarios", SheetProtectionPermission.EditScenarios)
     ];
 
-    private static readonly string[] DefaultSelectedSheetPermissions =
+    private static readonly SheetProtectionPermission[] DefaultSelectedSheetPermissions =
     [
-        "Select locked cells",
-        "Select unlocked cells"
+        SheetProtectionPermission.SelectLockedCells,
+        SheetProtectionPermission.SelectUnlockedCells
     ];
 
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password) =>
-        CreateSheetResult(sheet, password, DefaultSelectedSheetPermissions);
+        CreateSheetResult(sheet, password, GetDefaultSelectedSheetPermissions());
 
     public static ProtectionDialogResult CreateSheetResult(
         Sheet sheet,
@@ -60,16 +60,38 @@ public static class ProtectionDialogPlanner
     public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password, string? confirmation) =>
         sheet.IsProtected || PasswordsMatch(password, confirmation)
             ? CreateSheetResult(sheet, password)
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, null, DefaultSelectedSheetPermissions);
+            : new ProtectionDialogResult(ProtectionDialogMode.Protect, null, GetDefaultSelectedSheetPermissions());
 
     public static ProtectionDialogResult CreateWorkbookResult(Workbook workbook, string? password) =>
         workbook.IsStructureProtected
             ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, []);
 
-    public static IReadOnlyList<string> GetDefaultSheetPermissions() => DefaultSheetPermissions;
+    public static IReadOnlyList<string> GetDefaultSheetPermissions() =>
+        SheetPermissionChoices.Select(choice => choice.Label).ToList();
 
-    public static IReadOnlyList<string> GetDefaultSelectedSheetPermissions() => DefaultSelectedSheetPermissions;
+    public static IReadOnlyList<string> GetDefaultSelectedSheetPermissions() =>
+        DefaultSelectedSheetPermissions.Select(FormatSheetPermission).ToList();
+
+    public static IReadOnlyList<SheetProtectionPermission> ParseSheetPermissions(IEnumerable<string> labels) =>
+        labels.Select(ParseSheetPermission)
+            .Where(permission => permission is not null)
+            .Select(permission => permission!.Value)
+            .Distinct()
+            .ToList();
+
+    public static string FormatSheetPermission(SheetProtectionPermission permission) =>
+        SheetPermissionChoices.FirstOrDefault(choice => choice.Permission == permission).Label
+        ?? permission.ToString();
+
+    private static SheetProtectionPermission? ParseSheetPermission(string label)
+    {
+        foreach (var choice in SheetPermissionChoices)
+            if (string.Equals(choice.Label, label, StringComparison.Ordinal))
+                return choice.Permission;
+
+        return null;
+    }
 
     public static bool PasswordsMatch(string? password, string? confirmation) =>
         string.Equals(password ?? "", confirmation ?? "", StringComparison.Ordinal);

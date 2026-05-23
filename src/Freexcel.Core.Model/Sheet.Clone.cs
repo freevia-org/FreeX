@@ -130,6 +130,9 @@ public sealed partial class Sheet
             copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata;
 
         // Allow-edit ranges (protection)
+        copy.ProtectionPermissions.Clear();
+        foreach (var permission in ProtectionPermissions)
+            copy.ProtectionPermissions.Add(permission);
         foreach (var range in AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, newId));
         foreach (var property in CustomProperties)

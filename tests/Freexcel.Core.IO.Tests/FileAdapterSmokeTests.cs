@@ -5202,6 +5202,9 @@ public partial class FileAdapterSmokeTests
         var sheet = workbook.AddSheet("S1");
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "sheet-secret";
+        sheet.ProtectionPermissions.Clear();
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.SelectUnlockedCells);
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
         sheet.AllowEditRanges.Add(new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3)));
@@ -5218,6 +5221,9 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IsProtected.Should().BeTrue();
         loadedSheet.ProtectionPassword.Should().Be("sheet-secret");
+        loadedSheet.ProtectionPermissions.Should().Equal(
+            SheetProtectionPermission.SelectUnlockedCells,
+            SheetProtectionPermission.FormatCells);
         var allowEditRange = loadedSheet.AllowEditRanges.Should().ContainSingle().Subject;
         allowEditRange.Start.ToA1().Should().Be("B2");
         allowEditRange.End.ToA1().Should().Be("C3");
