@@ -846,7 +846,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void ConsolidateDialog_ExposesExcelStyleAllReferencesWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var source = ReadConsolidateDialogSources();
 
         source.Should().Contain("_referenceBox");
         source.Should().Contain("_referencesList");
@@ -924,7 +924,7 @@ public sealed class DataToolDialogTests
     [Fact]
     public void ConsolidateDialog_ExposesExcelStyleFunctionLabelsAndLinkOptions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var source = ReadConsolidateDialogSources();
 
         source.Should().Contain("_functionBox");
         source.Should().Contain("_topRowBox");
@@ -948,6 +948,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("CreateLinksToSourceData");
         source.Should().Contain("Write formulas that reference the source cells");
     }
+
+    private static string ReadConsolidateDialogSources() =>
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.Planning.cs"));
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
