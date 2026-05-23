@@ -40,6 +40,7 @@ public static partial class PivotTableRefreshService
         else
             WriteRowPivot(workbook, targetSheet, pivotTable, headers, rows);
 
+        ApplyMergedRowLabels(targetSheet, pivotTable);
         ApplyPivotTableStyle(workbook, targetSheet, pivotTable);
     }
 
@@ -125,6 +126,8 @@ public static partial class PivotTableRefreshService
 
     private static void ClearTargetRange(Sheet sheet, GridRange targetRange)
     {
+        sheet.ReplaceMergedRegions(sheet.MergedRegions.Where(region => !region.Overlaps(targetRange)));
+
         for (var row = targetRange.Start.Row; row <= targetRange.End.Row; row++)
         for (var col = targetRange.Start.Col; col <= targetRange.End.Col; col++)
             sheet.ClearCell(row, col);
