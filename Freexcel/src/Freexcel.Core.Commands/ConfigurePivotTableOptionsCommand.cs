@@ -23,6 +23,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _updateEmptyValueText;
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
+    private readonly bool? _enableRefresh;
     private readonly bool? _printTitles;
     private readonly bool? _printExpandCollapseButtons;
     private readonly bool? _showExpandCollapseButtons;
@@ -53,6 +54,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool updateEmptyValueText = false,
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
+        bool? enableRefresh = null,
         bool? printTitles = null,
         bool? printExpandCollapseButtons = null,
         string? altTextTitle = null,
@@ -84,6 +86,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _updateEmptyValueText = updateEmptyValueText;
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
+        _enableRefresh = enableRefresh;
         _printTitles = printTitles;
         _printExpandCollapseButtons = printExpandCollapseButtons;
         _showExpandCollapseButtons = showExpandCollapseButtons;
@@ -145,6 +148,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache.RefreshOnLoad = refreshOnOpen;
             if (_saveSourceData is { } saveSourceData)
                 cache.SaveData = saveSourceData;
+            if (_enableRefresh is { } enableRefresh)
+                cache.EnableRefresh = enableRefresh;
         }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);

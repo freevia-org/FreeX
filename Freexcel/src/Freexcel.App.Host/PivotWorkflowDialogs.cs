@@ -1066,6 +1066,7 @@ public sealed record PivotTableOptionsDialogResult(
     string? EmptyValueText = null,
     bool RefreshOnOpen = false,
     bool SaveSourceData = true,
+    bool EnableRefresh = true,
     bool PrintTitles = false,
     bool PrintExpandCollapseButtons = false,
     string? AltTextTitle = null,
@@ -1102,6 +1103,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
     private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
     private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
+    private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
     private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
     private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
     private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
@@ -1140,6 +1142,7 @@ public sealed class PivotTableOptionsDialog : Window
             pivotTable.EmptyValueText,
             refreshOnOpen: cache?.RefreshOnLoad ?? false,
             saveSourceData: cache?.SaveData ?? true,
+            enableRefresh: cache?.EnableRefresh ?? true,
             printTitles: pivotTable.PrintTitles,
             printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
             altTextTitle: pivotTable.AltTextTitle,
@@ -1165,6 +1168,7 @@ public sealed class PivotTableOptionsDialog : Window
         string? emptyValueText = null,
         bool refreshOnOpen = false,
         bool saveSourceData = true,
+        bool enableRefresh = true,
         bool printTitles = false,
         bool printExpandCollapseButtons = false,
         string? altTextTitle = null,
@@ -1189,6 +1193,7 @@ public sealed class PivotTableOptionsDialog : Window
             NormalizeEmptyValueText(emptyValueText),
             refreshOnOpen,
             saveSourceData,
+            enableRefresh,
             printTitles,
             printExpandCollapseButtons,
             NormalizeOptionalText(altTextTitle),
@@ -1269,6 +1274,7 @@ public sealed class PivotTableOptionsDialog : Window
         var dataPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(dataPanel, _refreshOnOpenBox);
         AddCheckBox(dataPanel, _saveSourceDataBox);
+        AddCheckBox(dataPanel, _enableRefreshBox);
         AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
         dataPanel.Children.Add(new TextBlock
         {
@@ -1359,6 +1365,7 @@ public sealed class PivotTableOptionsDialog : Window
         _preserveFormattingBox.IsChecked = result.PreserveFormattingOnUpdate;
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
+        _enableRefreshBox.IsChecked = result.EnableRefresh;
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
         _printTitlesBox.IsChecked = result.PrintTitles;
         _printExpandCollapseBox.IsChecked = result.PrintExpandCollapseButtons;
@@ -1388,6 +1395,7 @@ public sealed class PivotTableOptionsDialog : Window
             _emptyCellsBox.Text,
             _refreshOnOpenBox.IsChecked == true,
             _saveSourceDataBox.IsChecked == true,
+            _enableRefreshBox.IsChecked == true,
             _printTitlesBox.IsChecked == true,
             _printExpandCollapseBox.IsChecked == true,
             _altTextTitleBox.Text,
