@@ -123,15 +123,18 @@ internal static class PdfDocumentExporter
         if (properties is null)
             return;
 
-        if (!string.IsNullOrWhiteSpace(properties.Title))
-            pdf.Info.Title = properties.Title;
-        if (!string.IsNullOrWhiteSpace(properties.Author))
-            pdf.Info.Author = properties.Author;
-        if (!string.IsNullOrWhiteSpace(properties.Subject))
-            pdf.Info.Subject = properties.Subject;
-        if (!string.IsNullOrWhiteSpace(properties.Keywords))
-            pdf.Info.Keywords = properties.Keywords;
+        if (NormalizeProperty(properties.Title) is { } title)
+            pdf.Info.Title = title;
+        if (NormalizeProperty(properties.Author) is { } author)
+            pdf.Info.Author = author;
+        if (NormalizeProperty(properties.Subject) is { } subject)
+            pdf.Info.Subject = subject;
+        if (NormalizeProperty(properties.Keywords) is { } keywords)
+            pdf.Info.Keywords = keywords;
     }
+
+    private static string? NormalizeProperty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static FixedPage GetFixedPage(PageContent pageContent)
     {

@@ -131,6 +131,20 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void PageBreakDialog_ExposesExplicitExcelStyleActionsInsteadOfCommandText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var pageBreakSource = source[source.IndexOf("public sealed class PageBreakDialog", StringComparison.Ordinal)..];
+
+        pageBreakSource.Should().Contain("Insert _row page break");
+        pageBreakSource.Should().Contain("Insert _column page break");
+        pageBreakSource.Should().Contain("_Reset all page breaks");
+        pageBreakSource.Should().Contain("_rowBreakBox");
+        pageBreakSource.Should().Contain("_columnBreakBox");
+        pageBreakSource.Should().NotContain("ObjectSizeDialog.CreateSingleInputContent(\"Page break:\"");
+    }
+
+    [Fact]
     public void GoalSeekStatusDialog_CreateMessage_DescribesSolvedAndUnsolvedResults()
     {
         GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4), targetValue: 100)
