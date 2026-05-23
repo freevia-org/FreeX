@@ -25,7 +25,9 @@ internal sealed record XlsxTextBoxPackagePart(
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
     CellColor? FillColor,
-    CellColor? OutlineColor);
+    CellColor? OutlineColor,
+    WorkbookThemeColorReference? FillThemeColor,
+    WorkbookThemeColorReference? OutlineThemeColor);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -36,6 +38,8 @@ internal sealed record XlsxShapePackagePart(
     CellColor? FillColor,
     CellColor? OutlineColor,
     CellColor? GradientFillEndColor,
+    WorkbookThemeColorReference? FillThemeColor,
+    WorkbookThemeColorReference? OutlineThemeColor,
     bool HasShadowEffect);
 
 internal sealed record XlsxDrawingAnchor(
@@ -201,8 +205,18 @@ internal static class XlsxWorksheetDrawingPartReader
             var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
             var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
             var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
-            var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "solidFill"), drawingNs);
-            var outlineColor = ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill"), drawingNs);
+            var solidFill = spPr?.Element(drawingNs + "solidFill");
+            var outlineFill = spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill");
+            var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
+            var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
+            var fillThemeColor = solidFill is not null &&
+                                 XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, drawingNs, out var readFillThemeColor)
+                ? readFillThemeColor
+                : (WorkbookThemeColorReference?)null;
+            var outlineThemeColor = outlineFill is not null &&
+                                    XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
+                ? readOutlineThemeColor
+                : (WorkbookThemeColorReference?)null;
             var hasShadowEffect = spPr?
                 .Element(drawingNs + "effectLst")?
                 .Element(drawingNs + "outerShdw") is not null;
@@ -213,7 +227,16 @@ internal static class XlsxWorksheetDrawingPartReader
 
             if (!string.IsNullOrEmpty(text))
             {
-                textBoxes.Add(new XlsxTextBoxPackagePart(text, name, altText, ReadNearestAnchor(shapeElement), rotation, fillColor, outlineColor));
+                textBoxes.Add(new XlsxTextBoxPackagePart(
+                    text,
+                    name,
+                    altText,
+                    ReadNearestAnchor(shapeElement),
+                    rotation,
+                    fillThemeColor is null ? fillColor : null,
+                    outlineThemeColor is null ? outlineColor : null,
+                    fillThemeColor,
+                    outlineThemeColor));
                 continue;
             }
 
@@ -228,9 +251,11 @@ internal static class XlsxWorksheetDrawingPartReader
                     altText,
                     ReadNearestAnchor(shapeElement),
                     rotation,
-                    fillColor,
-                    outlineColor,
+                    fillThemeColor is null ? fillColor : null,
+                    outlineThemeColor is null ? outlineColor : null,
                     gradientFill.EndColor,
+                    fillThemeColor,
+                    outlineThemeColor,
                     hasShadowEffect));
         }
 

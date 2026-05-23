@@ -83,7 +83,9 @@ public sealed partial class XlsxFileAdapter
                 AltText = textBoxPart.AltText,
                 RotationDegrees = textBoxPart.RotationDegrees,
                 FillColor = textBoxPart.FillColor,
-                OutlineColor = textBoxPart.OutlineColor
+                OutlineColor = textBoxPart.OutlineColor,
+                FillThemeColor = textBoxPart.FillThemeColor,
+                OutlineThemeColor = textBoxPart.OutlineThemeColor
             };
             XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
             textBox.IsSourceLoaded = true;
@@ -104,6 +106,8 @@ public sealed partial class XlsxFileAdapter
                 FillColor = shapePart.FillColor,
                 OutlineColor = shapePart.OutlineColor,
                 GradientFillEndColor = shapePart.GradientFillEndColor,
+                FillThemeColor = shapePart.FillThemeColor,
+                OutlineThemeColor = shapePart.OutlineThemeColor,
                 HasShadowEffect = shapePart.HasShadowEffect
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
