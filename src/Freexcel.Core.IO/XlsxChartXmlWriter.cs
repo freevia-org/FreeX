@@ -39,6 +39,7 @@ internal static partial class XlsxChartXmlWriter
                         : ToChartTitleXml(chart, chartNs, drawingNs),
                     chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
                     ToPivotFormatsXml(chart, chartNs),
+                    ToChart3DViewXml(chart, chartNs),
                     new XElement(chartNs + "plotArea",
                         ToManualLayoutXml(chart.PlotAreaLayout, chartNs),
                         plotCharts,

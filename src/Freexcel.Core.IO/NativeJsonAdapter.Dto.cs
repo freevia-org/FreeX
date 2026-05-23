@@ -395,6 +395,7 @@ public sealed partial class NativeJsonAdapter
         public bool ShowDataInHiddenRowsAndColumns { get; set; }
         public ChartProtectionModel? Protection { get; set; }
         public ChartPrintSettingsModel? PrintSettings { get; set; }
+        public Chart3DViewModel? ThreeDView { get; set; }
         public bool ShowPivotChartFieldButtons { get; set; } = true;
         public bool ShowPivotChartReportFilterButtons { get; set; } = true;
         public bool ShowPivotChartAxisFieldButtons { get; set; } = true;
