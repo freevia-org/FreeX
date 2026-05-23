@@ -37,14 +37,19 @@ public partial class MainWindow
         if (Keyboard.Modifiers != ModifierKeys.None ||
             Keyboard.FocusedElement is not UIElement focusedElement ||
             !IsDescendantOf(focusedElement, StartScreenSidebar) ||
-            e.Key != Key.Up && e.Key != Key.Down)
+            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
         {
             return;
         }
 
-        var direction = e.Key == Key.Up
-            ? FocusNavigationDirection.Previous
-            : FocusNavigationDirection.Next;
+        var direction = e.Key switch
+        {
+            Key.Up => FocusNavigationDirection.Previous,
+            Key.Down => FocusNavigationDirection.Next,
+            Key.Home => FocusNavigationDirection.First,
+            Key.End => FocusNavigationDirection.Last,
+            _ => FocusNavigationDirection.Next
+        };
         focusedElement.MoveFocus(new TraversalRequest(direction));
         e.Handled = true;
     }
