@@ -548,6 +548,31 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_BookmarksRequestOutlineViewerMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var bookmarks = new[] { new PdfBookmark("Summary", PageIndex: 0) };
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, null, null, bookmarks: bookmarks);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageMode.Should().Be(PdfPageMode.UseOutlines);
+                pdf.Internals.Catalog.Elements.GetName("/NonFullScreenPageMode")
+                    .Should().Be("/UseOutlines");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
     {
         StaTestRunner.Run(() =>
