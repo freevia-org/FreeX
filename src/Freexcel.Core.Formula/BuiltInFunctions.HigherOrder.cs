@@ -72,6 +72,7 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < cols; c++)
             {
                 acc = ctx.InvokeLambda(lambda, [acc, rv.At(r + 1, c + 1)]);
+                if (acc is RangeValue) return ErrorValue.Calc;
                 result[r, c] = acc;
             }
         return new RangeValue(result);
