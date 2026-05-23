@@ -60,6 +60,8 @@ public sealed class SortDialogTests
             "_Add Level",
             "_Delete Level",
             "_Copy Level",
+            "Move _Up",
+            "Move Do_wn",
             "_Options...",
             "_OK",
             "_Cancel"
@@ -164,6 +166,27 @@ public sealed class SortDialogTests
                 new SortDialogLevel(0, true),
                 new SortDialogLevel(2, false),
                 new SortDialogLevel(2, false));
+    }
+
+    [Fact]
+    public void MoveLevel_ReordersRequestedLevelWithinBounds()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true),
+            new SortDialogLevel(1, false),
+            new SortDialogLevel(2, true)
+        };
+
+        SortDialog.MoveLevel(levels, 2, -1)
+            .Should()
+            .Equal(
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(2, true),
+                new SortDialogLevel(1, false));
+
+        SortDialog.MoveLevel(levels, 0, -1).Should().Equal(levels);
+        SortDialog.MoveLevel(levels, 2, 1).Should().Equal(levels);
     }
 
     [Fact]
