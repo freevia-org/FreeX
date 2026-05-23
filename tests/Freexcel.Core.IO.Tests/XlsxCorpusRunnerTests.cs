@@ -1135,8 +1135,10 @@ public class XlsxCorpusRunnerTests
     private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
         new(
             chart.ChartTitleTextColor is null ? "" : ToColorSummary(chart.ChartTitleTextColor.Value),
+            chart.ChartTitleTextThemeColor,
             chart.ChartTitleFontSize,
             chart.AxisTitleTextColor is null ? "" : ToColorSummary(chart.AxisTitleTextColor.Value),
+            chart.AxisTitleTextThemeColor,
             chart.AxisTitleFontSize,
             chart.ChartAreaFillColor is null ? "" : ToColorSummary(chart.ChartAreaFillColor.Value),
             chart.ChartAreaFillThemeColor,
@@ -1172,6 +1174,7 @@ public class XlsxCorpusRunnerTests
                 chart.XAxisMinorTickStyle,
                 chart.ShowXAxisLabels,
                 chart.XAxisLabelTextColor is null ? "" : ToColorSummary(chart.XAxisLabelTextColor.Value),
+                chart.XAxisLabelTextThemeColor,
                 chart.XAxisLabelFontSize,
                 chart.XAxisLabelAngle,
                 chart.XAxisLineColor is null ? "" : ToColorSummary(chart.XAxisLineColor.Value),
@@ -1192,6 +1195,7 @@ public class XlsxCorpusRunnerTests
                 chart.YAxisMinorTickStyle,
                 chart.ShowYAxisLabels,
                 chart.YAxisLabelTextColor is null ? "" : ToColorSummary(chart.YAxisLabelTextColor.Value),
+                chart.YAxisLabelTextThemeColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
                 chart.YAxisLineColor is null ? "" : ToColorSummary(chart.YAxisLineColor.Value),
@@ -2161,8 +2165,10 @@ public class XlsxCorpusRunnerTests
 
     private sealed record ChartVisualSummary(
         string ChartTitleTextColor,
+        WorkbookThemeColorReference? ChartTitleTextThemeColor,
         double ChartTitleFontSize,
         string AxisTitleTextColor,
+        WorkbookThemeColorReference? AxisTitleTextThemeColor,
         double AxisTitleFontSize,
         string ChartAreaFillColor,
         WorkbookThemeColorReference? ChartAreaFillThemeColor,
@@ -2196,6 +2202,7 @@ public class XlsxCorpusRunnerTests
         ChartAxisTickStyle MinorTickStyle,
         bool ShowLabels,
         string LabelTextColor,
+        WorkbookThemeColorReference? LabelTextThemeColor,
         double LabelFontSize,
         double LabelAngle,
         string LineColor,
