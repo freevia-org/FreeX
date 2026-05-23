@@ -142,7 +142,7 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
         var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
