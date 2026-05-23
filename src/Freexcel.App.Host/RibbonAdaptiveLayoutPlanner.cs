@@ -72,7 +72,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
         var collapseFrom = availableWidth switch
         {
-            <= 900 => 0,
+            <= 760 => 0,
             <= 1120 => 1,
             <= 1320 => 2,
             _ => -1
@@ -105,7 +105,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static int? GetFirstCollapsedIndexForKnownTab(double availableWidth, IReadOnlyList<string> groupNames)
     {
-        if (availableWidth <= 900)
+        if (availableWidth <= 760)
             return 0;
 
         if (IsDataRibbonGroupSet(groupNames) || IsViewRibbonGroupSet(groupNames) || IsReviewRibbonGroupSet(groupNames))
@@ -200,7 +200,7 @@ public static class RibbonAdaptiveLayoutPlanner
         double availableWidth,
         RibbonAdaptiveGroupState[] states)
     {
-        if (availableWidth <= 900)
+        if (availableWidth <= 760)
         {
             for (var i = 0; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
@@ -209,7 +209,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (availableWidth <= 1120)
         {
-            for (var i = 2; i < states.Length; i++)
+            for (var i = 1; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
         }
