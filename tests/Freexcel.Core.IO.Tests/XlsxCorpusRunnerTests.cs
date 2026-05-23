@@ -729,11 +729,23 @@ public class XlsxCorpusRunnerTests
             sheet.ShowRulers,
             sheet.ZoomPercent,
             sheet.ShowFormulas,
+            sheet.HiddenRows.OrderBy(row => row).ToArray(),
             sheet.HiddenRows.Count,
+            sheet.HiddenCols.OrderBy(column => column).ToArray(),
             sheet.HiddenCols.Count,
+            sheet.RowOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
             sheet.RowOutlineLevels.Count,
+            sheet.ColOutlineLevels
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new OutlineLevelSummary(pair.Key, pair.Value))
+                .ToArray(),
             sheet.ColOutlineLevels.Count,
+            sheet.GroupHiddenRows.OrderBy(row => row).ToArray(),
             sheet.GroupHiddenRows.Count,
+            sheet.GroupHiddenCols.OrderBy(column => column).ToArray(),
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
 
@@ -1288,17 +1300,25 @@ public class XlsxCorpusRunnerTests
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        IReadOnlyList<uint> HiddenRows,
         int HiddenRowCount,
+        IReadOnlyList<uint> HiddenColumns,
         int HiddenColumnCount,
+        IReadOnlyList<OutlineLevelSummary> RowOutlineLevels,
         int RowOutlineLevelCount,
+        IReadOnlyList<OutlineLevelSummary> ColumnOutlineLevels,
         int ColumnOutlineLevelCount,
+        IReadOnlyList<uint> GroupHiddenRows,
         int GroupHiddenRowCount,
+        IReadOnlyList<uint> GroupHiddenColumns,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
 
     private sealed record HyperlinkSummary(uint Row, uint Column, string Target);
+
+    private sealed record OutlineLevelSummary(uint Index, int Level);
 
     private sealed record ChartSummary(
         ChartType Type,
