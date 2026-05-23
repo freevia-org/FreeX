@@ -988,6 +988,7 @@ public sealed class PivotTableCommandTests
             RefreshOnLoad = false,
             SaveData = true,
             EnableRefresh = true,
+            PreserveSourceSortFilter = true,
             MissingItemsLimit = null
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region"));
@@ -1018,6 +1019,7 @@ public sealed class PivotTableCommandTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            preserveSourceSortFilter: false,
             missingItemsLimit: 0,
             updateMissingItemsLimit: true);
 
@@ -1026,6 +1028,7 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeTrue();
         cache.SaveData.Should().BeFalse();
         cache.EnableRefresh.Should().BeFalse();
+        cache.PreserveSourceSortFilter.Should().BeFalse();
         cache.MissingItemsLimit.Should().Be(0);
 
         command.Revert(ctx);
@@ -1033,6 +1036,7 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeFalse();
         cache.SaveData.Should().BeTrue();
         cache.EnableRefresh.Should().BeTrue();
+        cache.PreserveSourceSortFilter.Should().BeTrue();
         cache.MissingItemsLimit.Should().BeNull();
     }
 

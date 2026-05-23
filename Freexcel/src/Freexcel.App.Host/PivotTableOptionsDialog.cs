@@ -21,6 +21,7 @@ public sealed record PivotTableOptionsDialogResult(
     bool RefreshOnOpen = false,
     bool SaveSourceData = true,
     bool EnableRefresh = true,
+    bool PreserveSourceSortFilter = true,
     int? MissingItemsLimit = null,
     bool PrintTitles = false,
     bool PrintExpandCollapseButtons = false,
@@ -76,9 +77,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _preserveSourceSortFilterBox = new()
     {
         Content = "Preserve source sort and _filter settings",
-        IsChecked = true,
-        IsEnabled = false,
-        ToolTip = "Freexcel preserves existing pivot cache metadata when saving loaded workbooks; changing this option is not modeled yet."
+        IsChecked = true
     };
     private readonly ComboBox _missingItemsLimitBox = new();
     private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
@@ -120,6 +119,7 @@ public sealed class PivotTableOptionsDialog : Window
             refreshOnOpen: cache?.RefreshOnLoad ?? false,
             saveSourceData: cache?.SaveData ?? true,
             enableRefresh: cache?.EnableRefresh ?? true,
+            preserveSourceSortFilter: cache?.PreserveSourceSortFilter ?? true,
             missingItemsLimit: cache?.MissingItemsLimit,
             printTitles: pivotTable.PrintTitles,
             printExpandCollapseButtons: pivotTable.PrintExpandCollapseButtons,
@@ -154,6 +154,7 @@ public sealed class PivotTableOptionsDialog : Window
         bool refreshOnOpen = false,
         bool saveSourceData = true,
         bool enableRefresh = true,
+        bool preserveSourceSortFilter = true,
         int? missingItemsLimit = null,
         bool printTitles = false,
         bool printExpandCollapseButtons = false,
@@ -187,6 +188,7 @@ public sealed class PivotTableOptionsDialog : Window
             refreshOnOpen,
             saveSourceData,
             enableRefresh,
+            preserveSourceSortFilter,
             NormalizeMissingItemsLimit(missingItemsLimit),
             printTitles,
             printExpandCollapseButtons,
@@ -377,6 +379,7 @@ public sealed class PivotTableOptionsDialog : Window
         _refreshOnOpenBox.IsChecked = result.RefreshOnOpen;
         _saveSourceDataBox.IsChecked = result.SaveSourceData;
         _enableRefreshBox.IsChecked = result.EnableRefresh;
+        _preserveSourceSortFilterBox.IsChecked = result.PreserveSourceSortFilter;
         _missingItemsLimitBox.SelectedItem = LabelForMissingItemsLimit(result.MissingItemsLimit);
         _showExpandCollapseBox.IsChecked = result.ShowExpandCollapseButtons;
         _printTitlesBox.IsChecked = result.PrintTitles;
@@ -408,6 +411,7 @@ public sealed class PivotTableOptionsDialog : Window
             _refreshOnOpenBox.IsChecked == true,
             _saveSourceDataBox.IsChecked == true,
             _enableRefreshBox.IsChecked == true,
+            _preserveSourceSortFilterBox.IsChecked == true,
             MissingItemsLimitForLabel(_missingItemsLimitBox.SelectedItem?.ToString()),
             _printTitlesBox.IsChecked == true,
             _printExpandCollapseBox.IsChecked == true,
