@@ -516,6 +516,36 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_TrimsDocumentPropertiesBeforeWriting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var properties = new PdfDocumentProperties(
+                Title: "  Quarterly Review  ",
+                Author: "\tFinance Team\t",
+                Subject: "  Workbook export",
+                Keywords: "Freexcel, spreadsheet  ");
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, properties);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().Be("Quarterly Review");
+                pdf.Info.Author.Should().Be("Finance Team");
+                pdf.Info.Subject.Should().Be("Workbook export");
+                pdf.Info.Keywords.Should().Be("Freexcel, spreadsheet");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentProperties_FromWorkbook_ReturnsNullUnlessOptionIsRequested()
     {
         var workbook = new Workbook("Budget Model");
