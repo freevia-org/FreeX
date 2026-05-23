@@ -195,54 +195,7 @@ public partial class GridView : FrameworkElement
 
     // â”€â”€ Resize drag state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private enum ResizeTarget { None, Row, Column }
-    private ResizeTarget _resizeTarget = ResizeTarget.None;
-    private uint   _resizeIndex;
-    private double _resizeDragStart;
-    private double _resizeSizeStart;
-    private double _resizeLinePos;
-
-    // Autofill drag state
-    private bool      _autofillDragging;
-    private GridRange? _autofillSourceRange;
-    private CellAddress? _autofillTarget;
-
-    // Page Layout margin-guide drag state
-    private WorksheetPageMarginEdge? _marginDragEdge;
-    private SplitDividerHandle _splitDividerDragHandle = SplitDividerHandle.None;
-    private bool _splitPaneScrollbarDragging;
-    private SplitPaneScrollbar? _splitPaneScrollbarDragSource;
-    private double _splitPaneScrollbarDragPointerOffset;
-
     // â”€â”€ Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    /// <summary>Fired while the user drags a column border (real-time).</summary>
-    public event Action<uint, double>? ColumnResizing;
-    /// <summary>Fired when the user releases after resizing a column.</summary>
-    public event Action<uint, double>? ColumnResized;
-
-    /// <summary>Fired while the user drags a row border (real-time).</summary>
-    public event Action<uint, double>? RowResizing;
-    /// <summary>Fired when the user releases after resizing a row.</summary>
-    public event Action<uint, double>? RowResized;
-
-    /// <summary>Fired when the user drags the autofill handle and releases.</summary>
-    public event Action<GridRange, GridRange>? AutofillRequested;
-
-    /// <summary>Fired on right mouse button down with the clicked cell address.</summary>
-    public event Action<CellAddress, System.Windows.Point>? ContextMenuRequested;
-
-    /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
-    public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;
-
-    /// <summary>Fired when the user releases after dragging a Page Layout margin guide.</summary>
-    public event Action<WorksheetPageMargins>? PageMarginsChanged;
-
-    /// <summary>Fired when the user releases after dragging a split-pane divider.</summary>
-    public event Action<uint?, uint?>? SplitDividerMoved;
-
-    /// <summary>Fired when the user clicks or drags a split-pane mini scrollbar.</summary>
-    public event Action<SplitPaneScrollbarScrollTarget>? SplitPaneScrollbarScrolled;
 
     // â”€â”€ OnRender â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
