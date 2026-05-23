@@ -1473,6 +1473,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Weekday_OmittedReturnType_DefaultsToType1()
+    {
+        var sheet = MakeSheet();
+        var serial = new DateTime(2024, 1, 7).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
+
+        _eval.Evaluate("=WEEKDAY(A1,)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Weekday_ReturnType2_MondayIs1()
     {
         // 2024-01-08 is a Monday
