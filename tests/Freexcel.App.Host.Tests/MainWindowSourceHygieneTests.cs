@@ -327,6 +327,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ProtectionWorkflows_AreNotRegisteredAsF4RepeatableActions()
+    {
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        ExtractMethodBody(reviewSource, "ProtectSheetBtn_Click").Should().NotContain("ExecuteRepeatable");
+        ExtractMethodBody(reviewSource, "ProtectSheetBtn_Click").Should().NotContain("TryExecuteRepeatable");
+        ExtractMethodBody(reviewSource, "ProtectWorkbookBtn_Click").Should().NotContain("ExecuteRepeatable");
+        ExtractMethodBody(reviewSource, "ProtectWorkbookBtn_Click").Should().NotContain("TryExecuteRepeatable");
+    }
+
+    [Fact]
     public void FormulaCommands_LiveOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -1667,5 +1678,28 @@ public sealed class MainWindowSourceHygieneTests
 
         gridStatusSource.Should().Contain("private sealed record ColumnResizeSnapshot(");
         gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
+    }
+
+    private static string ExtractMethodBody(string source, string methodName)
+    {
+        var methodIndex = source.IndexOf(methodName, StringComparison.Ordinal);
+        methodIndex.Should().BeGreaterThanOrEqualTo(0, $"method {methodName} should exist");
+
+        var openBraceIndex = source.IndexOf('{', methodIndex);
+        openBraceIndex.Should().BeGreaterThanOrEqualTo(0, $"method {methodName} should have a body");
+
+        var depth = 0;
+        for (var i = openBraceIndex; i < source.Length; i++)
+        {
+            if (source[i] == '{')
+                depth++;
+            else if (source[i] == '}')
+                depth--;
+
+            if (depth == 0)
+                return source.Substring(openBraceIndex, i - openBraceIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not extract method body for {methodName}.");
     }
 }
