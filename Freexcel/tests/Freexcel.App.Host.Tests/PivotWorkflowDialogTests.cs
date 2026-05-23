@@ -265,6 +265,8 @@ public sealed class PivotWorkflowDialogTests
             autofitColumnsOnUpdate: false,
             preserveFormattingOnUpdate: false,
             showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
             compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
@@ -289,6 +291,8 @@ public sealed class PivotWorkflowDialogTests
             AutofitColumnsOnUpdate: false,
             PreserveFormattingOnUpdate: false,
             ShowFieldHeaders: false,
+            ShowContextualTooltips: false,
+            ShowPropertiesInTooltips: false,
             CompactRowLabelIndent: 3));
     }
 
@@ -347,6 +351,8 @@ public sealed class PivotWorkflowDialogTests
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             ShowFieldHeaders = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
             CompactRowLabelIndent = 5
         };
 
@@ -371,6 +377,8 @@ public sealed class PivotWorkflowDialogTests
                 AutofitColumnsOnUpdate: false,
                 PreserveFormattingOnUpdate: false,
                 ShowFieldHeaders: false,
+                ShowContextualTooltips: false,
+                ShowPropertiesInTooltips: false,
                 CompactRowLabelIndent: 5));
     }
 
@@ -543,6 +551,8 @@ public sealed class PivotWorkflowDialogTests
             autofitColumnsOnUpdate: false,
             preserveFormattingOnUpdate: false,
             showFieldHeaders: false,
+            showContextualTooltips: false,
+            showPropertiesInTooltips: false,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
@@ -552,6 +562,8 @@ public sealed class PivotWorkflowDialogTests
         result.AutofitColumnsOnUpdate.Should().BeFalse();
         result.PreserveFormattingOnUpdate.Should().BeFalse();
         result.ShowFieldHeaders.Should().BeFalse();
+        result.ShowContextualTooltips.Should().BeFalse();
+        result.ShowPropertiesInTooltips.Should().BeFalse();
         result.EnableRefresh.Should().BeFalse();
         result.MissingItemsLimit.Should().Be(0);
         result.PrintTitles.Should().BeTrue();

@@ -12734,6 +12734,8 @@ public partial class FileAdapterSmokeTests
             CompactRowLabelIndent = 4,
             ShowFieldHeaders = false,
             ShowExpandCollapseButtons = false,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             PrintTitles = true,
@@ -12765,6 +12767,8 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("showDrill")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showHeaders")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("showDataTips")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("showMemberPropertyTips")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("applyWidthHeightFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("preserveFormatting")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
@@ -12782,6 +12786,8 @@ public partial class FileAdapterSmokeTests
         loadedPivot.CompactRowLabelIndent.Should().Be(4);
         loadedPivot.ShowExpandCollapseButtons.Should().BeFalse();
         loadedPivot.ShowFieldHeaders.Should().BeFalse();
+        loadedPivot.ShowContextualTooltips.Should().BeFalse();
+        loadedPivot.ShowPropertiesInTooltips.Should().BeFalse();
         loadedPivot.AutofitColumnsOnUpdate.Should().BeFalse();
         loadedPivot.PreserveFormattingOnUpdate.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
