@@ -15,6 +15,9 @@ internal static class DelimitedTextWorkbookReader
         uint row = 1;
         while (TryReadRecord(reader, delimiter, out var fields))
         {
+            if (row > CellAddress.MaxRow)
+                break;
+
             if (row == 1 && allowSeparatorDirective && TryReadSeparatorDirective(fields, out var directiveDelimiter))
             {
                 delimiter = directiveDelimiter;
