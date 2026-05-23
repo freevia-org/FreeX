@@ -804,7 +804,18 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "B1", new TextValue("Review"));
         Set(sheet, "B2", new TextValue("Follow-up"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel/docs";
+        sheet.HyperlinkMetadata[Addr(sheet, "A1")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open the Freexcel documentation");
         sheet.Hyperlinks[Addr(sheet, "A2")] = "mailto:review@example.com";
+        sheet.HyperlinkMetadata[Addr(sheet, "A2")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Send a workbook review note");
+        sheet.Hyperlinks[Addr(sheet, "B2")] = "Links Notes!A1";
+        sheet.HyperlinkMetadata[Addr(sheet, "B2")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to the documentation link",
+            "Links Notes!A1");
         sheet.Comments[Addr(sheet, "B1")] = "Check workbook fidelity notes.";
         sheet.Comments[Addr(sheet, "B2")] = "Confirm links survived round-trip.";
         return workbook;
