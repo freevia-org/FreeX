@@ -941,7 +941,16 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "C4", new NumberValue(98));
         Set(sheet, "C5", new NumberValue(110));
         sheet.Charts.Add(new ChartModel { Type = ChartType.Line, DataRange = Range(sheet, "A1", "C5"), Title = "Trend", ShowLegend = true });
-        sheet.Charts.Add(new ChartModel { Type = ChartType.Bar, DataRange = Range(sheet, "A1", "C5"), Title = "Bar View", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = Range(sheet, "A1", "C5"),
+            Title = "Bar View",
+            ShowLegend = true,
+            BarGapWidth = 75,
+            BarOverlap = -20,
+            VaryColorsByPoint = true
+        });
         sheet.Charts.Add(new ChartModel { Type = ChartType.Area, DataRange = Range(sheet, "A1", "C5"), Title = "Area View", ShowLegend = true });
         return workbook;
     }
@@ -1139,9 +1148,20 @@ internal static class XlsxCorpusFixtureFactory
             Title = "Sales by Month",
             XAxisTitle = "Month",
             YAxisTitle = "Sales",
+            ChartStyleId = 42,
+            RoundedCorners = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            ShowDataInHiddenRowsAndColumns = true,
             ShowLegend = true,
             ShowDataLabels = true,
             LegendPosition = ChartLegendPosition.Bottom,
+            DataTable = new ChartDataTableModel
+            {
+                ShowHorizontalBorder = true,
+                ShowVerticalBorder = true,
+                ShowOutline = true,
+                ShowLegendKeys = true
+            },
             SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196))]
         });
         sheet.Charts.Add(new ChartModel
@@ -1173,7 +1193,16 @@ internal static class XlsxCorpusFixtureFactory
             Type = ChartType.ThreeDSurface,
             DataRange = Range(sheet, "A1", "C4"),
             Title = "3D Surface View",
-            ShowLegend = true
+            ShowLegend = true,
+            ThreeDView = new Chart3DViewModel
+            {
+                RotationX = 20,
+                HeightPercent = 80,
+                RotationY = 30,
+                DepthPercent = 150,
+                RightAngleAxes = false,
+                Perspective = 30
+            }
         });
         return workbook;
     }
@@ -1288,6 +1317,13 @@ internal static class XlsxCorpusFixtureFactory
         sheet.ViewLeftCol = 2;
         sheet.ActiveRow = 6;
         sheet.ActiveCol = 3;
+        workbook.WatchedCells.Add(Addr(sheet, "A2"));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Print Forecast",
+            [
+                new ScenarioCellValue(Addr(sheet, "A2"), new NumberValue(84)),
+                new ScenarioCellValue(Addr(sheet, "B2"), new TextValue("Scenario"))
+            ]));
         workbook.CustomViews.Add(new WorkbookCustomView(
             "Print Review",
             [

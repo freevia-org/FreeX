@@ -86,6 +86,7 @@ public static partial class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
