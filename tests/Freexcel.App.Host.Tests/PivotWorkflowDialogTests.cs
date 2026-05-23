@@ -1,6 +1,9 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -49,10 +52,12 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("AddLabeledReferenceEditor(");
         source.Should().Contain("_sourceRangeBox,");
         source.Should().Contain("_destinationRangeBox,");
-        source.Should().Contain("CreateReferenceEditor(textBox, automationName, editorMargin)");
+        source.Should().Contain("CreateReferenceEditor(textBox, automationName, target, editorMargin)");
         source.Should().Contain("Select PivotTable source range");
         source.Should().Contain("Select PivotTable location");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("UpdateDestinationState");
     }
 
@@ -99,9 +104,58 @@ public sealed class PivotWorkflowDialogTests
             "_destinationRangeBox,",
             "new Label",
             "Target = textBox",
-            "CreateReferenceEditor(textBox, automationName, editorMargin)"
+            "private void AddLabeledReferenceEditor",
+            "CreateReferenceEditor(textBox, automationName, target, editorMargin)"
         })
             source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        PivotTableDialog.CreateRangeSelectionRequest(PivotTableRangeSelectionTarget.DestinationRange, " Report!F3 ")
+            .Should()
+            .Be(new PivotTableRangeSelectionRequest(
+                PivotTableRangeSelectionTarget.DestinationRange,
+                "Report!F3",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select PivotTable source range", PivotTableRangeSelectionTarget.SourceRange, "Sales!A1:D20")]
+    [InlineData("Select PivotTable location", PivotTableRangeSelectionTarget.DestinationRange, "Sales!F1")]
+    public void PivotTableReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        PivotTableRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sales");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20, 4));
+
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<PivotTableRangeSelectionRequest>();
+            var dialog = new PivotTableDialog(workbook, sheet.Id, range, requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new PivotTableRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -114,13 +168,50 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        PivotTableDataSourceDialog.CreateRangeSelectionRequest(" Sales!A1:E200 ")
+            .Should()
+            .Be(new PivotTableDataSourceRangeSelectionRequest("Sales!A1:E200", CollapseDialog: true));
+    }
+
+    [Fact]
     public void PivotTableDataSourceDialog_ExposesReferencePickerForSourceRange()
     {
         var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("CreateReferenceEditor(_sourceBox");
         source.Should().Contain("Select PivotTable source range");
-        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("PivotTableDataSourceRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceReferencePicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<PivotTableDataSourceRangeSelectionRequest>();
+            var dialog = new PivotTableDataSourceDialog(" Sales!A1:E200 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select PivotTable source range");
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new PivotTableDataSourceRangeSelectionRequest(
+                    "Sales!A1:E200",
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -260,6 +351,7 @@ public sealed class PivotWorkflowDialogTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            preserveSourceSortFilter: false,
             missingItemsLimit: 42,
             showExpandCollapseButtons: false,
             autofitColumnsOnUpdate: false,
@@ -288,6 +380,7 @@ public sealed class PivotWorkflowDialogTests
             PivotReportLayout.Outline,
             "N/A",
             true,
+            false,
             false,
             false,
             1_048_576,
@@ -319,6 +412,7 @@ public sealed class PivotWorkflowDialogTests
             RefreshOnLoad = true,
             SaveData = false,
             EnableRefresh = false,
+            PreserveSourceSortFilter = false,
             MissingItemsLimit = 0
         };
 
@@ -328,6 +422,7 @@ public sealed class PivotWorkflowDialogTests
                 result.RefreshOnOpen &&
                 !result.SaveSourceData &&
                 !result.EnableRefresh &&
+                !result.PreserveSourceSortFilter &&
                 result.MissingItemsLimit == 0);
     }
 
@@ -446,6 +541,7 @@ public sealed class PivotWorkflowDialogTests
             "_preserveFormattingBox",
             "_refreshOnOpenBox",
             "_enableRefreshBox",
+            "_preserveSourceSortFilterBox",
             "_missingItemsLimitBox",
             "_fieldHeadersBox",
             "_showExpandCollapseBox",
@@ -486,11 +582,27 @@ public sealed class PivotWorkflowDialogTests
             "Alt Text",
             "Preserve source sort and _filter settings",
             "Retain items _deleted from the data source",
-            "Display field _captions and filter drop-downs"
+            "Display field _captions and filter drop-downs",
+            "Show items with no data on _rows",
+            "Show items with no data on _columns"
         })
             source.Should().Contain(content);
 
         source.Should().NotContain("Field list and buttons remain available");
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ModelsPreserveSourceSortFilterOption()
+    {
+        var source = ReadPivotWorkflowSource();
+
+        source.Should().Contain("private readonly CheckBox _preserveSourceSortFilterBox");
+        source.Should().Contain("Content = \"Preserve source sort and _filter settings\"");
+        source.Should().Contain("PreserveSourceSortFilter");
+        source.Should().Contain("AddCheckBox(dataPanel, _preserveSourceSortFilterBox)");
+        source.Should().NotContain("IsEnabled = false");
+        source.Should().NotContain("changing this option is not modeled yet");
+        source.Should().NotContain("new CheckBox { Content = \"Preserve source sort and _filter settings\"");
     }
 
     [Fact]
@@ -528,6 +640,8 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"Row _headers\"",
             "Content = \"Column hea_ders\"",
             "Content = \"Display field _captions and filter drop-downs\"",
+            "Content = \"Show items with no data on _rows\"",
+            "Content = \"Show items with no data on _columns\"",
             "Content = \"Banded _rows\"",
             "Content = \"Banded c_olumns\"",
             "Content = \"_Autofit column widths on update\"",
@@ -571,6 +685,8 @@ public sealed class PivotWorkflowDialogTests
             showPropertiesInTooltips: false,
             showClassicLayout: true,
             mergeAndCenterLabels: true,
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
@@ -584,6 +700,8 @@ public sealed class PivotWorkflowDialogTests
         result.ShowPropertiesInTooltips.Should().BeFalse();
         result.ShowClassicLayout.Should().BeTrue();
         result.MergeAndCenterLabels.Should().BeTrue();
+        result.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        result.ShowItemsWithNoDataOnColumns.Should().BeTrue();
         result.EnableRefresh.Should().BeFalse();
         result.MissingItemsLimit.Should().Be(0);
         result.PrintTitles.Should().BeTrue();
@@ -896,5 +1014,19 @@ public sealed class PivotWorkflowDialogTests
                 "PivotWorkflowDialogs.cs",
                 "PivotTableOptionsDialog.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 }

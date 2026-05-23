@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -17,21 +20,53 @@ public sealed record SortColorChoice(string Label);
 
 public sealed record SortDialogOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
-public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
+public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyPropertyChanged
 {
+    private uint _columnOffset;
+    private bool _ascending;
+    private string _sortOn = "Cell Values";
+    private string _targetColor = "";
+    private IReadOnlyList<SortColorChoice> _colorChoices = [new SortColorChoice("")];
+
     public SortDialogLevel(uint columnOffset, bool ascending)
     {
-        ColumnOffset = columnOffset;
-        Ascending = ascending;
+        _columnOffset = columnOffset;
+        _ascending = ascending;
     }
 
-    public uint ColumnOffset { get; set; }
+    public event PropertyChangedEventHandler? PropertyChanged;
 
-    public bool Ascending { get; set; }
+    public uint ColumnOffset
+    {
+        get => _columnOffset;
+        set => SetField(ref _columnOffset, value);
+    }
 
-    public string SortOn { get; set; } = "Cell Values";
+    public bool Ascending
+    {
+        get => _ascending;
+        set => SetField(ref _ascending, value);
+    }
 
-    public string TargetColor { get; set; } = "";
+    public string SortOn
+    {
+        get => _sortOn;
+        set
+        {
+            if (SetField(ref _sortOn, value))
+                OnPropertyChanged(nameof(OrderChoices));
+        }
+    }
+
+    public string TargetColor
+    {
+        get => _targetColor;
+        set => SetField(ref _targetColor, value);
+    }
+
+    public IReadOnlyList<SortDirectionChoice> OrderChoices => SortDialog.BuildOrderChoices(SortOn);
+
+    public IReadOnlyList<SortColorChoice> ColorChoices => _colorChoices;
 
     public bool Equals(SortDialogLevel? other) =>
         other is not null &&
@@ -45,14 +80,41 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
     public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending, SortOn, TargetColor.ToUpperInvariant());
 
     public override string ToString() => $"Column offset {ColumnOffset}, {(Ascending ? "Ascending" : "Descending")}";
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private void OnPropertyChanged(string? propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+    internal void SetColorChoices(IReadOnlyList<SortColorChoice> colorChoices)
+    {
+        _colorChoices = colorChoices.Count == 0 ? [new SortColorChoice("")] : colorChoices;
+        if (!string.IsNullOrWhiteSpace(TargetColor) &&
+            !_colorChoices.Any(choice => string.Equals(choice.Label, TargetColor, StringComparison.OrdinalIgnoreCase)))
+            TargetColor = "";
+        OnPropertyChanged(nameof(ColorChoices));
+    }
 }
 
-public sealed class SortDialog : Window
+public sealed partial class SortDialog : Window
 {
     private static readonly IReadOnlyList<SortDirectionChoice> DirectionChoices =
     [
         new("A to Z", true),
         new("Z to A", false)
+    ];
+
+    private static readonly IReadOnlyList<SortDirectionChoice> ColorDirectionChoices =
+    [
+        new("On Top", true),
+        new("On Bottom", false)
     ];
 
     private static readonly IReadOnlyList<SortOnChoice> SortOnChoices =
@@ -66,7 +128,8 @@ public sealed class SortDialog : Window
     private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
     private readonly IReadOnlyList<SortColumnChoice> _genericColumnChoices;
     private readonly IReadOnlyList<SortColumnChoice> _rowChoices;
-    private readonly IReadOnlyList<SortColorChoice> _colorChoices;
+    private readonly IReadOnlyList<SortColorChoice> _cellColorChoices;
+    private readonly IReadOnlyList<SortColorChoice> _fontColorChoices;
     private readonly CheckBox _headerCheck;
     private readonly DataGridComboBoxColumn _sortByColumn;
     private SortDialogOptions _options;
@@ -85,13 +148,16 @@ public sealed class SortDialog : Window
         IEnumerable<SortColumnChoice>? genericColumnChoices = null,
         IEnumerable<SortColumnChoice>? rowChoices = null,
         IEnumerable<SortColorChoice>? colorChoices = null,
+        IEnumerable<SortColorChoice>? cellColorChoices = null,
+        IEnumerable<SortColorChoice>? fontColorChoices = null,
         bool hasHeaders = true)
     {
         _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
         _columnChoices = NormalizeColumnChoices(columnChoices);
         _genericColumnChoices = NormalizeColumnChoices(genericColumnChoices ?? columnChoices);
         _rowChoices = NormalizeColumnChoices(rowChoices);
-        _colorChoices = NormalizeColorChoices(colorChoices);
+        _cellColorChoices = NormalizeColorChoices(cellColorChoices ?? colorChoices);
+        _fontColorChoices = NormalizeColorChoices(fontColorChoices ?? colorChoices);
         _options = new SortDialogOptions();
         ResultSortKeys = BuildSortKeys(_levels);
         ResultHasHeaders = hasHeaders;
@@ -123,6 +189,14 @@ public sealed class SortDialog : Window
         root.Children.Add(headerRow);
         _headerCheck.Checked += (_, _) => UpdateColumnChoices();
         _headerCheck.Unchecked += (_, _) => UpdateColumnChoices();
+        foreach (var level in _levels)
+            AttachLevel(level);
+        _levels.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems is null) return;
+            foreach (SortDialogLevel level in e.NewItems)
+                AttachLevel(level);
+        };
 
         var list = new DataGrid
         {
@@ -162,32 +236,8 @@ public sealed class SortDialog : Window
             },
             Width = new DataGridLength(140)
         });
-        list.Columns.Add(new DataGridComboBoxColumn
-        {
-            Header = "Order",
-            ItemsSource = DirectionChoices,
-            DisplayMemberPath = nameof(SortDirectionChoice.Label),
-            SelectedValuePath = nameof(SortDirectionChoice.Ascending),
-            SelectedValueBinding = new Binding(nameof(SortDialogLevel.Ascending))
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-            },
-            Width = new DataGridLength(150)
-        });
-        list.Columns.Add(new DataGridComboBoxColumn
-        {
-            Header = "Color",
-            ItemsSource = _colorChoices,
-            DisplayMemberPath = nameof(SortColorChoice.Label),
-            SelectedValuePath = nameof(SortColorChoice.Label),
-            SelectedValueBinding = new Binding(nameof(SortDialogLevel.TargetColor))
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
-            },
-            Width = new DataGridLength(115)
-        });
+        list.Columns.Add(CreateOrderColumn());
+        list.Columns.Add(CreateColorColumn());
         DockPanel.SetDock(list, Dock.Top);
         root.Children.Add(list);
 
@@ -286,156 +336,6 @@ public sealed class SortDialog : Window
         Content = root;
     }
 
-    public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels)
-    {
-        return NormalizeLevels(levels)
-            .Select(level =>
-            {
-                var sortOn = SortOnFromLabel(level.SortOn);
-                return new SortKey(level.ColumnOffset, level.Ascending, sortOn, TargetColorFromText(level.TargetColor, sortOn));
-            })
-            .ToList();
-    }
-
-    public static IReadOnlyList<SortDialogLevel> AddLevel(
-        IEnumerable<SortDialogLevel> levels,
-        uint columnOffset = 0,
-        bool ascending = true)
-    {
-        return NormalizeLevels(levels)
-            .Append(new SortDialogLevel(columnOffset, ascending))
-            .ToList();
-    }
-
-    public static IReadOnlyList<SortDialogLevel> RemoveLevel(IEnumerable<SortDialogLevel> levels, int index)
-    {
-        var updated = NormalizeLevels(levels).ToList();
-        if (index >= 0 && index < updated.Count)
-            updated.RemoveAt(index);
-
-        return updated.Count == 0 ? [new SortDialogLevel(0, true)] : updated;
-    }
-
-    public static IReadOnlyList<SortDialogLevel> CopyLevel(IEnumerable<SortDialogLevel> levels, int index)
-    {
-        var updated = NormalizeLevels(levels).ToList();
-        if (index >= 0 && index < updated.Count)
-        {
-            var level = updated[index];
-            updated.Insert(index + 1, new SortDialogLevel(level.ColumnOffset, level.Ascending)
-            {
-                SortOn = level.SortOn,
-                TargetColor = level.TargetColor
-            });
-        }
-
-        return updated;
-    }
-
-    public static IReadOnlyList<SortDialogLevel> MoveLevel(IEnumerable<SortDialogLevel> levels, int index, int direction)
-    {
-        var updated = NormalizeLevels(levels).ToList();
-        var targetIndex = index + Math.Sign(direction);
-        if (index < 0 || index >= updated.Count || targetIndex < 0 || targetIndex >= updated.Count)
-            return updated;
-
-        (updated[index], updated[targetIndex]) = (updated[targetIndex], updated[index]);
-        return updated;
-    }
-
-    public static IReadOnlyList<SortDialogLevel> UpdateLevel(
-        IEnumerable<SortDialogLevel> levels,
-        int index,
-        uint columnOffset,
-        bool ascending)
-    {
-        var updated = NormalizeLevels(levels).ToList();
-        if (index >= 0 && index < updated.Count)
-            updated[index] = new SortDialogLevel(columnOffset, ascending)
-            {
-                SortOn = updated[index].SortOn,
-                TargetColor = updated[index].TargetColor
-            };
-
-        return updated;
-    }
-
-    public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(GridRange range)
-    {
-        return BuildColumnChoices(null, range, hasHeaders: false);
-    }
-
-    public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(Sheet? sheet, GridRange range, bool hasHeaders)
-    {
-        var choices = new List<SortColumnChoice>();
-        for (uint offset = 0; offset < range.ColCount; offset++)
-        {
-            var columnName = CellAddress.NumberToColumnName(range.Start.Col + offset);
-            var label = hasHeaders && sheet is not null
-                ? GetHeaderLabel(sheet, range, offset, columnName)
-                : $"Column {columnName}";
-            choices.Add(new SortColumnChoice(label, offset));
-        }
-
-        return choices.Count == 0 ? [new SortColumnChoice("Column A", 0)] : choices;
-    }
-
-    public static IReadOnlyList<SortColumnChoice> BuildRowChoices(GridRange range)
-    {
-        var choices = new List<SortColumnChoice>();
-        for (uint offset = 0; offset < range.RowCount; offset++)
-            choices.Add(new SortColumnChoice($"Row {range.Start.Row + offset}", offset));
-
-        return choices.Count == 0 ? [new SortColumnChoice("Row 1", 0)] : choices;
-    }
-
-    public static IReadOnlyList<SortColorChoice> BuildColorChoices(Workbook workbook, Sheet? sheet, GridRange range)
-    {
-        if (sheet is null)
-            return [new SortColorChoice("")];
-
-        var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var address in range.AllCells())
-        {
-            var cell = sheet.GetCell(address);
-            var style = workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
-            if (style.FillColor is { } fillColor)
-                colors.Add(ColorInputParser.FormatHexColor(fillColor));
-            if (style.FontColor is { } fontColor)
-                colors.Add(ColorInputParser.FormatHexColor(fontColor));
-        }
-
-        return [new SortColorChoice(""), .. colors.Select(color => new SortColorChoice(color))];
-    }
-
-    public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
-    {
-        if (!hasHeaders || range.Start.Row >= range.End.Row)
-            return range;
-
-        return new GridRange(
-            new CellAddress(range.Start.Sheet, range.Start.Row + 1, range.Start.Col),
-            range.End);
-    }
-
-    private static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels)
-    {
-        var normalized = levels?.ToList() ?? [];
-        return normalized.Count == 0 ? [new SortDialogLevel(0, true)] : normalized;
-    }
-
-    private static IReadOnlyList<SortColumnChoice> NormalizeColumnChoices(IEnumerable<SortColumnChoice>? choices)
-    {
-        var normalized = choices?.ToList() ?? [];
-        return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
-    }
-
-    private static IReadOnlyList<SortColorChoice> NormalizeColorChoices(IEnumerable<SortColorChoice>? choices)
-    {
-        var normalized = choices?.ToList() ?? [];
-        return normalized.Count == 0 ? [new SortColorChoice("")] : normalized;
-    }
-
     private void UpdateColumnChoices()
     {
         _sortByColumn.Header = _options.LeftToRight ? "Sort by row" : "Sort by";
@@ -447,36 +347,82 @@ public sealed class SortDialog : Window
             : _genericColumnChoices;
     }
 
-    private static string GetHeaderLabel(Sheet sheet, GridRange range, uint offset, string fallbackColumnName)
+    private void AttachLevel(SortDialogLevel level)
     {
-        var address = new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col + offset);
-        var text = sheet.GetCell(address)?.Value switch
+        ApplyColorChoices(level);
+        level.PropertyChanged += (_, e) =>
         {
-            TextValue value => value.Value.Trim(),
-            NumberValue value => value.Value.ToString("G15", System.Globalization.CultureInfo.CurrentCulture),
-            DateTimeValue value => value.Value.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
-            BoolValue value => value.Value ? "TRUE" : "FALSE",
-            _ => string.Empty
+            if (e.PropertyName == nameof(SortDialogLevel.SortOn))
+                ApplyColorChoices(level);
         };
-
-        return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
     }
 
-    private static Freexcel.Core.Commands.SortOn SortOnFromLabel(string? label) =>
-        label switch
-        {
-            "Cell Color" => Freexcel.Core.Commands.SortOn.CellColor,
-            "Font Color" => Freexcel.Core.Commands.SortOn.FontColor,
-            _ => Freexcel.Core.Commands.SortOn.CellValues
-        };
-
-    private static CellColor? TargetColorFromText(string? text, Freexcel.Core.Commands.SortOn sortOn)
+    private void ApplyColorChoices(SortDialogLevel level)
     {
-        if (sortOn is not Freexcel.Core.Commands.SortOn.CellColor and not Freexcel.Core.Commands.SortOn.FontColor)
-            return null;
-
-        return ColorInputParser.TryParseColorText(text ?? "", out var color) ? color : null;
+        level.SetColorChoices(SortOnFromLabel(level.SortOn) switch
+        {
+            Freexcel.Core.Commands.SortOn.CellColor => _cellColorChoices,
+            Freexcel.Core.Commands.SortOn.FontColor => _fontColorChoices,
+            _ => [new SortColorChoice("")]
+        });
     }
+
+    private static DataGridTemplateColumn CreateOrderColumn()
+    {
+        var column = new DataGridTemplateColumn
+        {
+            Header = "Order",
+            Width = new DataGridLength(150)
+        };
+        column.CellTemplate = CreateOrderTemplate(isReadOnly: true);
+        column.CellEditingTemplate = CreateOrderTemplate(isReadOnly: false);
+        return column;
+    }
+
+    private static DataGridTemplateColumn CreateColorColumn()
+    {
+        var column = new DataGridTemplateColumn
+        {
+            Header = "Color",
+            Width = new DataGridLength(115)
+        };
+        column.CellTemplate = CreateColorTemplate(isReadOnly: true);
+        column.CellEditingTemplate = CreateColorTemplate(isReadOnly: false);
+        return column;
+    }
+
+    private static DataTemplate CreateColorTemplate(bool isReadOnly)
+    {
+        var combo = new FrameworkElementFactory(typeof(ComboBox));
+        combo.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(SortDialogLevel.ColorChoices)));
+        combo.SetValue(ItemsControl.DisplayMemberPathProperty, nameof(SortColorChoice.Label));
+        combo.SetValue(Selector.SelectedValuePathProperty, nameof(SortColorChoice.Label));
+        combo.SetBinding(Selector.SelectedValueProperty, new Binding(nameof(SortDialogLevel.TargetColor))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+        });
+        combo.SetValue(UIElement.IsHitTestVisibleProperty, !isReadOnly);
+        combo.SetValue(Control.IsTabStopProperty, !isReadOnly);
+        return new DataTemplate { VisualTree = combo };
+    }
+
+    private static DataTemplate CreateOrderTemplate(bool isReadOnly)
+    {
+        var combo = new FrameworkElementFactory(typeof(ComboBox));
+        combo.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(SortDialogLevel.OrderChoices)));
+        combo.SetValue(ItemsControl.DisplayMemberPathProperty, nameof(SortDirectionChoice.Label));
+        combo.SetValue(Selector.SelectedValuePathProperty, nameof(SortDirectionChoice.Ascending));
+        combo.SetBinding(Selector.SelectedValueProperty, new Binding(nameof(SortDialogLevel.Ascending))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+        });
+        combo.SetValue(UIElement.IsHitTestVisibleProperty, !isReadOnly);
+        combo.SetValue(Control.IsTabStopProperty, !isReadOnly);
+        return new DataTemplate { VisualTree = combo };
+    }
+
 }
 
 public sealed class SortOptionsDialog : Window

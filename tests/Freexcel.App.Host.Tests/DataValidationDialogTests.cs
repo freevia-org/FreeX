@@ -25,6 +25,8 @@ public sealed class DataValidationDialogTests
         xaml.Should().Contain("Click=\"SourcePicker2Button_Click\"");
         xaml.Should().Contain("AutomationProperties.Name=\"Select source range\"");
         xaml.Should().Contain("AutomationProperties.Name=\"Select maximum range\"");
+        xaml.Should().Contain("Collapse dialog and select source range");
+        xaml.Should().Contain("Collapse dialog and select maximum range");
     }
 
     [Fact]
@@ -65,7 +67,7 @@ public sealed class DataValidationDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new DataValidationDialog { SelectionSource = "=Sheet1!$B$2:$B$8" };
+            var dialog = new DataValidationDialog();
             dialog.Show();
             try
             {
@@ -175,6 +177,54 @@ public sealed class DataValidationDialogTests
         codeBehind.Should().Contain("Formula1Label.Content = \"_Formula:\"");
         codeBehind.Should().Contain("Formula1Label.Content = (opTag == \"Between\" || opTag == \"NotBetween\") ? \"_Minimum:\" : \"_Value:\"");
         codeBehind.Should().NotContain("Formula1Label.Text =");
+    }
+
+    [Theory]
+    [InlineData("List", "Between", "", "", "Source")]
+    [InlineData("Custom", "Between", "", "", "Formula")]
+    [InlineData("WholeNumber", "Between", "1", "", "Maximum")]
+    [InlineData("WholeNumber", "Equal", "", "", "Value")]
+    public void ValidateCriteriaInputs_RejectsIncompleteValidationCriteria(
+        string typeTag,
+        string operatorTag,
+        string formula1,
+        string formula2,
+        string expectedMessageFragment)
+    {
+        DataValidationDialog.TryValidateCriteriaInputs(
+                typeTag,
+                operatorTag,
+                formula1,
+                formula2,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Contain(expectedMessageFragment);
+    }
+
+    [Fact]
+    public void ValidateCriteriaInputs_AllowsAnyValueAndCompleteBetweenCriteria()
+    {
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "Any",
+                "Between",
+                "",
+                "",
+                out var anyError)
+            .Should()
+            .BeTrue();
+        anyError.Should().BeNull();
+
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "Decimal",
+                "Between",
+                "1.5",
+                "2.5",
+                out var betweenError)
+            .Should()
+            .BeTrue();
+        betweenError.Should().BeNull();
     }
 
     [Fact]
@@ -325,6 +375,34 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void SourcePickerButton_RaisesRangeSelectionRequestWithoutPreseededSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<DataValidationRangeSelectionRequest>();
+            var dialog = new DataValidationDialog(requests.Add);
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "Custom");
+                GetControl<TextBox>(dialog, "Formula1Box").Text = "=$A$1:$A$10";
+
+                InvokePrivate(dialog, "SourcePickerButton_Click");
+
+                requests.Should().Equal(new DataValidationRangeSelectionRequest(
+                    DataValidationRangeSelectionTarget.Formula1,
+                    "=$A$1:$A$10",
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void UseSelection2Button_PopulatesFormula2()
     {
         StaTestRunner.Run(() =>
@@ -360,6 +438,10 @@ public sealed class DataValidationDialogTests
 
                 var formula2Box = GetControl<TextBox>(dialog, "Formula2Box");
                 formula2Box.Text.Should().Be("=Sheet1!$C$2:$C$8");
+                dialog.RangeSelectionRequest.Should().Be(new DataValidationRangeSelectionRequest(
+                    DataValidationRangeSelectionTarget.Formula2,
+                    "=Sheet1!$C$2:$C$8",
+                    CollapseDialog: true));
                 formula2Box.IsKeyboardFocusWithin.Should().BeTrue();
                 formula2Box.SelectionLength.Should().Be(formula2Box.Text.Length);
             }
@@ -368,6 +450,19 @@ public sealed class DataValidationDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void DataValidationRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        DataValidationDialog.CreateRangeSelectionRequest(
+                DataValidationRangeSelectionTarget.Formula2,
+                "  =Sheet1!$C$2:$C$8  ")
+            .Should()
+            .Be(new DataValidationRangeSelectionRequest(
+                DataValidationRangeSelectionTarget.Formula2,
+                "=Sheet1!$C$2:$C$8",
+                CollapseDialog: true));
     }
 
     private static T GetControl<T>(DataValidationDialog dialog, string name)

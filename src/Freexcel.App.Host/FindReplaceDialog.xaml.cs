@@ -12,6 +12,7 @@ public sealed partial class FindReplaceDialog : Window
     private readonly Func<SheetId?> _getCurrentSheetId;
     private readonly ICommandBus _commandBus;
     private readonly Action<CellAddress> _navigateTo;
+    private readonly Func<CellAddress?> _getActiveSelectionCell;
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
     private string _lastSearch = string.Empty;
@@ -23,12 +24,14 @@ public sealed partial class FindReplaceDialog : Window
         ICommandBus commandBus,
         Action<CellAddress> navigateTo,
         bool replaceMode = false,
-        Func<SheetId?>? getCurrentSheetId = null)
+        Func<SheetId?>? getCurrentSheetId = null,
+        Func<CellAddress?>? getActiveSelectionCell = null)
     {
         _getWorkbook = getWorkbook;
         _getCurrentSheetId = getCurrentSheetId ?? (() => null);
         _commandBus = commandBus;
         _navigateTo = navigateTo;
+        _getActiveSelectionCell = getActiveSelectionCell ?? (() => null);
         InitializeComponent();
         if (replaceMode)
         {
@@ -55,6 +58,8 @@ public sealed partial class FindReplaceDialog : Window
     private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
     private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
+    private void ChooseFindFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromCell(ref _findFormatDiff);
+    private void ChooseReplaceWithFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromCell(ref _replaceFormatDiff);
     private void FindClearFormatButton_Click(object sender, RoutedEventArgs e)
     {
         _findFormatDiff = null;
@@ -200,6 +205,31 @@ public sealed partial class FindReplaceDialog : Window
         UpdateFormatStateButtons();
     }
 
+    private void PickFormatFromCell(ref StyleDiff? target)
+    {
+        var address = FindResultsGrid.SelectedItem is FindResultRow row
+            ? row.Address
+            : _getActiveSelectionCell();
+        if (address is null)
+        {
+            StatusLabel.Text = "Select a result cell or worksheet cell to choose its format.";
+            return;
+        }
+
+        var diff = FindReplaceDialogPlanner.CreateFormatDiffFromCell(_getWorkbook(), address.Value);
+        if (diff is null)
+        {
+            StatusLabel.Text = "No cell format found.";
+            return;
+        }
+
+        target = diff;
+        StatusLabel.Text = FindResultsGrid.SelectedItem is FindResultRow
+            ? "Format chosen from selected result cell."
+            : "Format chosen from active worksheet cell.";
+        UpdateFormatStateButtons();
+    }
+
     private void UpdateFormatStateButtons()
     {
         SetFormatState(_findFormatDiff is not null, "Find format is set", FindFormatButton, FindClearFormatButton);
@@ -226,6 +256,13 @@ internal static class FindReplaceDialogPlanner
         results
             .Select(result => CreateFindResultRow(workbook, result))
             .ToList();
+
+    public static StyleDiff? CreateFormatDiffFromCell(Workbook workbook, CellAddress address)
+    {
+        var sheet = workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        return cell is null ? null : StyleDiff.FromStyle(workbook.GetStyle(cell.StyleId));
+    }
 
     private static FindResultRow CreateFindResultRow(Workbook workbook, FindResult result)
     {

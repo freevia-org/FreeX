@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -77,6 +78,7 @@ public sealed class SubtotalDialog : Window
         root.Children.Add(_summaryBelowBox);
         root.Children.Add(CreateSubtotalButtonRow(Accept, RemoveAll));
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static SubtotalDialogResult CreateResult(
@@ -160,6 +162,12 @@ public sealed class SubtotalDialog : Window
     {
         Result = CreateRemoveAllResult();
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _groupColumnBox.Focus();
+        Keyboard.Focus(_groupColumnBox);
     }
 
     private static Grid CreateSubtotalButtonRow(Action accept, Action removeAll)

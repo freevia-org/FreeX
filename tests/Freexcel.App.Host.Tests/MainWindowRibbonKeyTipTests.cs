@@ -299,9 +299,13 @@ public sealed class MainWindowRibbonKeyTipTests
                 workbookRef,
                 workbook);
 
-            window.Width = 1280;
+            window.WindowState = WindowState.Normal;
+            window.Width = 2400;
             window.Height = 720;
             window.Show();
+            if (window.FindName("RibbonTabs") is TabControl ribbonTabs)
+                ribbonTabs.Width = 2400;
+            window.UpdateLayout();
             PumpDispatcher();
             configureWorkbook?.Invoke(workbookRef.Current);
             return new MainWindowHarness(window);

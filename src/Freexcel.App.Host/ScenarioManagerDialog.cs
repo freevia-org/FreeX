@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -98,6 +99,7 @@ public sealed class ScenarioManagerDialog : Window
         closeRow.Children.Add(new Button { Content = "_Close", Width = 72, IsCancel = true });
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static IReadOnlyList<ScenarioManagerItem> BuildScenarioItems(Workbook workbook) =>
@@ -141,6 +143,13 @@ public sealed class ScenarioManagerDialog : Window
         button.Click += (_, _) => Accept(action);
         panel.Children.Add(button);
         return button;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        Control target = _scenarioList.Items.Count > 0 ? _scenarioList : _newNameBox;
+        target.Focus();
+        Keyboard.Focus(target);
     }
 
     private void UpdateSelectionState()

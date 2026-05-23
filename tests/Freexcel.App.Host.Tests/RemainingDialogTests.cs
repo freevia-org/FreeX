@@ -3,6 +3,8 @@ using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
 using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -98,6 +100,8 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("ZoomPresets");
+        source.Should().Contain("[400, 200, 100, 75, 50, 25]");
+        source.Should().Contain("400");
         source.Should().Contain("200");
         source.Should().Contain("100");
         source.Should().Contain("75");
@@ -236,6 +240,30 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void RemainingNonChartDialogs_UseSharedExcelStyleButtonRows()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+    }
+
+    [Fact]
+    public void SingleInputMiniDialogs_UseAccessKeyedLabelsAndSharedButtonRows()
+    {
+        var remainingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var objectSource = ReadObjectDialogSources();
+
+        remainingSource.Should().Contain("Format cells greater _than:");
+        remainingSource.Should().Contain("Row _height:");
+        remainingSource.Should().Contain("Column _width:");
+        remainingSource.Should().Contain("Forecast _periods:");
+        remainingSource.Should().Contain("Sheet _name:");
+        objectSource.Should().Contain("Target = box");
+        objectSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72)");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_TryCreateResult_RequiresPositivePeriods()
     {
         ForecastSheetDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
@@ -260,6 +288,32 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_CreateRangeSelectionRequest_TrimsCurrentTextAndRequestsCollapse()
+    {
+        SparklineDialog.CreateRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, " A1:E1 ")
+            .Should()
+            .Be(new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void SparklineDialog_RangePickerButtonsTriggerWorksheetSelectionIntent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<SparklineRangeSelectionRequest>();
+            var dialog = new SparklineDialog("A1:E1", "F1", SparklineKindChoice.Line, requests.Add);
+
+            GetField<Button>(dialog, "_dataRangePickerButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            GetField<Button>(dialog, "_locationPickerButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            requests.Should().Equal(
+                new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.DataRange, "A1:E1", CollapseDialog: true),
+                new SparklineRangeSelectionRequest(SparklineRangeSelectionTarget.Location, "F1", CollapseDialog: true));
+            dialog.RangeSelectionRequest.Should().Be(requests[^1]);
+        });
+    }
+
+    [Fact]
     public void SparklineDialog_ExposesRangePickerButtonsForDataAndLocation()
     {
         var source = ReadRemainingDialogSources();
@@ -268,6 +322,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_locationPickerButton");
         source.Should().Contain("Select Data Range");
         source.Should().Contain("Select Location Range");
+        source.Should().Contain("RequestRangeSelection");
     }
 
     [Fact]
@@ -278,6 +333,18 @@ public sealed class RemainingDialogTests
         source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
         source.Should().Contain("new Label { Content = \"_Location:\", Target = _locationBox");
         source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
+    }
+
+    [Fact]
+    public void SparklineDialog_UsesExcelWinLossLabel()
+    {
+        SparklineDialog.GetKindLabel(SparklineKindChoice.Line).Should().Be("Line");
+        SparklineDialog.GetKindLabel(SparklineKindChoice.Column).Should().Be("Column");
+        SparklineDialog.GetKindLabel(SparklineKindChoice.WinLoss).Should().Be("Win/Loss");
+
+        var source = ReadRemainingDialogSources();
+        source.Should().Contain("GetKindLabel(choice)");
+        source.Should().Contain("Tag = choice");
     }
 
     [Fact]
@@ -409,6 +476,12 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
     }
+
+    private static string ReadObjectDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
     private static T GetField<T>(object instance, string name)
         where T : class
     {

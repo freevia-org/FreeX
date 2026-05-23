@@ -11,7 +11,18 @@ public enum SparklineKindChoice
     WinLoss
 }
 
+public enum SparklineRangeSelectionTarget
+{
+    DataRange,
+    Location
+}
+
 public sealed record SparklineDialogResult(string DataRangeText, string LocationText, SparklineKindChoice Kind);
+
+public sealed record SparklineRangeSelectionRequest(
+    SparklineRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog);
 
 public sealed class SparklineDialog : Window
 {
@@ -20,11 +31,18 @@ public sealed class SparklineDialog : Window
     private readonly ComboBox _kindBox = new();
     private readonly Button _dataRangePickerButton = new() { Content = "_Select Data Range", Width = 132, ToolTip = "Select Data Range" };
     private readonly Button _locationPickerButton = new() { Content = "Select _Location Range", Width = 152, ToolTip = "Select Location Range" };
+    private readonly Action<SparklineRangeSelectionRequest>? _requestRangeSelection;
 
     public SparklineDialogResult Result { get; private set; }
+    public SparklineRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public SparklineDialog(string dataRangeText, string locationText, SparklineKindChoice kind)
+    public SparklineDialog(
+        string dataRangeText,
+        string locationText,
+        SparklineKindChoice kind,
+        Action<SparklineRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(dataRangeText, locationText, kind);
         Title = "Insert Sparkline";
         Width = 380;
@@ -32,8 +50,8 @@ public sealed class SparklineDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _dataRangePickerButton.Click += (_, _) => FocusRangeBox(_dataRangeBox);
-        _locationPickerButton.Click += (_, _) => FocusRangeBox(_locationBox);
+        _dataRangePickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.DataRange, _dataRangeBox);
+        _locationPickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.Location, _locationBox);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
@@ -43,25 +61,38 @@ public sealed class SparklineDialog : Window
         _locationBox.Text = Result.LocationText;
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>();
-        _kindBox.SelectedItem = kind;
+        _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
+            .Select(choice => new ComboBoxItem
+            {
+                Content = GetKindLabel(choice),
+                Tag = choice
+            });
+        _kindBox.SelectedIndex = Math.Max(0, Array.IndexOf(Enum.GetValues<SparklineKindChoice>(), kind));
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_kindBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         Content = stack;
     }
 
     public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKindChoice kind) =>
         new(dataRangeText.Trim(), locationText.Trim(), kind);
 
+    public static SparklineRangeSelectionRequest CreateRangeSelectionRequest(
+        SparklineRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
     private void Accept()
     {
         Result = CreateResult(
             _dataRangeBox.Text,
             _locationBox.Text,
-            _kindBox.SelectedItem is SparklineKindChoice kind ? kind : SparklineKindChoice.Line);
+            _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKindChoice kind } ? kind : SparklineKindChoice.Line);
         DialogResult = true;
     }
+
+    public static string GetKindLabel(SparklineKindChoice kind) =>
+        kind == SparklineKindChoice.WinLoss ? "Win/Loss" : kind.ToString();
 
     private static StackPanel CreateRangePickerRow(TextBox textBox, Button pickerButton)
     {
@@ -74,9 +105,11 @@ public sealed class SparklineDialog : Window
         return row;
     }
 
-    private static void FocusRangeBox(TextBox textBox)
+    private void RequestRangeSelection(SparklineRangeSelectionTarget target, TextBox textBox)
     {
         textBox.Focus();
         textBox.SelectAll();
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 }

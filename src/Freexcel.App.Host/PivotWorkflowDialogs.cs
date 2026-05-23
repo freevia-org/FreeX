@@ -10,15 +10,23 @@ using Freexcel.Core.Model;
 namespace Freexcel.App.Host;
 
 public sealed record PivotTableDataSourceDialogResult(string SourceRangeText);
+public sealed record PivotTableDataSourceRangeSelectionRequest(
+    string CurrentText,
+    bool CollapseDialog = true);
 
 public sealed class PivotTableDataSourceDialog : Window
 {
     private readonly TextBox _sourceBox = new();
+    private readonly Action<PivotTableDataSourceRangeSelectionRequest>? _requestRangeSelection;
 
     public PivotTableDataSourceDialogResult Result { get; private set; }
+    public PivotTableDataSourceRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public PivotTableDataSourceDialog(string sourceRangeText)
+    public PivotTableDataSourceDialog(
+        string sourceRangeText,
+        Action<PivotTableDataSourceRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText);
         Title = "Change PivotTable Data Source";
         Width = 420;
@@ -32,6 +40,9 @@ public sealed class PivotTableDataSourceDialog : Window
 
     public static PivotTableDataSourceDialogResult CreateResult(string sourceRangeText) =>
         new(sourceRangeText.Trim());
+
+    public static PivotTableDataSourceRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
+        new(currentText.Trim(), CollapseDialog: true);
 
     private StackPanel CreateContent()
     {
@@ -50,31 +61,15 @@ public sealed class PivotTableDataSourceDialog : Window
         return stack;
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
-    {
-        var panel = new DockPanel();
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
-        return panel;
-    }
-
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
-
-        textBox.Focus();
-        textBox.SelectAll();
-    }
+    private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request =>
+            {
+                RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
+                _requestRangeSelection?.Invoke(RangeSelectionRequest);
+            });
 }
 
 internal static class PivotDialogLayout

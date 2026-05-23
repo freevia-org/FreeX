@@ -55,7 +55,8 @@ public sealed class SortDialogTests
     [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
 
         foreach (var content in new[]
         {
@@ -75,6 +76,7 @@ public sealed class SortDialogTests
     public void DialogLayout_ExposesExcelCustomSortFields()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
 
         source.Should().Contain("My data has _headers");
         source.Should().Contain("IsChecked = hasHeaders");
@@ -87,9 +89,44 @@ public sealed class SortDialogTests
         source.Should().Contain("Cell Values");
         source.Should().Contain("Cell Color");
         source.Should().Contain("Font Color");
-        source.Should().Contain("BuildColorChoices");
+        source.Should().Contain("On Top");
+        source.Should().Contain("On Bottom");
+        source.Should().Contain("CreateOrderColumn");
+        planningSource.Should().Contain("BuildColorChoices");
         source.Should().Contain("UpdateColumnChoices");
         source.Should().Contain("SortOptionsDialog");
+    }
+
+    [Fact]
+    public void BuildOrderChoices_UsesExcelColorSortLabelsForColorSorts()
+    {
+        SortDialog.BuildOrderChoices("Cell Values").Should().Equal(
+            new SortDirectionChoice("A to Z", true),
+            new SortDirectionChoice("Z to A", false));
+
+        SortDialog.BuildOrderChoices("Cell Color").Should().Equal(
+            new SortDirectionChoice("On Top", true),
+            new SortDirectionChoice("On Bottom", false));
+
+        SortDialog.BuildOrderChoices("Font Color").Should().Equal(
+            new SortDirectionChoice("On Top", true),
+            new SortDirectionChoice("On Bottom", false));
+    }
+
+    [Fact]
+    public void SortDialogLevel_RefreshesOrderChoicesWhenSortOnChanges()
+    {
+        var level = new SortDialogLevel(0, true);
+        var changed = new List<string?>();
+        level.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        level.SortOn = "Cell Color";
+
+        level.OrderChoices.Should().Equal(
+            new SortDirectionChoice("On Top", true),
+            new SortDirectionChoice("On Bottom", false));
+        changed.Should().Contain(nameof(SortDialogLevel.SortOn));
+        changed.Should().Contain(nameof(SortDialogLevel.OrderChoices));
     }
 
     [Fact]
@@ -111,6 +148,29 @@ public sealed class SortDialogTests
                 new CellAddress(sheet.Id, 2, 1)))
             .Should()
             .Equal(new SortColorChoice(""), new SortColorChoice("#000000"), new SortColorChoice("#0000FF"), new SortColorChoice("#FF0000"));
+    }
+
+    [Fact]
+    public void BuildColorChoices_ScopesChoicesToRequestedColorSortKind()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var fillStyle = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var fontStyle = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0, 0, 255) });
+        var fillCell = Cell.FromValue(new TextValue("fill"));
+        fillCell.StyleId = fillStyle;
+        var fontCell = Cell.FromValue(new TextValue("font"));
+        fontCell.StyleId = fontStyle;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), fillCell);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), fontCell);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
+
+        SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.CellColor)
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#FF0000"));
+        SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.FontColor)
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#000000"), new SortColorChoice("#0000FF"));
     }
 
     [Fact]

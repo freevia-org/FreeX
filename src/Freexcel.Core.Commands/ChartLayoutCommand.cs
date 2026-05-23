@@ -109,7 +109,11 @@ public sealed record ChartLayoutOptions(
     WorkbookThemeColorReference? DataLabelFillThemeColor = null,
     WorkbookThemeColorReference? DataLabelBorderThemeColor = null,
     WorkbookThemeColorReference? DataLabelTextThemeColor = null,
-    WorkbookThemeColorReference? TrendlineThemeColor = null);
+    WorkbookThemeColorReference? TrendlineThemeColor = null,
+    WorkbookThemeColorReference? ChartTitleTextThemeColor = null,
+    WorkbookThemeColorReference? AxisTitleTextThemeColor = null,
+    WorkbookThemeColorReference? XAxisLabelTextThemeColor = null,
+    WorkbookThemeColorReference? YAxisLabelTextThemeColor = null);
 
 public sealed partial class SetChartLayoutCommand : IWorkbookCommand
 {
@@ -129,7 +133,11 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var chart = sheet.Charts.FirstOrDefault(item => item.Id == _chartId);
         if (chart is null)
             return new CommandOutcome(false, "Chart was not found.");
 
@@ -256,6 +264,10 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
             DataLabelFillThemeColor: chart.DataLabelFillThemeColor,
             DataLabelBorderThemeColor: chart.DataLabelBorderThemeColor,
             DataLabelTextThemeColor: chart.DataLabelTextThemeColor,
-            TrendlineThemeColor: chart.TrendlineThemeColor);
+            TrendlineThemeColor: chart.TrendlineThemeColor,
+            ChartTitleTextThemeColor: chart.ChartTitleTextThemeColor,
+            AxisTitleTextThemeColor: chart.AxisTitleTextThemeColor,
+            XAxisLabelTextThemeColor: chart.XAxisLabelTextThemeColor,
+            YAxisLabelTextThemeColor: chart.YAxisLabelTextThemeColor);
 
 }

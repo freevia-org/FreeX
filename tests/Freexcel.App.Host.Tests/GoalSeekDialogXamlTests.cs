@@ -1,5 +1,9 @@
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -23,8 +27,12 @@ public sealed class GoalSeekDialogXamlTests
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
             .Should()
-            .Contain(["Select set cell reference", "Select changing cell reference"])
-            .And.NotContain("Collapse Dialog");
+            .Contain(["Select set cell reference", "Select changing cell reference"]);
+
+        document.Descendants(presentation + "Button")
+            .Select(element => element.Attribute("ToolTip")?.Value)
+            .Should()
+            .Contain(["Collapse dialog and select set cell reference", "Collapse dialog and select changing cell reference"]);
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("CommandParameter")?.Value)
@@ -39,5 +47,65 @@ public sealed class GoalSeekDialogXamlTests
 
             label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
         }
+    }
+
+    [Fact]
+    public void CreateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        GoalSeekDialog.CreateRangeSelectionRequest(GoalSeekRangeSelectionTarget.ChangingCell, " $B$2 ")
+            .Should()
+            .Be(new GoalSeekRangeSelectionRequest(
+                GoalSeekRangeSelectionTarget.ChangingCell,
+                "$B$2",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("SetCellBox", GoalSeekRangeSelectionTarget.SetCell, "$A$1")]
+    [InlineData("ChangingCellBox", GoalSeekRangeSelectionTarget.ChangingCell, "$B$2")]
+    public void RangePickerButtons_RaiseRangeSelectionRequest(
+        string targetName,
+        GoalSeekRangeSelectionTarget expectedTarget,
+        string currentText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<GoalSeekRangeSelectionRequest>();
+            var sheetId = SheetId.New();
+            var dialog = new GoalSeekDialog(sheetId, null, requests.Add);
+            dialog.Show();
+            try
+            {
+                GetControl<TextBox>(dialog, targetName).Text = $" {currentText} ";
+                var button = new Button { CommandParameter = targetName };
+
+                InvokePrivate(dialog, "RangePickerButton_Click", button);
+
+                requests.Should().Equal(new GoalSeekRangeSelectionRequest(
+                    expectedTarget,
+                    currentText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    private static T GetControl<T>(GoalSeekDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(GoalSeekDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static void InvokePrivate(GoalSeekDialog dialog, string methodName, object sender)
+    {
+        var method = typeof(GoalSeekDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [sender, new RoutedEventArgs()]);
     }
 }

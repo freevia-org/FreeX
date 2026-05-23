@@ -486,6 +486,7 @@ public class ExportPlannerTests
                 using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
                 ReadViewerPreference(pdf, "/FitWindow").Should().BeTrue();
                 ReadViewerPreference(pdf, "/CenterWindow").Should().BeTrue();
+                ReadViewerPreference(pdf, "/PickTrayByPDFSize").Should().BeTrue();
             }
             finally
             {

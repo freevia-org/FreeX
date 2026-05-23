@@ -83,6 +83,58 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void RefreshPivotTableCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "E5")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        sheet.IsProtected = true;
+
+        var outcome = new RefreshPivotTableCommand(sheet.Id, "PivotTable1").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetCell(Addr(sheet, "D3")).Should().BeNull();
+    }
+
+    [Fact]
+    public void RefreshPivotTableCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "E5")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = new RefreshPivotTableCommand(sheet.Id, "PivotTable1").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Category"));
+    }
+
+    [Fact]
     public void RefreshPivotTableCommand_UpdatesBoundPivotChartDataRange()
     {
         var workbook = new Workbook("PivotChartRefreshTest");
@@ -435,8 +487,8 @@ public sealed class PivotTableCommandTests
         pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(1);
         pivot.PageFields.Should().ContainSingle().Which.SelectedItem.Should().Be("A");
         pivot.DataFields.Should().ContainSingle().Which.SummaryFunction.Should().Be("count");
-        sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("Q1"));
-        sheet.GetCell(Addr(sheet, "F4"))!.Value.Should().Be(new NumberValue(1));
+        sheet.GetCell(Addr(sheet, "E6"))!.Value.Should().Be(new TextValue("Q1"));
+        sheet.GetCell(Addr(sheet, "F6"))!.Value.Should().Be(new NumberValue(1));
 
         command.Revert(ctx);
 
@@ -583,6 +635,82 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableLayoutCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotLayoutCommandTest");
+        sheet.IsProtected = true;
+
+        var outcome = new ConfigurePivotTableLayoutCommand(
+            sheet.Id,
+            pivot.Name,
+            rowFields: [],
+            columnFields: [],
+            pageFields: [],
+            dataFields: [new PivotDataFieldModel(1, "Sum of Amount", "sum")]).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ConfigurePivotTableLayoutCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotLayoutCommandTest");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = new ConfigurePivotTableLayoutCommand(
+            sheet.Id,
+            pivot.Name,
+            rowFields: [],
+            columnFields: [],
+            pageFields: [],
+            dataFields: [new PivotDataFieldModel(1, "Sum of Amount", "sum")]).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        pivot.RowFields.Should().BeEmpty();
+        sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableViewCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotViewCommandTest");
+        sheet.IsProtected = true;
+
+        var outcome = new ConfigurePivotTableViewCommand(
+            sheet.Id,
+            pivot.Name,
+            labelFilters: [new PivotLabelFilterModel(0, PivotLabelFilterKind.Equals, "B")],
+            valueFilters: [],
+            sorts: []).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        pivot.LabelFilters.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableViewCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotViewCommandTest");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = new ConfigurePivotTableViewCommand(
+            sheet.Id,
+            pivot.Name,
+            labelFilters: [new PivotLabelFilterModel(0, PivotLabelFilterKind.Equals, "B")],
+            valueFilters: [],
+            sorts: []).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        pivot.LabelFilters.Should().ContainSingle().Which.Value.Should().Be("B");
+        sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
     public void ConfigurePivotTableOptionsCommand_ReplacesLayoutOptionsRefreshesAndUndoRestores()
     {
         var workbook = new Workbook("PivotOptionsCommandTest");
@@ -680,6 +808,32 @@ public sealed class PivotTableCommandTests
         pivot.AltTextDescription.Should().Be("Old description");
         sheet.GetCell(Addr(sheet, "E4"))!.Value.Should().Be(new TextValue("A"));
         sheet.GetCell(Addr(sheet, "E6"))!.Value.Should().Be(new TextValue("Grand Total"));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotOptionsCommandTest");
+        sheet.IsProtected = true;
+
+        var outcome = CreateBasicPivotOptionsCommand(sheet.Id, pivot.Name, showRowGrandTotals: false).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        pivot.ShowRowGrandTotals.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotOptionsCommandTest");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = CreateBasicPivotOptionsCommand(sheet.Id, pivot.Name, showRowGrandTotals: false).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        pivot.ShowRowGrandTotals.Should().BeFalse();
     }
 
     [Fact]
@@ -926,6 +1080,50 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesShowItemsWithNoDataAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotShowItemsWithNoDataCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            ShowItemsWithNoDataOnRows = false,
+            ShowItemsWithNoDataOnColumns = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        pivot.ShowItemsWithNoDataOnColumns.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        pivot.ShowItemsWithNoDataOnRows.Should().BeFalse();
+        pivot.ShowItemsWithNoDataOnColumns.Should().BeFalse();
+    }
+
+    [Fact]
     public void ConfigurePivotTableOptionsCommand_UpdatesFormatOptionsAndUndoRestores()
     {
         var workbook = new Workbook("PivotFormatOptionsCommandTest");
@@ -988,6 +1186,7 @@ public sealed class PivotTableCommandTests
             RefreshOnLoad = false,
             SaveData = true,
             EnableRefresh = true,
+            PreserveSourceSortFilter = true,
             MissingItemsLimit = null
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region"));
@@ -1018,6 +1217,7 @@ public sealed class PivotTableCommandTests
             refreshOnOpen: true,
             saveSourceData: false,
             enableRefresh: false,
+            preserveSourceSortFilter: false,
             missingItemsLimit: 0,
             updateMissingItemsLimit: true);
 
@@ -1026,6 +1226,7 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeTrue();
         cache.SaveData.Should().BeFalse();
         cache.EnableRefresh.Should().BeFalse();
+        cache.PreserveSourceSortFilter.Should().BeFalse();
         cache.MissingItemsLimit.Should().Be(0);
 
         command.Revert(ctx);
@@ -1033,6 +1234,7 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeFalse();
         cache.SaveData.Should().BeTrue();
         cache.EnableRefresh.Should().BeTrue();
+        cache.PreserveSourceSortFilter.Should().BeTrue();
         cache.MissingItemsLimit.Should().BeNull();
     }
 
@@ -1580,6 +1782,41 @@ public sealed class PivotTableCommandTests
         sheet.SetCell(Addr(sheet, "A3"), new TextValue("B"));
         sheet.SetCell(Addr(sheet, "B3"), new NumberValue(20));
     }
+
+    private static (Sheet Sheet, ICommandContext Context, PivotTableModel Pivot) CreateBasicPivotReport(string workbookName)
+    {
+        var workbook = new Workbook(workbookName);
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+        return (sheet, ctx, pivot);
+    }
+
+    private static ConfigurePivotTableOptionsCommand CreateBasicPivotOptionsCommand(
+        SheetId sheetId,
+        string pivotTableName,
+        bool showRowGrandTotals = true) =>
+        new(
+            sheetId,
+            pivotTableName,
+            showRowGrandTotals,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleMedium9");
 
     private static void SeedTimelineData(Sheet sheet)
     {

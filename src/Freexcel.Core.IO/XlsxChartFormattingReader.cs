@@ -19,8 +19,16 @@ internal static class XlsxChartFormattingReader
             chart.ChartTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var solidFill = runProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        {
+            chart.ChartTitleTextThemeColor = themeColor;
+            chart.ChartTitleTextColor = null;
+        }
+        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        {
             chart.ChartTitleTextColor = color;
+            chart.ChartTitleTextThemeColor = null;
+        }
     }
 
     public static void ApplyChartAreaShapeProperties(XElement? shapeProperties, ChartModel chart)

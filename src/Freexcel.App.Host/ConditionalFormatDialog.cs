@@ -652,22 +652,6 @@ public partial class ConditionalFormatDialog : Window
             colorBox.Text = FormatRgb(new RgbColor(selected.R, selected.G, selected.B));
     }
 
-    private static string? BlankToNull(string text) =>
-        string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-
-    private static int? ParseOptionalPercent(string text)
-    {
-        if (!int.TryParse(text.Trim(), out var value))
-            return null;
-
-        return Math.Clamp(value, 0, 100);
-    }
-
-    private static int ParseTopBottomRank(string text) =>
-        int.TryParse(text.Trim(), out var value)
-            ? Math.Clamp(value, 1, 1000)
-            : 10;
-
     private void UpdateColorScaleMidpointState()
     {
         var enabled = _colorScaleUseThreeColorBox.IsChecked == true;
@@ -675,83 +659,6 @@ public partial class ConditionalFormatDialog : Window
         _colorScaleMidValueBox.IsEnabled = enabled;
         _colorScaleMidColorBox.IsEnabled = enabled;
         _colorScaleMidColorButton.IsEnabled = enabled;
-    }
-
-    private static string FormatRgb(RgbColor color) =>
-        $"{color.R},{color.G},{color.B}";
-
-    private static RgbColor ParseRgbOrFallback(string text, RgbColor fallback) =>
-        ColorInputParser.TryParseRgbColorText(text, out var color)
-            ? new RgbColor(color.R, color.G, color.B)
-            : fallback;
-
-    private static CfRuleType DuplicateValuesRuleType(string? label) =>
-        string.Equals(label, "Unique", StringComparison.OrdinalIgnoreCase)
-            ? CfRuleType.UniqueValues
-            : CfRuleType.DuplicateValues;
-
-    private static string DatePeriodValue(string? label) =>
-        DateOccurringPeriods.FirstOrDefault(period => period.Label == label) is var period
-            && period.Label is not null
-                ? period.Value
-                : "today";
-
-    private static string DatePeriodLabel(string? value) =>
-        DateOccurringPeriods.FirstOrDefault(period => period.Value == value) is var period
-            && period.Label is not null
-                ? period.Label
-                : "Today";
-
-    private Grid BuildExcelRuleShell(string ruleType, UIElement descriptionContent)
-    {
-        var root = new Grid { Margin = new Thickness(14) };
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var left = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-        left.Children.Add(new TextBlock
-        {
-            Text = "Select a Rule Type:",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6)
-        });
-
-        var ruleTypeList = new ListBox
-        {
-            MinHeight = 182,
-            ItemsSource = ExcelRuleShellTypes,
-            SelectedItem = RuleTypeShellLabel(ruleType)
-        };
-        ruleTypeList.SelectionChanged += RuleTypeList_SelectionChanged;
-        left.Children.Add(ruleTypeList);
-        Grid.SetColumn(left, 0);
-        root.Children.Add(left);
-
-        var right = new StackPanel();
-        _descriptionHost = right;
-        right.Children.Add(new TextBlock
-        {
-            Text = "Edit the Rule Description:",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 6)
-        });
-        right.Children.Add(descriptionContent);
-        Grid.SetColumn(right, 1);
-        root.Children.Add(right);
-
-        return root;
-    }
-
-    private void RuleTypeList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (sender is not ListBox listBox || listBox.SelectedItem is not string shellLabel)
-            return;
-
-        var newRuleType = DefaultRuleTypeForShellLabel(shellLabel);
-        if (newRuleType == _ruleType || _descriptionHost is null)
-            return;
-
-        RefreshRuleDescription(newRuleType);
     }
 
     private void RefreshRuleDescription(string ruleType)
@@ -975,24 +882,6 @@ public partial class ConditionalFormatDialog : Window
         _descriptionHost.Children.Add(inner);
     }
 
-    private static string DefaultRuleTypeForShellLabel(string shellLabel) =>
-        shellLabel == ExcelRuleShellTypes[0] ? "Data Bar" :
-        shellLabel == ExcelRuleShellTypes[2] ? "Top 10 Items" :
-        shellLabel == ExcelRuleShellTypes[3] ? "Above Average" :
-        shellLabel == ExcelRuleShellTypes[4] ? "Duplicate Values" :
-        shellLabel == ExcelRuleShellTypes[5] ? "Formula" :
-        "Greater Than";
-
-    private static string RuleTypeShellLabel(string ruleType) => ruleType switch
-    {
-        "Data Bar" or "Color Scale" or "Icon Set" => ExcelRuleShellTypes[0],
-        "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => ExcelRuleShellTypes[2],
-        "Above Average" or "Below Average" => ExcelRuleShellTypes[3],
-        "Duplicate Values" => ExcelRuleShellTypes[4],
-        "Formula" or "Use a Formula" => ExcelRuleShellTypes[5],
-        _ => ExcelRuleShellTypes[1]
-    };
-
     private void BuildIconSetThresholdPanel(string? style, IReadOnlyList<CfThresholdModel>? existing = null)
     {
         _iconSetThresholdPanel.Children.Clear();
@@ -1036,75 +925,4 @@ public partial class ConditionalFormatDialog : Window
             _iconSetThresholdRows.Add((typeBox, valueBox));
         }
     }
-}
-
-public sealed class HighlightCellsRuleDialog : ConditionalFormatDialog
-{
-    public HighlightCellsRuleDialog(string ruleType, GridRange range)
-        : base(ruleType, range)
-    {
-        Title = $"Highlight Cells Rule - {ruleType}";
-    }
-}
-
-public sealed class TopBottomRuleDialog : ConditionalFormatDialog
-{
-    public TopBottomRuleDialog(string ruleType, GridRange range)
-        : base(ruleType, range)
-    {
-        Title = $"Top/Bottom Rule - {ruleType}";
-    }
-}
-
-public sealed class DataBarRuleDialog : ConditionalFormatDialog
-{
-    public DataBarRuleDialog(GridRange range)
-        : base("Data Bar", range)
-    {
-        Title = "Data Bar Rule";
-    }
-}
-
-public sealed class ColorScaleRuleDialog : ConditionalFormatDialog
-{
-    public ColorScaleRuleDialog(GridRange range)
-        : base("Color Scale", range)
-    {
-        Title = "Color Scale Rule";
-    }
-}
-
-public sealed class IconSetRuleDialog : ConditionalFormatDialog
-{
-    public IconSetRuleDialog(GridRange range)
-        : base("Icon Set", range)
-    {
-        Title = "Icon Set Rule";
-    }
-}
-
-public sealed class NewConditionalFormatRuleDialog : ConditionalFormatDialog
-{
-    public NewConditionalFormatRuleDialog(string ruleType, GridRange range)
-        : base(ruleType, range)
-    {
-        Title = "New Formatting Rule";
-    }
-}
-
-public static class ConditionalFormatDialogFactory
-{
-    public static ConditionalFormatDialog Create(string ruleType, GridRange range) =>
-        ruleType switch
-        {
-            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" or "Date Occurring" or "Duplicate Values" or
-            "Blanks" or "No Blanks" or "Errors" or "No Errors" =>
-                new HighlightCellsRuleDialog(ruleType, range),
-            "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" or "Above Average" or "Below Average" =>
-                new TopBottomRuleDialog(ruleType, range),
-            "Data Bar" => new DataBarRuleDialog(range),
-            "Color Scale" => new ColorScaleRuleDialog(range),
-            "Icon Set" => new IconSetRuleDialog(range),
-            _ => new NewConditionalFormatRuleDialog(ruleType, range)
-        };
 }

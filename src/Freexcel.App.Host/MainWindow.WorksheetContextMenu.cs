@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -33,8 +34,22 @@ public partial class MainWindow
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
+        menu.Opened += WorksheetContextMenu_Opened;
         PositionWorksheetContextMenu(menu, gridPos);
         menu.IsOpen = true;
+    }
+
+    private static void WorksheetContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        if (firstEnabledItem is null)
+            return;
+
+        firstEnabledItem.Focus();
+        Keyboard.Focus(firstEnabledItem);
     }
 
     private void ExecuteWorksheetContextMenuAction(WorksheetContextMenuAction action, CellAddress address)
@@ -227,6 +242,9 @@ public partial class MainWindow
 
     private void OpenKeyboardContextMenu()
     {
+        if (TryOpenFocusedSheetTabContextMenu())
+            return;
+
         var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
         OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
     }

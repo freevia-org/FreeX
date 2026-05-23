@@ -102,6 +102,16 @@ public partial class PivotValueFieldSettingsDialog : Window
         var baseItem = !usesBaseField || string.IsNullOrWhiteSpace(BaseItemBox.Text)
             ? null
             : BaseItemBox.Text.Trim();
+        if (!TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out var showValuesAsError))
+        {
+            MessageBox.Show(this, showValuesAsError, "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (baseFieldIndex is null)
+                BaseFieldBox.Focus();
+            else
+                BaseItemBox.Focus();
+            return;
+        }
+
         var name = string.IsNullOrWhiteSpace(CustomNameBox.Text)
             ? _initialField.Name
             : CustomNameBox.Text.Trim();
@@ -186,7 +196,33 @@ public partial class PivotValueFieldSettingsDialog : Window
         BaseItemPanel.IsEnabled = visible;
     }
 
-    private static bool ShowValuesAsRequiresBaseField(PivotShowValuesAs showValuesAs) =>
+    public static bool TryValidateShowValuesAs(
+        PivotShowValuesAs showValuesAs,
+        int? baseFieldIndex,
+        string? baseItem,
+        out string? error)
+    {
+        error = null;
+        if (!ShowValuesAsRequiresBaseField(showValuesAs))
+            return true;
+
+        if (baseFieldIndex is null)
+        {
+            error = "Select a base field for this Show Values As calculation.";
+            return false;
+        }
+
+        if (showValuesAs is PivotShowValuesAs.DifferenceFrom or PivotShowValuesAs.PercentDifferenceFrom &&
+            string.IsNullOrWhiteSpace(baseItem))
+        {
+            error = "Enter a base item for this Show Values As calculation.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool ShowValuesAsRequiresBaseField(PivotShowValuesAs showValuesAs) =>
         showValuesAs is PivotShowValuesAs.RunningTotalIn
             or PivotShowValuesAs.DifferenceFrom
             or PivotShowValuesAs.PercentDifferenceFrom

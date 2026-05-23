@@ -171,4 +171,39 @@ public sealed class PivotValueFieldSettingsInputParserTests
             preset.FormatCode.Should().Be(formatCode);
         }
     }
+
+    [Theory]
+    [InlineData(PivotShowValuesAs.RunningTotalIn)]
+    [InlineData(PivotShowValuesAs.RankSmallest)]
+    [InlineData(PivotShowValuesAs.PercentOfParentTotal)]
+    public void TryValidateShowValuesAs_RequiresBaseFieldForBaseFieldModes(PivotShowValuesAs showValuesAs)
+    {
+        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, null, null, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Select a base field for this Show Values As calculation.");
+
+        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, 1, null, out error)
+            .Should()
+            .BeTrue();
+        error.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(PivotShowValuesAs.DifferenceFrom)]
+    [InlineData(PivotShowValuesAs.PercentDifferenceFrom)]
+    public void TryValidateShowValuesAs_RequiresBaseItemForDifferenceModes(PivotShowValuesAs showValuesAs)
+    {
+        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, 1, "", out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a base item for this Show Values As calculation.");
+
+        PivotValueFieldSettingsDialog.TryValidateShowValuesAs(showValuesAs, 1, "Q1", out error)
+            .Should()
+            .BeTrue();
+        error.Should().BeNull();
+    }
 }

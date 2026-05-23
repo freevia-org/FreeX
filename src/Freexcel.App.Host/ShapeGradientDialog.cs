@@ -91,7 +91,7 @@ public sealed class ShapeGradientDialog : Window
         stack.Children.Add(_startColorText);
         stack.Children.Add(_endColorText);
 
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 

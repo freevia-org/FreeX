@@ -15,64 +15,9 @@ public sealed record ProtectionDialogResult(
     string? Password,
     IReadOnlyList<string> SelectedSheetPermissions);
 
-public static class ProtectionDialogPlanner
-{
-    private static readonly string[] DefaultSheetPermissions =
-    [
-        "Select locked cells",
-        "Select unlocked cells",
-        "Format cells",
-        "Format columns",
-        "Format rows",
-        "Insert columns",
-        "Insert rows",
-        "Insert hyperlinks",
-        "Delete columns",
-        "Delete rows",
-        "Sort",
-        "Use AutoFilter",
-        "Use PivotTable reports",
-        "Edit objects",
-        "Edit scenarios"
-    ];
-
-    private static readonly string[] DefaultSelectedSheetPermissions =
-    [
-        "Select locked cells",
-        "Select unlocked cells"
-    ];
-
-    public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password) =>
-        CreateSheetResult(sheet, password, DefaultSelectedSheetPermissions);
-
-    public static ProtectionDialogResult CreateSheetResult(
-        Sheet sheet,
-        string? password,
-        IReadOnlyList<string> selectedSheetPermissions) =>
-        sheet.IsProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, selectedSheetPermissions);
-
-    public static ProtectionDialogResult CreateSheetResult(Sheet sheet, string? password, string? confirmation) =>
-        sheet.IsProtected || PasswordsMatch(password, confirmation)
-            ? CreateSheetResult(sheet, password)
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, null, DefaultSelectedSheetPermissions);
-
-    public static ProtectionDialogResult CreateWorkbookResult(Workbook workbook, string? password) =>
-        workbook.IsStructureProtected
-            ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null, [])
-            : new ProtectionDialogResult(ProtectionDialogMode.Protect, password, []);
-
-    public static IReadOnlyList<string> GetDefaultSheetPermissions() => DefaultSheetPermissions;
-
-    public static IReadOnlyList<string> GetDefaultSelectedSheetPermissions() => DefaultSelectedSheetPermissions;
-
-    public static bool PasswordsMatch(string? password, string? confirmation) =>
-        string.Equals(password ?? "", confirmation ?? "", StringComparison.Ordinal);
-
-    public static bool TryParseAllowEditRange(string text, SheetId sheetId, out GridRange range) =>
-        ProtectionInputParser.TryParseAllowEditRange(text, sheetId, out range);
-}
+public sealed record AllowEditRangeSelectionRequest(
+    string CurrentText,
+    bool CollapseDialog = true);
 
 public sealed class PasswordProtectionDialog : Window
 {
@@ -139,7 +84,7 @@ public sealed class PasswordProtectionDialog : Window
         {
             Header = "Allow all users of this worksheet to:",
             Content = scroll,
-            ToolTip = "These selections are returned with the Protect Sheet result; current enforcement is limited to locked cells and allowed edit ranges.",
+            ToolTip = "Choose which protected-sheet actions remain available.",
             Margin = new Thickness(0, 0, 0, 0)
         };
         root.Children.Add(group);
@@ -220,12 +165,18 @@ public sealed class AllowEditRangeDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
+    private readonly Action<AllowEditRangeSelectionRequest>? _requestRangeSelection;
 
     public GridRange Range { get; private set; }
+    public AllowEditRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public AllowEditRangeDialog(SheetId sheetId, string defaultRange)
+    public AllowEditRangeDialog(
+        SheetId sheetId,
+        string defaultRange,
+        Action<AllowEditRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
+        _requestRangeSelection = requestRangeSelection;
         Title = "Allow Users to Edit Ranges";
         Width = 430;
         Height = 230;
@@ -248,9 +199,12 @@ public sealed class AllowEditRangeDialog : Window
             Content = "...",
             Width = 28,
             Margin = new Thickness(0, 0, 6, 0),
-            ToolTip = "Select editable range"
+            ToolTip = "Collapse dialog and select editable range"
         };
         System.Windows.Automation.AutomationProperties.SetName(rangePicker, "Select editable range");
+        System.Windows.Automation.AutomationProperties.SetHelpText(
+            rangePicker,
+            "Collapse dialog and select the editable range from the worksheet.");
         rangePicker.Click += RangePicker_Click;
         DockPanel.SetDock(rangePicker, Dock.Right);
         rangePanel.Children.Add(rangePicker);
@@ -271,9 +225,14 @@ public sealed class AllowEditRangeDialog : Window
 
     private void RangePicker_Click(object sender, RoutedEventArgs e)
     {
+        RangeSelectionRequest = CreateRangeSelectionRequest(_rangeBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
         _rangeBox.Focus();
         _rangeBox.SelectAll();
     }
+
+    public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
+        new(currentText.Trim(), CollapseDialog: true);
 
     private void Accept()
     {

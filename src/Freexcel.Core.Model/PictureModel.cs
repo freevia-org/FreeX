@@ -23,6 +23,7 @@ public sealed class PictureModel
     public string? AltText { get; set; }
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
+    public bool LockAspectRatio { get; set; } = true;
     public double RotationDegrees { get; set; }
     public bool IsVisible { get; set; } = true;
     public double CropLeft { get; set; }

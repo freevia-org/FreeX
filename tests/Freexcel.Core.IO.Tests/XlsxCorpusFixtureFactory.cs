@@ -748,6 +748,10 @@ internal static class XlsxCorpusFixtureFactory
             ContentType = "image/png",
             Width = 120,
             Height = 80,
+            CropLeft = 0.05,
+            CropTop = 0.10,
+            CropRight = 0.05,
+            CropBottom = 0.10,
             AltText = "Corpus image"
         });
         sheet.Sparklines.Add(new SparklineModel
@@ -771,8 +775,8 @@ internal static class XlsxCorpusFixtureFactory
             Text = "Corpus note",
             Width = 200,
             Height = 90,
-            FillColor = new CellColor(255, 242, 204),
-            OutlineColor = new CellColor(112, 48, 160),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
             AltText = "Corpus text box"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
@@ -783,7 +787,9 @@ internal static class XlsxCorpusFixtureFactory
             Width = 140,
             Height = 90,
             FillColor = new CellColor(221, 235, 247),
-            OutlineColor = new CellColor(31, 78, 121),
+            GradientFillEndColor = new CellColor(189, 215, 238),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
+            HasShadowEffect = true,
             AltText = "Corpus ellipse"
         });
         return workbook;
@@ -798,7 +804,18 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "B1", new TextValue("Review"));
         Set(sheet, "B2", new TextValue("Follow-up"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel/docs";
+        sheet.HyperlinkMetadata[Addr(sheet, "A1")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open the Freexcel documentation");
         sheet.Hyperlinks[Addr(sheet, "A2")] = "mailto:review@example.com";
+        sheet.HyperlinkMetadata[Addr(sheet, "A2")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.EmailAddress,
+            "Send a workbook review note");
+        sheet.Hyperlinks[Addr(sheet, "B2")] = "Links Notes!A1";
+        sheet.HyperlinkMetadata[Addr(sheet, "B2")] = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Jump to the documentation link",
+            "Links Notes!A1");
         sheet.Comments[Addr(sheet, "B1")] = "Check workbook fidelity notes.";
         sheet.Comments[Addr(sheet, "B2")] = "Confirm links survived round-trip.";
         return workbook;
@@ -941,7 +958,16 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "C4", new NumberValue(98));
         Set(sheet, "C5", new NumberValue(110));
         sheet.Charts.Add(new ChartModel { Type = ChartType.Line, DataRange = Range(sheet, "A1", "C5"), Title = "Trend", ShowLegend = true });
-        sheet.Charts.Add(new ChartModel { Type = ChartType.Bar, DataRange = Range(sheet, "A1", "C5"), Title = "Bar View", ShowLegend = true });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = Range(sheet, "A1", "C5"),
+            Title = "Bar View",
+            ShowLegend = true,
+            BarGapWidth = 75,
+            BarOverlap = -20,
+            VaryColorsByPoint = true
+        });
         sheet.Charts.Add(new ChartModel { Type = ChartType.Area, DataRange = Range(sheet, "A1", "C5"), Title = "Area View", ShowLegend = true });
         return workbook;
     }
@@ -949,6 +975,7 @@ internal static class XlsxCorpusFixtureFactory
     private static Workbook CreatePivotsWithFilters()
     {
         var workbook = NewWorkbook("generated-pivots-filters-002");
+        workbook.NumberFormatCatalog[165] = "#,##0.0 \"kg\"";
         var sheet = workbook.AddSheet("Pivot Filters");
         Set(sheet, "A1", new TextValue("Region"));
         Set(sheet, "B1", new TextValue("Category"));
@@ -976,11 +1003,13 @@ internal static class XlsxCorpusFixtureFactory
             SourceSheetName = sheet.Name,
             SourceReference = "A1:C4",
             PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
-            RefreshOnLoad = true
+            RefreshOnLoad = true,
+            PreserveSourceSortFilter = false,
+            RefreshedBy = "Freexcel Corpus"
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
         cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
-        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4, ContainsNumber: true, MinValue: 80, MaxValue: 125));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 165, ContainsNumber: true, MinValue: 80, MaxValue: 125));
         workbook.PivotCaches.Add(cache);
 
         var style = new PivotTableStyleModel { Name = "FreexcelCorpusFilteredPivotStyle", AppliesToPivotTables = true };
@@ -1001,7 +1030,7 @@ internal static class XlsxCorpusFixtureFactory
         };
         pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
         pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
-        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 4));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", 165, null, PivotShowValuesAs.None, null, null, "#,##0.0 \"kg\""));
         sheet.PivotTables.Add(pivot);
         return workbook;
     }
@@ -1139,9 +1168,117 @@ internal static class XlsxCorpusFixtureFactory
             Title = "Sales by Month",
             XAxisTitle = "Month",
             YAxisTitle = "Sales",
+            ChartTitleTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2),
+            ChartTitleFontSize = 18,
+            AxisTitleTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            AxisTitleFontSize = 12.5,
+            ChartAreaFillColor = new CellColor(250, 250, 250),
+            PlotAreaFillColor = new CellColor(242, 242, 242),
+            PlotAreaBorderColor = new CellColor(191, 191, 191),
+            PlotAreaBorderThickness = 1.25,
+            ChartStyleId = 42,
+            RoundedCorners = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            ShowDataInHiddenRowsAndColumns = true,
             ShowLegend = true,
             ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            DataLabelSeparator = ChartDataLabelSeparator.Semicolon,
+            DataLabelNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowDataLabelCallouts = true,
+            DataLabelFillColor = new CellColor(255, 255, 225),
+            DataLabelBorderColor = new CellColor(128, 128, 128),
+            DataLabelTextColor = new CellColor(30, 30, 30),
+            DataLabelBorderThickness = 1.5,
+            DataLabelFontSize = 13,
+            DataLabelAngle = -35,
+            ShowLinearTrendline = true,
+            TrendlineType = ChartTrendlineType.Polynomial,
+            TrendlineOrder = 3,
+            ShowTrendlineEquation = true,
+            ShowTrendlineRSquared = true,
+            TrendlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+            TrendlineThickness = 2.25,
+            TrendlineDashStyle = ChartLineDashStyle.Dot,
+            ShowErrorBars = true,
+            ErrorBarKind = ChartErrorBarKind.Percentage,
+            ErrorBarDirection = ChartErrorBarDirection.Plus,
+            ErrorBarValue = 12.5,
+            ErrorBarEndCaps = false,
             LegendPosition = ChartLegendPosition.Bottom,
+            LegendTextColor = new CellColor(64, 64, 64),
+            LegendFillColor = new CellColor(255, 255, 255),
+            LegendBorderColor = new CellColor(166, 166, 166),
+            LegendBorderThickness = 1,
+            LegendFontSize = 10.5,
+            ShowXAxisMajorGridlines = true,
+            XAxisMajorGridlineColor = new CellColor(217, 217, 217),
+            XAxisGridlineThickness = 0.75,
+            XAxisMajorTickStyle = ChartAxisTickStyle.Cross,
+            XAxisMinorTickStyle = ChartAxisTickStyle.Inside,
+            XAxisLineColor = new CellColor(128, 128, 128),
+            XAxisLineThickness = 1,
+            XAxisLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            XAxisLabelFontSize = 10,
+            XAxisLabelAngle = -45,
+            YAxisMinimum = 0,
+            YAxisMaximum = 200,
+            YAxisMajorUnit = 50,
+            YAxisMinorUnit = 25,
+            YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowYAxisMajorGridlines = true,
+            YAxisMajorGridlineColor = new CellColor(217, 217, 217),
+            YAxisGridlineThickness = 0.75,
+            YAxisMajorTickStyle = ChartAxisTickStyle.Outside,
+            YAxisMinorTickStyle = ChartAxisTickStyle.Inside,
+            YAxisLineColor = new CellColor(128, 128, 128),
+            YAxisLineThickness = 1,
+            YAxisLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2, 0.1),
+            YAxisLabelFontSize = 12,
+            YAxisLabelAngle = 90,
+            Uses1904DateSystem = true,
+            Language = "en-US",
+            ShowDataLabelsOverMaximum = true,
+            AutoTitleDeleted = true,
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                UseMasterColorMapping = false,
+                OverrideMappings = { ["accent1"] = "accent2" }
+            },
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternalData1",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "../externalLinks/externalLink1.xml",
+                TargetMode = "External",
+                AutoUpdate = true
+            },
+            PlotAreaLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner",
+                XMode = "factor",
+                YMode = "factor",
+                WidthMode = "factor",
+                HeightMode = "factor",
+                X = 0.1,
+                Y = 0.2,
+                Width = 0.8,
+                Height = 0.6
+            },
+            LegendLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner",
+                X = 0.72,
+                Y = 0.1,
+                Height = 0.7
+            },
+            DataTable = new ChartDataTableModel
+            {
+                ShowHorizontalBorder = true,
+                ShowVerticalBorder = true,
+                ShowOutline = true,
+                ShowLegendKeys = true
+            },
             SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196))]
         });
         sheet.Charts.Add(new ChartModel
@@ -1173,7 +1310,16 @@ internal static class XlsxCorpusFixtureFactory
             Type = ChartType.ThreeDSurface,
             DataRange = Range(sheet, "A1", "C4"),
             Title = "3D Surface View",
-            ShowLegend = true
+            ShowLegend = true,
+            ThreeDView = new Chart3DViewModel
+            {
+                RotationX = 20,
+                HeightPercent = 80,
+                RotationY = 30,
+                DepthPercent = 150,
+                RightAngleAxes = false,
+                Perspective = 30
+            }
         });
         return workbook;
     }
@@ -1199,10 +1345,21 @@ internal static class XlsxCorpusFixtureFactory
             TotalsRowShown = false,
             StyleName = "TableStyleMedium2",
             ShowRowStripes = true,
+            NativeSortStateXml = """<sortState xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ref="A2:B3"><sortCondition ref="B2:B3" descending="1" /></sortState>""",
             PackagePart = "xl/tables/table1.xml"
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            [],
+            IncludeBlank: false,
+            NativeFilterXmls:
+            [
+                """<customFilters xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><customFilter operator="greaterThan" val="15" /></customFilters>"""
+            ]));
+        sheet.FilterHiddenRows.Add(2);
+        sheet.FilterHiddenRows.Add(3);
         sheet.StructuredTables.Add(table);
         return workbook;
     }
@@ -1255,7 +1412,13 @@ internal static class XlsxCorpusFixtureFactory
             TargetRange = Range(sheet, "A5", "B8"),
             PackagePart = "xl/pivotTables/pivotTable1.xml",
             StyleName = "FreexcelCorpusPivotStyle",
-            ShowRowStripes = true
+            ShowRowStripes = true,
+            ShowContextualTooltips = false,
+            ShowPropertiesInTooltips = false,
+            ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
+            AltTextTitle = "Corpus pivot",
+            AltTextDescription = "Generated PivotTable parity fixture"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
@@ -1266,9 +1429,30 @@ internal static class XlsxCorpusFixtureFactory
     private static Workbook CreateProtectionAndPageSetup()
     {
         var workbook = NewWorkbook("generated-protection-page-setup-001");
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        workbook.FullCalculationOnLoad = true;
+        workbook.ForceFullCalculation = true;
+        workbook.IterativeCalculation = true;
+        workbook.MaxCalculationIterations = 25;
+        workbook.MaxCalculationChange = 0.005;
+        workbook.Theme = WorkbookTheme.Office
+            .WithName("Freexcel Corpus Theme")
+            .WithFonts("Aptos Display", "Aptos")
+            .WithEffects("FreexcelEffects")
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(12, 34, 56))
+            .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(1, 99, 193));
         var sheet = workbook.AddSheet("Print");
         Set(sheet, "A1", new TextValue("Protected print fixture"));
         Set(sheet, "A2", new NumberValue(42));
+        sheet.DefaultColumnWidth = 11;
+        sheet.DefaultRowHeight = 22;
+        sheet.ColumnWidths[1] = 18;
+        sheet.RowHeights[2] = 28;
+        sheet.TabColor = new CellColor(0, 176, 80);
+        sheet.CodeName = "PrintSheet";
+        sheet.FullCalculationOnLoad = true;
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelCorpusSheet", 7));
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "fixture";
         sheet.AllowEditRanges.Add(Range(sheet, "A2", "B5"));
@@ -1281,8 +1465,48 @@ internal static class XlsxCorpusFixtureFactory
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 1);
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
-        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel", "Corpus", "2026");
+        sheet.PageHeader = new WorksheetHeaderFooter("Freexcel &[Picture]", "Corpus", "2026");
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            new WorksheetHeaderFooterPicture(MinimalPngBytes(), "image/png", "header-logo.png", 96, 32),
+            null,
+            null);
         sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P", "");
+        sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+        sheet.ViewTopRow = 4;
+        sheet.ViewLeftCol = 2;
+        sheet.ActiveRow = 6;
+        sheet.ActiveCol = 3;
+        workbook.WatchedCells.Add(Addr(sheet, "A2"));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Print Forecast",
+            [
+                new ScenarioCellValue(Addr(sheet, "A2"), new NumberValue(84)),
+                new ScenarioCellValue(Addr(sheet, "B2"), new TextValue("Scenario"))
+            ]));
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Print Review",
+            [
+                new WorksheetCustomViewState(
+                    sheet.Name,
+                    WorksheetViewMode.PageLayout,
+                    sheet.FrozenRows,
+                    sheet.FrozenCols,
+                    sheet.SplitRow,
+                    sheet.SplitColumn,
+                    sheet.ShowGridlines,
+                    sheet.ShowHeadings,
+                    sheet.ShowRulers,
+                    125,
+                    sheet.ShowFormulas)
+            ],
+            IncludePrintSettings: true,
+            IncludeHiddenRowsColumnsAndFilterSettings: true));
+        var hidden = workbook.AddSheet("Hidden Meta");
+        Set(hidden, "A1", new TextValue("Very hidden metadata fixture"));
+        hidden.IsHidden = true;
+        hidden.IsVeryHidden = true;
+        hidden.CodeName = "HiddenMeta";
+        hidden.TabColor = new CellColor(255, 192, 0);
         return workbook;
     }
 

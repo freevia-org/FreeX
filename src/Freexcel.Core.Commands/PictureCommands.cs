@@ -40,6 +40,9 @@ public sealed class InsertPictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         sheet.Pictures.Add(_picture);
         _added = true;
         return new CommandOutcome(true, AffectedCells: [_picture.Anchor]);
@@ -98,6 +101,9 @@ public sealed class ResizePictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
         if (picture is null)
             return new CommandOutcome(false, "Picture was not found.");
@@ -144,6 +150,9 @@ public sealed class RotatePictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
         if (picture is null)
             return new CommandOutcome(false, "Picture was not found.");
@@ -167,6 +176,49 @@ public sealed class RotatePictureCommand : IWorkbookCommand
     {
         var normalized = value % 360;
         return normalized < 0 ? normalized + 360 : normalized;
+    }
+}
+
+public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _pictureId;
+    private readonly bool _lockAspectRatio;
+    private bool _previousLockAspectRatio;
+    private bool _applied;
+
+    public string Label => "Picture Lock Aspect Ratio";
+
+    public SetPictureLockAspectRatioCommand(SheetId sheetId, Guid pictureId, bool lockAspectRatio)
+    {
+        _sheetId = sheetId;
+        _pictureId = pictureId;
+        _lockAspectRatio = lockAspectRatio;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null)
+            return new CommandOutcome(false, "Picture was not found.");
+
+        _previousLockAspectRatio = picture.LockAspectRatio;
+        picture.LockAspectRatio = _lockAspectRatio;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null) return;
+        picture.LockAspectRatio = _previousLockAspectRatio;
+        _applied = false;
     }
 }
 
@@ -199,6 +251,9 @@ public sealed class SetPictureCropCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture crop values must be finite percentages between 0 and 100%, with visible width and height remaining.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+
         var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
         if (picture is null)
             return new CommandOutcome(false, "Picture was not found.");

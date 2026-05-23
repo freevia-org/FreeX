@@ -36,8 +36,9 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]
+    [InlineData("# ??/??", 1.25, "1  1/4 ")]
+    [InlineData("# ??/16", 0.3125, " 5/16")]
     [InlineData("# ?/4", 0.5, "2/4")]
-    [InlineData("# ??/16", 0.3125, "5/16")]
     [InlineData("0.00E+00\" kg\"", 1200, "1.20E+03 kg")]
     [InlineData("0.00E+00", 1200, "1.20E+03")]
     [InlineData("0.00E-00", 1200, "1.20E03")]
@@ -208,7 +209,9 @@ public class NumberFormatterTests
     [InlineData("-[$\u20AC-407]#,##0.00", 1234.5, "-\u20AC1.234,50")]
     [InlineData("([$\u20AC-407]#,##0.00)", 1234.5, "(\u20AC1.234,50)")]
     [InlineData("[$\u20AC-407]* #,##0.00", 1234.5, "\u20AC 1.234,50")]
+    [InlineData("[$CHF-807]* #,##0.00", 1234.5, "CHF 1'234.50")]
     [InlineData("[$\u20AC-407]* \"-\"??", 0, "\u20AC -")]
+    [InlineData("[$CHF-807]* \"-\"??", 0, "CHF -")]
     public void CustomNumberSubset_PreservesVisibleCurrencyFromLocaleTokens(
         string format,
         double value,

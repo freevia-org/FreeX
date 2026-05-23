@@ -226,8 +226,10 @@ public sealed class ChartModel
     public string? XAxisTitle { get; set; }
     public string? YAxisTitle { get; set; }
     public CellColor? ChartTitleTextColor { get; set; }
+    public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
     public double ChartTitleFontSize { get; set; } = 16;
     public CellColor? AxisTitleTextColor { get; set; }
+    public WorkbookThemeColorReference? AxisTitleTextThemeColor { get; set; }
     public double AxisTitleFontSize { get; set; } = 12;
     public CellColor? ChartAreaFillColor { get; set; }
     public WorkbookThemeColorReference? ChartAreaFillThemeColor { get; set; }
@@ -263,6 +265,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowXAxisLabels { get; set; } = true;
     public CellColor? XAxisLabelTextColor { get; set; }
+    public WorkbookThemeColorReference? XAxisLabelTextThemeColor { get; set; }
     public double XAxisLabelFontSize { get; set; } = 11;
     public double XAxisLabelAngle { get; set; }
     public CellColor? XAxisLineColor { get; set; }
@@ -282,6 +285,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowYAxisLabels { get; set; } = true;
     public CellColor? YAxisLabelTextColor { get; set; }
+    public WorkbookThemeColorReference? YAxisLabelTextThemeColor { get; set; }
     public double YAxisLabelFontSize { get; set; } = 11;
     public double YAxisLabelAngle { get; set; }
     public CellColor? YAxisLineColor { get; set; }
@@ -344,6 +348,12 @@ public sealed class ChartModel
     public CellColor? ResolvePlotAreaBorderColor(WorkbookTheme theme) =>
         PlotAreaBorderThemeColor?.Resolve(theme) ?? PlotAreaBorderColor;
 
+    public CellColor? ResolveChartTitleTextColor(WorkbookTheme theme) =>
+        ChartTitleTextThemeColor?.Resolve(theme) ?? ChartTitleTextColor;
+
+    public CellColor? ResolveAxisTitleTextColor(WorkbookTheme theme) =>
+        AxisTitleTextThemeColor?.Resolve(theme) ?? AxisTitleTextColor;
+
     public CellColor? ResolveLegendTextColor(WorkbookTheme theme) =>
         LegendTextThemeColor?.Resolve(theme) ?? LegendTextColor;
 
@@ -361,6 +371,12 @@ public sealed class ChartModel
 
     public CellColor? ResolveDataLabelTextColor(WorkbookTheme theme) =>
         DataLabelTextThemeColor?.Resolve(theme) ?? DataLabelTextColor;
+
+    public CellColor? ResolveXAxisLabelTextColor(WorkbookTheme theme) =>
+        XAxisLabelTextThemeColor?.Resolve(theme) ?? XAxisLabelTextColor;
+
+    public CellColor? ResolveYAxisLabelTextColor(WorkbookTheme theme) =>
+        YAxisLabelTextThemeColor?.Resolve(theme) ?? YAxisLabelTextColor;
 
     public CellColor? ResolveTrendlineColor(WorkbookTheme theme) =>
         TrendlineThemeColor?.Resolve(theme) ?? TrendlineColor;

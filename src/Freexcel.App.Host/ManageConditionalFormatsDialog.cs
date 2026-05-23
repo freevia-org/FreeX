@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -8,6 +9,11 @@ using System.Windows.Shapes;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
+
+public sealed record ConditionalFormatAppliesToRangeSelectionRequest(
+    Guid RuleId,
+    string CurrentText,
+    bool CollapseDialog = true);
 
 /// <summary>
 /// "Manage Conditional Formatting Rules" dialog — lists all rules on a sheet,
@@ -20,6 +26,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private readonly Sheet _sheet;
     private readonly GridRange? _selection;
+    private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
 
     // Working copy — bound to the ListView
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
@@ -27,6 +34,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private readonly ComboBox _scopeBox;
     private readonly ListView _listView;
     private readonly Button _editBtn;
+    private readonly Button _duplicateBtn;
     private readonly Button _deleteBtn;
     private readonly Button _moveUpBtn;
     private readonly Button _moveDownBtn;
@@ -34,10 +42,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
 
-    public ManageConditionalFormatsDialog(Sheet sheet, GridRange? selection)
+    public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
+
+    public ManageConditionalFormatsDialog(
+        Sheet sheet,
+        GridRange? selection,
+        Action<ConditionalFormatAppliesToRangeSelectionRequest>? requestAppliesToRangeSelection = null)
     {
         _sheet     = sheet;
         _selection = selection;
+        _requestAppliesToRangeSelection = requestAppliesToRangeSelection;
 
         Title  = "Conditional Formatting Rules Manager";
         Width  = 560;
@@ -92,7 +106,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         bottomRow.Children.Add(applyBtn);
         root.Children.Add(bottomRow);
 
-        // ── Middle toolbar: New / Edit / Delete / reorder ──────────────────────
+        // ── Middle toolbar: New / Edit / Duplicate / Delete / reorder ──────────
         var toolBar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -102,6 +116,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         var newBtn   = new Button { Content = "_New Rule...", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
         _editBtn     = new Button { Content = "_Edit Rule",   Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        _duplicateBtn = new Button { Content = "D_uplicate Rule", Width = 118, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         _deleteBtn   = new Button { Content = "_Delete Rule", Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
         _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), ToolTip = "Move selected rule up", IsEnabled = false };
         _moveDownBtn = new Button { Content = "▼", Width = 32, ToolTip = "Move selected rule down", IsEnabled = false };
@@ -110,12 +125,14 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         newBtn.Click       += NewRule_Click;
         _editBtn.Click     += EditRule_Click;
+        _duplicateBtn.Click += DuplicateRule_Click;
         _deleteBtn.Click   += DeleteRule_Click;
         _moveUpBtn.Click   += MoveUp_Click;
         _moveDownBtn.Click += MoveDown_Click;
 
         toolBar.Children.Add(newBtn);
         toolBar.Children.Add(_editBtn);
+        toolBar.Children.Add(_duplicateBtn);
         toolBar.Children.Add(_deleteBtn);
         toolBar.Children.Add(_moveUpBtn);
         toolBar.Children.Add(_moveDownBtn);
@@ -173,7 +190,9 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
         rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
         rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select Applies To range text");
+        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Collapse dialog and select Applies To range");
+        rangePickerFactory.SetValue(AutomationProperties.NameProperty, "Select Applies To range");
+        rangePickerFactory.SetValue(AutomationProperties.HelpTextProperty, "Collapse dialog and select a worksheet range for this conditional format rule.");
         rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
         rangePickerFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
         {
@@ -293,6 +312,19 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         ReassignPriorities();
     }
 
+    private void DuplicateRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+
+        var idx = _rules.IndexOf(selected);
+        if (idx < 0) return;
+
+        var duplicate = CloneWithPriority(selected, idx + 2, Guid.NewGuid());
+        _rules.Insert(idx + 1, duplicate);
+        _listView.SelectedItem = duplicate;
+        ReassignPriorities();
+    }
+
     private void MoveUp_Click(object sender, RoutedEventArgs e)
     {
         var idx = _rules.IndexOf(_listView.SelectedItem as ConditionalFormat ?? default!);
@@ -315,6 +347,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     {
         bool hasSelection = _listView.SelectedItem is not null;
         _editBtn.IsEnabled   = hasSelection;
+        _duplicateBtn.IsEnabled = hasSelection;
         _deleteBtn.IsEnabled = hasSelection;
 
         var idx = _listView.SelectedIndex;
@@ -399,12 +432,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
         rules.Select((rule, index) => CloneWithPriority(rule, index + 1)).ToList();
 
-    private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority)
+    private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority, Guid? id = null)
     {
         var cf = new ConditionalFormat
         {
             // preserve Id
-            Id            = src.Id,
+            Id            = id ?? src.Id,
             AppliesTo     = src.AppliesTo,
             Priority      = priority,
             RuleType      = src.RuleType,
@@ -453,10 +486,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
     }
 
-    private static void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    public static ConditionalFormatAppliesToRangeSelectionRequest CreateAppliesToRangeSelectionRequest(
+        Guid ruleId,
+        string currentText) =>
+        new(ruleId, currentText.Trim(), CollapseDialog: true);
+
+    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not DependencyObject current)
             return;
+        var rule = (sender as FrameworkElement)?.DataContext as ConditionalFormat;
 
         while (current is not null)
         {
@@ -467,6 +506,11 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 {
                     rangeBox.Focus();
                     rangeBox.SelectAll();
+                    if (rule is not null)
+                    {
+                        AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest(rule.Id, rangeBox.Text);
+                        _requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest);
+                    }
                 }
                 return;
             }

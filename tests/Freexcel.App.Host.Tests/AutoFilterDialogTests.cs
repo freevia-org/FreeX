@@ -62,6 +62,20 @@ public sealed class AutoFilterDialogTests
         AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(AutoFilterMenuFilterKind.Text, "Sort _A to Z", "Sort _Z to A")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "Sort _Smallest to Largest", "Sort _Largest to Smallest")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "Sort _Oldest to Newest", "Sort _Newest to Oldest")]
+    public void GetSortLabels_ReturnsExcelLabelsForDetectedFilterValueType(
+        AutoFilterMenuFilterKind filterKind,
+        string expectedAscending,
+        string expectedDescending)
+    {
+        AutoFilterDialog.GetSortLabels(filterKind)
+            .Should()
+            .Be((expectedAscending, expectedDescending));
+    }
+
     [Fact]
     public void DialogItems_AreMutableForChecklistBinding()
     {
@@ -97,6 +111,35 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void BuildResult_WithSearchUsesVisibleMatchesUnlessAddingCurrentSelection()
+    {
+        var items = new[]
+        {
+            new AutoFilterDialogItem("Apple", "Apple", true),
+            new AutoFilterDialogItem("Apricot", "Apricot", false),
+            new AutoFilterDialogItem("Banana", "Banana", true)
+        };
+
+        var searchOnly = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            items,
+            "ap",
+            "",
+            addCurrentSelectionToFilter: false);
+        var addCurrentSelection = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            items,
+            "ap",
+            "",
+            addCurrentSelectionToFilter: true);
+
+        searchOnly.SelectedValues.Should().Equal("Apple");
+        searchOnly.CriteriaText.Should().Be("Apple");
+        addCurrentSelection.SelectedValues.Should().Equal("Apple", "Banana");
+        addCurrentSelection.CriteriaText.Should().Be("Apple, Banana");
+    }
+
+    [Fact]
     public void BuildResult_CarriesOptionalColorFilter()
     {
         var color = new CellColor(33, 115, 70);
@@ -123,6 +166,20 @@ public sealed class AutoFilterDialogTests
             new AutoFilterColorFilter(AutoFilterColorFilterKind.NoFill, null));
 
         result.ColorFilter.Should().Be(new AutoFilterColorFilter(AutoFilterColorFilterKind.NoFill, null));
+    }
+
+    [Fact]
+    public void CreateClearFilterResult_RequestsExplicitClearAction()
+    {
+        AutoFilterDialog.CreateClearFilterResult()
+            .Should()
+            .Be(new AutoFilterDialogResult(
+                AutoFilterSortDirection.None,
+                [],
+                "",
+                "",
+                null,
+                AutoFilterDialogAction.ClearFilter));
     }
 
     [Fact]
@@ -230,7 +287,10 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("_searchBox.TextChanged");
         source.Should().Contain("FilterItems(_allItems, _searchBox.Text)");
-        source.Should().Contain("BuildResult(GetSortDirection(), _allItems");
+        source.Should().Contain("GetSortDirection()");
+        source.Should().Contain("_allItems");
+        source.Should().Contain("_addCurrentSelectionToFilterBox.IsChecked == true");
+        source.Should().Contain("GetResultItemsForSearchMode");
     }
 
     [Fact]
@@ -249,6 +309,7 @@ public sealed class AutoFilterDialogTests
             "_Date Filters",
             "_Select All",
             "_Clear All",
+            "_Add current selection to filter",
             "_OK",
             "_Cancel"
         })
@@ -256,6 +317,17 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("Content = \"_Criteria text\"");
         source.Should().Contain("Content = \"_Search\"");
+    }
+
+    [Fact]
+    public void DialogOpenedFromKeyboard_FocusesFirstSortCommand()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_sortAscending.Focus();");
+        source.Should().Contain("Keyboard.Focus(_sortAscending);");
     }
 
     [Fact]
@@ -278,6 +350,8 @@ public sealed class AutoFilterDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
 
+        source.Should().Contain("result.Action == AutoFilterDialogAction.ClearFilter");
+        source.Should().Contain("\"Clear Filter\"");
         source.Should().Contain("result.ColorFilter is { } colorFilter");
         source.Should().Contain("new CellFillColorFilterCommand");
         source.Should().Contain("new CellNoFillColorFilterCommand");
@@ -353,6 +427,7 @@ public sealed class AutoFilterDialogTests
         return string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Controls.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogModel.cs")));
     }

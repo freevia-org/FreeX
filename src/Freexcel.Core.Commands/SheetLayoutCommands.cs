@@ -29,7 +29,7 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
             return new CommandOutcome(false, "Row height must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
         _previousHeights = Capture(sheet.RowHeights, _startRow, _endRow);
@@ -103,7 +103,7 @@ public sealed class SetColumnWidthCommand : IWorkbookCommand
             return new CommandOutcome(false, "Column width must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
             return protectedOutcome;
 
         _previousWidths = Capture(sheet.ColumnWidths, _startCol, _endCol);
@@ -175,7 +175,7 @@ public sealed class SetRowsHiddenCommand : IWorkbookCommand
             return new CommandOutcome(false, "Row range is outside the worksheet bounds.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
         _previousHiddenRows = Capture(sheet.HiddenRows, _startRow, _endRow);
@@ -232,7 +232,7 @@ public sealed class SetColumnsHiddenCommand : IWorkbookCommand
             return new CommandOutcome(false, "Column range is outside the worksheet bounds.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
             return protectedOutcome;
 
         _previousHiddenCols = Capture(sheet.HiddenCols, _startCol, _endCol);

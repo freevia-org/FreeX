@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Model;
 using System.IO;
@@ -121,18 +124,52 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Target = _rangeBox");
         source.Should().Contain("Header = \"Range\"");
         source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = \"Select editable range\"");
+        source.Should().Contain("ToolTip = \"Collapse dialog and select editable range\"");
         source.Should().Contain("AutomationProperties.SetName(rangePicker, \"Select editable range\")");
+        source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("rangePicker.Click += RangePicker_Click");
         source.Should().Contain("private void RangePicker_Click");
+        source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("_rangeBox.SelectAll()");
         source.Should().Contain("Use an A1-style range");
     }
 
     [Fact]
+    public void AllowEditRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        AllowEditRangeDialog.CreateRangeSelectionRequest(" $A$1:$C$10 ")
+            .Should()
+            .Be(new AllowEditRangeSelectionRequest("$A$1:$C$10", CollapseDialog: true));
+    }
+
+    [Fact]
+    public void AllowEditRangePicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<AllowEditRangeSelectionRequest>();
+            var dialog = new AllowEditRangeDialog(SheetId.New(), " $A$1:$C$10 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                InvokePrivate(dialog, "RangePicker_Click");
+
+                requests.Should().Equal(new AllowEditRangeSelectionRequest("$A$1:$C$10", CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+                GetPrivateField<TextBox>(dialog, "_rangeBox").SelectionLength.Should().Be("$A$1:$C$10".Length + 2);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void ProtectSheetDialog_ExposesPermissionChecklistAndFollowUpConfirmation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+        var source = ReadProtectionDialogSources();
 
         source.Should().Contain("Allow all users of this worksheet to:");
         source.Should().Contain("Header = \"Password\"");
@@ -143,5 +180,28 @@ public sealed class ProtectionDialogTests
         source.Should().NotContain("_Confirm password:");
         source.Should().Contain("Select locked cells");
         source.Should().Contain("Edit scenarios");
+        source.Should().Contain("Choose which protected-sheet actions remain available.");
+        source.Should().NotContain("current enforcement is limited");
     }
+
+    private static T GetPrivateField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
+    }
+
+    private static void InvokePrivate(AllowEditRangeDialog dialog, string methodName)
+    {
+        var method = typeof(AllowEditRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+    }
+
+    private static string ReadProtectionDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogPlanner.cs")));
 }

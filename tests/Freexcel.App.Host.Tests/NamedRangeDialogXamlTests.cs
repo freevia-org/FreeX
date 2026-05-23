@@ -1,6 +1,11 @@
 using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -75,6 +80,8 @@ public sealed class NamedRangeDialogXamlTests
             .Single(element => element.Attribute(x + "Name")?.Value == "RefersToPickerButton");
         picker.Attribute("Click")?.Value.Should().Be("RefersToPickerButton_Click");
         picker.Attribute("IsEnabled").Should().BeNull("the picker state is managed from the selected name");
+        picker.Attribute("ToolTip")?.Value.Should().Be("Collapse dialog and select the referenced range");
+        picker.Attribute("AutomationProperties.Name")?.Value.Should().Be("Select referenced range");
     }
 
     [Fact]
@@ -99,11 +106,13 @@ public sealed class NamedRangeDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
 
         source.Should().Contain("NameDefinitionDialog");
+        source.Should().Contain("NamedRangeSelectionRequest");
         source.Should().Contain("_scopeBox");
         source.Should().Contain("_commentBox");
         source.Should().Contain("_refersToBox");
         source.Should().Contain("_rangePickerButton");
         source.Should().Contain("_rangePickerButton.Click");
+        source.Should().Contain("_requestRangeSelection?.Invoke");
         source.Should().Contain("_refersToBox.SelectAll");
         source.Should().Contain("UpdateSelectionCommands");
         source.Should().Contain("EditButton.IsEnabled = hasSelection");
@@ -129,5 +138,109 @@ public sealed class NamedRangeDialogXamlTests
             .Should().Equal(workbookName);
         NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.Worksheet)
             .Should().Equal(sheetName);
+    }
+
+    [Fact]
+    public void CreateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        NamedRangeDialog.CreateRangeSelectionRequest(
+                NamedRangeSelectionTarget.DefinitionRefersTo,
+                " Sheet1!$A$1:$C$5 ")
+            .Should()
+            .Be(new NamedRangeSelectionRequest(
+                NamedRangeSelectionTarget.DefinitionRefersTo,
+                "Sheet1!$A$1:$C$5",
+                CollapseDialog: true));
+    }
+
+    [Fact]
+    public void NameManagerRefersToPicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            var requests = new List<NamedRangeSelectionRequest>();
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook), requestRangeSelection: requests.Add);
+            dialog.Show();
+            try
+            {
+                GetControl<TextBox>(dialog, "RefersToBox").Text = " Sheet1!A1:C3 ";
+
+                InvokePrivate(dialog, "RefersToPickerButton_Click");
+
+                requests.Should().Equal(new NamedRangeSelectionRequest(
+                    NamedRangeSelectionTarget.SelectedNameRefersTo,
+                    "Sheet1!A1:C3",
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void NameDefinitionRefersToPicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<NamedRangeSelectionRequest>();
+            var dialog = new NameDefinitionDialog(
+                new NameDefinitionDialogResult("Sales", "Workbook", "", " Sheet1!$A$1:$C$5 "),
+                ["Workbook"],
+                requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = GetPrivateField<Button>(dialog, "_rangePickerButton");
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new NamedRangeSelectionRequest(
+                    NamedRangeSelectionTarget.DefinitionRefersTo,
+                    "Sheet1!$A$1:$C$5",
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    private static T GetControl<T>(NamedRangeDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(NamedRangeDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static T GetPrivateField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
+    }
+
+    private static void InvokePrivate(NamedRangeDialog dialog, string methodName)
+    {
+        var method = typeof(NamedRangeDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+    }
+
+    private static ICommandBus CreateCommandBus(Workbook workbook) =>
+        new CommandBus(_ => new TestCommandContext(workbook));
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException("Sheet not found.");
     }
 }
