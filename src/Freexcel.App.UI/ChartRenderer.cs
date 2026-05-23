@@ -81,7 +81,7 @@ public static partial class ChartRenderer
         ConfigureLegend(model, chart, theme);
         AddPivotChartFieldButtons(model, chart);
 
-        if (chart.Type is ChartType.Pie or ChartType.Doughnut)
+        if (chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut)
         {
             var pieSeriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((startRow, dataStartCol), out var pieHeader)
                 ? pieHeader.DisplayText

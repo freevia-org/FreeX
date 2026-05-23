@@ -1,24 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .r{fill:none;stroke:#242424;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g{fill:#107c41}
-      .g2{fill:#dff6dd}
-      .b{fill:#0078d4}
-      .o{fill:#f7630c}
-      .y{fill:#ffb900}
-      .rd{fill:#d32f2f}
-      .p{fill:#8b5cf6}
-      .w{fill:#ffffff}
-      .k{fill:#242424}
-      .f{fill:#f3f2f1}
-      .t{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-</style>
-  </defs>
-  <path class="s" d="M4 5 L14 5" stroke-width="1"/>
-  <path class="s" d="M4 9 L14 9" stroke-width="1"/>
-  <path class="r" d="M14 9 L9 14" stroke-width="1"/>
-  <polygon class="b" points="9.64 11.24 9 14 11.76 13.36"/>
-  <path class="s" d="M9 14 L16 14" stroke-width="1"/>
+  
+  <path d="M4 5 L14 5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4 9 L14 9" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 9 L9 14" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+  <polygon points="9.64 11.24 9 14 11.76 13.36" fill="#0078d4"/>
+  <path d="M9 14 L16 14" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
