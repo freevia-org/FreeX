@@ -112,6 +112,7 @@ public static partial class XlsxChartPartReader
         XElement? plotArea,
         IReadOnlyList<XElement> areaCharts,
         SheetId sheetId,
+        ChartType chartType,
         out ChartModel chart)
     {
         var ranges = new List<GridRange>();
@@ -119,7 +120,7 @@ public static partial class XlsxChartPartReader
         var hasCategoryRange = false;
         var result = new ChartModel
         {
-            Type = ChartType.Area,
+            Type = chartType,
             Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 

@@ -30,6 +30,7 @@ public sealed class ChartDialogTests
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
+            ChartType.ThreeDArea,
             ChartType.Radar,
             ChartType.Stock);
         options.Should().NotContain(option => !ChartTypeSupport.IsRenderable(option.Type));
@@ -81,6 +82,9 @@ public sealed class ChartDialogTests
             ChartType.StackedBar,
             ChartType.PercentStackedBar,
             ChartType.ThreeDBar);
+        categories.Single(category => category.Name == "Area").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Area,
+            ChartType.ThreeDArea);
     }
 
     [Fact]

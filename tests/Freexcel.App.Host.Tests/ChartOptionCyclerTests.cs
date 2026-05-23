@@ -86,6 +86,7 @@ public sealed class ChartOptionCyclerTests
     }
 
     [Theory]
+    [InlineData("3d area", ChartType.ThreeDArea)]
     [InlineData("3d pie", ChartType.ThreeDPie)]
     [InlineData("doughnut", ChartType.Doughnut)]
     [InlineData("donut", ChartType.Doughnut)]

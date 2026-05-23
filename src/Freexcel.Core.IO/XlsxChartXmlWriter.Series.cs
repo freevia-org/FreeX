@@ -495,7 +495,7 @@ internal static partial class XlsxChartXmlWriter
     private static bool SupportsErrorBars(ChartType chartType) =>
         chartType is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or
             ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or
-            ChartType.Line or ChartType.Scatter or ChartType.Area;
+            ChartType.Line or ChartType.Scatter or ChartType.Area or ChartType.ThreeDArea;
 
     private static string ToXlsxErrorBarKind(ChartErrorBarKind kind) =>
         kind switch
