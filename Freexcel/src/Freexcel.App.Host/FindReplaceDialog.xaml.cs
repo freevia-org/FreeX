@@ -45,6 +45,12 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void FindResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FindResultsGrid.SelectedItem is FindResultRow row)
+            _navigateTo(row.Address);
+    }
+
     private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options <<";
     private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
@@ -186,16 +192,42 @@ public sealed partial class FindReplaceDialog : Window
 
     private void UpdateResultsGrid()
     {
-        FindResultsGrid.ItemsSource = _results
-            .Select(result => new FindResultRow(result.Address.ToA1(), result.MatchedText))
-            .ToList();
+        FindResultsGrid.ItemsSource = FindReplaceDialogPlanner.BuildFindResultRows(_getWorkbook(), _results);
     }
-
-    private sealed record FindResultRow(string Address, string Value);
 }
 
 internal static class FindReplaceDialogPlanner
 {
+    public static IReadOnlyList<FindResultRow> BuildFindResultRows(Workbook workbook, IReadOnlyList<FindResult> results) =>
+        results
+            .Select(result => CreateFindResultRow(workbook, result))
+            .ToList();
+
+    private static FindResultRow CreateFindResultRow(Workbook workbook, FindResult result)
+    {
+        var sheet = workbook.GetSheet(result.Address.Sheet);
+        var cell = sheet?.GetCell(result.Address);
+        return new FindResultRow(
+            workbook.Name,
+            sheet?.Name ?? "",
+            FindNameForAddress(workbook, result.Address),
+            result.Address,
+            result.Address.ToA1(),
+            result.MatchedText,
+            cell?.HasFormula == true ? cell.FormulaText ?? "" : "");
+    }
+
+    private static string FindNameForAddress(Workbook workbook, CellAddress address)
+    {
+        var namedRange = workbook.NamedRanges
+            .Where(pair => pair.Value.Contains(address))
+            .OrderBy(pair => pair.Value.CellCount)
+            .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
+        return string.IsNullOrEmpty(namedRange.Key) ? "" : namedRange.Key;
+    }
+
     public static bool ReplaceSingleMatch(
         Workbook workbook,
         ICommandBus commandBus,
@@ -263,3 +295,12 @@ internal static class FindReplaceDialogPlanner
         _ => null
     };
 }
+
+internal sealed record FindResultRow(
+    string Book,
+    string Sheet,
+    string Name,
+    CellAddress Address,
+    string Cell,
+    string Value,
+    string Formula);

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 
 namespace Freexcel.App.Host;
@@ -54,6 +55,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, (_, _) => SaveWorkbookWithDialog());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CycleShellFocus, (_, _) => CycleShellFocus(reverse: Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenContextMenu, (_, _) => OpenKeyboardContextMenu());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditInFormulaBar, (_, _) => EditActiveCellInFormulaBar());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertWorksheet, AddSheetButton_Click);
