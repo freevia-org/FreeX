@@ -728,6 +728,8 @@ public class XlsxCorpusRunnerTests
             sheet.PageOrientation,
             sheet.PaperSize,
             sheet.PageMargins,
+            sheet.HeaderMargin,
+            sheet.FooterMargin,
             sheet.ScaleToFit,
             sheet.PrintGridlines,
             sheet.PrintHeadings,
@@ -735,6 +737,23 @@ public class XlsxCorpusRunnerTests
             !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
             CaptureHeaderFooterSummary(sheet.PageFooter),
             !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
+            sheet.DifferentFirstPageHeaderFooter ? CaptureHeaderFooterSummary(sheet.FirstPageHeader) : HeaderFooterSummary.Empty,
+            sheet.DifferentFirstPageHeaderFooter ? CaptureHeaderFooterSummary(sheet.FirstPageFooter) : HeaderFooterSummary.Empty,
+            sheet.DifferentOddEvenHeaderFooter ? CaptureHeaderFooterSummary(sheet.EvenPageHeader) : HeaderFooterSummary.Empty,
+            sheet.DifferentOddEvenHeaderFooter ? CaptureHeaderFooterSummary(sheet.EvenPageFooter) : HeaderFooterSummary.Empty,
+            sheet.DifferentFirstPageHeaderFooter,
+            sheet.DifferentOddEvenHeaderFooter,
+            sheet.HeaderFooterScaleWithDocument,
+            sheet.HeaderFooterAlignWithMargins,
+            sheet.CenterHorizontallyOnPage,
+            sheet.CenterVerticallyOnPage,
+            sheet.PageOrder,
+            sheet.FirstPageNumber,
+            sheet.PrintBlackAndWhite,
+            sheet.PrintDraftQuality,
+            sheet.PrintQualityDpi,
+            sheet.PrintErrorValue,
+            sheet.PrintComments,
             sheet.RowPageBreaks.OrderBy(row => row).ToArray(),
             sheet.RowPageBreaks.Count,
             sheet.ColumnPageBreaks.OrderBy(column => column).ToArray(),
@@ -1094,6 +1113,8 @@ public class XlsxCorpusRunnerTests
                 .Select(sheet => sheet with
                 {
                     Cells = [],
+                    HeaderFooterAlignWithMargins = true,
+                    HeaderFooterScaleWithDocument = true,
                     StyleOnlyCells = [],
                     StyleOnlyCellCount = 0
                 })
@@ -1369,6 +1390,8 @@ public class XlsxCorpusRunnerTests
         WorksheetPageOrientation PageOrientation,
         WorksheetPaperSize PaperSize,
         WorksheetPageMargins PageMargins,
+        double HeaderMargin,
+        double FooterMargin,
         WorksheetScaleToFit ScaleToFit,
         bool PrintGridlines,
         bool PrintHeadings,
@@ -1376,6 +1399,23 @@ public class XlsxCorpusRunnerTests
         bool HasPageHeader,
         HeaderFooterSummary PageFooter,
         bool HasPageFooter,
+        HeaderFooterSummary FirstPageHeader,
+        HeaderFooterSummary FirstPageFooter,
+        HeaderFooterSummary EvenPageHeader,
+        HeaderFooterSummary EvenPageFooter,
+        bool DifferentFirstPageHeaderFooter,
+        bool DifferentOddEvenHeaderFooter,
+        bool HeaderFooterScaleWithDocument,
+        bool HeaderFooterAlignWithMargins,
+        bool CenterHorizontallyOnPage,
+        bool CenterVerticallyOnPage,
+        WorksheetPageOrder PageOrder,
+        int? FirstPageNumber,
+        bool PrintBlackAndWhite,
+        bool PrintDraftQuality,
+        int? PrintQualityDpi,
+        WorksheetPrintErrorValue PrintErrorValue,
+        WorksheetPrintComments PrintComments,
         IReadOnlyList<uint> RowPageBreaks,
         int RowPageBreakCount,
         IReadOnlyList<uint> ColumnPageBreaks,
@@ -1425,7 +1465,10 @@ public class XlsxCorpusRunnerTests
 
     private sealed record BackgroundImageSummary(string ContentType, string FileName, int ImageByteCount);
 
-    private sealed record HeaderFooterSummary(string Left, string Center, string Right);
+    private sealed record HeaderFooterSummary(string Left, string Center, string Right)
+    {
+        public static HeaderFooterSummary Empty { get; } = new("", "", "");
+    }
 
     private sealed record ChartSummary(
         ChartType Type,
