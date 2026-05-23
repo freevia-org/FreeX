@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 
 namespace Freexcel.App.Host;
@@ -68,6 +69,7 @@ public sealed class GoToSpecialDialog : Window
         root.Children.Add(buttons);
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static IReadOnlyList<GoToSpecialChoice> GetChoices() =>
@@ -132,6 +134,14 @@ public sealed class GoToSpecialDialog : Window
         Grid.SetRow(button, row);
         Grid.SetColumn(button, index % 2);
         grid.Children.Add(button);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        var firstButton = _buttons.FirstOrDefault();
+        _buttons.FirstOrDefault()?.Focus();
+        if (firstButton is not null)
+            Keyboard.Focus(firstButton);
     }
 
     private void Accept()
