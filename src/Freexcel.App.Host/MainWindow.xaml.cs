@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private SheetId? _dragSheetTabId;
     private System.Windows.Point _dragSheetTabStart;
     private bool _suppressToolbarSync;
+    private ToolbarVisualState? _lastToolbarVisualState;
     private bool _suppressViewOptionSync;
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;
