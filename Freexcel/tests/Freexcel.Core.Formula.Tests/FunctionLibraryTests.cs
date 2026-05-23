@@ -1089,6 +1089,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_OmittedStartNum_DefaultsToOne()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"h\",\"hello\",)", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"H\",\"hello\",)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Find_NotFound_ReturnsValueError()
     {
         var sheet = MakeSheet();
