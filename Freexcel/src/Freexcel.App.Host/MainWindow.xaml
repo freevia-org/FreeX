@@ -1969,42 +1969,44 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Trace Precedents"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TracePrecedentsBtn_Click"
-                                        local:RibbonTooltip.Title="Trace Precedents"
-                                        local:RibbonTooltip.KeyTip="TP"
-                                        local:RibbonTooltip.Description="Show arrows pointing to the cells that supply values to the selected formula."/>
-                                <Button Content="Trace Dependents"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TraceDependentsBtn_Click"
-                                        local:RibbonTooltip.Title="Trace Dependents"
-                                        local:RibbonTooltip.KeyTip="TD"
-                                        local:RibbonTooltip.Description="Show arrows pointing to the cells that depend on the selected cell."/>
-                                <Button Content="Remove Arrows"     Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveArrowsBtn_Click"
-                                        local:RibbonTooltip.Title="Remove Arrows"
-                                        local:RibbonTooltip.KeyTip="RA"
-                                        local:RibbonTooltip.Description="Remove the tracer arrows added by Trace Precedents or Trace Dependents."/>
-                                <Button Content="Show Formulas"     Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShowFormulasBtn_Click"
-                                        local:RibbonTooltip.Title="Show Formulas"
-                                        local:RibbonTooltip.KeyTip="SF"
-                                        local:RibbonTooltip.Description="Display formulas in all cells instead of their calculated results."/>
-                                <Button Content="Error Checking"    Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ErrorCheckBtn_Click"
-                                        local:RibbonTooltip.Title="Error Checking"
-                                        local:RibbonTooltip.KeyTip="EC"
-                                        local:RibbonTooltip.Description="Check for common errors in the formulas on this sheet, or open error-checking options.">
-                                    <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Error Checking..." local:RibbonTooltip.KeyTip="E" Click="ErrorCheckBtn_Click"/>
-                                            <MenuItem Header="Error Checking Options..." local:RibbonTooltip.KeyTip="O" Click="SsOptionsBtn_Click"/>
-                                        </ContextMenu>
-                                    </Button.ContextMenu>
-                                </Button>
-                                <Button Content="Evaluate Formula"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="EvaluateFormulaBtn_Click"
-                                        local:RibbonTooltip.Title="Evaluate Formula"
-                                        local:RibbonTooltip.KeyTip="V"
-                                        local:RibbonTooltip.Description="Show the selected formula and its current calculated result."/>
-                                <Button Content="Watch Window"      Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="WatchWindowBtn_Click"
-                                        local:RibbonTooltip.Title="Watch Window"
-                                        local:RibbonTooltip.KeyTip="W"
-                                        local:RibbonTooltip.Description="Show watched cells and their current values."/>
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel VerticalAlignment="Center">
+                                    <Button Content="Trace Precedents"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TracePrecedentsBtn_Click"
+                                            local:RibbonTooltip.Title="Trace Precedents"
+                                            local:RibbonTooltip.KeyTip="TP"
+                                            local:RibbonTooltip.Description="Show arrows pointing to the cells that supply values to the selected formula."/>
+                                    <Button Content="Trace Dependents"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TraceDependentsBtn_Click"
+                                            local:RibbonTooltip.Title="Trace Dependents"
+                                            local:RibbonTooltip.KeyTip="TD"
+                                            local:RibbonTooltip.Description="Show arrows pointing to the cells that depend on the selected cell."/>
+                                    <Button Content="Remove Arrows"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveArrowsBtn_Click"
+                                            local:RibbonTooltip.Title="Remove Arrows"
+                                            local:RibbonTooltip.KeyTip="RA"
+                                            local:RibbonTooltip.Description="Remove the tracer arrows added by Trace Precedents or Trace Dependents."/>
+                                    <Button Content="Show Formulas"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShowFormulasBtn_Click"
+                                            local:RibbonTooltip.Title="Show Formulas"
+                                            local:RibbonTooltip.KeyTip="SF"
+                                            local:RibbonTooltip.Description="Display formulas in all cells instead of their calculated results."/>
+                                    <Button Content="Error Checking"    Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ErrorCheckBtn_Click"
+                                            local:RibbonTooltip.Title="Error Checking"
+                                            local:RibbonTooltip.KeyTip="EC"
+                                            local:RibbonTooltip.Description="Check for common errors in the formulas on this sheet, or open error-checking options.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Error Checking..." local:RibbonTooltip.KeyTip="E" Click="ErrorCheckBtn_Click"/>
+                                                <MenuItem Header="Error Checking Options..." local:RibbonTooltip.KeyTip="O" Click="SsOptionsBtn_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                    <Button Content="Evaluate Formula"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="EvaluateFormulaBtn_Click"
+                                            local:RibbonTooltip.Title="Evaluate Formula"
+                                            local:RibbonTooltip.KeyTip="V"
+                                            local:RibbonTooltip.Description="Show the selected formula and its current calculated result."/>
+                                    <Button Content="Watch Window"      Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="WatchWindowBtn_Click"
+                                            local:RibbonTooltip.Title="Watch Window"
+                                            local:RibbonTooltip.KeyTip="W"
+                                            local:RibbonTooltip.Description="Show watched cells and their current values."/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center">
                                     <Button Content="Add Watch" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AddWatchBtn_Click"
                                             local:RibbonTooltip.Title="Add Watch"
                                             local:RibbonTooltip.KeyTip="AW"
@@ -2379,19 +2381,19 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Normal" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
+                                <Button Content="Normal" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
                                         local:RibbonTooltip.Title="Normal"
                                         local:RibbonTooltip.KeyTip="N"
                                         local:RibbonTooltip.Description="Show the worksheet in the standard editing view."/>
-                                <Button Content="Page Break Preview" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
+                                <Button Content="Page Break Preview" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
                                         local:RibbonTooltip.Title="Page Break Preview"
                                         local:RibbonTooltip.KeyTip="P"
                                         local:RibbonTooltip.Description="Show manual page breaks and print area boundaries while editing."/>
-                                <Button Content="Page Layout" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
+                                <Button Content="Page Layout" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
                                         local:RibbonTooltip.Title="Page Layout"
                                         local:RibbonTooltip.KeyTip="L"
                                         local:RibbonTooltip.Description="Show the sheet with print layout boundaries."/>
-                                <Button Content="Custom Views" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
+                                <Button Content="Custom Views" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
                                         local:RibbonTooltip.Title="Custom Views"
                                         local:RibbonTooltip.KeyTip="C"
                                         local:RibbonTooltip.Description="View, add, show, and delete saved workbook views."/>
@@ -2516,15 +2518,15 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Side by Side" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="View Side by Side"
+                                        local:RibbonTooltip.Title="Side by Side"
                                         local:RibbonTooltip.KeyTip="B"
                                         local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
                                 <Button Content="Sync Scrolling" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Synchronous Scrolling"
+                                        local:RibbonTooltip.Title="Sync Scrolling"
                                         local:RibbonTooltip.KeyTip="SS"
                                         local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
                                 <Button Content="Reset Position" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Reset Window Position"
+                                        local:RibbonTooltip.Title="Reset Position"
                                         local:RibbonTooltip.KeyTip="RP"
                                         local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
                                 <Button Content="Switch Windows" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
