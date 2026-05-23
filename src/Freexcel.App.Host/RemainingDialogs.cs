@@ -22,7 +22,7 @@ public sealed class ConditionalFormatThresholdDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _thresholdBox.Text = Result.ThresholdText;
-        Content = ObjectSizeDialog.CreateSingleInputContent("Format cells greater than:", _thresholdBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("Format cells greater _than:", _thresholdBox, Accept);
     }
 
     public static ConditionalFormatThresholdDialogResult CreateResult(string thresholdText) =>
@@ -55,7 +55,7 @@ public sealed class RowHeightDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Row height:", _heightBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("Row _height:", _heightBox, Accept);
     }
 
     public static bool TryCreateResult(string? input, out RowHeightDialogResult result, out string? error)
@@ -99,7 +99,7 @@ public sealed class ColumnWidthDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Column width:", _widthBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("Column _width:", _widthBox, Accept);
     }
 
     public static bool TryCreateResult(string? input, out ColumnWidthDialogResult result, out string? error)
@@ -257,7 +257,7 @@ public sealed class ForecastSheetDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _periodsBox.Text = periods.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Forecast periods:", _periodsBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept);
     }
 
     public static bool TryCreateResult(string input, out ForecastSheetDialogResult result, out string? error)
@@ -301,7 +301,7 @@ public sealed class SheetNameDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _nameBox.Text = currentName;
-        Content = ObjectSizeDialog.CreateSingleInputContent("Sheet name:", _nameBox, () =>
+        Content = ObjectSizeDialog.CreateSingleInputContent("Sheet _name:", _nameBox, () =>
         {
             Result = CreateResult(_nameBox.Text);
             DialogResult = true;

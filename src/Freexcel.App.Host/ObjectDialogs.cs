@@ -293,7 +293,7 @@ public sealed class ObjectSizeDialog : Window
         AddLabeledTextBox(stack, "Height:", _heightBox);
         AddLabeledTextBox(stack, "Width:", _widthBox);
         stack.Children.Add(_lockAspectRatioBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
     }
 
