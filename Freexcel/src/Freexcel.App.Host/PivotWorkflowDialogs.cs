@@ -1040,7 +1040,7 @@ public sealed class PivotCalculatedItemDialog : Window
 
 file static class PivotFormulaInsertion
 {
-public static string InsertFormulaToken(string formula, string reference, int selectionStart, int selectionLength)
+    public static string InsertFormulaToken(string formula, string reference, int selectionStart, int selectionLength)
     {
         var safeFormula = formula ?? "";
         var safeReference = reference ?? "";
