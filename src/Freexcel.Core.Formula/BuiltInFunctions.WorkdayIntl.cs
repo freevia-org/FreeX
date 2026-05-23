@@ -66,7 +66,8 @@ public static partial class BuiltInFunctions
 
         var (mask, maskErr) = ParseWeekendMask(args.Count > 2 ? args[2] : BlankValue.Instance);
         if (maskErr is not null) return maskErr;
-        var holidays = args.Count > 3 ? CollectHolidays(args[3]) : new HashSet<DateTime>();
+        if (!TryCollectHolidays(args.Count > 3 ? args[3] : null, out var holidays, out var holidayError))
+            return holidayError!;
 
         var startDt = startRaw.Date;
         var endDt = endRaw.Date;
@@ -98,7 +99,8 @@ public static partial class BuiltInFunctions
 
         var (mask, maskErr) = ParseWeekendMask(args.Count > 2 ? args[2] : BlankValue.Instance);
         if (maskErr is not null) return maskErr;
-        var holidays = args.Count > 3 ? CollectHolidays(args[3]) : new HashSet<DateTime>();
+        if (!TryCollectHolidays(args.Count > 3 ? args[3] : null, out var holidays, out var holidayError))
+            return holidayError!;
 
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
