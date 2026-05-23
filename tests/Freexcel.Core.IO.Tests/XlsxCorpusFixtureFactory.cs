@@ -1288,10 +1288,21 @@ internal static class XlsxCorpusFixtureFactory
             TotalsRowShown = false,
             StyleName = "TableStyleMedium2",
             ShowRowStripes = true,
+            NativeSortStateXml = """<sortState xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ref="A2:B3"><sortCondition ref="B2:B3" descending="1" /></sortState>""",
             PackagePart = "xl/tables/table1.xml"
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(
+            0,
+            [],
+            IncludeBlank: false,
+            NativeFilterXmls:
+            [
+                """<customFilters xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><customFilter operator="greaterThan" val="15" /></customFilters>"""
+            ]));
+        sheet.FilterHiddenRows.Add(2);
+        sheet.FilterHiddenRows.Add(3);
         sheet.StructuredTables.Add(table);
         return workbook;
     }
