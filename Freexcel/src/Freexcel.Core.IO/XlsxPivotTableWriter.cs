@@ -247,6 +247,7 @@ internal static class XlsxPivotTableWriter
             new XAttribute("itemPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("printDrill", pivot.PrintExpandCollapseButtons ? "1" : "0"),
+            new XAttribute("indent", Math.Clamp(pivot.CompactRowLabelIndent, 0, 15).ToString(CultureInfo.InvariantCulture)),
             OptionalAttribute("altText", pivot.AltTextTitle),
             OptionalAttribute("altTextSummary", pivot.AltTextDescription),
             new XAttribute("reportLayout", ToPivotReportLayoutText(pivot.ReportLayout)),

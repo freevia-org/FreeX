@@ -243,7 +243,8 @@ public sealed class PivotWorkflowDialogTests
             reportLayout: PivotReportLayout.Outline,
             emptyValueText: "  N/A  ",
             refreshOnOpen: true,
-            saveSourceData: false);
+            saveSourceData: false,
+            compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
             true,
@@ -260,7 +261,8 @@ public sealed class PivotWorkflowDialogTests
             PivotReportLayout.Outline,
             "N/A",
             true,
-            false));
+            false,
+            CompactRowLabelIndent: 3));
     }
 
     [Fact]
@@ -308,7 +310,8 @@ public sealed class PivotWorkflowDialogTests
             ShowColumnHeaders = false,
             ShowRowStripes = true,
             ShowColumnStripes = true,
-            EmptyValueText = "-"
+            EmptyValueText = "-",
+            CompactRowLabelIndent = 5
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
@@ -326,7 +329,8 @@ public sealed class PivotWorkflowDialogTests
                 true,
                 true,
                 PivotReportLayout.Compact,
-                "-"));
+                "-",
+                CompactRowLabelIndent: 5));
     }
 
     [Fact]
@@ -372,6 +376,7 @@ public sealed class PivotWorkflowDialogTests
             "Printing",
             "Alt Text",
             "_emptyCellsBox",
+            "_compactIndentBox",
             "_autofitColumnsBox",
             "_preserveFormattingBox",
             "_refreshOnOpenBox",
@@ -424,6 +429,7 @@ public sealed class PivotWorkflowDialogTests
         foreach (var content in new[]
         {
             "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
+            "AddLabeledControl(layoutPanel, \"When in compact form indent row labels\", _compactIndentBox",
             "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
             "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
             "AddLabeledControl(stylePanel, \"PivotTable _style\", _styleBox",
@@ -478,6 +484,7 @@ public sealed class PivotWorkflowDialogTests
             emptyValueText: " - ",
             refreshOnOpen: true,
             saveSourceData: false,
+            compactRowLabelIndent: 6,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
@@ -485,6 +492,7 @@ public sealed class PivotWorkflowDialogTests
 
         result.PrintTitles.Should().BeTrue();
         result.PrintExpandCollapseButtons.Should().BeTrue();
+        result.CompactRowLabelIndent.Should().Be(6);
         result.AltTextTitle.Should().Be("Sales pivot");
         result.AltTextDescription.Should().Be("Quarterly sales summary");
     }
@@ -707,12 +715,13 @@ public sealed class PivotWorkflowDialogTests
             ShowPivotChartFieldButtons = false,
             ShowPivotChartReportFilterButtons = true,
             ShowPivotChartAxisFieldButtons = false,
-            ShowPivotChartValueFieldButtons = true
+            ShowPivotChartValueFieldButtons = true,
+            DataTable = new ChartDataTableModel { ShowLegendKeys = true }
         };
 
         PivotChartOptionsDialog.FromChart(chart)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true));
+            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true, true, true));
     }
 
     [Fact]
@@ -730,6 +739,8 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Report _filter buttons");
         source.Should().Contain("_Axis field buttons");
         source.Should().Contain("_Value field buttons");
+        source.Should().Contain("Show data _table");
+        source.Should().Contain("Show legend _keys");
         source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
         source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
     }
