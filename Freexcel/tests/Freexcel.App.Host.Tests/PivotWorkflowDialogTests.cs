@@ -707,12 +707,13 @@ public sealed class PivotWorkflowDialogTests
             ShowPivotChartFieldButtons = false,
             ShowPivotChartReportFilterButtons = true,
             ShowPivotChartAxisFieldButtons = false,
-            ShowPivotChartValueFieldButtons = true
+            ShowPivotChartValueFieldButtons = true,
+            DataTable = new ChartDataTableModel { ShowLegendKeys = true }
         };
 
         PivotChartOptionsDialog.FromChart(chart)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true));
+            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true, true, true));
     }
 
     [Fact]
@@ -730,6 +731,8 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Report _filter buttons");
         source.Should().Contain("_Axis field buttons");
         source.Should().Contain("_Value field buttons");
+        source.Should().Contain("Show data _table");
+        source.Should().Contain("Show legend _keys");
         source.Should().NotContain("Style IDs match the built-in Excel chart style gallery");
         source.Should().NotContain("Field buttons let you filter and rearrange PivotChart data directly on the chart");
     }
