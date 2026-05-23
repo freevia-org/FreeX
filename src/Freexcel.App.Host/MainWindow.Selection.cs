@@ -623,16 +623,13 @@ public partial class MainWindow
             case ShellFocusTarget.FormulaBar:
                 if (FormulaBarBorder?.Visibility != Visibility.Visible)
                     return false;
-                FormulaBar.Focus();
-                return true;
+                return FormulaBar.Focus();
 
             case ShellFocusTarget.SheetTabs:
-                AddSheetButton.Focus();
-                return true;
+                return AddSheetButton.Focus();
 
             case ShellFocusTarget.StatusBar:
-                ZoomSlider.Focus();
-                return true;
+                return ZoomSlider.Focus();
 
             default:
                 FocusSheetGridIfNeeded();
