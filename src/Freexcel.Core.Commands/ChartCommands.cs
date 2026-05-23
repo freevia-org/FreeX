@@ -285,6 +285,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
     private readonly bool? _showValueFieldButtons;
     private readonly bool? _showDataTable;
     private readonly bool? _showDataTableLegendKeys;
+    private readonly bool? _roundedCorners;
+    private readonly bool? _showHiddenData;
+    private readonly ChartBlankDisplayMode? _blankDisplayMode;
     private int? _previousChartStyleId;
     private bool? _previousShowFieldButtons;
     private bool? _previousShowReportFilterButtons;
@@ -292,6 +295,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
     private bool? _previousShowValueFieldButtons;
     private ChartDataTableModel? _previousDataTable;
     private bool _previousDataTableCaptured;
+    private bool? _previousRoundedCorners;
+    private bool? _previousShowHiddenData;
+    private ChartBlankDisplayMode? _previousBlankDisplayMode;
 
     public string Label => "PivotChart Options";
 
@@ -304,7 +310,10 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         bool? showAxisFieldButtons = null,
         bool? showValueFieldButtons = null,
         bool? showDataTable = null,
-        bool? showDataTableLegendKeys = null)
+        bool? showDataTableLegendKeys = null,
+        bool? roundedCorners = null,
+        bool? showHiddenData = null,
+        ChartBlankDisplayMode? blankDisplayMode = null)
     {
         _sheetId = sheetId;
         _chartId = chartId;
@@ -315,6 +324,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _showValueFieldButtons = showValueFieldButtons;
         _showDataTable = showDataTable;
         _showDataTableLegendKeys = showDataTableLegendKeys;
+        _roundedCorners = roundedCorners;
+        _showHiddenData = showHiddenData;
+        _blankDisplayMode = blankDisplayMode;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -332,6 +344,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _previousShowValueFieldButtons = chart.ShowPivotChartValueFieldButtons;
         _previousDataTable = CloneDataTable(chart.DataTable);
         _previousDataTableCaptured = true;
+        _previousRoundedCorners = chart.RoundedCorners;
+        _previousShowHiddenData = chart.ShowDataInHiddenRowsAndColumns;
+        _previousBlankDisplayMode = chart.BlankDisplayMode;
         chart.ChartStyleId = _chartStyleId;
         chart.ShowPivotChartFieldButtons = _showFieldButtons;
         chart.ShowPivotChartReportFilterButtons = _showReportFilterButtons ?? chart.ShowPivotChartReportFilterButtons;
@@ -353,6 +368,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         {
             chart.DataTable.ShowLegendKeys = showLegendKeys;
         }
+        chart.RoundedCorners = _roundedCorners ?? chart.RoundedCorners;
+        chart.ShowDataInHiddenRowsAndColumns = _showHiddenData ?? chart.ShowDataInHiddenRowsAndColumns;
+        chart.BlankDisplayMode = _blankDisplayMode ?? chart.BlankDisplayMode;
 
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
     }
@@ -373,6 +391,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         chart.ShowPivotChartValueFieldButtons = _previousShowValueFieldButtons ?? true;
         if (_previousDataTableCaptured)
             chart.DataTable = CloneDataTable(_previousDataTable);
+        chart.RoundedCorners = _previousRoundedCorners ?? false;
+        chart.ShowDataInHiddenRowsAndColumns = _previousShowHiddenData ?? false;
+        chart.BlankDisplayMode = _previousBlankDisplayMode ?? ChartBlankDisplayMode.Gap;
         _previousChartStyleId = null;
         _previousShowFieldButtons = null;
         _previousShowReportFilterButtons = null;
@@ -380,6 +401,9 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         _previousShowValueFieldButtons = null;
         _previousDataTable = null;
         _previousDataTableCaptured = false;
+        _previousRoundedCorners = null;
+        _previousShowHiddenData = null;
+        _previousBlankDisplayMode = null;
     }
 
     private static ChartDataTableModel? CloneDataTable(ChartDataTableModel? dataTable) =>
