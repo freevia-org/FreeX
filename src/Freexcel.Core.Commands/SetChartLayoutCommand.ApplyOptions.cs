@@ -13,11 +13,27 @@ public sealed partial class SetChartLayoutCommand
         if (options.YAxisTitle is not null)
             chart.YAxisTitle = options.YAxisTitle;
         if (options.ChartTitleTextColor is not null)
+        {
             chart.ChartTitleTextColor = options.ChartTitleTextColor;
+            chart.ChartTitleTextThemeColor = null;
+        }
+        if (options.ChartTitleTextThemeColor is not null)
+        {
+            chart.ChartTitleTextThemeColor = options.ChartTitleTextThemeColor;
+            chart.ChartTitleTextColor = null;
+        }
         if (options.ChartTitleFontSize is not null)
             chart.ChartTitleFontSize = ClampFinite(options.ChartTitleFontSize.Value, 6, 72);
         if (options.AxisTitleTextColor is not null)
+        {
             chart.AxisTitleTextColor = options.AxisTitleTextColor;
+            chart.AxisTitleTextThemeColor = null;
+        }
+        if (options.AxisTitleTextThemeColor is not null)
+        {
+            chart.AxisTitleTextThemeColor = options.AxisTitleTextThemeColor;
+            chart.AxisTitleTextColor = null;
+        }
         if (options.AxisTitleFontSize is not null)
             chart.AxisTitleFontSize = ClampFinite(options.AxisTitleFontSize.Value, 6, 72);
         if (options.ChartAreaFillColor is not null)
@@ -103,7 +119,15 @@ public sealed partial class SetChartLayoutCommand
         if (options.ShowXAxisLabels is not null)
             chart.ShowXAxisLabels = options.ShowXAxisLabels.Value;
         if (options.XAxisLabelTextColor is not null)
+        {
             chart.XAxisLabelTextColor = options.XAxisLabelTextColor;
+            chart.XAxisLabelTextThemeColor = null;
+        }
+        if (options.XAxisLabelTextThemeColor is not null)
+        {
+            chart.XAxisLabelTextThemeColor = options.XAxisLabelTextThemeColor;
+            chart.XAxisLabelTextColor = null;
+        }
         if (options.XAxisLabelFontSize is not null)
             chart.XAxisLabelFontSize = ClampFinite(options.XAxisLabelFontSize.Value, 6, 72);
         if (options.XAxisLabelAngle is not null)
@@ -141,7 +165,15 @@ public sealed partial class SetChartLayoutCommand
         if (options.ShowYAxisLabels is not null)
             chart.ShowYAxisLabels = options.ShowYAxisLabels.Value;
         if (options.YAxisLabelTextColor is not null)
+        {
             chart.YAxisLabelTextColor = options.YAxisLabelTextColor;
+            chart.YAxisLabelTextThemeColor = null;
+        }
+        if (options.YAxisLabelTextThemeColor is not null)
+        {
+            chart.YAxisLabelTextThemeColor = options.YAxisLabelTextThemeColor;
+            chart.YAxisLabelTextColor = null;
+        }
         if (options.YAxisLabelFontSize is not null)
             chart.YAxisLabelFontSize = ClampFinite(options.YAxisLabelFontSize.Value, 6, 72);
         if (options.YAxisLabelAngle is not null)
