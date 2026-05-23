@@ -1295,6 +1295,18 @@ internal static class XlsxCorpusFixtureFactory
     private static Workbook CreateProtectionAndPageSetup()
     {
         var workbook = NewWorkbook("generated-protection-page-setup-001");
+        workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        workbook.FullCalculationOnLoad = true;
+        workbook.ForceFullCalculation = true;
+        workbook.IterativeCalculation = true;
+        workbook.MaxCalculationIterations = 25;
+        workbook.MaxCalculationChange = 0.005;
+        workbook.Theme = WorkbookTheme.Office
+            .WithName("Freexcel Corpus Theme")
+            .WithFonts("Aptos Display", "Aptos")
+            .WithEffects("FreexcelEffects")
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(12, 34, 56))
+            .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(1, 99, 193));
         var sheet = workbook.AddSheet("Print");
         Set(sheet, "A1", new TextValue("Protected print fixture"));
         Set(sheet, "A2", new NumberValue(42));
@@ -1317,6 +1329,13 @@ internal static class XlsxCorpusFixtureFactory
         sheet.ViewLeftCol = 2;
         sheet.ActiveRow = 6;
         sheet.ActiveCol = 3;
+        workbook.WatchedCells.Add(Addr(sheet, "A2"));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Print Forecast",
+            [
+                new ScenarioCellValue(Addr(sheet, "A2"), new NumberValue(84)),
+                new ScenarioCellValue(Addr(sheet, "B2"), new TextValue("Scenario"))
+            ]));
         workbook.CustomViews.Add(new WorkbookCustomView(
             "Print Review",
             [
