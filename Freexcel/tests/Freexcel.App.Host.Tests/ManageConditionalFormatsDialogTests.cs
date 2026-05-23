@@ -189,9 +189,14 @@ public sealed class ManageConditionalFormatsDialogTests
             "_Edit Rule",
             "_Delete Rule"
         })
-            source.Should().Contain($"Content = \"{content}\"");
+        source.Should().Contain($"Content = \"{content}\"");
 
         source.Should().Contain("Content = \"Show formatting _rules for:\"");
+        source.Should().Contain("Target = _scopeBox");
+        source.Should().Contain("ToolTip = \"Move selected rule up\"");
+        source.Should().Contain("ToolTip = \"Move selected rule down\"");
+        source.Should().Contain("AutomationProperties.SetName(_moveUpBtn, \"Move Up\")");
+        source.Should().Contain("AutomationProperties.SetName(_moveDownBtn, \"Move Down\")");
     }
 
     [Fact]
@@ -217,6 +222,43 @@ public sealed class ManageConditionalFormatsDialogTests
 
             scope.SelectedItem.Should().Be("Current Selection");
             scope.Items.Cast<string>().Should().Equal("This Worksheet", "Current Selection");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ToolbarButtons_EnableOnlyValidSelectedRuleActions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            sheet.ConditionalFormats.Add(CreateRule(sheet.Id, 1, 1, 1));
+            sheet.ConditionalFormats.Add(CreateRule(sheet.Id, 2, 1, 2));
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection: null);
+
+            var listView = GetControl<ListView>(dialog, "_listView");
+            var editButton = GetControl<Button>(dialog, "_editBtn");
+            var deleteButton = GetControl<Button>(dialog, "_deleteBtn");
+            var moveUpButton = GetControl<Button>(dialog, "_moveUpBtn");
+            var moveDownButton = GetControl<Button>(dialog, "_moveDownBtn");
+
+            editButton.IsEnabled.Should().BeFalse();
+            deleteButton.IsEnabled.Should().BeFalse();
+            moveUpButton.IsEnabled.Should().BeFalse();
+            moveDownButton.IsEnabled.Should().BeFalse();
+
+            listView.SelectedIndex = 0;
+            editButton.IsEnabled.Should().BeTrue();
+            deleteButton.IsEnabled.Should().BeTrue();
+            moveUpButton.IsEnabled.Should().BeFalse();
+            moveDownButton.IsEnabled.Should().BeTrue();
+
+            listView.SelectedIndex = 1;
+            editButton.IsEnabled.Should().BeTrue();
+            deleteButton.IsEnabled.Should().BeTrue();
+            moveUpButton.IsEnabled.Should().BeTrue();
+            moveDownButton.IsEnabled.Should().BeFalse();
 
             dialog.Close();
         });
