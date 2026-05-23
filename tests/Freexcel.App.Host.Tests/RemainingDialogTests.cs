@@ -247,6 +247,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SingleInputMiniDialogs_UseAccessKeyedLabelsAndSharedButtonRows()
+    {
+        var remainingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var objectSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        remainingSource.Should().Contain("Format cells greater _than:");
+        remainingSource.Should().Contain("Row _height:");
+        remainingSource.Should().Contain("Column _width:");
+        remainingSource.Should().Contain("Forecast _periods:");
+        remainingSource.Should().Contain("Sheet _name:");
+        objectSource.Should().Contain("Target = box");
+        objectSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72)");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_TryCreateResult_RequiresPositivePeriods()
     {
         ForecastSheetDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
