@@ -412,6 +412,32 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void DataBarRule_ExposesExcelLikeBarColorPickerButton()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", RangeFor(SheetId.New())));
+
+            GetControl<Button>(dialog, "_dataBarColorButton").Content.Should().Be("...");
+            GetControl<Button>(dialog, "_dataBarColorButton").ToolTip.Should().Be("Choose data bar color");
+            FindLabel(dialog.Content, "_Bar color:").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_SourceUsesSharedColorPickerForCustomBarColors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+
+        source.Should().Contain("CreateDataBarColorButton");
+        source.Should().Contain("CreateDataBarColorEditor");
+        source.Should().Contain("Choose data bar color");
+        source.Should().Contain("SelectedDataBarColor");
+    }
+
+    [Fact]
     public void ColorScaleRule_CreatesThresholdAndColorOptionsWithoutFormatIfTrue()
     {
         StaTestRunner.Run(() =>
@@ -599,6 +625,31 @@ public sealed class ConditionalFormatDialogTests
             GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked.Should().BeTrue();
             GetControl<TextBox>(dialog, "_dataBarMinLengthBox").Text.Should().Be("7");
             GetControl<TextBox>(dialog, "_dataBarMaxLengthBox").Text.Should().Be("88");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingDataBarRule_PreservesCustomBarColor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                DataBarColor = new RgbColor(12, 34, 56)
+            };
+
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            GetControl<ComboBox>(dialog, "_colorBox").SelectedItem.Should().Be("Custom Format...");
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarColor.Should().Be(new RgbColor(12, 34, 56));
 
             dialog.Close();
         });
