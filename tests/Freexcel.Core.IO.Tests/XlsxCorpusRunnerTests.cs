@@ -703,6 +703,30 @@ public class XlsxCorpusRunnerTests
                     link.PackagePart,
                     link.TargetUri ?? "",
                     link.TargetMode ?? ""))
+                .ToArray(),
+            workbook.WatchedCells
+                .Select(address => new WatchedCellSummary(
+                    workbook.GetSheet(address.Sheet)?.Name ?? "",
+                    address.Row,
+                    address.Col))
+                .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(cell => cell.Row)
+                .ThenBy(cell => cell.Column)
+                .ToArray(),
+            workbook.Scenarios
+                .OrderBy(scenario => scenario.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(scenario => new ScenarioSummary(
+                    scenario.Name,
+                    scenario.ChangingCells
+                        .Select(change => new ScenarioCellSummary(
+                            workbook.GetSheet(change.Address.Sheet)?.Name ?? "",
+                            change.Address.Row,
+                            change.Address.Col,
+                            CaptureScalarValueSummary(change.Value)))
+                        .OrderBy(cell => cell.SheetName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(cell => cell.Row)
+                        .ThenBy(cell => cell.Column)
+                        .ToArray()))
                 .ToArray());
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
@@ -1462,7 +1486,9 @@ public class XlsxCorpusRunnerTests
     private sealed record WorkbookMetadataSummary(
         IReadOnlyList<SlicerSummary> Slicers,
         IReadOnlyList<TimelineSummary> Timelines,
-        IReadOnlyList<ExternalLinkSummary> ExternalLinks);
+        IReadOnlyList<ExternalLinkSummary> ExternalLinks,
+        IReadOnlyList<WatchedCellSummary> WatchedCells,
+        IReadOnlyList<ScenarioSummary> Scenarios);
 
     private sealed record SlicerSummary(
         string Name,
@@ -1491,6 +1517,21 @@ public class XlsxCorpusRunnerTests
         string PackagePart,
         string TargetUri,
         string TargetMode);
+
+    private sealed record WatchedCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column);
+
+    private sealed record ScenarioSummary(
+        string Name,
+        IReadOnlyList<ScenarioCellSummary> ChangingCells);
+
+    private sealed record ScenarioCellSummary(
+        string SheetName,
+        uint Row,
+        uint Column,
+        ScalarValueSummary Value);
 
     private sealed record NamedRangeSummary(
         string Name,
