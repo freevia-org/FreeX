@@ -87,9 +87,44 @@ public sealed class SortDialogTests
         source.Should().Contain("Cell Values");
         source.Should().Contain("Cell Color");
         source.Should().Contain("Font Color");
+        source.Should().Contain("On Top");
+        source.Should().Contain("On Bottom");
+        source.Should().Contain("CreateOrderColumn");
         source.Should().Contain("BuildColorChoices");
         source.Should().Contain("UpdateColumnChoices");
         source.Should().Contain("SortOptionsDialog");
+    }
+
+    [Fact]
+    public void BuildOrderChoices_UsesExcelColorSortLabelsForColorSorts()
+    {
+        SortDialog.BuildOrderChoices("Cell Values").Should().Equal(
+            new SortDirectionChoice("A to Z", true),
+            new SortDirectionChoice("Z to A", false));
+
+        SortDialog.BuildOrderChoices("Cell Color").Should().Equal(
+            new SortDirectionChoice("On Top", true),
+            new SortDirectionChoice("On Bottom", false));
+
+        SortDialog.BuildOrderChoices("Font Color").Should().Equal(
+            new SortDirectionChoice("On Top", true),
+            new SortDirectionChoice("On Bottom", false));
+    }
+
+    [Fact]
+    public void SortDialogLevel_RefreshesOrderChoicesWhenSortOnChanges()
+    {
+        var level = new SortDialogLevel(0, true);
+        var changed = new List<string?>();
+        level.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        level.SortOn = "Cell Color";
+
+        level.OrderChoices.Should().Equal(
+            new SortDirectionChoice("On Top", true),
+            new SortDirectionChoice("On Bottom", false));
+        changed.Should().Contain(nameof(SortDialogLevel.SortOn));
+        changed.Should().Contain(nameof(SortDialogLevel.OrderChoices));
     }
 
     [Fact]
