@@ -24,7 +24,7 @@ public sealed class AverageFilterCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
         _previousHiddenRows = [.. sheet.HiddenRows];
