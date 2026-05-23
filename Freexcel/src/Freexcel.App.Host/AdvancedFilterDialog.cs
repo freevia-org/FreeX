@@ -12,10 +12,23 @@ public sealed record AdvancedFilterDialogResult(
     bool UniqueRecordsOnly,
     GridRange? CopyToRange = null);
 
+public enum AdvancedFilterRangeSelectionTarget
+{
+    ListRange,
+    CriteriaRange,
+    CopyTo
+}
+
+public sealed record AdvancedFilterRangeSelectionRequest(
+    AdvancedFilterRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public sealed class AdvancedFilterDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly Func<string, SheetId?> _resolveSheetId;
+    private readonly Action<AdvancedFilterRangeSelectionRequest>? _requestRangeSelection;
     private readonly TextBox _listRangeBox = new();
     private readonly TextBox _criteriaRangeBox = new();
     private readonly TextBox _copyToBox = new();
@@ -31,11 +44,17 @@ public sealed class AdvancedFilterDialog : Window
     };
 
     public AdvancedFilterDialogResult? Result { get; private set; }
+    public AdvancedFilterRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public AdvancedFilterDialog(SheetId sheetId, string defaultListRange, Func<string, SheetId?>? resolveSheetId = null)
+    public AdvancedFilterDialog(
+        SheetId sheetId,
+        string defaultListRange,
+        Func<string, SheetId?>? resolveSheetId = null,
+        Action<AdvancedFilterRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
         _resolveSheetId = resolveSheetId ?? (_ => null);
+        _requestRangeSelection = requestRangeSelection;
         Title = "Advanced Filter";
         Width = 420;
         Height = 340;
@@ -71,9 +90,9 @@ public sealed class AdvancedFilterDialog : Window
         var rangesGrid = new Grid();
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range");
-        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range");
-        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell");
+        AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range", AdvancedFilterRangeSelectionTarget.ListRange);
+        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
+        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo);
         content.Children.Add(rangesGrid);
         content.Children.Add(_copyToHint);
 
@@ -184,10 +203,27 @@ public sealed class AdvancedFilterDialog : Window
             out result,
             out error);
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
-        DialogReferencePicker.CreateEditor(textBox, automationName);
+    public static AdvancedFilterRangeSelectionRequest CreateRangeSelectionRequest(
+        AdvancedFilterRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
 
-    private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
+    private DockPanel CreateReferenceEditor(
+        TextBox textBox,
+        string automationName,
+        AdvancedFilterRangeSelectionTarget target) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            requestSelection: request => RequestRangeSelection(target, request));
+
+    private void AddReferenceRow(
+        Grid grid,
+        int row,
+        string label,
+        TextBox textBox,
+        string automationName,
+        AdvancedFilterRangeSelectionTarget target)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var labelBlock = new Label
@@ -202,11 +238,17 @@ public sealed class AdvancedFilterDialog : Window
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
-        var editor = CreateReferenceEditor(textBox, automationName);
+        var editor = CreateReferenceEditor(textBox, automationName, target);
         editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
         Grid.SetRow(editor, row);
         Grid.SetColumn(editor, 1);
         grid.Children.Add(editor);
+    }
+
+    private void RequestRangeSelection(AdvancedFilterRangeSelectionTarget target, DialogReferencePickerRequest request)
+    {
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 
     private void UpdateCopyToState()
