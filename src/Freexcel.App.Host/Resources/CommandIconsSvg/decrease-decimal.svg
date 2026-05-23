@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Decrease Decimal Places">
-<rect width="20" height="20" fill="none"/>
-<text x="4" y="8.5" font-family="Segoe UI,Arial,sans-serif" font-size="9.5" font-weight="500" fill="#242424">.00</text>
-<text x="4" y="18" font-family="Segoe UI,Arial,sans-serif" font-size="9.5" font-weight="500" fill="#242424">.0</text>
-<path d="M8 10H2.5" stroke="#0078d4" stroke-width="1.5" stroke-linecap="round"/>
-<path d="M4.5 7.5l-3 2.5 3 2.5" fill="none" stroke="#0078d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Decrease Decimal">
+  <rect width="32" height="32" fill="none"/>
+  <text x="17" y="10" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">0.00</text>
+  <text x="17" y="22" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">0.0</text>
+  <path d="M11.5 16.5H3.5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="square"/>
+  <polygon points="7 13.5 3 16.5 7 19.5" fill="#0078d4"/>
 </svg>
