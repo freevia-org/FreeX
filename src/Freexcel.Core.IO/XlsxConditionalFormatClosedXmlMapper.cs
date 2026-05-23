@@ -45,6 +45,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                     Operator = op.Value,
                     Value1 = v1,
                     Value2 = v2,
+                    StopIfTrue = xlCf.StopIfTrue,
                     FormatIfTrue = mapStyle(xlCf.Style, theme)
                 };
                 sheet.ConditionalFormats.Add(fmt);
@@ -68,6 +69,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                     Priority = priority++,
                     RuleType = CfRuleType.Formula,
                     FormulaText = formula,
+                    StopIfTrue = xlCf.StopIfTrue,
                     FormatIfTrue = mapStyle(xlCf.Style, theme)
                 };
                 sheet.ConditionalFormats.Add(fmt);
@@ -97,6 +99,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 if (cf.RuleType == CfRuleType.Formula && !string.IsNullOrWhiteSpace(cf.FormulaText))
                 {
                     var xlStyle = xlCf.WhenIsTrue("=" + cf.FormulaText);
+                    xlCf.SetStopIfTrue(cf.StopIfTrue);
                     if (cf.FormatIfTrue is not null)
                         ApplyStyle(xlStyle, cf.FormatIfTrue);
                 }
@@ -116,6 +119,7 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                         CfOperator.NotBetween => xlCf.WhenNotBetween(v1, v2),
                         _ => throw new InvalidOperationException("Unsupported conditional format operator.")
                     };
+                    xlCf.SetStopIfTrue(cf.StopIfTrue);
                     if (cf.FormatIfTrue is not null)
                         ApplyStyle(xlStyle, cf.FormatIfTrue);
                 }

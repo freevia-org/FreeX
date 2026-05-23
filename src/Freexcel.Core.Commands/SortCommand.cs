@@ -306,8 +306,8 @@ public sealed class SortCommand : IWorkbookCommand
                 sheet.ThreadedComments[addr] = comment;
         }
 
-        InsertRowsCommand.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
-        InsertRowsCommand.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
+        RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
     }
 
     private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, bool caseSensitive)
