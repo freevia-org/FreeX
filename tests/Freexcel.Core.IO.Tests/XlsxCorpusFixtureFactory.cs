@@ -972,8 +972,8 @@ internal static class XlsxCorpusFixtureFactory
             PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
             RefreshOnLoad = true
         };
-        cache.Fields.Add(new PivotCacheFieldModel("Region", SharedItems: ["North", "South"]));
-        cache.Fields.Add(new PivotCacheFieldModel("Category", SharedItems: ["Hardware", "Software", "Services"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
         cache.Fields.Add(new PivotCacheFieldModel("Amount", 4, ContainsNumber: true, MinValue: 80, MaxValue: 125));
         workbook.PivotCaches.Add(cache);
 
