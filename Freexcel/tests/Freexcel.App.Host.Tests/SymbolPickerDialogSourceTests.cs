@@ -8,7 +8,7 @@ public sealed class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_ExposesKeyboardAccessKeysForInsertAndCancel()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs"));
+        var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("Content = \"_Insert\"");
         source.Should().Contain("Content = \"_Cancel\"");
@@ -17,7 +17,7 @@ public sealed class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_ExposesExcelLikeSymbolSelectionAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs"));
+        var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("Content = \"_Font:\"");
         source.Should().Contain("Content = \"_Subset:\"");
@@ -30,7 +30,7 @@ public sealed class SymbolPickerDialogSourceTests
     [Fact]
     public void Dialog_SelectsSymbolsBeforeExplicitInsert()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs"));
+        var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("void SelectSymbol(char value)");
         source.Should().Contain("SelectedChar = value");
@@ -46,7 +46,7 @@ public sealed class SymbolPickerDialogSourceTests
         SymbolPickerDialog.GetSymbolsForSubset("Greek and Coptic").Should().Contain('\u03c0');
         SymbolPickerDialog.GetSymbolsForSubset("Arrows").Should().Contain('\u2192');
 
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs"));
+        var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("SymbolsBySubset");
         source.Should().Contain("subsetBox.SelectionChanged");
@@ -82,7 +82,7 @@ public sealed class SymbolPickerDialogSourceTests
             new SymbolPickerDialog.SpecialCharacter("Registered", "\u00ae"),
             new SymbolPickerDialog.SpecialCharacter("Trademark", "\u2122")]);
 
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs"));
+        var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("Header = \"Symbols\"");
         source.Should().Contain("Header = \"Special Characters\"");
@@ -122,4 +122,8 @@ public sealed class SymbolPickerDialogSourceTests
         SymbolPickerDialog.PromoteRecentSymbol(recent, "\u20ac", capacity: 3)
             .Should().Equal(["\u20ac", "\u03c0", "\u00a3"]);
     }
+
+    private static string ReadSymbolPickerDialogSources() =>
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.cs")) +
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SymbolPickerDialog.Catalog.cs"));
 }
