@@ -66,8 +66,17 @@ public sealed partial class XlsxFileAdapter
 
         if (workbook.Sheets.Any(XlsxHeaderFooterPictureReaderWriter.HasPictures))
         {
+            IReadOnlySet<string>? sheetsToPreserve = null;
+            if (SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            {
+                using var sourceStream = new MemoryStream(sourcePackage.Bytes, writable: false);
+                sheetsToPreserve = XlsxHeaderFooterPictureReaderWriter.FindSheetsWithUnchangedSourcePictures(
+                    sourceStream,
+                    workbook);
+            }
+
             packageStream.Position = 0;
-            XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook);
+            XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook, sheetsToPreserve);
         }
 
         if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))
