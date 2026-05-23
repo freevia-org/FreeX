@@ -18,7 +18,8 @@ public static class ChartTypeSupport
             or ChartType.Bubble
             or ChartType.Area
             or ChartType.Radar
-            or ChartType.Stock;
+            or ChartType.Stock
+            or ChartType.ThreeDColumn;
 
     public static bool SupportsTrendlines(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area;

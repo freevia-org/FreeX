@@ -157,6 +157,11 @@ internal static partial class XlsxChartXmlWriter
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+            ChartType.ThreeDColumn => WithBarChartSpacing(new XElement(chartNs + "bar3DChart",
+                new XElement(chartNs + "barDir", new XAttribute("val", "col")),
+                new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
+                ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs),
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
                 BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs)),
             ChartType.Pie => new XElement(chartNs + "pieChart",
@@ -572,7 +577,8 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Pie
                 or ChartType.Doughnut
                 or ChartType.Radar
-                or ChartType.Stock);
+                or ChartType.Stock
+                or ChartType.ThreeDColumn);
 
     private static string ToXlsxBarDirection(ChartType chartType) =>
         chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar

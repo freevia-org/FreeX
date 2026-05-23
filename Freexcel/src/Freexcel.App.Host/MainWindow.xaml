@@ -1240,9 +1240,9 @@
                                     <Button Content="Map"          Width="58"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
                                             local:RibbonTooltip.Title="Map Chart" local:RibbonTooltip.KeyTip="MP"
                                             local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="3D Column"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="3D Column"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DColumnMenuItem_Click"
                                             local:RibbonTooltip.Title="3D Column Chart" local:RibbonTooltip.KeyTip="3C"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a 3D clustered column chart for the selected data."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Data Labels"  Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
