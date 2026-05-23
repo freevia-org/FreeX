@@ -182,6 +182,27 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_IndexLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,0,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,-1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Vlookup_IndexBeyondTable_ReturnsRefError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("ten")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B1,3,FALSE)", sheet).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
     public void Vlookup_DateKey_ExactMatchesDateSerial()
     {
         var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
@@ -256,6 +277,27 @@ public class FunctionLibraryTests
     public void Hlookup_TableArgumentError_PropagatesError()
     {
         _eval.Evaluate("=HLOOKUP(\"b\",NA(),2,FALSE)", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_IndexLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new TextValue("ten")));
+
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,0,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,-1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Hlookup_IndexBeyondTable_ReturnsRefError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new TextValue("ten")));
+
+        _eval.Evaluate("=HLOOKUP(10,A1:A2,3,FALSE)", sheet).Should().Be(ErrorValue.Ref);
     }
 
     [Fact]
