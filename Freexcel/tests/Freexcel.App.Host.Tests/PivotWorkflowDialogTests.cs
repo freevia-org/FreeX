@@ -260,6 +260,8 @@ public sealed class PivotWorkflowDialogTests
             refreshOnOpen: true,
             saveSourceData: false,
             showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
             compactRowLabelIndent: 3);
 
         result.Should().Be(new PivotTableOptionsDialogResult(
@@ -280,6 +282,8 @@ public sealed class PivotWorkflowDialogTests
             false,
             false,
             ShowExpandCollapseButtons: false,
+            AutofitColumnsOnUpdate: false,
+            PreserveFormattingOnUpdate: false,
             CompactRowLabelIndent: 3));
     }
 
@@ -331,6 +335,8 @@ public sealed class PivotWorkflowDialogTests
             EmptyValueText = "-",
             ShowExpandCollapseButtons = false,
             PrintExpandCollapseButtons = true,
+            AutofitColumnsOnUpdate = false,
+            PreserveFormattingOnUpdate = false,
             CompactRowLabelIndent = 5
         };
 
@@ -352,6 +358,8 @@ public sealed class PivotWorkflowDialogTests
                 "-",
                 PrintExpandCollapseButtons: true,
                 ShowExpandCollapseButtons: false,
+                AutofitColumnsOnUpdate: false,
+                PreserveFormattingOnUpdate: false,
                 CompactRowLabelIndent: 5));
     }
 
@@ -511,12 +519,16 @@ public sealed class PivotWorkflowDialogTests
             saveSourceData: false,
             compactRowLabelIndent: 6,
             showExpandCollapseButtons: false,
+            autofitColumnsOnUpdate: false,
+            preserveFormattingOnUpdate: false,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
             altTextDescription: " Quarterly sales summary ");
 
         result.ShowExpandCollapseButtons.Should().BeFalse();
+        result.AutofitColumnsOnUpdate.Should().BeFalse();
+        result.PreserveFormattingOnUpdate.Should().BeFalse();
         result.PrintTitles.Should().BeTrue();
         result.PrintExpandCollapseButtons.Should().BeTrue();
         result.CompactRowLabelIndent.Should().Be(6);
