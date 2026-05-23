@@ -36,7 +36,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_listRange.Start.Sheet);
         var criteriaSheet = ctx.GetSheet(_criteriaRange.Start.Sheet);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
         var headers = BuildHeaderMap(sheet, _listRange);
@@ -65,6 +65,8 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
         if (_copyTo.Value.Sheet != sheet.Id)
             return new CommandOutcome(false, "Copy destination must be on the filtered sheet.");
+        if (GetLockedCopyDestination(ctx.Workbook, sheet, matches) is { } lockedDestination)
+            return lockedDestination;
 
         CopyMatches(sheet, matches);
         return new CommandOutcome(true, AffectedCells: [_copyTo.Value]);
@@ -175,22 +177,21 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
     {
         _copySnapshot = [];
         var outputColumns = ResolveCopyOutputColumns(sheet);
-        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
-        var clearWidth = Math.Max(_listRange.ColCount, outputWidth);
-        var outputRowCount = 1 + rows.Count;
-        var rowsToReplace = Math.Max(outputRowCount, CountExistingDestinationRows(sheet, clearWidth));
-        for (uint r = 0; r < rowsToReplace; r++)
+        foreach (var target in GetCopyTargetAddresses(sheet, rows, outputColumns))
+            _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
+
+        foreach (var (target, _) in _copySnapshot)
         {
-            for (uint c = 0; c < clearWidth; c++)
+            sheet.ClearCell(target);
+        }
+
+        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
+        var outputRowCount = 1 + rows.Count;
+        for (uint r = 0; r < outputRowCount; r++)
+        {
+            for (uint c = 0; c < outputWidth; c++)
             {
                 var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
-                _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
-                if (r >= outputRowCount || c >= outputWidth)
-                {
-                    sheet.ClearCell(target);
-                    continue;
-                }
-
                 var sourceRow = r == 0 ? _listRange.Start.Row : rows[(int)r - 1];
                 var sourceCol = outputColumns is null ? _listRange.Start.Col + c : outputColumns[(int)c];
                 var source = new CellAddress(sheet.Id, sourceRow, sourceCol);
@@ -199,6 +200,39 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
                 sheet.SetCell(target, sourceCell);
             }
         }
+    }
+
+    private CommandOutcome? GetLockedCopyDestination(Workbook workbook, Sheet sheet, IReadOnlyList<uint> rows)
+    {
+        foreach (var target in GetCopyTargetAddresses(sheet, rows))
+        {
+            if (!CommandGuards.CanEditCell(workbook, sheet, target))
+                return new CommandOutcome(false, "The sheet is protected.");
+        }
+
+        return null;
+    }
+
+    private IReadOnlyList<CellAddress> GetCopyTargetAddresses(
+        Sheet sheet,
+        IReadOnlyList<uint> rows,
+        IReadOnlyList<uint>? outputColumns = null)
+    {
+        if (_copyTo is null)
+            return [];
+
+        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
+        var clearWidth = Math.Max(_listRange.ColCount, outputWidth);
+        var outputRowCount = 1 + rows.Count;
+        var rowsToReplace = Math.Max(outputRowCount, CountExistingDestinationRows(sheet, clearWidth));
+        var targets = new List<CellAddress>();
+        for (uint row = 0; row < rowsToReplace; row++)
+        {
+            for (uint col = 0; col < clearWidth; col++)
+                targets.Add(new CellAddress(sheet.Id, _copyTo.Value.Row + row, _copyTo.Value.Col + col));
+        }
+
+        return targets;
     }
 
     private uint CountExistingDestinationRows(Sheet sheet, uint outputWidth)
