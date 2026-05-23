@@ -712,8 +712,11 @@ public class XlsxCorpusRunnerTests
                 .Select(ToRangeSummary)
                 .ToArray(),
             sheet.AllowEditRanges.Count,
+            sheet.PrintArea.HasValue ? ToRangeSummary(sheet.PrintArea.Value) : null,
             sheet.PrintArea is not null,
+            sheet.PrintTitleRows.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleRows.Value) : null,
             sheet.PrintTitleRows is not null,
+            sheet.PrintTitleColumns.HasValue ? ToRepeatRangeSummary(sheet.PrintTitleColumns.Value) : null,
             sheet.PrintTitleColumns is not null,
             sheet.PageOrientation,
             sheet.PaperSize,
@@ -908,6 +911,9 @@ public class XlsxCorpusRunnerTests
             range.Start.Col,
             range.End.Row,
             range.End.Col);
+
+    private static RepeatRangeSummary ToRepeatRangeSummary(WorksheetRepeatRange range) =>
+        new(range.Start, range.End);
 
     private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
         new(
@@ -1292,8 +1298,11 @@ public class XlsxCorpusRunnerTests
         bool IsProtected,
         IReadOnlyList<ChartRangeSummary> AllowEditRanges,
         int AllowEditRangeCount,
+        ChartRangeSummary? PrintArea,
         bool HasPrintArea,
+        RepeatRangeSummary? PrintTitleRows,
         bool HasPrintTitleRows,
+        RepeatRangeSummary? PrintTitleColumns,
         bool HasPrintTitleColumns,
         WorksheetPageOrientation PageOrientation,
         WorksheetPaperSize PaperSize,
@@ -1338,6 +1347,8 @@ public class XlsxCorpusRunnerTests
     private sealed record OutlineLevelSummary(uint Index, int Level);
 
     private sealed record StyleOnlyCellSummary(uint Row, uint Column, CellStyleSummary? Style);
+
+    private sealed record RepeatRangeSummary(uint Start, uint End);
 
     private sealed record ChartSummary(
         ChartType Type,
