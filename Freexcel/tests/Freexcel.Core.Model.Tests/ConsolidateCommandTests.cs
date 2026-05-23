@@ -86,6 +86,51 @@ public sealed class ConsolidateCommandTests
         outcome.ErrorMessage.Should().Contain("same size");
     }
 
+    [Fact]
+    public void ConsolidateCommand_UsesTopRowAndLeftColumnLabels()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+        var source2 = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 3, 7));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Q2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(40));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 6), new TextValue("Q2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 7), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 5), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 6), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 7), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 6), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 7), new NumberValue(13));
+
+        var command = new ConsolidateCommand(
+            [source1, source2],
+            new CellAddress(sheet.Id, 6, 1),
+            ConsolidateFunction.Sum,
+            useTopRowLabels: true,
+            useLeftColumnLabels: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(6, 1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(6, 2).Should().Be(new TextValue("Q1"));
+        sheet.GetValue(6, 3).Should().Be(new TextValue("Q2"));
+        sheet.GetValue(7, 1).Should().Be(new TextValue("East"));
+        sheet.GetValue(8, 1).Should().Be(new TextValue("West"));
+        sheet.GetValue(7, 2).Should().Be(new NumberValue(23));
+        sheet.GetValue(7, 3).Should().Be(new NumberValue(31));
+        sheet.GetValue(8, 2).Should().Be(new NumberValue(37));
+        sheet.GetValue(8, 3).Should().Be(new NumberValue(45));
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
