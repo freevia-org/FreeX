@@ -544,8 +544,8 @@ public static partial class BuiltInFunctions
         else                coeff = 2.5;
         double depRate = rate * coeff;
         // First period proration
-        DateTime dp = SerialToDate(datePurchased);
-        DateTime fp = SerialToDate(firstPeriod);
+        if (!TryGetFinancialDate(datePurchased, out DateTime dp) ||
+            !TryGetFinancialDate(firstPeriod, out DateTime fp)) return ErrorValue.Num;
         double firstFrac = DayCountFraction(dp, fp, basis);
         double bookValue = cost;
         int iper = (int)Math.Truncate(period);
@@ -578,8 +578,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
-        DateTime dp = SerialToDate(datePurchased);
-        DateTime fp = SerialToDate(firstPeriod);
+        if (!TryGetFinancialDate(datePurchased, out DateTime dp) ||
+            !TryGetFinancialDate(firstPeriod, out DateTime fp)) return ErrorValue.Num;
         double firstFrac = DayCountFraction(dp, fp, basis);
         double annualDep = cost * rate;
         double bookValue = cost;
@@ -706,7 +706,8 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate <= 0 || par <= 0 || frequency <= 0) return ErrorValue.Num;
-        DateTime sd = SerialToDate(issue), sett = SerialToDate(settlement);
+        if (!TryGetFinancialDate(issue, out DateTime sd) ||
+            !TryGetFinancialDate(settlement, out DateTime sett)) return ErrorValue.Num;
         if (sd >= sett) return ErrorValue.Num;
         double dcf = DayCountFraction(sd, sett, basis);
         return NumberResult(par * rate * dcf);
@@ -1015,7 +1016,8 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (coupon < 0 || yld < 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         // Build coupon schedule
         DateTime pcd = CouponDateBefore(sd, md, frequency);
@@ -1078,9 +1080,10 @@ public static partial class BuiltInFunctions
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
-        DateTime id = SerialToDate(issue);
-        DateTime fcd = SerialToDate(firstCoupon);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md) ||
+            !TryGetFinancialDate(issue, out DateTime id) ||
+            !TryGetFinancialDate(firstCoupon, out DateTime fcd)) return ErrorValue.Num;
         if (!(md > fcd && fcd > sd && sd > id)) return ErrorValue.Num;
         double price = OddFirstPrice(id, sd, md, fcd, rate, yld, redemption, frequency, basis);
         return NumberResult(price);
@@ -1106,8 +1109,10 @@ public static partial class BuiltInFunctions
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
-        DateTime id = SerialToDate(issue), fcd = SerialToDate(firstCoupon);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md) ||
+            !TryGetFinancialDate(issue, out DateTime id) ||
+            !TryGetFinancialDate(firstCoupon, out DateTime fcd)) return ErrorValue.Num;
         if (!(md > fcd && fcd > sd && sd > id)) return ErrorValue.Num;
 
         double y = 0.1;
@@ -1143,8 +1148,9 @@ public static partial class BuiltInFunctions
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
-        DateTime li = SerialToDate(lastInterest);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md) ||
+            !TryGetFinancialDate(lastInterest, out DateTime li)) return ErrorValue.Num;
         if (!(md > sd && sd > li)) return ErrorValue.Num;
         return NumberResult(OddLastPrice(li, sd, md, rate, yld, redemption, frequency, basis));
     }
@@ -1167,8 +1173,9 @@ public static partial class BuiltInFunctions
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
-        DateTime li = SerialToDate(lastInterest);
+        if (!TryGetFinancialDate(settlement, out DateTime sd) ||
+            !TryGetFinancialDate(maturity, out DateTime md) ||
+            !TryGetFinancialDate(lastInterest, out DateTime li)) return ErrorValue.Num;
         if (!(md > sd && sd > li)) return ErrorValue.Num;
 
         double daysInCoupon = CouponPeriodDays(li, frequency, basis);
