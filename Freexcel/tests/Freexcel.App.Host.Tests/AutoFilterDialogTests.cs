@@ -192,9 +192,15 @@ public sealed class AutoFilterDialogTests
     [InlineData("Today", "date=2026-05-22")]
     [InlineData("Yesterday", "date=2026-05-21")]
     [InlineData("Tomorrow", "date=2026-05-23")]
+    [InlineData("This Week", "datebetween:2026-05-17:2026-05-23")]
+    [InlineData("Last Week", "datebetween:2026-05-10:2026-05-16")]
+    [InlineData("Next Week", "datebetween:2026-05-24:2026-05-30")]
     [InlineData("This Month", "datebetween:2026-05-01:2026-05-31")]
     [InlineData("Last Month", "datebetween:2026-04-01:2026-04-30")]
     [InlineData("Next Month", "datebetween:2026-06-01:2026-06-30")]
+    [InlineData("This Year", "datebetween:2026-01-01:2026-12-31")]
+    [InlineData("Last Year", "datebetween:2025-01-01:2025-12-31")]
+    [InlineData("Next Year", "datebetween:2027-01-01:2027-12-31")]
     public void BuildDatePresetCriteriaText_UsesExcelDateFilterPresets(string preset, string expected)
     {
         AutoFilterDialog.BuildDatePresetCriteriaText(preset, new DateTime(2026, 5, 22))
@@ -293,6 +299,12 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("_topBottomCriteriaPanel");
         source.Should().Contain("_topBottomCountBox");
         source.Should().Contain("_datePresetBox");
+        source.Should().Contain("\"This Week\"");
+        source.Should().Contain("\"Last Week\"");
+        source.Should().Contain("\"Next Week\"");
+        source.Should().Contain("\"This Year\"");
+        source.Should().Contain("\"Last Year\"");
+        source.Should().Contain("\"Next Year\"");
         source.Should().Contain("Date _preset");
         source.Should().Contain("_criteriaConnectorBox");
         source.Should().Contain("_criteriaOperatorBox2");
