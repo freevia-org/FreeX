@@ -162,6 +162,7 @@ public sealed partial class Sheet
                 ShowContextualTooltips = pt.ShowContextualTooltips,
                 ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
                 ShowClassicLayout = pt.ShowClassicLayout,
+                MergeAndCenterLabels = pt.MergeAndCenterLabels,
                 EmptyValueText = pt.EmptyValueText,
                 AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
                 PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,

@@ -12775,6 +12775,7 @@ public partial class FileAdapterSmokeTests
             ShowContextualTooltips = false,
             ShowPropertiesInTooltips = false,
             ShowClassicLayout = true,
+            MergeAndCenterLabels = true,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             PrintTitles = true,
@@ -12809,6 +12810,7 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("showDataTips")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showMemberPropertyTips")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showDropZones")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("mergeItem")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("applyWidthHeightFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("preserveFormatting")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
@@ -12829,6 +12831,7 @@ public partial class FileAdapterSmokeTests
         loadedPivot.ShowContextualTooltips.Should().BeFalse();
         loadedPivot.ShowPropertiesInTooltips.Should().BeFalse();
         loadedPivot.ShowClassicLayout.Should().BeTrue();
+        loadedPivot.MergeAndCenterLabels.Should().BeTrue();
         loadedPivot.AutofitColumnsOnUpdate.Should().BeFalse();
         loadedPivot.PreserveFormattingOnUpdate.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
