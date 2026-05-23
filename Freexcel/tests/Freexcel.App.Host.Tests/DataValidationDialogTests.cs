@@ -236,6 +236,40 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void OkAfterClearAll_AppliesLaterEditsInsteadOfKeepingClearRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new DataValidation
+            {
+                Type = DvType.WholeNumber,
+                Operator = DvOperator.Between,
+                Formula1 = "1",
+                Formula2 = "10"
+            };
+            var dialog = new DataValidationDialog(existing);
+            dialog.Show();
+            try
+            {
+                InvokePrivate(dialog, "ClearAllButton_Click");
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "List");
+                GetControl<TextBox>(dialog, "Formula1Box").Text = "Red,Blue";
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+
+                dialog.ClearRequested.Should().BeFalse();
+                dialog.Result.Should().NotBeNull();
+                dialog.Result!.Type.Should().Be(DvType.List);
+                dialog.Result.Formula1.Should().Be("Red,Blue");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SourcePickerButton_PopulatesListSource()
     {
         StaTestRunner.Run(() =>
