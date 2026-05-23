@@ -132,6 +132,8 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("Content = \"_Reset\"");
         source.Should().Contain("CalculateLockedAspectHeight");
         source.Should().Contain("CalculateLockedAspectWidth");
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow(Accept)");
     }
 
     [Fact]

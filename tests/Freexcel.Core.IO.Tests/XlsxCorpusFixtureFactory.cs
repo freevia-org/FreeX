@@ -1283,6 +1283,29 @@ internal static class XlsxCorpusFixtureFactory
         sheet.PrintHeadings = true;
         sheet.PageHeader = new WorksheetHeaderFooter("Freexcel", "Corpus", "2026");
         sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P", "");
+        sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+        sheet.ViewTopRow = 4;
+        sheet.ViewLeftCol = 2;
+        sheet.ActiveRow = 6;
+        sheet.ActiveCol = 3;
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Print Review",
+            [
+                new WorksheetCustomViewState(
+                    sheet.Name,
+                    WorksheetViewMode.PageLayout,
+                    sheet.FrozenRows,
+                    sheet.FrozenCols,
+                    sheet.SplitRow,
+                    sheet.SplitColumn,
+                    sheet.ShowGridlines,
+                    sheet.ShowHeadings,
+                    sheet.ShowRulers,
+                    125,
+                    sheet.ShowFormulas)
+            ],
+            IncludePrintSettings: true,
+            IncludeHiddenRowsColumnsAndFilterSettings: true));
         return workbook;
     }
 

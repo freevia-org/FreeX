@@ -196,9 +196,13 @@ public sealed class MainWindowSourceHygieneTests
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
         var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
         var ribbonSourcePath = Path.Combine(appHostDirectory, "MainWindow.Ribbon.cs");
+        var ribbonAdaptiveSourcePath = Path.Combine(appHostDirectory, "MainWindow.RibbonAdaptive.cs");
 
         File.Exists(ribbonSourcePath).Should().BeTrue();
-        var ribbonSource = File.ReadAllText(ribbonSourcePath);
+        File.Exists(ribbonAdaptiveSourcePath).Should().BeTrue();
+        var ribbonSource =
+            File.ReadAllText(ribbonSourcePath) +
+            File.ReadAllText(ribbonAdaptiveSourcePath);
 
         mainSource.Should().NotContain("private void UpdateRibbonCompactMode(");
         mainSource.Should().NotContain("private void NormalizeRibbonSurface(");
@@ -480,7 +484,7 @@ public sealed class MainWindowSourceHygieneTests
         contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
         contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
         contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
-        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
     }
 
@@ -819,6 +823,15 @@ public sealed class MainWindowSourceHygieneTests
         shellSource.Should().Contain("private static Thickness GetMaximizedSafeInset(");
         shellSource.Should().Contain("private void UndoQatBtn_Click(");
         shellSource.Should().Contain("private void RedoQatBtn_Click(");
+    }
+
+    [Fact]
+    public void QuickAccessUndoRedoButtons_ReflectCommandStackState()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+
+        source.Should().Contain("UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);");
+        source.Should().Contain("RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);");
     }
 
     [Fact]
@@ -1219,7 +1232,7 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
-        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
         source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
         source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
@@ -1621,6 +1634,17 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("new SetPictureCropCommand(");
         source.Should().Contain("0, 0, 0, 0");
+    }
+
+    [Fact]
+    public void CollapsedRibbonOverflowCommands_ReturnFocusToVisibleGroupButton()
+    {
+        var adaptiveSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
+
+        adaptiveSource.Should().Contain("FocusCollapsedRibbonMenuPlacementTarget(item)");
+        adaptiveSource.Should().Contain("private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)");
+        adaptiveSource.Should().Contain("contextMenu.PlacementTarget is UIElement placementTarget");
+        adaptiveSource.Should().Contain("placementTarget.Focus();");
     }
 
     [Fact]
