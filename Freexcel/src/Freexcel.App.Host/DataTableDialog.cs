@@ -108,23 +108,8 @@ public sealed class DataTableDialog : Window
         return true;
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
-    {
-        var panel = new DockPanel();
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(6, 0, 0, 0),
-            Tag = textBox
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        DockPanel.SetDock(pickerButton, Dock.Right);
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
-        return panel;
-    }
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
+        DialogReferencePicker.CreateEditor(textBox, automationName, new Thickness(6, 0, 0, 0), Dock.Right);
 
     private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
     {
@@ -146,15 +131,6 @@ public sealed class DataTableDialog : Window
         Grid.SetRow(editor, row);
         Grid.SetColumn(editor, 1);
         grid.Children.Add(editor);
-    }
-
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
-
-        textBox.Focus();
-        textBox.SelectAll();
     }
 
     private void Accept()
