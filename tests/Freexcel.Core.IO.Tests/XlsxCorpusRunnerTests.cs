@@ -154,6 +154,36 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    [Theory]
+    [InlineData("generated-slicers-001", "xl/drawings/drawing1.xml", "../slicers/slicer1.xml")]
+    [InlineData("generated-timelines-001", "xl/drawings/drawing1.xml", "../timelines/timeline1.xml")]
+    public void GeneratedSlicerTimelineRows_RetainFloatingDrawingAnchorsAfterModelEdit(
+        string id,
+        string drawingPart,
+        string drawingRelationshipTarget)
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(id);
+        var before = CapturePackageSummary(source);
+        before.CriticalParts.Should().Contain(drawingPart, id);
+        before.CriticalRelationshipTargets.Should().Contain(target =>
+            target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-floating-anchor-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, id);
+        var after = CapturePackageSummary(saved);
+
+        after.CriticalParts.Should().Contain(drawingPart, id);
+        after.CriticalRelationshipTargets.Should().Contain(target =>
+            target.EndsWith($"=>{drawingRelationshipTarget}", StringComparison.OrdinalIgnoreCase), id);
+    }
+
     [Fact]
     public void PackageSummary_TreatsDocumentPropertiesAsFidelityCriticalParts()
     {
