@@ -43,8 +43,13 @@ public sealed class SparklineDialog : Window
         _locationBox.Text = Result.LocationText;
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>();
-        _kindBox.SelectedItem = kind;
+        _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
+            .Select(choice => new ComboBoxItem
+            {
+                Content = GetKindLabel(choice),
+                Tag = choice
+            });
+        _kindBox.SelectedIndex = Math.Max(0, Array.IndexOf(Enum.GetValues<SparklineKindChoice>(), kind));
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_kindBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
@@ -59,9 +64,12 @@ public sealed class SparklineDialog : Window
         Result = CreateResult(
             _dataRangeBox.Text,
             _locationBox.Text,
-            _kindBox.SelectedItem is SparklineKindChoice kind ? kind : SparklineKindChoice.Line);
+            _kindBox.SelectedItem is ComboBoxItem { Tag: SparklineKindChoice kind } ? kind : SparklineKindChoice.Line);
         DialogResult = true;
     }
+
+    public static string GetKindLabel(SparklineKindChoice kind) =>
+        kind == SparklineKindChoice.WinLoss ? "Win/Loss" : kind.ToString();
 
     private static StackPanel CreateRangePickerRow(TextBox textBox, Button pickerButton)
     {
