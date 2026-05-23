@@ -180,6 +180,8 @@ public sealed class ProtectionDialogTests
         source.Should().NotContain("_Confirm password:");
         source.Should().Contain("Select locked cells");
         source.Should().Contain("Edit scenarios");
+        source.Should().Contain("Choose which protected-sheet actions remain available.");
+        source.Should().NotContain("current enforcement is limited");
     }
 
     private static T GetPrivateField<T>(object instance, string name)

@@ -84,7 +84,7 @@ public sealed class PasswordProtectionDialog : Window
         {
             Header = "Allow all users of this worksheet to:",
             Content = scroll,
-            ToolTip = "These selections are returned with the Protect Sheet result; current enforcement is limited to locked cells and allowed edit ranges.",
+            ToolTip = "Choose which protected-sheet actions remain available.",
             Margin = new Thickness(0, 0, 0, 0)
         };
         root.Children.Add(group);
