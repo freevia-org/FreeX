@@ -71,6 +71,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Column data format");
         source.Should().Contain("Content = \"_General\"");
         source.Should().Contain("Content = \"_Text\"");
+        source.Should().Contain("Content = \"_Date:\"");
+        source.Should().Contain("_dateFormatBox");
         source.Should().Contain("Do not import column (_skip)");
         source.Should().Contain("Header = \"Advanced\"");
         source.Should().Contain("_Decimal separator:");
@@ -178,11 +180,12 @@ public sealed class DataToolDialogTests
         TextToColumnsDialog.NormalizeColumnFormats(
             [
                 TextToColumnsColumnFormat.Text,
+                TextToColumnsColumnFormat.DateMDY,
                 TextToColumnsColumnFormat.General,
                 TextToColumnsColumnFormat.General
             ])
             .Should()
-            .Equal(TextToColumnsColumnFormat.Text);
+            .Equal(TextToColumnsColumnFormat.Text, TextToColumnsColumnFormat.DateMDY);
 
         var result = TextToColumnsDialog.CreateResult(
             [TextToColumnsDelimiterKind.Comma],
