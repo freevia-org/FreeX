@@ -178,6 +178,10 @@ public sealed class MainWindowAdaptiveRibbonTests
                 harness.VerticallyStackedRibbonIconOffsets.Should().OnlyContain(
                     stack => stack.Offsets.Select(offset => Math.Round(offset, 1)).Distinct().Count() == 1,
                     $"{tab} vertical command stacks should put small command icons directly above one another");
+
+                harness.DirectVerticalButtonStackIconOffsets.Should().OnlyContain(
+                    stack => stack.Offsets.Select(offset => Math.Round(offset, 1)).Distinct().Count() == 1,
+                    $"{tab} direct XAML vertical button stacks should align small command icons in a fixed column");
             }
         });
     }
@@ -329,6 +333,13 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .SelectMany(GetVerticalIconStacks)
                 .ToList();
 
+        public IReadOnlyList<RibbonIconStackOffsets> DirectVerticalButtonStackIconOffsets =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<StackPanel>()
+                .Where(panel => panel.Orientation == Orientation.Vertical)
+                .SelectMany(GetDirectVerticalButtonStacks)
+                .ToList();
+
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
                 ? EnumerateSelfAndVisualDescendants(tabs)
@@ -453,8 +464,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
         private static double GetIconSlotOffset(Visual ancestor, Button button)
         {
-            if (button.Content is not StackPanel { Children.Count: > 0 } content ||
-                content.Children[0] is not FrameworkElement iconSlot)
+            if (!TryGetCommandIconSlot(button, out var iconSlot))
             {
                 return double.NaN;
             }
@@ -492,19 +502,57 @@ public sealed class MainWindowAdaptiveRibbonTests
             }
         }
 
+        private static IEnumerable<RibbonIconStackOffsets> GetDirectVerticalButtonStacks(StackPanel panel)
+        {
+            var buttons = panel.Children
+                .OfType<Button>()
+                .Where(IsEffectivelyVisible)
+                .Where(button => TryGetCommandIconSlot(button, out _))
+                .ToArray();
+
+            if (buttons.Length < 2)
+                yield break;
+
+            yield return new RibbonIconStackOffsets(
+                buttons.Select(GetButtonLabel).ToArray(),
+                buttons.Select(button => GetDirectIconSlotCenterOffset(panel, button)).ToArray());
+        }
+
         private static IEnumerable<Button> GetSmallCommandButtons(Panel panel) =>
             panel.Children.OfType<Button>()
                 .Where(IsEffectivelyVisible)
-                .Where(button => button.Content is StackPanel
-                {
-                    Orientation: Orientation.Horizontal,
-                    Tag: string tag
-                } && tag == "RibbonCommandContent:S");
+                .Where(button => button.Content is FrameworkElement content &&
+                                 string.Equals(content.Tag?.ToString(), "RibbonCommandContent:S", StringComparison.Ordinal) &&
+                                 TryGetCommandIconSlot(button, out _));
 
         private static RibbonIconStackOffsets CreateIconStackOffsets(Visual ancestor, IReadOnlyList<Button> buttons) =>
             new(
                 buttons.Select(GetButtonLabel).ToArray(),
                 buttons.Select(button => GetIconSlotOffset(ancestor, button)).ToArray());
+
+        private static double GetDirectIconSlotCenterOffset(Visual ancestor, Button button)
+        {
+            if (!TryGetCommandIconSlot(button, out var iconSlot))
+            {
+                return double.NaN;
+            }
+
+            var point = iconSlot.TransformToAncestor(ancestor).Transform(new Point(0, 0));
+            return point.X + iconSlot.ActualWidth / 2;
+        }
+
+        private static bool TryGetCommandIconSlot(Button button, out FrameworkElement iconSlot)
+        {
+            iconSlot = null!;
+            if (button.Content is not Panel { Children.Count: > 0 } content ||
+                content.Children[0] is not FrameworkElement firstChild)
+            {
+                return false;
+            }
+
+            iconSlot = firstChild;
+            return true;
+        }
 
         private static bool IsEffectivelyVisible(DependencyObject element)
         {
