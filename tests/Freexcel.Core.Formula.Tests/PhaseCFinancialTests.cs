@@ -644,6 +644,17 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DiscountSettlementFunctions_NegativeDateSerial_ReturnNumError()
+    {
+        CalcError("DISC(-1,44197,95,100)").Should().Be("#NUM!");
+        CalcError("INTRATE(-1,44197,95,100)").Should().Be("#NUM!");
+        CalcError("RECEIVED(-1,44197,100,0.05)").Should().Be("#NUM!");
+        CalcError("TBILLEQ(-1,44197,0.05)").Should().Be("#NUM!");
+        CalcError("TBILLPRICE(-1,44197,0.05)").Should().Be("#NUM!");
+        CalcError("TBILLYIELD(-1,44197,95)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
     {
         double r = 0.12;
