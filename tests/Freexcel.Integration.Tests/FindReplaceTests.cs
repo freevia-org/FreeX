@@ -103,6 +103,29 @@ public class FindReplaceTests
     }
 
     [Fact]
+    public void Find_OptionsCanRequireMatchingCellFormat()
+    {
+        var (wb, sheet, _) = Setup();
+        var boldStyle = wb.RegisterStyle(new CellStyle { Bold = true, FillColor = new CellColor(255, 255, 0) });
+        var yellowOnlyStyle = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 255, 0) });
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new TextValue("needle"));
+        sheet.SetCell(a2, new TextValue("needle"));
+        sheet.SetCell(a3, new TextValue("needle"));
+        sheet.GetCell(a1)!.StyleId = boldStyle;
+        sheet.GetCell(a2)!.StyleId = yellowOnlyStyle;
+
+        var results = FindReplaceService.Find(
+            wb,
+            "needle",
+            new FindOptions(RequiredFormat: new StyleDiff(Bold: true, FillColor: new CellColor(255, 255, 0))));
+
+        results.Select(result => result.Address).Should().Equal(a1);
+    }
+
+    [Fact]
     public void ReplaceAll_ReplacesValueCells()
     {
         var (wb, sheet, commandBus) = Setup();
