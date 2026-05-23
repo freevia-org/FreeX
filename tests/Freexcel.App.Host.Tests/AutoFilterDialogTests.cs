@@ -320,6 +320,17 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesFirstSortCommand()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_sortAscending.Focus();");
+        source.Should().Contain("Keyboard.Focus(_sortAscending);");
+    }
+
+    [Fact]
     public void DialogControls_ExposeFilterByColorPickerWhenMenuPlanSupportsIt()
     {
         var source = ReadAutoFilterDialogSources();
