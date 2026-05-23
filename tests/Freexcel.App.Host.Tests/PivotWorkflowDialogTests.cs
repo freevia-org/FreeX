@@ -491,7 +491,9 @@ public sealed class PivotWorkflowDialogTests
             "Alt Text",
             "Preserve source sort and _filter settings",
             "Retain items _deleted from the data source",
-            "Display field _captions and filter drop-downs"
+            "Display field _captions and filter drop-downs",
+            "Show items with no data on _rows",
+            "Show items with no data on _columns"
         })
             source.Should().Contain(content);
 
@@ -547,6 +549,8 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"Row _headers\"",
             "Content = \"Column hea_ders\"",
             "Content = \"Display field _captions and filter drop-downs\"",
+            "Content = \"Show items with no data on _rows\"",
+            "Content = \"Show items with no data on _columns\"",
             "Content = \"Banded _rows\"",
             "Content = \"Banded c_olumns\"",
             "Content = \"_Autofit column widths on update\"",
@@ -590,6 +594,8 @@ public sealed class PivotWorkflowDialogTests
             showPropertiesInTooltips: false,
             showClassicLayout: true,
             mergeAndCenterLabels: true,
+            showItemsWithNoDataOnRows: true,
+            showItemsWithNoDataOnColumns: true,
             printTitles: true,
             printExpandCollapseButtons: true,
             altTextTitle: "  Sales pivot ",
@@ -603,6 +609,8 @@ public sealed class PivotWorkflowDialogTests
         result.ShowPropertiesInTooltips.Should().BeFalse();
         result.ShowClassicLayout.Should().BeTrue();
         result.MergeAndCenterLabels.Should().BeTrue();
+        result.ShowItemsWithNoDataOnRows.Should().BeTrue();
+        result.ShowItemsWithNoDataOnColumns.Should().BeTrue();
         result.EnableRefresh.Should().BeFalse();
         result.MissingItemsLimit.Should().Be(0);
         result.PrintTitles.Should().BeTrue();
