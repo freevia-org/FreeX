@@ -938,6 +938,13 @@ public class XlsxCorpusRunnerTests
                     column.TotalsRowFunction ?? "",
                     column.CalculatedColumnFormula ?? "",
                     column.TotalsRowFormula ?? ""))
+                .ToArray(),
+            table.FilterColumns
+                .OrderBy(filter => filter.ColumnId)
+                .Select(filter => new StructuredTableFilterColumnSummary(
+                    filter.ColumnId,
+                    filter.Values.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    filter.IncludeBlank))
                 .ToArray());
 
     private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
@@ -1551,7 +1558,8 @@ public class XlsxCorpusRunnerTests
         bool ShowRowStripes,
         bool ShowColumnStripes,
         ChartRangeSummary Range,
-        IReadOnlyList<StructuredTableColumnSummary> Columns);
+        IReadOnlyList<StructuredTableColumnSummary> Columns,
+        IReadOnlyList<StructuredTableFilterColumnSummary> FilterColumns);
 
     private sealed record StructuredTableColumnSummary(
         int Id,
@@ -1560,6 +1568,11 @@ public class XlsxCorpusRunnerTests
         string TotalsRowFunction,
         string CalculatedColumnFormula,
         string TotalsRowFormula);
+
+    private sealed record StructuredTableFilterColumnSummary(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank);
 
     private sealed record PivotTableSummary(
         string Name,
