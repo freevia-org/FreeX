@@ -53,6 +53,26 @@ public sealed class FormulaEvaluationSession
         return true;
     }
 
+    public bool StepOut()
+    {
+        var expression = CurrentStep?.Expression;
+        if (string.IsNullOrWhiteSpace(expression))
+            return false;
+
+        for (var index = CurrentStepIndex + 1; index < Summary.Steps.Count; index++)
+        {
+            var candidate = Summary.Steps[index].Expression;
+            if (candidate.Length > expression.Length &&
+                candidate.Contains(expression, StringComparison.OrdinalIgnoreCase))
+            {
+                CurrentStepIndex = index;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private FormulaEvaluationHighlight BuildCurrentHighlight()
     {
         var formula = Summary.FormulaText;

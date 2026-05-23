@@ -58,7 +58,7 @@ public sealed class EvaluateFormulaDialog : Window
         _stepOutButton = new Button { Content = "Step _Out", Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _stepOutButton.Click += (_, _) =>
         {
-            _session.MovePrevious();
+            _session.StepOut();
             Refresh();
         };
         buttons.Children.Add(_stepOutButton);
@@ -147,7 +147,7 @@ public sealed class EvaluateFormulaDialog : Window
             _valueText.Text = $"Value: {_session.Summary.ValueText}";
         }
 
-        _stepOutButton.IsEnabled = _session.CanMovePrevious;
+        _stepOutButton.IsEnabled = _session.CurrentStep is not null;
         _nextButton.IsEnabled = _session.CanMoveNext;
     }
 
