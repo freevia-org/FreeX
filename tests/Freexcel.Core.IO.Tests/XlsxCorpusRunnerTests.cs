@@ -1045,7 +1045,11 @@ public class XlsxCorpusRunnerTests
         return summary with
         {
             Sheets = summary.Sheets
-                .Select(sheet => sheet with { StyleOnlyCellCount = 0 })
+                .Select(sheet => sheet with
+                {
+                    StyleOnlyCells = [],
+                    StyleOnlyCellCount = 0
+                })
                 .ToArray()
         };
     }
