@@ -9879,6 +9879,51 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RegeneratesHeaderFooterDrawingWhenPictureChanges()
+    {
+        var workbook = new Workbook("HeaderFooterDrawingChangeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("header image"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddHeaderFooterLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var originalPicture = loadedSheet.PageHeaderPictures.Left!;
+        loadedSheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            originalPicture with { Width = originalPicture.Width + 24 },
+            null,
+            null);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/drawings/freexcelHeaderFooter1.vml").Should().NotBeNull();
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var relId = worksheetXml.Root!
+            .Element(worksheetNs + "legacyDrawingHF")!
+            .Attribute(relNs + "id")!
+            .Value;
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var target = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .First(rel => string.Equals(rel.Attribute("Id")?.Value, relId, StringComparison.Ordinal))
+            .Attribute("Target")!
+            .Value;
+        target.Should().Be("../drawings/freexcelHeaderFooter1.vml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomSheetViews()
     {
         var workbook = new Workbook("CustomSheetViewsRetentionTest");
