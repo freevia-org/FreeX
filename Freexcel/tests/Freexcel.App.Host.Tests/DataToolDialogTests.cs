@@ -486,6 +486,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialogOpenedFromKeyboard_FocusesGroupColumnChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_groupColumnBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_groupColumnBox);");
+    }
+
+    [Fact]
     public void SubtotalDialog_OrdersControlsLikeExcelSubtotalDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
@@ -803,6 +814,36 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_TryAddReference_RejectsMalformedReferenceImmediately()
+    {
+        var sheetId = SheetId.New();
+
+        ConsolidateDialog.TryAddReference(
+                sheetId,
+                ["A1:B3"],
+                "nope",
+                out var unchanged,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        unchanged.Should().Equal("A1:B3");
+        error.Should().Be("Enter a valid source range: nope.");
+
+        ConsolidateDialog.TryAddReference(
+                sheetId,
+                ["A1:B3"],
+                "D5:E7",
+                out var updated,
+                out error)
+            .Should()
+            .BeTrue();
+
+        updated.Should().Equal("A1:B3", "D5:E7");
+        error.Should().BeNull();
+    }
+
+    [Fact]
     public void ConsolidateDialog_ExposesExcelStyleAllReferencesWorkflow()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
@@ -823,6 +864,17 @@ public sealed class DataToolDialogTests
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_functionBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_functionBox);");
     }
 
     [Fact]
