@@ -62,6 +62,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             sbyte number => new NumberValue(number),
             uint number => new NumberValue(number),
             ushort number => new NumberValue(number),
+            ulong number => new NumberValue(number),
             decimal number => new NumberValue((double)number),
             bool boolean => new BoolValue(boolean),
             DateTime date => DateTimeValue.FromDateTime(date),
