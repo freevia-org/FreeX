@@ -626,7 +626,7 @@ public partial class MainWindow
                 return FormulaBar.Focus();
 
             case ShellFocusTarget.SheetTabs:
-                return AddSheetButton.Focus();
+                return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
 
             case ShellFocusTarget.StatusBar:
                 return ZoomSlider.Focus();
