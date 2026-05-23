@@ -73,32 +73,55 @@ public partial class MainWindow
 
     private void RefreshToolbar()
     {
-        UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);
-        RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);
+        var canUndo = _commandBus.CanUndo(_workbook.Id);
+        var canRedo = _commandBus.CanRedo(_workbook.Id);
 
-        if (SheetGrid.SelectedRange is not { } range) return;
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            _lastToolbarVisualState = null;
+            UndoQatBtn.IsEnabled = canUndo;
+            RedoQatBtn.IsEnabled = canRedo;
+            return;
+        }
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
+        if (sheet is null)
+        {
+            _lastToolbarVisualState = null;
+            UndoQatBtn.IsEnabled = canUndo;
+            RedoQatBtn.IsEnabled = canRedo;
+            return;
+        }
         var style = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
+        var state = ToolbarVisualState.From(style, canUndo, canRedo);
+        if (state == _lastToolbarVisualState)
+            return;
 
         _suppressToolbarSync = true;
-        BoldButton.IsChecked = style.Bold;
-        ItalicButton.IsChecked = style.Italic;
-        UnderlineButton.IsChecked = style.Underline && !style.Strikethrough;
-        StrikeButton.IsChecked = style.Strikethrough;
-        AlignTopBtn.IsChecked = style.VerticalAlignment == CellVAlign.Top;
-        AlignMiddleBtn.IsChecked = style.VerticalAlignment == CellVAlign.Center;
-        AlignBottomBtn.IsChecked = style.VerticalAlignment == CellVAlign.Bottom;
-        AlignLeftBtn.IsChecked = style.HorizontalAlignment == CellHAlign.Left;
-        AlignCenterBtn.IsChecked = style.HorizontalAlignment == CellHAlign.Center;
-        AlignRightBtn.IsChecked = style.HorizontalAlignment == CellHAlign.Right;
-        WrapTextBtn.IsChecked = style.WrapText;
-        if (FontNameBox.Items.Contains(style.FontName))
-            FontNameBox.SelectedItem = style.FontName;
-        var sizeStr = style.FontSize.ToString("0.#");
-        if (FontSizeBox.Items.Contains(sizeStr))
-            FontSizeBox.SelectedItem = sizeStr;
-        _suppressToolbarSync = false;
+        try
+        {
+            UndoQatBtn.IsEnabled = state.CanUndo;
+            RedoQatBtn.IsEnabled = state.CanRedo;
+            BoldButton.IsChecked = state.Bold;
+            ItalicButton.IsChecked = state.Italic;
+            UnderlineButton.IsChecked = state.Underline;
+            StrikeButton.IsChecked = state.Strikethrough;
+            AlignTopBtn.IsChecked = state.VerticalAlignment == CellVAlign.Top;
+            AlignMiddleBtn.IsChecked = state.VerticalAlignment == CellVAlign.Center;
+            AlignBottomBtn.IsChecked = state.VerticalAlignment == CellVAlign.Bottom;
+            AlignLeftBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Left;
+            AlignCenterBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Center;
+            AlignRightBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Right;
+            WrapTextBtn.IsChecked = state.WrapText;
+            if (FontNameBox.Items.Contains(state.FontName))
+                FontNameBox.SelectedItem = state.FontName;
+            if (FontSizeBox.Items.Contains(state.FontSizeText))
+                FontSizeBox.SelectedItem = state.FontSizeText;
+            _lastToolbarVisualState = state;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
     }
 
     private void ApplyStyleDiff(StyleDiff diff)

@@ -914,8 +914,10 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
 
-        source.Should().Contain("UndoQatBtn.IsEnabled = _commandBus.CanUndo(_workbook.Id);");
-        source.Should().Contain("RedoQatBtn.IsEnabled = _commandBus.CanRedo(_workbook.Id);");
+        source.Should().Contain("var canUndo = _commandBus.CanUndo(_workbook.Id);");
+        source.Should().Contain("var canRedo = _commandBus.CanRedo(_workbook.Id);");
+        source.Should().Contain("UndoQatBtn.IsEnabled = state.CanUndo;");
+        source.Should().Contain("RedoQatBtn.IsEnabled = state.CanRedo;");
     }
 
     [Fact]
