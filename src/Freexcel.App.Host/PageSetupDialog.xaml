@@ -131,8 +131,15 @@
                         <ComboBoxItem Content="(none)" Tag=""/>
                         <ComboBoxItem Content="Page 1" Tag="&amp;[Page]"/>
                         <ComboBoxItem Content="Page 1 of ?" Tag="Page &amp;[Page] of &amp;[Pages]"/>
+                        <ComboBoxItem Content="Sheet1" Tag="&amp;[Tab]"/>
+                        <ComboBoxItem Content="Book1" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="Book1.xlsx" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="Book1.xlsx, Sheet1" Tag="&amp;[File], &amp;[Tab]"/>
+                        <ComboBoxItem Content="Confidential, Page 1" Tag="Confidential, Page &amp;[Page]"/>
+                        <ComboBoxItem Content="Date, Page 1" Tag="&amp;[Date], Page &amp;[Page]"/>
                         <ComboBoxItem Content="Sheet name" Tag="&amp;[Tab]"/>
                         <ComboBoxItem Content="File name" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="File path" Tag="&amp;[Path]&amp;[File]"/>
                     </ComboBox>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="_Footer preset:" Target="{Binding ElementName=FooterPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
@@ -140,8 +147,15 @@
                         <ComboBoxItem Content="(none)" Tag=""/>
                         <ComboBoxItem Content="Page 1" Tag="&amp;[Page]"/>
                         <ComboBoxItem Content="Page 1 of ?" Tag="Page &amp;[Page] of &amp;[Pages]"/>
+                        <ComboBoxItem Content="Sheet1" Tag="&amp;[Tab]"/>
+                        <ComboBoxItem Content="Book1" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="Book1.xlsx" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="Book1.xlsx, Sheet1" Tag="&amp;[File], &amp;[Tab]"/>
                         <ComboBoxItem Content="Date" Tag="&amp;[Date]"/>
+                        <ComboBoxItem Content="Time" Tag="&amp;[Time]"/>
+                        <ComboBoxItem Content="Date, Page 1" Tag="&amp;[Date], Page &amp;[Page]"/>
                         <ComboBoxItem Content="File path" Tag="&amp;[Path]&amp;[File]"/>
+                        <ComboBoxItem Content="File name" Tag="&amp;[File]"/>
                     </ComboBox>
 
                     <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="Preview" Margin="0,2,0,10">

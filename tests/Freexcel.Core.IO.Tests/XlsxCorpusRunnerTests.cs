@@ -652,6 +652,11 @@ public class XlsxCorpusRunnerTests
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
             workbook.PivotTableStyles.Count,
             workbook.PivotTableStyles.Sum(style => style.Elements.Count),
+            workbook.CustomViews
+                .OrderBy(view => view.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CaptureCustomViewSummary)
+                .ToArray(),
+            workbook.CustomViews.Count,
             workbook.Sheets.Select(sheet => CaptureSheetSummary(workbook, sheet)).ToArray());
 
     private static SheetSummary CaptureSheetSummary(Workbook workbook, Sheet sheet) =>
@@ -835,6 +840,27 @@ public class XlsxCorpusRunnerTests
             ErrorValue error => new ScalarValueSummary("Error", error.Code),
             _ => new ScalarValueSummary(value.GetType().Name, value.ToString() ?? "")
         };
+
+    private static CustomViewSummary CaptureCustomViewSummary(WorkbookCustomView view) =>
+        new(
+            view.Name,
+            view.IncludePrintSettings,
+            view.IncludeHiddenRowsColumnsAndFilterSettings,
+            view.Sheets
+                .OrderBy(sheet => sheet.SheetName, StringComparer.OrdinalIgnoreCase)
+                .Select(sheet => new CustomViewSheetSummary(
+                    sheet.SheetName,
+                    sheet.ViewMode,
+                    sheet.FrozenRows,
+                    sheet.FrozenCols,
+                    sheet.SplitRow,
+                    sheet.SplitColumn,
+                    sheet.ShowGridlines,
+                    sheet.ShowHeadings,
+                    sheet.ShowRulers,
+                    sheet.ZoomPercent,
+                    sheet.ShowFormulas))
+                .ToArray());
 
     private static ChartSummary CaptureChartSummary(ChartModel chart) =>
         new(
@@ -1335,6 +1361,8 @@ public class XlsxCorpusRunnerTests
         int PivotCacheFieldCount,
         int PivotTableStyleCount,
         int PivotTableStyleElementCount,
+        IReadOnlyList<CustomViewSummary> CustomViews,
+        int CustomViewCount,
         IReadOnlyList<SheetSummary> Sheets);
 
     private sealed record NamedRangeSummary(
@@ -1452,6 +1480,25 @@ public class XlsxCorpusRunnerTests
         bool IgnoreFormulaError);
 
     private sealed record ScalarValueSummary(string Kind, string Value);
+
+    private sealed record CustomViewSummary(
+        string Name,
+        bool IncludePrintSettings,
+        bool IncludeHiddenRowsColumnsAndFilterSettings,
+        IReadOnlyList<CustomViewSheetSummary> Sheets);
+
+    private sealed record CustomViewSheetSummary(
+        string SheetName,
+        WorksheetViewMode ViewMode,
+        uint FrozenRows,
+        uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        int ZoomPercent,
+        bool ShowFormulas);
 
     private sealed record CommentSummary(uint Row, uint Column, string Text);
 
