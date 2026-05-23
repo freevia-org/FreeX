@@ -148,7 +148,53 @@ internal static class XlsxHeaderFooterPictureReaderWriter
             ToSet(pictures, HeaderFooterPictureSetKind.EvenPageFooter));
     }
 
-    public static void Save(Stream xlsxStream, Workbook workbook)
+    public static IReadOnlySet<string> FindSheetsWithUnchangedSourcePictures(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relTargets = XlsxRelationshipReader.ReadTargets(
+            relsXml,
+            packageRelNs,
+            XlsxPackagePath.NormalizeWorkbookTarget);
+        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+        var unchanged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(relId))
+                continue;
+            if (!sheetsByName.TryGetValue(name, out var sheet) || !HasPictures(sheet))
+                continue;
+            if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var sourcePictures = Read(archive, worksheetPath, worksheetXml);
+            if (PictureSetsEqual(sourcePictures, sheet))
+                unchanged.Add(name);
+        }
+
+        return unchanged;
+    }
+
+    public static void Save(Stream xlsxStream, Workbook workbook, IReadOnlySet<string>? sheetsToPreserve = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -177,6 +223,8 @@ internal static class XlsxHeaderFooterPictureReaderWriter
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(relId))
                 continue;
             if (!sheetsByName.TryGetValue(name, out var sheet) || !HasPictures(sheet))
+                continue;
+            if (sheetsToPreserve?.Contains(name) == true)
                 continue;
             if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
@@ -311,6 +359,31 @@ internal static class XlsxHeaderFooterPictureReaderWriter
 
     private static bool HasPictures(WorksheetHeaderFooterPictureSet set) =>
         set.Left is not null || set.Center is not null || set.Right is not null;
+
+    private static bool PictureSetsEqual(XlsxHeaderFooterPictureSets sourcePictures, Sheet sheet) =>
+        PictureSetEqual(sourcePictures.PageHeader, sheet.PageHeaderPictures) &&
+        PictureSetEqual(sourcePictures.PageFooter, sheet.PageFooterPictures) &&
+        PictureSetEqual(sourcePictures.FirstPageHeader, sheet.FirstPageHeaderPictures) &&
+        PictureSetEqual(sourcePictures.FirstPageFooter, sheet.FirstPageFooterPictures) &&
+        PictureSetEqual(sourcePictures.EvenPageHeader, sheet.EvenPageHeaderPictures) &&
+        PictureSetEqual(sourcePictures.EvenPageFooter, sheet.EvenPageFooterPictures);
+
+    private static bool PictureSetEqual(WorksheetHeaderFooterPictureSet left, WorksheetHeaderFooterPictureSet right) =>
+        PictureEqual(left.Left, right.Left) &&
+        PictureEqual(left.Center, right.Center) &&
+        PictureEqual(left.Right, right.Right);
+
+    private static bool PictureEqual(WorksheetHeaderFooterPicture? left, WorksheetHeaderFooterPicture? right)
+    {
+        if (left is null || right is null)
+            return left is null && right is null;
+
+        return string.Equals(left.ContentType, right.ContentType, StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(left.FileName, right.FileName, StringComparison.OrdinalIgnoreCase) &&
+               left.Width.Equals(right.Width) &&
+               left.Height.Equals(right.Height) &&
+               left.ImageBytes.AsSpan().SequenceEqual(right.ImageBytes);
+    }
 
     private static string GetMediaFileName(string? fileName, int sheetIndex, int pictureIndex, string extension)
     {

@@ -53,6 +53,110 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForPercentages()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(0.125));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-0.03));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForErrorLiterals()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(ErrorValue.NA);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(ErrorValue.DivByZero);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDatesAndTimes()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17\t2026-05-17 09:30\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForUsSlashDatesWithFourDigitYears()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("5/17/2026\t5/17/2026 09:30\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForStandaloneTimes()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("09:30\t21:45:15\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new DateTimeValue(new TimeSpan(21, 45, 15).TotalDays));
+    }
+
+    [Fact]
+    public void Load_IgnoresFieldsBeyondExcelColumnLimit()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        var fields = Enumerable.Repeat("", (int)CellAddress.MaxCol + 1).ToArray();
+        fields[CellAddress.MaxCol - 1] = "last";
+        fields[CellAddress.MaxCol] = "overflow";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(string.Join('\t', fields)));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, CellAddress.MaxCol)).Should().Be(new TextValue("last"));
+        sheet.GetCell(new CellAddress(sheet.Id, 1, CellAddress.MaxCol + 1)).Should().BeNull();
+    }
+
+    [Fact]
+    public void Load_IgnoresRecordsBeyondExcelRowLimit()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        var builder = new StringBuilder();
+        for (var row = 1; row < CellAddress.MaxRow; row++)
+            builder.AppendLine();
+        builder.AppendLine("last");
+        builder.AppendLine("overflow");
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(builder.ToString()));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, CellAddress.MaxRow, 1)).Should().Be(new TextValue("last"));
+        sheet.GetCell(new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1)).Should().BeNull();
+    }
+
+    [Fact]
     public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');

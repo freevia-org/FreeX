@@ -57,7 +57,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             int number => new NumberValue(number),
             decimal number => new NumberValue((double)number),
             bool boolean => new BoolValue(boolean),
-            DateTime date => new NumberValue(date.ToOADate()),
+            DateTime date => DateTimeValue.FromDateTime(date),
             string text when text.Length == 0 => BlankValue.Instance,
             string text => new TextValue(text),
             _ => new TextValue(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "")
