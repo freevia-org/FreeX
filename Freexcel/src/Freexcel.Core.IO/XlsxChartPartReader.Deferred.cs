@@ -37,6 +37,7 @@ public static partial class XlsxChartPartReader
     private static bool HasDirectSupportedChart(XElement? plotArea) =>
         plotArea?.Elements().Any(element => element.Name.LocalName is
             "areaChart" or
+            "area3DChart" or
             "barChart" or
             "bubbleChart" or
             "doughnutChart" or

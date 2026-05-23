@@ -110,7 +110,7 @@ internal static partial class XlsxChartXmlWriter
         }
 
         if ((secondaryIndexes.Count > 0 || comboLineIndexes.Count > 0) &&
-            chart.Type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area)
+            chart.Type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area or ChartType.ThreeDArea)
         {
             var primaryBase = Enumerable.Range(0, seriesCount)
                 .Where(index => !secondaryIndexes.Contains(index) && !comboLineIndexes.Contains(index))
@@ -155,6 +155,9 @@ internal static partial class XlsxChartXmlWriter
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
             ChartType.Stock => CreateStockPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Area => new XElement(chartNs + "areaChart",
+                new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+            ChartType.ThreeDArea => new XElement(chartNs + "area3DChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.ThreeDColumn or ChartType.ThreeDBar => WithBarChartSpacing(new XElement(chartNs + "bar3DChart",
@@ -576,6 +579,7 @@ internal static partial class XlsxChartXmlWriter
                 or ChartType.Line
                 or ChartType.Scatter
                 or ChartType.Area
+                or ChartType.ThreeDArea
                 or ChartType.Bubble
                 or ChartType.Pie
                 or ChartType.ThreeDPie

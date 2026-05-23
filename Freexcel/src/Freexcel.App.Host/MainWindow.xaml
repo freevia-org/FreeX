@@ -1151,6 +1151,9 @@
                                     <Button Content="Area"      Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaMenuItem_Click"
                                             local:RibbonTooltip.Title="Area Chart" local:RibbonTooltip.KeyTip="A"
                                             local:RibbonTooltip.Description="Insert an area chart to show trends with filled areas."/>
+                                    <Button Content="3D Area"   Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DAreaMenuItem_Click"
+                                            local:RibbonTooltip.Title="3D Area Chart" local:RibbonTooltip.KeyTip="3A"
+                                            local:RibbonTooltip.Description="Insert a 3D area chart to show trends with filled areas."/>
                                     <Button Content="Stock"     Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockMenuItem_Click"
                                             local:RibbonTooltip.Title="Stock Chart" local:RibbonTooltip.KeyTip="ST"
                                             local:RibbonTooltip.Description="Insert a stock chart from high-low-close or open-high-low-close data."/>

@@ -21,6 +21,8 @@ public static partial class XlsxChartPartReader
         var scatterChart = scatterCharts.FirstOrDefault();
         var areaCharts = plotArea?.Elements(ChartNs + "areaChart").ToList() ?? [];
         var areaChart = areaCharts.FirstOrDefault();
+        var threeDAreaCharts = plotArea?.Elements(ChartNs + "area3DChart").ToList() ?? [];
+        var threeDAreaChart = threeDAreaCharts.FirstOrDefault();
         var radarCharts = plotArea?.Elements(ChartNs + "radarChart").ToList() ?? [];
         var stockCharts = plotArea?.Elements(ChartNs + "stockChart").ToList() ?? [];
         var deferredAdvancedChart = HasDirectSupportedChart(plotArea) ? null : FindDeferredAdvancedChart(plotArea);
@@ -41,7 +43,9 @@ public static partial class XlsxChartPartReader
         else if (areaChart is not null && lineChart is not null)
             read = TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, out chart);
         else if (areaCharts.Count > 0)
-            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, out chart);
+            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, ChartType.Area, out chart);
+        else if (threeDAreaChart is not null)
+            read = TryReadAreaChart(chartXml, plotArea, threeDAreaCharts, sheetId, ChartType.ThreeDArea, out chart);
         else if (scatterCharts.Count > 0)
             read = TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, out chart);
         else if (barChart is not null && lineChart is not null)

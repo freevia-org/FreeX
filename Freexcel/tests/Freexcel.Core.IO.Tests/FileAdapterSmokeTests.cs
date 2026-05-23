@@ -6711,6 +6711,7 @@ public partial class FileAdapterSmokeTests
     [Theory]
     [InlineData(ChartType.Radar, "radarChart", null)]
     [InlineData(ChartType.Stock, "stockChart", null)]
+    [InlineData(ChartType.ThreeDArea, "area3DChart", null)]
     [InlineData(ChartType.ThreeDColumn, "bar3DChart", "col")]
     [InlineData(ChartType.ThreeDBar, "bar3DChart", "bar")]
     public void XlsxAdapter_Save_WritesEmbeddedRadarStockAnd3DChartPackagePart(

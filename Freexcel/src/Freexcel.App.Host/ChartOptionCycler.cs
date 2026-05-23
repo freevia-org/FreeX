@@ -116,6 +116,7 @@ public static class ChartOptionCycler
             "scatter" => ChartType.Scatter,
             "bubble" => ChartType.Bubble,
             "area" => ChartType.Area,
+            "3d area" or "three d area" or "three-dimensional area" => ChartType.ThreeDArea,
             "radar" => ChartType.Radar,
             "stock" => ChartType.Stock,
             _ => ChartType.Column
