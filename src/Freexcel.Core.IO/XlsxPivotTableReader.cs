@@ -112,7 +112,7 @@ internal static class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, "PivotStyleLight16", true, true, false, false, false, false, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, false, false, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -155,6 +155,7 @@ internal static class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "repeatItemLabels", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "blankLineAfterItems"),
             ReadPivotReportLayout(root.Attribute("reportLayout")?.Value),
+            Math.Clamp(XlsxXmlAttributeReader.ReadIntAttribute(root, "indent") ?? 1, 0, 15),
             styleInfo?.Attribute("name")?.Value ?? "PivotStyleLight16",
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showRowHeaders", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showColHeaders", defaultValue: true),
@@ -652,6 +653,7 @@ internal static class XlsxPivotTableReader
             RepeatItemLabels = pending.RepeatItemLabels,
             BlankLineAfterItems = pending.BlankLineAfterItems,
             ReportLayout = pending.ReportLayout,
+            CompactRowLabelIndent = pending.CompactRowLabelIndent,
             StyleName = string.IsNullOrWhiteSpace(pending.StyleName) ? "PivotStyleLight16" : pending.StyleName,
             ShowRowHeaders = pending.ShowRowHeaders,
             ShowColumnHeaders = pending.ShowColumnHeaders,
@@ -698,6 +700,7 @@ internal static class XlsxPivotTableReader
         bool RepeatItemLabels,
         bool BlankLineAfterItems,
         PivotReportLayout ReportLayout,
+        int CompactRowLabelIndent,
         string StyleName,
         bool ShowRowHeaders,
         bool ShowColumnHeaders,

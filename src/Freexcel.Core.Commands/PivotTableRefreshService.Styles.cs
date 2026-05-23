@@ -82,6 +82,8 @@ public static partial class PivotTableRefreshService
             if (pivotTable.ShowColumnStripes && bodyColIndex % 2 == 1)
                 ApplyPivotVisualStyle(workbook, cell, stripeStyle);
         }
+
+        ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);
     }
 
     private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId)
@@ -104,6 +106,38 @@ public static partial class PivotTableRefreshService
         return col < firstValueColumn
             ? pivotTable.ShowRowHeaders
             : pivotTable.ShowColumnHeaders;
+    }
+
+    private static void ApplyCompactRowLabelIndent(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        GridRange materialized,
+        uint headerEndRow,
+        IReadOnlySet<uint> subtotalRows,
+        IReadOnlySet<uint> grandTotalRows)
+    {
+        if (pivotTable.ReportLayout != PivotReportLayout.Compact ||
+            pivotTable.RowFields.Count <= 1 ||
+            pivotTable.CompactRowLabelIndent <= 0)
+        {
+            return;
+        }
+
+        var indent = Math.Clamp(pivotTable.CompactRowLabelIndent, 0, 15);
+        for (var row = headerEndRow + 1; row <= materialized.End.Row; row++)
+        {
+            if (subtotalRows.Contains(row) || grandTotalRows.Contains(row))
+                continue;
+
+            var cell = sheet.GetCell(row, materialized.Start.Col);
+            if (cell is null)
+                continue;
+
+            var style = workbook.GetStyle(cell.StyleId);
+            style.IndentLevel = indent;
+            cell.StyleId = workbook.RegisterStyle(style);
+        }
     }
 
     private static bool IsPivotGrandTotalCaption(string value) =>

@@ -789,6 +789,53 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableOptionsCommand_PreservesModeledAdvancedOptionsWhenCallerOmitsThem()
+    {
+        var workbook = new Workbook("PivotCompactIndentCompatibilityTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            ReportLayout = PivotReportLayout.Compact,
+            CompactRowLabelIndent = 5,
+            PrintTitles = true,
+            PrintExpandCollapseButtons = true,
+            AltTextTitle = "Existing title",
+            AltTextDescription = "Existing description"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            reportLayout: PivotReportLayout.Compact);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.CompactRowLabelIndent.Should().Be(5);
+        pivot.PrintTitles.Should().BeTrue();
+        pivot.PrintExpandCollapseButtons.Should().BeTrue();
+        pivot.AltTextTitle.Should().Be("Existing title");
+        pivot.AltTextDescription.Should().Be("Existing description");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "D4"))!.StyleId).IndentLevel.Should().Be(5);
+    }
+
+    [Fact]
     public void ConfigurePivotTableOptionsCommand_UpdatesPivotCacheDataOptionsAndUndoRestores()
     {
         var workbook = new Workbook("PivotCacheOptionsCommandTest");
@@ -847,6 +894,51 @@ public sealed class PivotTableCommandTests
         cache.RefreshOnLoad.Should().BeFalse();
         cache.SaveData.Should().BeTrue();
         cache.EnableRefresh.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesCompactRowLabelIndentAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotCompactIndentCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            ReportLayout = PivotReportLayout.Compact,
+            CompactRowLabelIndent = 1
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            reportLayout: PivotReportLayout.Compact,
+            compactRowLabelIndent: 4);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.CompactRowLabelIndent.Should().Be(4);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "D4"))!.StyleId).IndentLevel.Should().Be(4);
+
+        command.Revert(ctx);
+
+        pivot.CompactRowLabelIndent.Should().Be(1);
     }
 
     [Fact]

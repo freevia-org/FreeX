@@ -437,6 +437,49 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FillTab_UsesExcelLikePalettePatternAndSampleAreas()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "Title=\"Format Cells\" Width=\"700\" Height=\"610\"",
+            "x:Name=\"DlgFillPalettePanel\" Columns=\"10\" Rows=\"6\"",
+            "x:Name=\"DlgFillPatternColorPalettePanel\" Columns=\"8\" Rows=\"2\"",
+            "x:Name=\"DlgFillPatternSamplePreview\"",
+            "Text=\"Pattern Color:\"",
+            "Text=\"Pattern Style:\"",
+            "ToolTip=\"Gold\"",
+            "ToolTip=\"Dark Blue\"",
+            "ToolTip=\"Pattern accent blue\""
+        })
+            xaml.Should().Contain(expected);
+    }
+
+    [Fact]
+    public void FormatCellsDialog_BorderTab_UsesExcelLikeLineListPaletteAndUnclippedPreview()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "x:Name=\"DlgBorderLineStyleList\"",
+            "Height=\"124\"",
+            "x:Name=\"DlgBorderLinePalettePanel\" Columns=\"8\" Rows=\"2\"",
+            "Width=\"244\" Height=\"164\"",
+            "MinWidth=\"48\"",
+            "MinHeight=\"30\"",
+            "ToolTip=\"Apply top border\"",
+            "ToolTip=\"Apply right border\"",
+            "ToolTip=\"Apply bottom border\"",
+            "ToolTip=\"Apply left border\"",
+            "ToolTip=\"Gold border\"",
+            "ToolTip=\"Purple border\""
+        })
+            xaml.Should().Contain(expected);
+    }
+
+    [Fact]
     public void FormatCellsDialog_FillTab_LabelsEditableControlsWithAccessKeyTargets()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
