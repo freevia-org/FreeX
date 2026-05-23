@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  
-  <text x="10" y="9" font-size="9"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">U</text>
-  <path d="M6 15 L14 15" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Underline">
+  <rect width="20" height="20" fill="none"/>
+  <text x="10" y="8.8" font-size="14" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" text-anchor="middle" dominant-baseline="central">U</text>
+  <path d="M5.5 17.5H14.5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="square"/>
 </svg>
