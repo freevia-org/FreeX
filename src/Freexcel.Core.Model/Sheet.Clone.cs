@@ -158,6 +158,7 @@ public sealed partial class Sheet
                 ShowColumnHeaders = pt.ShowColumnHeaders,
                 ShowRowStripes = pt.ShowRowStripes,
                 ShowColumnStripes = pt.ShowColumnStripes,
+                ShowFieldHeaders = pt.ShowFieldHeaders,
                 EmptyValueText = pt.EmptyValueText,
                 AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
                 PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
