@@ -92,6 +92,19 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_KeepsQuotedFormulaLikeFieldsAsLiteralText()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"=A1*2\"\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var cell = sheet.GetCell(new CellAddress(sheet.Id, 1, 1));
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue("=A1*2"));
+    }
+
+    [Fact]
     public void Save_WritesDateTimeValuesAsInvariantText()
     {
         var workbook = new Workbook("Book1");

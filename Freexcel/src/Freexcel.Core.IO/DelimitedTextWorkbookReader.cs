@@ -32,12 +32,12 @@ internal static class DelimitedTextWorkbookReader
                 if (i >= CellAddress.MaxCol)
                     break;
 
-                var field = fields[i];
+                var field = fields[i].Value;
                 if (field.Length == 0)
                     continue;
 
                 var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
-                if (TryReadFormula(field, out var formulaText))
+                if (!fields[i].WasQuoted && TryReadFormula(field, out var formulaText))
                     sheet.SetCell(address, Cell.FromFormula(formulaText));
                 else
                     sheet.SetCell(address, CoerceValue(field));
@@ -49,13 +49,13 @@ internal static class DelimitedTextWorkbookReader
         return workbook;
     }
 
-    private static bool TryReadSeparatorDirective(IReadOnlyList<string> fields, out char delimiter)
+    private static bool TryReadSeparatorDirective(IReadOnlyList<DelimitedTextField> fields, out char delimiter)
     {
         delimiter = default;
 
         if (fields.Count == 2 &&
-            string.Equals(fields[0], "sep=", StringComparison.OrdinalIgnoreCase) &&
-            fields[1].Length == 0)
+            string.Equals(fields[0].Value, "sep=", StringComparison.OrdinalIgnoreCase) &&
+            fields[1].Value.Length == 0)
         {
             delimiter = ',';
             return true;
@@ -64,7 +64,7 @@ internal static class DelimitedTextWorkbookReader
         if (fields.Count != 1)
             return false;
 
-        var directive = fields[0];
+        var directive = fields[0].Value;
         if (!directive.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) || directive.Length != 5)
             return false;
 
@@ -72,12 +72,13 @@ internal static class DelimitedTextWorkbookReader
         return delimiter is not '\r' and not '\n';
     }
 
-    internal static bool TryReadRecord(TextReader reader, char delimiter, out List<string> fields)
+    internal static bool TryReadRecord(TextReader reader, char delimiter, out List<DelimitedTextField> fields)
     {
         fields = [];
         var current = new StringBuilder();
         var inQuotes = false;
         var atFieldStart = true;
+        var currentWasQuoted = false;
 
         int ch;
         while ((ch = reader.Read()) != -1)
@@ -110,23 +111,25 @@ internal static class DelimitedTextWorkbookReader
             {
                 inQuotes = true;
                 atFieldStart = false;
+                currentWasQuoted = true;
             }
             else if (c == delimiter)
             {
-                fields.Add(current.ToString());
+                fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
                 current.Clear();
+                currentWasQuoted = false;
                 atFieldStart = true;
             }
             else if (c == '\r')
             {
                 if (reader.Peek() == '\n')
                     reader.Read();
-                fields.Add(current.ToString());
+                fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
                 return true;
             }
             else if (c == '\n')
             {
-                fields.Add(current.ToString());
+                fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
                 return true;
             }
             else
@@ -138,12 +141,14 @@ internal static class DelimitedTextWorkbookReader
 
         if (current.Length > 0 || fields.Count > 0)
         {
-            fields.Add(current.ToString());
+            fields.Add(new DelimitedTextField(current.ToString(), currentWasQuoted));
             return true;
         }
 
         return false;
     }
+
+    internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
 
     private static ScalarValue CoerceValue(string field)
     {
