@@ -60,7 +60,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ObjectSizeDialog_ExposesExcelLikeWidthHeightAndAspectRatioControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = ReadObjectDialogSources();
         var objectSizeSource = source[
             source.IndexOf("public sealed class ObjectSizeDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record RotationDialogResult", StringComparison.Ordinal)];
@@ -89,7 +89,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ObjectDialogs_LabelSharedInputHelpersWithTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = ReadObjectDialogSources();
 
         source.Should().Contain("new Label { Content = label, Target = box");
         source.Should().NotContain("new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) }");
@@ -98,7 +98,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ObjectDialogs_UseSharedButtonRowsOutsideChartDialogs()
     {
-        var objectSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var objectSource = ReadObjectDialogSources();
         var formatPictureSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
         var namedRangeSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
         var shapeGradientSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
@@ -113,7 +113,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_LabelsTextRowsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = ReadObjectDialogSources();
 
         source.Should().Contain("AddTextRow(grid, 0, \"Text to _display:\", _displayBox, displayText)");
         source.Should().Contain("AddTextRow(grid, 1, \"_Address:\", _targetBox, target)");
@@ -172,7 +172,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void PictureCropDialog_ExposesSeparateExcelCropEdgeFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = ReadObjectDialogSources();
 
         source.Should().Contain("_cropLeftBox");
         source.Should().Contain("_cropTopBox");
@@ -310,4 +310,10 @@ public sealed class ObjectDialogTests
         TextEntryDialog.CreateResult(null).Text.Should().Be("");
         TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
     }
+
+    private static string ReadObjectDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
 }
