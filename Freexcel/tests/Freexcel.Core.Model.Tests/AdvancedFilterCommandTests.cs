@@ -89,6 +89,42 @@ public sealed class AdvancedFilterCommandTests
     }
 
     [Fact]
+    public void AdvancedFilter_CopyToLocation_ClearsStaleRowsFromPriorLargerOutput()
+    {
+        var (wb, sheet, ctx) = Setup();
+        SeedList(sheet);
+        Set(sheet, 1, 6, "Sales");
+        Set(sheet, 2, 6, ">0");
+
+        var first = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: Addr(sheet, 8, 1),
+            UniqueRecordsOnly: false);
+
+        first.Apply(ctx).Success.Should().BeTrue();
+        sheet.GetValue(12, 1).Should().Be(new TextValue("West"));
+        Set(sheet, 2, 6, ">120");
+
+        var second = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 3),
+            CriteriaRange: ListRange(sheet, 1, 6, 2, 6),
+            CopyTo: Addr(sheet, 8, 1),
+            UniqueRecordsOnly: false);
+
+        second.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(8, 1).Should().Be(new TextValue("Region"));
+        sheet.GetValue(9, 1).Should().Be(new TextValue("West"));
+        sheet.GetCell(10, 1).Should().BeNull();
+        sheet.GetCell(11, 1).Should().BeNull();
+        sheet.GetCell(12, 1).Should().BeNull();
+
+        second.Revert(ctx);
+        sheet.GetValue(12, 1).Should().Be(new TextValue("West"));
+    }
+
+    [Fact]
     public void AdvancedFilter_RejectsCriteriaHeadersNotPresentInList()
     {
         var (wb, sheet, ctx) = Setup();
