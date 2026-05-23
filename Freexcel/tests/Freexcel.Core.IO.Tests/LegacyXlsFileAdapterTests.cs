@@ -87,6 +87,7 @@ public sealed class LegacyXlsFileAdapterTests
         { (byte)42, 42d },
         { (sbyte)-42, -42d },
         { 456u, 456d },
-        { (ushort)789, 789d }
+        { (ushort)789, 789d },
+        { 900UL, 900d }
     };
 }
