@@ -202,11 +202,14 @@ public static partial class BuiltInFunctions
             int sortOrder = 1;
             if (i + 1 < args.Count && args[i + 1] is not RangeValue)
             {
-                if (args[i + 1] is ErrorValue orderError) return orderError;
-                double orderRaw = ToNumber(args[i + 1]);
-                if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
-                sortOrder = (int)orderRaw;
-                if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
+                if (args[i + 1] is not BlankValue)
+                {
+                    if (args[i + 1] is ErrorValue orderError) return orderError;
+                    double orderRaw = ToNumber(args[i + 1]);
+                    if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
+                    sortOrder = (int)orderRaw;
+                    if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
+                }
                 i++;
             }
 
