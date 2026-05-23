@@ -1049,4 +1049,3 @@ file static class PivotFormulaInsertion
         return safeFormula.Remove(start, length).Insert(start, safeReference);
     }
 }
-
