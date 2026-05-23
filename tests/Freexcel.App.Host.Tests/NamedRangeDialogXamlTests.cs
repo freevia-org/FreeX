@@ -23,6 +23,14 @@ public sealed class NamedRangeDialogXamlTests
             .Should()
             .Contain(["_New...", "_Edit...", "_Delete", "_Close"]);
 
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "EditButton")
+            .Attribute("IsEnabled")?.Value.Should().Be("False");
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "DeleteButton")
+            .Attribute("IsEnabled")?.Value.Should().Be("False");
+
         static void AssertLabelTargets(XDocument document, XNamespace presentation, string content, string target)
         {
             var label = document
@@ -97,7 +105,11 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("_rangePickerButton");
         source.Should().Contain("_rangePickerButton.Click");
         source.Should().Contain("_refersToBox.SelectAll");
-        source.Should().Contain("RefersToPickerButton.IsEnabled = NamesList.SelectedItem is NamedRangeViewModel");
+        source.Should().Contain("UpdateSelectionCommands");
+        source.Should().Contain("EditButton.IsEnabled = hasSelection");
+        source.Should().Contain("DeleteButton.IsEnabled = hasSelection");
+        source.Should().Contain("MessageBoxButton.YesNo");
+        source.Should().Contain("Delete the name");
         source.Should().Contain("RefersToPickerButton_Click");
         source.Should().Contain("RefersToBox.SelectAll()");
         source.Should().NotContain("IsEnabled = false");
