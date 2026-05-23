@@ -50,6 +50,14 @@ public enum ChartErrorBarDirection { Both, Plus, Minus }
 
 public enum ChartBlankDisplayMode { Gap, Span, Zero }
 
+public enum StockChartSubtype
+{
+    HighLowClose,
+    OpenHighLowClose,
+    VolumeHighLowClose,
+    VolumeOpenHighLowClose
+}
+
 public sealed class ChartProtectionModel
 {
     public bool? ChartObject { get; set; }
@@ -195,6 +203,7 @@ public sealed class ChartModel
     public int? BarGapWidth { get; set; }
     public int? BarOverlap { get; set; }
     public bool? VaryColorsByPoint { get; set; }
+    public StockChartSubtype StockSubtype { get; set; } = StockChartSubtype.HighLowClose;
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
