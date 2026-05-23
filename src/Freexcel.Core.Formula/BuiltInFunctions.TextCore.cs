@@ -308,12 +308,40 @@ public static partial class BuiltInFunctions
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
         if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        if (ContainsSurrogatePair(text))
+            return MidTextWithSurrogatePairs(text, (int)rawStart, (int)rawLen);
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
         return TextResult(text.Substring(start, actualLen));
     }
+
+    private static bool ContainsSurrogatePair(string text)
+    {
+        for (int i = 0; i + 1 < text.Length; i++)
+            if (char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))
+                return true;
+        return false;
+    }
+
+    private static ScalarValue MidTextWithSurrogatePairs(string text, int startNum, int numChars)
+    {
+        int start = 0;
+        for (int current = 1; current < startNum && start < text.Length; current++)
+            start += IsSurrogatePairAt(text, start) ? 2 : 1;
+
+        if (start >= text.Length) return new TextValue("");
+
+        int end = start;
+        for (int taken = 0; taken < numChars && end < text.Length; taken++)
+            end += IsSurrogatePairAt(text, end) ? 2 : 1;
+
+        return TextResult(text[start..end]);
+    }
+
+    private static bool IsSurrogatePairAt(string text, int index) =>
+        index + 1 < text.Length && char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
 
     private static ScalarValue Rept(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
