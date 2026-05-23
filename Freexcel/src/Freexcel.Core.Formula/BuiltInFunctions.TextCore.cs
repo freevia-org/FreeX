@@ -357,6 +357,15 @@ public static partial class BuiltInFunctions
         return index;
     }
 
+    private static int CountTextElements(string text)
+    {
+        int count = 0;
+        for (int index = 0; index < text.Length; count++)
+            index += IsSurrogatePairAt(text, index) ? 2 : 1;
+
+        return count;
+    }
+
     private static int OneBasedTextPositionFromUtf16Index(string text, int index)
     {
         int position = 1;

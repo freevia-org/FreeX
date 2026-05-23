@@ -634,7 +634,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
-        return new NumberValue(ToText(args[0]).Length);
+        var text = ToText(args[0]);
+        return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
     }
 
     private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -647,7 +648,8 @@ public static partial class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        count = ExtendPastTrailingHighSurrogate(text, count);
+        if (ContainsSurrogatePair(text))
+            return TextResult(text[..AdvanceTextElements(text, 0, count)]);
         return TextResult(text[..count]);
     }
 
@@ -661,22 +663,10 @@ public static partial class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        int start = RetreatBeforeLeadingLowSurrogate(text, text.Length - count);
+        int start = ContainsSurrogatePair(text)
+            ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
+            : text.Length - count;
         return TextResult(text[start..]);
-    }
-
-    private static int ExtendPastTrailingHighSurrogate(string text, int length)
-    {
-        if (length > 0 && length < text.Length && char.IsHighSurrogate(text[length - 1]) && char.IsLowSurrogate(text[length]))
-            return length + 1;
-        return length;
-    }
-
-    private static int RetreatBeforeLeadingLowSurrogate(string text, int start)
-    {
-        if (start > 0 && start < text.Length && char.IsLowSurrogate(text[start]) && char.IsHighSurrogate(text[start - 1]))
-            return start - 1;
-        return start;
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>

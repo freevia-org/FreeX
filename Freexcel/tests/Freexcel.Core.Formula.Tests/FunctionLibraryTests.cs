@@ -813,6 +813,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀x"));
+        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("x😀"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
