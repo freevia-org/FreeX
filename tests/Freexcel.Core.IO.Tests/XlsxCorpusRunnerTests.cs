@@ -609,6 +609,7 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
             sheet.Comments.Count,
             sheet.Hyperlinks.Count,
+            sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
             sheet.PivotTables.Count,
             sheet.PivotTables.Sum(pivot => pivot.RowFields.Count + pivot.ColumnFields.Count + pivot.PageFields.Count + pivot.DataFields.Count),
@@ -650,6 +651,18 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
+
+    private static ChartSummary CaptureChartSummary(ChartModel chart) =>
+        new(
+            chart.Type,
+            chart.Title ?? "",
+            chart.ShowLegend,
+            chart.IsPivotChart,
+            new ChartRangeSummary(
+                chart.DataRange.Start.Row,
+                chart.DataRange.Start.Col,
+                chart.DataRange.End.Row,
+                chart.DataRange.End.Col));
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -887,6 +900,7 @@ public class XlsxCorpusRunnerTests
         int IconSetConditionalFormatCount,
         int CommentCount,
         int HyperlinkCount,
+        IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
         int PivotTableCount,
         int PivotTableFieldCount,
@@ -928,6 +942,19 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenRowCount,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
+
+    private sealed record ChartSummary(
+        ChartType Type,
+        string Title,
+        bool ShowLegend,
+        bool IsPivotChart,
+        ChartRangeSummary DataRange);
+
+    private sealed record ChartRangeSummary(
+        uint StartRow,
+        uint StartColumn,
+        uint EndRow,
+        uint EndColumn);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,

@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  
-  <text x="12.8" y="11.2" font-size="7.2"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">0.0</text>
-  <text x="12.8" y="20.8" font-size="7.2"  fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">0.00</text>
-  <path d="M20.8 16 L27.2 16" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <polygon points="23.36 18.4 27.2 16 23.36 13.6" fill="#0078d4"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Increase Decimal">
+  <rect width="32" height="32" fill="none"/>
+  <text x="12.5" y="10" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">0.0</text>
+  <text x="12.5" y="22" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">0.00</text>
+  <path d="M20.5 16.5H28.5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="square"/>
+  <polygon points="25 19.5 29 16.5 25 13.5" fill="#0078d4"/>
 </svg>
