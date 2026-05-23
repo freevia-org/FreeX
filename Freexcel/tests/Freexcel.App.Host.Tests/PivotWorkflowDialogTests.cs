@@ -168,6 +168,14 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        PivotTableDataSourceDialog.CreateRangeSelectionRequest(" Sales!A1:E200 ")
+            .Should()
+            .Be(new PivotTableDataSourceRangeSelectionRequest("Sales!A1:E200", CollapseDialog: true));
+    }
+
+    [Fact]
     public void PivotTableDataSourceDialog_ExposesReferencePickerForSourceRange()
     {
         var source = ReadPivotWorkflowSource();
@@ -175,6 +183,35 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("CreateReferenceEditor(_sourceBox");
         source.Should().Contain("Select PivotTable source range");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("PivotTableDataSourceRangeSelectionRequest");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceReferencePicker_RaisesRangeSelectionRequest()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<PivotTableDataSourceRangeSelectionRequest>();
+            var dialog = new PivotTableDataSourceDialog(" Sales!A1:E200 ", requests.Add);
+            dialog.Show();
+            try
+            {
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == "Select PivotTable source range");
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new PivotTableDataSourceRangeSelectionRequest(
+                    "Sales!A1:E200",
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
