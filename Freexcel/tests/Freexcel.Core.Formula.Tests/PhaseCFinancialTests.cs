@@ -666,6 +666,16 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DepreciationAccrualDurationFunctions_NegativeDateSerial_ReturnNumError()
+    {
+        CalcError("AMORDEGRC(1000,-1,44197,100,1,0.1)").Should().Be("#NUM!");
+        CalcError("AMORLINC(1000,-1,44197,100,1,0.1)").Should().Be("#NUM!");
+        CalcError("ACCRINT(-1,43831,44197,0.05,1000,2)").Should().Be("#NUM!");
+        CalcError("DURATION(-1,44197,0.05,0.06,2)").Should().Be("#NUM!");
+        CalcError("MDURATION(-1,44197,0.05,0.06,2)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Effect_NominalRoundTrip_Quarterly()
     {
         double r = 0.12;
