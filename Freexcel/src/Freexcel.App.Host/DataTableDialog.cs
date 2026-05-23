@@ -19,19 +19,36 @@ public sealed record DataTableDialogResult(
     CellAddress? RowInputCell,
     CellAddress? ColumnInputCell);
 
+public enum DataTableRangeSelectionTarget
+{
+    RowInputCell,
+    ColumnInputCell
+}
+
+public sealed record DataTableRangeSelectionRequest(
+    DataTableRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
+
 public sealed class DataTableDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly TextBox _rowInputBox = new();
     private readonly TextBox _columnInputBox = new();
+    private readonly Action<DataTableRangeSelectionRequest>? _requestRangeSelection;
 
     public DataTableDialogResult? Result { get; private set; }
+    public DataTableRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
-    public DataTableDialog(SheetId sheetId, GridRange range)
+    public DataTableDialog(
+        SheetId sheetId,
+        GridRange range,
+        Action<DataTableRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
         _range = range;
+        _requestRangeSelection = requestRangeSelection;
         Title = "Data Table";
         Width = 360;
         Height = 210;
@@ -43,8 +60,8 @@ public sealed class DataTableDialog : Window
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddReferenceRow(grid, 0, "_Row input cell:", _rowInputBox, "Select row input cell");
-        AddReferenceRow(grid, 1, "_Column input cell:", _columnInputBox, "Select column input cell");
+        AddReferenceRow(grid, 0, "_Row input cell:", _rowInputBox, "Select row input cell", DataTableRangeSelectionTarget.RowInputCell);
+        AddReferenceRow(grid, 1, "_Column input cell:", _columnInputBox, "Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell);
         root.Children.Add(grid);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76));
         Content = root;
@@ -108,10 +125,29 @@ public sealed class DataTableDialog : Window
         return true;
     }
 
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
-        DialogReferencePicker.CreateEditor(textBox, automationName, new Thickness(6, 0, 0, 0), Dock.Right);
+    public static DataTableRangeSelectionRequest CreateRangeSelectionRequest(
+        DataTableRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
 
-    private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
+    private DockPanel CreateReferenceEditor(
+        TextBox textBox,
+        string automationName,
+        DataTableRangeSelectionTarget target) =>
+        DialogReferencePicker.CreateEditor(
+            textBox,
+            automationName,
+            new Thickness(6, 0, 0, 0),
+            Dock.Right,
+            request => RequestRangeSelection(target, request));
+
+    private void AddReferenceRow(
+        Grid grid,
+        int row,
+        string label,
+        TextBox textBox,
+        string automationName,
+        DataTableRangeSelectionTarget target)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var labelBlock = new Label
@@ -126,11 +162,17 @@ public sealed class DataTableDialog : Window
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
-        var editor = CreateReferenceEditor(textBox, automationName);
+        var editor = CreateReferenceEditor(textBox, automationName, target);
         editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
         Grid.SetRow(editor, row);
         Grid.SetColumn(editor, 1);
         grid.Children.Add(editor);
+    }
+
+    private void RequestRangeSelection(DataTableRangeSelectionTarget target, DialogReferencePickerRequest request)
+    {
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 
     private void Accept()
