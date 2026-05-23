@@ -601,7 +601,9 @@ internal static class XlsxCorpusFixtureFactory
             Type = DvType.List,
             Formula1 = "Apple,Banana,Cherry",
             ErrorTitle = "Invalid choice",
-            ErrorMessage = "Choose a listed item."
+            ErrorMessage = "Choose a listed item.",
+            PromptTitle = "Pick a fruit",
+            PromptMessage = "Select Apple, Banana, or Cherry."
         });
         sheet.DataValidations.Add(new DataValidation
         {
