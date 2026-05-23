@@ -1209,12 +1209,30 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenu_AppliesTargetSpecificEnabledState()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorksheetContextMenuPlanner.cs"));
+
+        source.Should().Contain("GetWorksheetContextMenuState(actualAddr)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
+        source.Should().Contain("IsEnabled = command.IsEnabled");
+        source.Should().Contain("sheet.ThreadedComments.ContainsKey(address)");
+        source.Should().Contain("sheet.Comments.ContainsKey(address)");
+        source.Should().Contain("sheet.Hyperlinks.ContainsKey(address)");
+        plannerSource.Should().Contain("WorksheetContextMenuState");
+        plannerSource.Should().Contain("IsEnabled: state.HasThreadedComment");
+        plannerSource.Should().Contain("IsEnabled: state.HasNote");
+        plannerSource.Should().Contain("IsEnabled: state.HasHyperlink");
+    }
+
+    [Fact]
     public void WorksheetContextMenu_UsesObjectAwareTargetKind()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("GetWorksheetContextMenuTargetKind(actualAddr)");
-        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind)");
+        source.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
         source.Should().Contain("DrawingTargetResolver.GetTargetPicture(sheet, address)");
         source.Should().Contain("WorksheetContextMenuTargetKind.Picture");
         source.Should().Contain("case WorksheetContextMenuAction.FormatPicture:");
