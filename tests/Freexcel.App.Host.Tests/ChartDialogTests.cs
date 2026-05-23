@@ -33,7 +33,9 @@ public sealed class ChartDialogTests
             ChartType.Area,
             ChartType.ThreeDArea,
             ChartType.Radar,
-            ChartType.Stock);
+            ChartType.Stock,
+            ChartType.Surface,
+            ChartType.ThreeDSurface);
         options.Should().NotContain(option => !ChartTypeSupport.IsRenderable(option.Type));
         options.Single(option => option.Type == ChartType.PercentStackedColumn).DisplayName
             .Should()
