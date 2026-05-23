@@ -53,6 +53,15 @@ public sealed class LegacyXlsFileAdapterTests
         value.Should().Be(new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays));
     }
 
+    [Theory]
+    [MemberData(nameof(AdditionalNumericValues))]
+    public void Load_MapsLegacyNumericPrimitiveCellsToNumberValues(object legacyValue, double expected)
+    {
+        var value = MapLegacyXlsValue(legacyValue);
+
+        value.Should().Be(new NumberValue(expected));
+    }
+
     [Fact]
     public void Save_IsNotSupported()
     {
@@ -69,4 +78,16 @@ public sealed class LegacyXlsFileAdapterTests
         method.Should().NotBeNull();
         return (ScalarValue)method!.Invoke(null, [value])!;
     }
+
+    public static TheoryData<object, double> AdditionalNumericValues() => new()
+    {
+        { 123L, 123d },
+        { (short)-7, -7d },
+        { 12.5f, 12.5d },
+        { (byte)42, 42d },
+        { (sbyte)-42, -42d },
+        { 456u, 456d },
+        { (ushort)789, 789d },
+        { 900UL, 900d }
+    };
 }

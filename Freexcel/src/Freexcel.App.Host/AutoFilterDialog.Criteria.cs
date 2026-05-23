@@ -2,7 +2,7 @@ namespace Freexcel.App.Host;
 
 public sealed partial class AutoFilterDialog
 {
-public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
+    public static IReadOnlyList<AutoFilterDialogItem> FilterItems(
         IEnumerable<AutoFilterDialogItem> items,
         string? searchText)
     {
