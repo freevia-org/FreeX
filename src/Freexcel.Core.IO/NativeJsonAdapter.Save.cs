@@ -80,6 +80,10 @@ public sealed partial class NativeJsonAdapter
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected ? s.ProtectionPassword : null,
+                ProtectionPermissions = s.ProtectionPermissions
+                    .Where(Enum.IsDefined)
+                    .Distinct()
+                    .ToList(),
                 CustomProperties = s.CustomProperties
                     .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
                     .Select(property => new WorksheetCustomPropertyDto
