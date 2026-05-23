@@ -3,8 +3,11 @@ namespace Freexcel.App.Host;
 public static class WorksheetContextMenuPlanner
 {
     public static IReadOnlyList<WorksheetContextMenuCommand> BuildCommands(
-        WorksheetContextMenuTargetKind targetKind = WorksheetContextMenuTargetKind.Worksheet)
+        WorksheetContextMenuTargetKind targetKind = WorksheetContextMenuTargetKind.Worksheet,
+        WorksheetContextMenuState? state = null)
     {
+        state ??= WorksheetContextMenuState.Default;
+
         return targetKind switch
         {
             WorksheetContextMenuTargetKind.Picture => BuildPictureCommands(),
@@ -12,11 +15,11 @@ public static class WorksheetContextMenuPlanner
             WorksheetContextMenuTargetKind.TextBox => BuildDrawingObjectCommands("Format Text Box...", includeReorder: false),
             WorksheetContextMenuTargetKind.RowSelection => BuildRowSelectionCommands(),
             WorksheetContextMenuTargetKind.ColumnSelection => BuildColumnSelectionCommands(),
-            _ => BuildWorksheetCommands()
+            _ => BuildWorksheetCommands(state)
         };
     }
 
-    private static IReadOnlyList<WorksheetContextMenuCommand> BuildWorksheetCommands() =>
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildWorksheetCommands(WorksheetContextMenuState state) =>
     [
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
@@ -59,12 +62,12 @@ public static class WorksheetContextMenuPlanner
         new("AutoFit Column Width", WorksheetContextMenuAction.AutoFitColumnWidth, AccessHeader: "AutoFit Column Wi_dth"),
         WorksheetContextMenuCommand.Separator,
         new("New Comment", WorksheetContextMenuAction.NewComment, AccessHeader: "New Co_mment"),
-        new("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment..."),
-        new("Delete Comment", WorksheetContextMenuAction.DeleteComment, AccessHeader: "Delete _Comment"),
+        new("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment...", IsEnabled: state.HasThreadedComment),
+        new("Delete Comment", WorksheetContextMenuAction.DeleteComment, AccessHeader: "Delete _Comment", IsEnabled: state.HasThreadedComment),
         new("New Note", WorksheetContextMenuAction.NewNote, AccessHeader: "New No_te"),
-        new("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note..."),
-        new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note"),
-        new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes"),
+        new("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
+        new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
+        new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote || state.HasThreadedComment),
         new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink..."),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
@@ -72,7 +75,7 @@ public static class WorksheetContextMenuPlanner
         new("Clear All", WorksheetContextMenuAction.ClearAll, AccessHeader: "Clear _All"),
         new("Clear Formats", WorksheetContextMenuAction.ClearFormats, AccessHeader: "Clear _Formats"),
         new("Clear Comments", WorksheetContextMenuAction.ClearComments, AccessHeader: "Clear Co_mments"),
-        new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks"),
+        new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "Clear _Hyperlinks", IsEnabled: state.HasHyperlink),
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];
 
@@ -149,12 +152,21 @@ public sealed record WorksheetContextMenuCommand(
     string Header,
     WorksheetContextMenuAction Action,
     bool IsSeparator = false,
-    string? AccessHeader = null)
+    string? AccessHeader = null,
+    bool IsEnabled = true)
 {
     public static WorksheetContextMenuCommand Separator { get; } =
-        new("", WorksheetContextMenuAction.None, IsSeparator: true);
+        new("", WorksheetContextMenuAction.None, IsSeparator: true, IsEnabled: false);
 
     public string AccessHeader { get; init; } = AccessHeader ?? Header;
+}
+
+public sealed record WorksheetContextMenuState(
+    bool HasThreadedComment = false,
+    bool HasNote = false,
+    bool HasHyperlink = false)
+{
+    public static WorksheetContextMenuState Default { get; } = new();
 }
 
 public enum WorksheetContextMenuAction
