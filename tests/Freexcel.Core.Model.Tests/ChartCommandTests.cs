@@ -9,7 +9,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesTrendlineChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Bar, ChartType.Scatter, ChartType.Bubble, ChartType.Area, ChartType.ThreeDArea };
+        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.ThreeDLine, ChartType.Bar, ChartType.Scatter, ChartType.Bubble, ChartType.Area, ChartType.ThreeDArea };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsTrendlines(type));
@@ -21,6 +21,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.StackedColumn)]
     [InlineData(ChartType.PercentStackedColumn)]
     [InlineData(ChartType.Line)]
+    [InlineData(ChartType.ThreeDLine)]
     [InlineData(ChartType.Pie)]
     [InlineData(ChartType.ThreeDPie)]
     [InlineData(ChartType.Doughnut)]
@@ -60,7 +61,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesSecondaryAxisChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Area, ChartType.ThreeDArea, ChartType.Scatter };
+        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.ThreeDLine, ChartType.Area, ChartType.ThreeDArea, ChartType.Scatter };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsSecondaryAxis(type));
@@ -124,6 +125,7 @@ public sealed class ChartCommandTests
             ChartType.StackedColumn,
             ChartType.PercentStackedColumn,
             ChartType.Line,
+            ChartType.ThreeDLine,
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
@@ -145,6 +147,7 @@ public sealed class ChartCommandTests
             ChartType.StackedColumn,
             ChartType.PercentStackedColumn,
             ChartType.Line,
+            ChartType.ThreeDLine,
             ChartType.Scatter,
             ChartType.Bubble,
             ChartType.Area,
@@ -160,7 +163,7 @@ public sealed class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesSeriesMarkerChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Line, ChartType.Scatter };
+        var supportedTypes = new[] { ChartType.Line, ChartType.ThreeDLine, ChartType.Scatter };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsSeriesMarkers(type));
@@ -281,6 +284,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.StackedColumn)]
     [InlineData(ChartType.PercentStackedColumn)]
     [InlineData(ChartType.Line)]
+    [InlineData(ChartType.ThreeDLine)]
     [InlineData(ChartType.Pie)]
     [InlineData(ChartType.Doughnut)]
     [InlineData(ChartType.Bar)]

@@ -1148,6 +1148,9 @@
                                     <Button Content="Line"      Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
                                             local:RibbonTooltip.Title="Line Chart" local:RibbonTooltip.KeyTip="L"
                                             local:RibbonTooltip.Description="Insert a line chart to show trends over time."/>
+                                    <Button Content="3D Line"   Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DLineMenuItem_Click"
+                                            local:RibbonTooltip.Title="3D Line Chart" local:RibbonTooltip.KeyTip="3L"
+                                            local:RibbonTooltip.Description="Insert a 3D line chart to show trends over time."/>
                                     <Button Content="Area"      Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaMenuItem_Click"
                                             local:RibbonTooltip.Title="Area Chart" local:RibbonTooltip.KeyTip="A"
                                             local:RibbonTooltip.Description="Insert an area chart to show trends with filled areas."/>

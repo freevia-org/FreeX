@@ -215,6 +215,7 @@ public partial class MainWindow
     private void ChartStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.StackedColumn);
     private void ChartPercentStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.PercentStackedColumn);
     private void ChartLineMenuItem_Click(object sender, RoutedEventArgs e)   => InsertChartOfType(ChartType.Line);
+    private void Chart3DLineMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDLine);
     private void ChartPieMenuItem_Click(object sender, RoutedEventArgs e)    => InsertChartOfType(ChartType.Pie);
     private void Chart3DPieMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.ThreeDPie);
     private void ChartDoughnutMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Doughnut);
