@@ -202,14 +202,14 @@ public static partial class NumberFormatter
             if (NumberFormatColorMapper.TryMapColor(token, out var tokenColor))
             {
                 color = tokenColor;
-                index = close + 1;
+                index = SkipInterDirectiveWhitespace(section, close + 1);
                 continue;
             }
 
             if (TryParseCondition(token, out var tokenCondition))
             {
                 condition = tokenCondition;
-                index = close + 1;
+                index = SkipInterDirectiveWhitespace(section, close + 1);
                 continue;
             }
 
@@ -217,6 +217,17 @@ public static partial class NumberFormatter
         }
 
         return new ParsedSection(section[index..], color, condition);
+    }
+
+    private static int SkipInterDirectiveWhitespace(string section, int index)
+    {
+        int next = index;
+        while (next < section.Length && char.IsWhiteSpace(section[next]))
+            next++;
+
+        return next < section.Length && section[next] == '['
+            ? next
+            : index;
     }
 
     private static bool TryParseCondition(string token, out FormatCondition? condition)
