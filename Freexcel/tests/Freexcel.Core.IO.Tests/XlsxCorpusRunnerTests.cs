@@ -63,6 +63,33 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCorpusRows_IncludeNamedVisualObjects()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(tag => tag is "images" or "text-boxes" or "shapes"))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("visual object identity should be covered by deterministic generated fixtures");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbooks = rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id)).ToArray();
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.Pictures)
+            .Should().Contain(picture => !string.IsNullOrWhiteSpace(picture.Name));
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.TextBoxes)
+            .Should().Contain(textBox => !string.IsNullOrWhiteSpace(textBox.Name));
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DrawingShapes)
+            .Should().Contain(shape => !string.IsNullOrWhiteSpace(shape.Name));
+    }
+
+    [Fact]
     public void GeneratedKnownGapRows_DeclareExpectedWarningsAndNotes()
     {
         var rows = ReadManifestRows()
@@ -618,9 +645,13 @@ public class XlsxCorpusRunnerTests
             sheet.StructuredTables.Select(CaptureStructuredTableSummary).ToArray(),
             sheet.StructuredTables.Count,
             sheet.StructuredTables.Sum(table => table.Columns.Count),
+            sheet.Sparklines.Select(sparkline => new SparklineSummary(sparkline.Kind, ToRangeSummary(sparkline.DataRange), sparkline.Location.Row, sparkline.Location.Col)).ToArray(),
             sheet.Sparklines.Count,
+            sheet.TextBoxes.Select(CaptureTextBoxSummary).ToArray(),
             sheet.TextBoxes.Count,
+            sheet.DrawingShapes.Select(CaptureDrawingShapeSummary).ToArray(),
             sheet.DrawingShapes.Count,
+            sheet.Pictures.Select(CapturePictureSummary).ToArray(),
             sheet.Pictures.Count,
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
@@ -786,6 +817,44 @@ public class XlsxCorpusRunnerTests
             range.Start.Col,
             range.End.Row,
             range.End.Col);
+
+    private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
+        new(
+            textBox.Name ?? "",
+            textBox.Text,
+            textBox.AltText ?? "",
+            textBox.Anchor.Row,
+            textBox.Anchor.Col,
+            textBox.Width,
+            textBox.Height,
+            textBox.RotationDegrees,
+            textBox.IsVisible);
+
+    private static DrawingShapeSummary CaptureDrawingShapeSummary(DrawingShapeModel shape) =>
+        new(
+            shape.Name ?? "",
+            shape.Kind,
+            shape.AltText ?? "",
+            shape.Anchor.Row,
+            shape.Anchor.Col,
+            shape.Width,
+            shape.Height,
+            shape.RotationDegrees,
+            shape.IsVisible);
+
+    private static PictureSummary CapturePictureSummary(PictureModel picture) =>
+        new(
+            picture.Name ?? "",
+            picture.Kind,
+            picture.AltText ?? "",
+            picture.Anchor.Row,
+            picture.Anchor.Col,
+            picture.Width,
+            picture.Height,
+            picture.RotationDegrees,
+            picture.IsVisible,
+            picture.ContentType ?? "",
+            picture.ImageBytes?.Length ?? 0);
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -1032,9 +1101,13 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<StructuredTableSummary> StructuredTables,
         int StructuredTableCount,
         int StructuredTableColumnCount,
+        IReadOnlyList<SparklineSummary> Sparklines,
         int SparklineCount,
+        IReadOnlyList<TextBoxSummary> TextBoxes,
         int TextBoxCount,
+        IReadOnlyList<DrawingShapeSummary> DrawingShapes,
         int DrawingShapeCount,
+        IReadOnlyList<PictureSummary> Pictures,
         int PictureCount,
         bool HasBackgroundImage,
         bool IsProtected,
@@ -1185,6 +1258,47 @@ public class XlsxCorpusRunnerTests
         int? BaseFieldIndex,
         string BaseItem,
         string NumberFormatCode);
+
+    private sealed record SparklineSummary(
+        SparklineKind Kind,
+        ChartRangeSummary DataRange,
+        uint LocationRow,
+        uint LocationColumn);
+
+    private sealed record TextBoxSummary(
+        string Name,
+        string Text,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible);
+
+    private sealed record DrawingShapeSummary(
+        string Name,
+        DrawingShapeKind Kind,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible);
+
+    private sealed record PictureSummary(
+        string Name,
+        PictureKind Kind,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible,
+        string ContentType,
+        int ImageByteCount);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
