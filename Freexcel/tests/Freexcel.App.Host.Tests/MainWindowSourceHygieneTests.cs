@@ -58,7 +58,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
 
-        xaml.Should().Contain("Content=\"_Save As\"");
+        xaml.Should().Contain("Content=\"Save _As\"");
         xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
         backstageSource.Should().Contain("private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>");
         backstageSource.Should().Contain("SaveWorkbookWithDialog();");
