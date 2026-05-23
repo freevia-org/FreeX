@@ -164,6 +164,8 @@ internal static class DelimitedTextWorkbookReader
             return DateTimeValue.FromDateTime(dateTime);
         if (TryParseTime(field, out var time))
             return new DateTimeValue(time.TotalDays);
+        if (TryParseCurrency(field, out var currency))
+            return new NumberValue(currency);
         if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return new NumberValue(number);
 
@@ -264,5 +266,19 @@ internal static class DelimitedTextWorkbookReader
 
         value = number / 100d;
         return true;
+    }
+
+    private static bool TryParseCurrency(string field, out double value)
+    {
+        value = default;
+        var trimmed = field.Trim();
+        if (!trimmed.Contains('$', StringComparison.Ordinal))
+            return false;
+
+        return double.TryParse(
+            trimmed,
+            NumberStyles.Currency,
+            CultureInfo.GetCultureInfo("en-US"),
+            out value);
     }
 }
