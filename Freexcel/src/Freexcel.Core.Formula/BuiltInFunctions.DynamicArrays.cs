@@ -347,7 +347,7 @@ public static partial class BuiltInFunctions
             count = 0;
             return false;
         }
-        if (raw > int.MaxValue || raw < int.MinValue)
+        if (raw > int.MaxValue || raw <= int.MinValue)
         {
             start = 0;
             count = 0;
