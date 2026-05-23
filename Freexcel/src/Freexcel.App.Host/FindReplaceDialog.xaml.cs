@@ -55,6 +55,17 @@ public sealed partial class FindReplaceDialog : Window
     private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
     private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
+    private void FindClearFormatButton_Click(object sender, RoutedEventArgs e)
+    {
+        _findFormatDiff = null;
+        UpdateFormatStateButtons();
+    }
+
+    private void ReplaceWithClearFormatButton_Click(object sender, RoutedEventArgs e)
+    {
+        _replaceFormatDiff = null;
+        UpdateFormatStateButtons();
+    }
 
     private void FindBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -186,8 +197,21 @@ public sealed partial class FindReplaceDialog : Window
             return;
 
         target = dialog.ResultDiff;
-        foreach (var button in buttons)
-            button.Content = "For_mat...";
+        UpdateFormatStateButtons();
+    }
+
+    private void UpdateFormatStateButtons()
+    {
+        SetFormatState(_findFormatDiff is not null, "Find format is set", FindFormatButton, FindClearFormatButton);
+        SetFormatState(_findFormatDiff is not null, "Find format is set", ReplaceFindFormatButton, ReplaceFindClearFormatButton);
+        SetFormatState(_replaceFormatDiff is not null, "Replace format is set", ReplaceWithFormatButton, ReplaceWithClearFormatButton);
+    }
+
+    private static void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
+    {
+        formatButton.Content = isSet ? "Format Set..." : "For_mat...";
+        formatButton.ToolTip = isSet ? toolTip : null;
+        clearButton.Visibility = isSet ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateResultsGrid()
