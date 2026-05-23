@@ -32,6 +32,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.Radar)]
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.ThreeDColumn)]
+    [InlineData(ChartType.ThreeDBar)]
     public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
