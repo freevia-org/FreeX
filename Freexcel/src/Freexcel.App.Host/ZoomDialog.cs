@@ -109,7 +109,7 @@ public sealed class ZoomDialog : Window
         choices.Children.Add(customChoices);
         group.Content = choices;
         stack.Children.Add(group);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
 }
