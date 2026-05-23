@@ -169,7 +169,7 @@ public sealed class ProtectionDialogTests
     [Fact]
     public void ProtectSheetDialog_ExposesPermissionChecklistAndFollowUpConfirmation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+        var source = ReadProtectionDialogSources();
 
         source.Should().Contain("Allow all users of this worksheet to:");
         source.Should().Contain("Header = \"Password\"");
@@ -196,4 +196,10 @@ public sealed class ProtectionDialogTests
         method.Should().NotBeNull();
         method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
     }
+
+    private static string ReadProtectionDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogPlanner.cs")));
 }
