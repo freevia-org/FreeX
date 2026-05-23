@@ -329,7 +329,7 @@ public static partial class BuiltInFunctions
             ? $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}"
             : $"{(rowAbs ? $"R{rowNum}" : $"R[{rowNum}]")}{(colAbs ? $"C{colNum}" : $"C[{colNum}]")}";
         if (!string.IsNullOrEmpty(sheetText))
-            addr = $"'{sheetText}'!{addr}";
+            addr = $"'{sheetText.Replace("'", "''")}'!{addr}";
         return new TextValue(addr);
     }
 
