@@ -113,7 +113,13 @@ public partial class MainWindow
 
     private void FindButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: false, () => _currentSheetId)
+        var dlg = new FindReplaceDialog(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode: false,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start)
         {
             Owner = this
         };
@@ -122,7 +128,13 @@ public partial class MainWindow
 
     private void ReplaceButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: true, () => _currentSheetId)
+        var dlg = new FindReplaceDialog(
+            () => _workbook,
+            _commandBus,
+            NavigateToCell,
+            replaceMode: true,
+            () => _currentSheetId,
+            () => SheetGrid.SelectedRange?.Start)
         {
             Owner = this
         };
