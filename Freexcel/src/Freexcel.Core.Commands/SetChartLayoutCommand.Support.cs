@@ -299,6 +299,10 @@ public sealed partial class SetChartLayoutCommand
         chart.ErrorBarDirection = snapshot.ErrorBarDirection ?? ChartErrorBarDirection.Both;
         chart.ErrorBarValue = snapshot.ErrorBarValue ?? 5;
         chart.ErrorBarEndCaps = snapshot.ErrorBarEndCaps ?? true;
+        chart.ErrorBarColor = snapshot.ErrorBarColor;
+        chart.ErrorBarThemeColor = snapshot.ErrorBarThemeColor;
+        chart.ErrorBarThickness = snapshot.ErrorBarThickness ?? 1;
+        chart.ErrorBarDashStyle = snapshot.ErrorBarDashStyle ?? ChartLineDashStyle.Solid;
         chart.ShowSecondaryAxis = snapshot.ShowSecondaryAxis ?? false;
         chart.SecondaryAxisSeriesIndexes = snapshot.SecondaryAxisSeriesIndexes?.ToList() ?? [];
         chart.ComboLineSeriesIndexes = snapshot.ComboLineSeriesIndexes?.ToList() ?? [];
