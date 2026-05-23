@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, 0, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -166,6 +166,8 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showMemberPropertyTips", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDropZones"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "mergeItem"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "pageOverThenDown"),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(root, "pageWrap") ?? 0),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDrill", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyWidthHeightFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveFormatting", defaultValue: true),
@@ -488,6 +490,8 @@ internal static partial class XlsxPivotTableReader
             ShowPropertiesInTooltips = pending.ShowPropertiesInTooltips,
             ShowClassicLayout = pending.ShowClassicLayout,
             MergeAndCenterLabels = pending.MergeAndCenterLabels,
+            PageOverThenDown = pending.PageOverThenDown,
+            PageWrap = pending.PageWrap,
             ShowExpandCollapseButtons = pending.ShowExpandCollapseButtons,
             AutofitColumnsOnUpdate = pending.AutofitColumnsOnUpdate,
             PreserveFormattingOnUpdate = pending.PreserveFormattingOnUpdate,
@@ -559,6 +563,8 @@ internal static partial class XlsxPivotTableReader
         bool ShowPropertiesInTooltips,
         bool ShowClassicLayout,
         bool MergeAndCenterLabels,
+        bool PageOverThenDown,
+        int PageWrap,
         bool ShowExpandCollapseButtons,
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,
