@@ -65,7 +65,9 @@ public sealed class OpenWorkbookLoaderTests
                 workbook.AddSheet("Sheet1");
                 return workbook;
             });
-            var loader = new OpenWorkbookLoader(_ => { });
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                inspectXlsx: _ => new XlsxFeatureReport([]));
 
             var result = await loader.LoadAsync(
                 tempPath,
@@ -75,6 +77,54 @@ public sealed class OpenWorkbookLoaderTests
                 new Progress<OpenProgressUpdate>());
 
             result.OpenedAsTemplate.Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(".xlsm", false)]
+    [InlineData(".xltx", true)]
+    [InlineData(".xltm", true)]
+    public async Task LoadAsync_InspectsOpenXmlExcelVariants(string extension, bool opensAsTemplate)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var expectedReport = new XlsxFeatureReport([
+                new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin")
+            ]);
+            var adapter = new FakeAdapter(stream =>
+            {
+                using var reader = new StreamReader(stream);
+                reader.ReadToEnd().Should().Be("payload");
+                var workbook = new Workbook("Loaded");
+                workbook.AddSheet("Sheet1");
+                return workbook;
+            });
+            var inspected = false;
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                inspectXlsx: stream =>
+                {
+                    using var reader = new StreamReader(stream);
+                    reader.ReadToEnd().Should().Be("payload");
+                    inspected = true;
+                    return expectedReport;
+                });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                extension,
+                new FileFormatDescriptor(extension, "Excel Open XML", CanOpen: true, CanSave: false, opensAsTemplate),
+                new Progress<OpenProgressUpdate>());
+
+            inspected.Should().BeTrue();
+            result.FeatureReport.Should().BeSameAs(expectedReport);
         }
         finally
         {

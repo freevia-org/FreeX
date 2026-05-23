@@ -28,7 +28,7 @@ public sealed class OpenWorkbookLoader
         var bytes = await ReadFileBytesWithProgressAsync(path, progress);
 
         XlsxFeatureReport? featureReport = null;
-        if (extension == ".xlsx")
+        if (IsOpenXmlExcelExtension(extension))
         {
             featureReport = await RunStageAsync(
                 progress,
@@ -73,6 +73,9 @@ public sealed class OpenWorkbookLoader
             Path.GetFileNameWithoutExtension(path),
             format.OpensAsTemplate);
     }
+
+    private static bool IsOpenXmlExcelExtension(string extension) =>
+        extension.Trim().ToLowerInvariant() is ".xlsx" or ".xlsm" or ".xltx" or ".xltm";
 
     private static async Task<T> RunStageAsync<T>(
         IProgress<OpenProgressUpdate> progress,
