@@ -92,6 +92,7 @@ public sealed class PivotTableModel
     public bool ShowContextualTooltips { get; set; } = true;
     public bool ShowPropertiesInTooltips { get; set; } = true;
     public bool ShowClassicLayout { get; set; }
+    public bool MergeAndCenterLabels { get; set; }
     public string? EmptyValueText { get; set; }
     public bool AutofitColumnsOnUpdate { get; set; } = true;
     public bool PreserveFormattingOnUpdate { get; set; } = true;
