@@ -13,16 +13,16 @@ public sealed class SortDialogTests
         var levels = new[]
         {
             new SortDialogLevel(2, true) { SortOn = "Cell Values" },
-            new SortDialogLevel(1, true) { SortOn = "Cell Color" },
-            new SortDialogLevel(0, false) { SortOn = "Font Color" }
+            new SortDialogLevel(1, true) { SortOn = "Cell Color", TargetColor = "#FF0000" },
+            new SortDialogLevel(0, false) { SortOn = "Font Color", TargetColor = "#0000FF" }
         };
 
         var keys = SortDialog.BuildSortKeys(levels);
 
         keys.Should().Equal(
             new SortKey(2, true),
-            new SortKey(1, true, SortOn.CellColor),
-            new SortKey(0, false, SortOn.FontColor));
+            new SortKey(1, true, SortOn.CellColor, new CellColor(255, 0, 0)),
+            new SortKey(0, false, SortOn.FontColor, new CellColor(0, 0, 255)));
     }
 
     [Fact]
@@ -83,11 +83,34 @@ public sealed class SortDialogTests
         source.Should().Contain("Header = \"Sort by\"");
         source.Should().Contain("Header = \"Sort On\"");
         source.Should().Contain("Header = \"Order\"");
+        source.Should().Contain("Header = \"Color\"");
         source.Should().Contain("Cell Values");
         source.Should().Contain("Cell Color");
         source.Should().Contain("Font Color");
+        source.Should().Contain("BuildColorChoices");
         source.Should().Contain("UpdateColumnChoices");
         source.Should().Contain("SortOptionsDialog");
+    }
+
+    [Fact]
+    public void BuildColorChoices_ListsDistinctFillAndFontColorsFromSelectedRange()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var red = workbook.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 0, 0) });
+        var blue = workbook.RegisterStyle(new CellStyle { FontColor = new CellColor(0, 0, 255) });
+        var redCell = Cell.FromValue(new TextValue("red"));
+        redCell.StyleId = red;
+        var blueCell = Cell.FromValue(new TextValue("blue"));
+        blueCell.StyleId = blue;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), redCell);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), blueCell);
+
+        SortDialog.BuildColorChoices(workbook, sheet, new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 1)))
+            .Should()
+            .Equal(new SortColorChoice(""), new SortColorChoice("#000000"), new SortColorChoice("#0000FF"), new SortColorChoice("#FF0000"));
     }
 
     [Fact]
@@ -161,14 +184,14 @@ public sealed class SortDialogTests
         var levels = new[]
         {
             new SortDialogLevel(0, true),
-            new SortDialogLevel(1, false) { SortOn = "Font Color" }
+            new SortDialogLevel(1, false) { SortOn = "Font Color", TargetColor = "#FF0000" }
         };
 
         SortDialog.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
-                new SortDialogLevel(2, true) { SortOn = "Font Color" });
+                new SortDialogLevel(2, true) { SortOn = "Font Color", TargetColor = "#FF0000" });
     }
 
     [Fact]
@@ -194,15 +217,15 @@ public sealed class SortDialogTests
         var levels = new[]
         {
             new SortDialogLevel(0, true),
-            new SortDialogLevel(2, false) { SortOn = "Cell Color" }
+            new SortDialogLevel(2, false) { SortOn = "Cell Color", TargetColor = "#00FF00" }
         };
 
         SortDialog.CopyLevel(levels, 1)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
-                new SortDialogLevel(2, false) { SortOn = "Cell Color" },
-                new SortDialogLevel(2, false) { SortOn = "Cell Color" });
+                new SortDialogLevel(2, false) { SortOn = "Cell Color", TargetColor = "#00FF00" },
+                new SortDialogLevel(2, false) { SortOn = "Cell Color", TargetColor = "#00FF00" });
     }
 
     [Fact]
@@ -234,6 +257,7 @@ public sealed class SortDialogTests
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)");
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false)");
         source.Should().Contain("SortDialog.BuildRowChoices(range)");
+        source.Should().Contain("SortDialog.BuildColorChoices(_workbook, sheet, range)");
         source.Should().Contain("SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders)");
         source.Should().Contain("new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight)");
     }

@@ -36,7 +36,8 @@ public partial class MainWindow
         var dialog = new SortDialog(
             columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true),
             genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false),
-            rowChoices: SortDialog.BuildRowChoices(range))
+            rowChoices: SortDialog.BuildRowChoices(range),
+            colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range))
         {
             Owner = this
         };
