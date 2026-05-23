@@ -12,7 +12,7 @@ public sealed class CsvFileAdapter : IFileAdapter
     public string Extension => ".csv";
     public string FormatName => "CSV (Comma-separated values)";
 
-    public Workbook Load(Stream stream) => DelimitedTextWorkbookReader.Load(stream, ',');
+    public Workbook Load(Stream stream) => DelimitedTextWorkbookReader.Load(stream, ',', allowSeparatorDirective: true);
 
     public void Save(Workbook workbook, Stream stream)
     {
