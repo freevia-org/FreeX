@@ -537,6 +537,12 @@ public static partial class BuiltInFunctions
         if (arg is RangeValue rv)
         {
             foreach (var v in rv.Flatten())
+            {
+                if (v is ErrorValue rangeError)
+                {
+                    error = rangeError;
+                    return false;
+                }
                 if (TryCellNumber(v, out double serial))
                 {
                     if (!TryOADateToDateTime(new NumberValue(serial), out var holiday))
@@ -546,6 +552,7 @@ public static partial class BuiltInFunctions
                     }
                     holidays.Add(holiday.Date);
                 }
+            }
         }
         else if (arg is not null && TryCellNumber(arg, out double s))
         {
