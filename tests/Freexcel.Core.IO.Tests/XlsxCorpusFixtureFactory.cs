@@ -1301,6 +1301,12 @@ internal static class XlsxCorpusFixtureFactory
         workbook.IterativeCalculation = true;
         workbook.MaxCalculationIterations = 25;
         workbook.MaxCalculationChange = 0.005;
+        workbook.Theme = WorkbookTheme.Office
+            .WithName("Freexcel Corpus Theme")
+            .WithFonts("Aptos Display", "Aptos")
+            .WithEffects("FreexcelEffects")
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(12, 34, 56))
+            .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(1, 99, 193));
         var sheet = workbook.AddSheet("Print");
         Set(sheet, "A1", new TextValue("Protected print fixture"));
         Set(sheet, "A2", new NumberValue(42));
