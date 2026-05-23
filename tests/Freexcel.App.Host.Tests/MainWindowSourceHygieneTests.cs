@@ -1485,6 +1485,21 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_UsesKeyboardSelectionAnchorAndInitialMenuFocus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().NotContain("PlacementMode.MousePoint");
+        source.Should().Contain("Placement = PlacementMode.RelativePoint");
+        source.Should().Contain("QuickAnalysisMenuPlacementPlanner.BuildAnchor");
+        source.Should().Contain("menu.HorizontalOffset = anchor.X;");
+        source.Should().Contain("menu.VerticalOffset = anchor.Y;");
+        source.Should().Contain("menu.Opened += QuickAnalysisMenu_Opened;");
+        source.Should().Contain("private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)");
+        source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
