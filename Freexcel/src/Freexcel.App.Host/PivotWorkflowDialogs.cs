@@ -1079,7 +1079,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowFieldHeaders = true,
     bool ShowContextualTooltips = true,
     bool ShowPropertiesInTooltips = true,
-    bool ShowClassicLayout = false);
+    bool ShowClassicLayout = false,
+    bool MergeAndCenterLabels = false);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -1096,6 +1097,7 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly ComboBox _subtotalPlacementBox = new();
     private readonly CheckBox _repeatItemLabelsBox = new() { Content = "_Repeat item labels" };
     private readonly CheckBox _blankLineBox = new() { Content = "Insert _blank line after each item" };
+    private readonly CheckBox _mergeLabelsBox = new() { Content = "_Merge and center cells with labels" };
     private readonly ComboBox _reportLayoutBox = new();
     private readonly TextBox _compactIndentBox = new() { Width = 60 };
     private readonly ComboBox _styleBox = new();
@@ -1165,7 +1167,8 @@ public sealed class PivotTableOptionsDialog : Window
             showFieldHeaders: pivotTable.ShowFieldHeaders,
             showContextualTooltips: pivotTable.ShowContextualTooltips,
             showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips,
-            showClassicLayout: pivotTable.ShowClassicLayout);
+            showClassicLayout: pivotTable.ShowClassicLayout,
+            mergeAndCenterLabels: pivotTable.MergeAndCenterLabels);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1196,7 +1199,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool showFieldHeaders = true,
         bool showContextualTooltips = true,
         bool showPropertiesInTooltips = true,
-        bool showClassicLayout = false) =>
+        bool showClassicLayout = false,
+        bool mergeAndCenterLabels = false) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1226,7 +1230,8 @@ public sealed class PivotTableOptionsDialog : Window
             showFieldHeaders,
             showContextualTooltips,
             showPropertiesInTooltips,
-            showClassicLayout);
+            showClassicLayout,
+            mergeAndCenterLabels);
 
     private DockPanel CreateContent()
     {
@@ -1254,6 +1259,7 @@ public sealed class PivotTableOptionsDialog : Window
         AddLabeledControl(layoutPanel, "When in compact form indent row labels", _compactIndentBox);
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);
         AddCheckBox(layoutPanel, _blankLineBox);
+        AddCheckBox(layoutPanel, _mergeLabelsBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout section", layoutPanel));
 
         var formatPanel = PivotDialogLayout.CreateGroupPanel();
@@ -1375,6 +1381,7 @@ public sealed class PivotTableOptionsDialog : Window
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
         _compactIndentBox.Text = result.CompactRowLabelIndent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _mergeLabelsBox.IsChecked = result.MergeAndCenterLabels;
         var styleNames = StyleNames.Contains(result.StyleName, StringComparer.OrdinalIgnoreCase)
             ? StyleNames
             : [..StyleNames, result.StyleName];
@@ -1438,7 +1445,8 @@ public sealed class PivotTableOptionsDialog : Window
             _fieldHeadersBox.IsChecked == true,
             _contextualTooltipsBox.IsChecked == true,
             _propertiesInTooltipsBox.IsChecked == true,
-            _classicLayoutBox.IsChecked == true);
+            _classicLayoutBox.IsChecked == true,
+            _mergeLabelsBox.IsChecked == true);
         DialogResult = true;
     }
 
