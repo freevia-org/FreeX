@@ -130,9 +130,25 @@ internal static class DelimitedTextWorkbookReader
             return new BoolValue(true);
         if (string.Equals(field, "FALSE", StringComparison.OrdinalIgnoreCase))
             return new BoolValue(false);
+        if (TryParsePercentage(field, out var percentage))
+            return new NumberValue(percentage);
         if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return new NumberValue(number);
 
         return new TextValue(field);
+    }
+
+    private static bool TryParsePercentage(string field, out double value)
+    {
+        value = default;
+        var trimmed = field.Trim();
+        if (trimmed.Length < 2 || trimmed[^1] != '%')
+            return false;
+
+        if (!double.TryParse(trimmed[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+            return false;
+
+        value = number / 100d;
+        return true;
     }
 }
