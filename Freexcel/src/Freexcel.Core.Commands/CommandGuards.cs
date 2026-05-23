@@ -11,6 +11,18 @@ internal static class CommandGuards
             : null;
     }
 
+    public static CommandOutcome? RejectIfProtectedWithoutPermission(
+        Sheet sheet,
+        SheetProtectionPermission permission)
+    {
+        if (!sheet.IsProtected)
+            return null;
+
+        return sheet.ProtectionPermissions.Contains(permission)
+            ? null
+            : new CommandOutcome(false, "The sheet is protected.");
+    }
+
     public static CommandOutcome? RejectIfWorkbookStructureProtected(Workbook workbook)
     {
         return workbook.IsStructureProtected

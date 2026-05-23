@@ -78,8 +78,16 @@ internal static class XlsxChartAxisReader
             chart.AxisTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
 
         var solidFill = runProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        {
+            chart.AxisTitleTextThemeColor = themeColor;
+            chart.AxisTitleTextColor = null;
+        }
+        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        {
             chart.AxisTitleTextColor = color;
+            chart.AxisTitleTextThemeColor = null;
+        }
     }
 
     private static void ApplyAxisLabelFormatting(XElement? axisElement, ChartModel chart, bool useXAxis)
@@ -94,6 +102,7 @@ internal static class XlsxChartAxisReader
             .FirstOrDefault();
 
         var textColor = TryReadTextColor(runProperties);
+        var textThemeColor = TryReadTextThemeColor(runProperties);
         var fontSize = int.TryParse(runProperties?.Attribute("sz")?.Value, out var size)
             ? Math.Clamp(size / 100.0, 6, 72)
             : (double?)null;
@@ -103,6 +112,15 @@ internal static class XlsxChartAxisReader
 
         if (useXAxis)
         {
+            if (textThemeColor is { } themeColor)
+            {
+                chart.XAxisLabelTextThemeColor = themeColor;
+                chart.XAxisLabelTextColor = null;
+            }
+            else if (textColor is not null)
+            {
+                chart.XAxisLabelTextThemeColor = null;
+            }
             if (textColor is { } color)
                 chart.XAxisLabelTextColor = color;
             if (fontSize is { } labelFontSize)
@@ -112,6 +130,15 @@ internal static class XlsxChartAxisReader
             return;
         }
 
+        if (textThemeColor is { } yThemeColor)
+        {
+            chart.YAxisLabelTextThemeColor = yThemeColor;
+            chart.YAxisLabelTextColor = null;
+        }
+        else if (textColor is not null)
+        {
+            chart.YAxisLabelTextThemeColor = null;
+        }
         if (textColor is { } yColor)
             chart.YAxisLabelTextColor = yColor;
         if (fontSize is { } yFontSize)
@@ -125,6 +152,14 @@ internal static class XlsxChartAxisReader
         var solidFill = runProperties?.Element(DrawingNs + "solidFill");
         return solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color)
             ? color
+            : null;
+    }
+
+    private static WorkbookThemeColorReference? TryReadTextThemeColor(XElement? runProperties)
+    {
+        var solidFill = runProperties?.Element(DrawingNs + "solidFill");
+        return solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor)
+            ? themeColor
             : null;
     }
 

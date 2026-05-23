@@ -12,6 +12,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisTitle = null;
         chart.YAxisTitle = null;
         chart.AxisTitleTextColor = null;
+        chart.AxisTitleTextThemeColor = null;
         chart.AxisTitleFontSize = 12;
     }
 
@@ -40,6 +41,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisMinorTickStyle = ChartAxisTickStyle.None;
         chart.ShowXAxisLabels = true;
         chart.XAxisLabelTextColor = null;
+        chart.XAxisLabelTextThemeColor = null;
         chart.XAxisLabelFontSize = 11;
         chart.XAxisLabelAngle = 0;
         chart.XAxisLineColor = null;
@@ -63,6 +65,7 @@ public sealed partial class SetChartLayoutCommand
         chart.YAxisMinorTickStyle = ChartAxisTickStyle.None;
         chart.ShowYAxisLabels = true;
         chart.YAxisLabelTextColor = null;
+        chart.YAxisLabelTextThemeColor = null;
         chart.YAxisLabelFontSize = 11;
         chart.YAxisLabelAngle = 0;
         chart.YAxisLineColor = null;
@@ -197,8 +200,10 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisTitle = snapshot.XAxisTitle;
         chart.YAxisTitle = snapshot.YAxisTitle;
         chart.ChartTitleTextColor = snapshot.ChartTitleTextColor;
+        chart.ChartTitleTextThemeColor = snapshot.ChartTitleTextThemeColor;
         chart.ChartTitleFontSize = snapshot.ChartTitleFontSize ?? 16;
         chart.AxisTitleTextColor = snapshot.AxisTitleTextColor;
+        chart.AxisTitleTextThemeColor = snapshot.AxisTitleTextThemeColor;
         chart.AxisTitleFontSize = snapshot.AxisTitleFontSize ?? 12;
         chart.ChartAreaFillColor = snapshot.ChartAreaFillColor;
         chart.ChartAreaFillThemeColor = snapshot.ChartAreaFillThemeColor;
@@ -234,6 +239,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisMinorTickStyle = snapshot.XAxisMinorTickStyle ?? ChartAxisTickStyle.None;
         chart.ShowXAxisLabels = snapshot.ShowXAxisLabels ?? true;
         chart.XAxisLabelTextColor = snapshot.XAxisLabelTextColor;
+        chart.XAxisLabelTextThemeColor = snapshot.XAxisLabelTextThemeColor;
         chart.XAxisLabelFontSize = snapshot.XAxisLabelFontSize ?? 11;
         chart.XAxisLabelAngle = snapshot.XAxisLabelAngle ?? 0;
         chart.XAxisLineColor = snapshot.XAxisLineColor;
@@ -253,6 +259,7 @@ public sealed partial class SetChartLayoutCommand
         chart.YAxisMinorTickStyle = snapshot.YAxisMinorTickStyle ?? ChartAxisTickStyle.None;
         chart.ShowYAxisLabels = snapshot.ShowYAxisLabels ?? true;
         chart.YAxisLabelTextColor = snapshot.YAxisLabelTextColor;
+        chart.YAxisLabelTextThemeColor = snapshot.YAxisLabelTextThemeColor;
         chart.YAxisLabelFontSize = snapshot.YAxisLabelFontSize ?? 11;
         chart.YAxisLabelAngle = snapshot.YAxisLabelAngle ?? 0;
         chart.YAxisLineColor = snapshot.YAxisLineColor;
