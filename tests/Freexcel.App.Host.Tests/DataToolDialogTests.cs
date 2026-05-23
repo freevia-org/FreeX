@@ -582,12 +582,62 @@ public sealed class DataToolDialogTests
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+        source.Should().Contain("RequestRangeSelection");
+        source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         pickerSource.Should().Contain("Collapse dialog and select range");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().NotContain("Text = \"E1:F2\"");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
+    }
+
+    [Fact]
+    public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
+    {
+        AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
+            .Should()
+            .Be(new AdvancedFilterRangeSelectionRequest(
+                AdvancedFilterRangeSelectionTarget.CriteriaRange,
+                "E1:F4",
+                CollapseDialog: true));
+    }
+
+    [Theory]
+    [InlineData("Select list range", AdvancedFilterRangeSelectionTarget.ListRange, "A1:C12")]
+    [InlineData("Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange, "E1:F4")]
+    [InlineData("Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, "H1:J1")]
+    public void AdvancedFilterReferencePickers_RaiseRangeSelectionRequest(
+        string automationName,
+        AdvancedFilterRangeSelectionTarget expectedTarget,
+        string expectedText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var requests = new List<AdvancedFilterRangeSelectionRequest>();
+            var dialog = new AdvancedFilterDialog(SheetId.New(), " A1:C12 ", requestRangeSelection: requests.Add);
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+                textBoxes[1].Text = " E1:F4 ";
+                textBoxes[2].Text = " H1:J1 ";
+                var picker = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                requests.Should().Equal(new AdvancedFilterRangeSelectionRequest(
+                    expectedTarget,
+                    expectedText,
+                    CollapseDialog: true));
+                dialog.RangeSelectionRequest.Should().Be(requests[0]);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
