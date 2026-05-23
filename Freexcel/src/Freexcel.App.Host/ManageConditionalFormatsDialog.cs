@@ -422,6 +422,7 @@ public sealed class ManageConditionalFormatsDialog : Window
             DataBarShowValue = src.DataBarShowValue,
             DataBarMinLength = src.DataBarMinLength,
             DataBarMaxLength = src.DataBarMaxLength,
+            DataBarGradient  = src.DataBarGradient,
             AboveAverage  = src.AboveAverage,
             FormulaText   = src.FormulaText,
             IconSetStyle = src.IconSetStyle,

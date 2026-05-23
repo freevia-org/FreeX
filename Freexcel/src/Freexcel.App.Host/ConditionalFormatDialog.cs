@@ -26,6 +26,7 @@ public class ConditionalFormatDialog : Window
     private ComboBox _dataBarMaxTypeBox;
     private TextBox _dataBarMaxValueBox;
     private CheckBox _dataBarShowValueBox;
+    private CheckBox _dataBarGradientBox;
     private TextBox _dataBarMinLengthBox;
     private TextBox _dataBarMaxLengthBox;
     private ComboBox _colorScaleMinTypeBox;
@@ -121,6 +122,7 @@ public class ConditionalFormatDialog : Window
         _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
         _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
+        _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
         _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
         _colorScaleMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
@@ -166,6 +168,7 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Maximum _value:", _dataBarMaxValueBox));
             inner.Children.Add(_dataBarMaxValueBox);
             inner.Children.Add(_dataBarShowValueBox);
+            inner.Children.Add(_dataBarGradientBox);
             inner.Children.Add(CreateAccessLabel("_Minimum bar length (%):", _dataBarMinLengthBox));
             inner.Children.Add(_dataBarMinLengthBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
@@ -344,6 +347,7 @@ public class ConditionalFormatDialog : Window
                 _dataBarMaxTypeBox.SelectedItem = existingRule.DataBarMaxThresholdType;
                 _dataBarMaxValueBox.Text = existingRule.DataBarMaxThresholdValue ?? "";
                 _dataBarShowValueBox.IsChecked = !existingRule.DataBarShowValue;
+                _dataBarGradientBox.IsChecked = existingRule.DataBarGradient;
                 _dataBarMinLengthBox.Text = existingRule.DataBarMinLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
                 _dataBarMaxLengthBox.Text = existingRule.DataBarMaxLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
             }
@@ -495,6 +499,7 @@ public class ConditionalFormatDialog : Window
                 cf.DataBarMaxThresholdType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max);
                 cf.DataBarMaxThresholdValue = BlankToNull(_dataBarMaxValueBox.Text);
                 cf.DataBarShowValue = _dataBarShowValueBox.IsChecked != true;
+                cf.DataBarGradient = _dataBarGradientBox.IsChecked == true;
                 cf.DataBarMinLength = ParseOptionalPercent(_dataBarMinLengthBox.Text);
                 cf.DataBarMaxLength = ParseOptionalPercent(_dataBarMaxLengthBox.Text);
             }
@@ -702,6 +707,7 @@ public class ConditionalFormatDialog : Window
             _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
             _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarShowValueBox = new CheckBox { Content = "_Show Bar Only", Margin = new Thickness(0, 0, 0, 8), IsChecked = false };
+            _dataBarGradientBox = new CheckBox { Content = "_Gradient fill", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
             _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
             _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
             inner.Children.Add(CreateAccessLabel("_Minimum type:", _dataBarMinTypeBox));
@@ -713,6 +719,7 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(CreateAccessLabel("Maximum _value:", _dataBarMaxValueBox));
             inner.Children.Add(_dataBarMaxValueBox);
             inner.Children.Add(_dataBarShowValueBox);
+            inner.Children.Add(_dataBarGradientBox);
             inner.Children.Add(CreateAccessLabel("_Minimum bar length (%):", _dataBarMinLengthBox));
             inner.Children.Add(_dataBarMinLengthBox);
             inner.Children.Add(CreateAccessLabel("Ma_ximum bar length (%):", _dataBarMaxLengthBox));
