@@ -228,6 +228,32 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void FormatPictureDialog_ExposesQuickResetActionsForInitialSizeAndCrop()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("Content = \"Reset _Size\"");
+        source.Should().Contain("Content = \"Reset _Crop\"");
+        source.Should().Contain("ResetSizeToInitial");
+        source.Should().Contain("ResetCropToInitial");
+        source.Should().Contain("_resetCropButton.IsEnabled = false");
+    }
+
+    [Fact]
+    public void FormatPictureDialog_ResetActionsRestoreInitialFieldText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_cropLeftBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropLeft)");
+        source.Should().Contain("_cropTopBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropTop)");
+        source.Should().Contain("_cropRightBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropRight)");
+        source.Should().Contain("_cropBottomBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropBottom)");
+    }
+
+    [Fact]
     public void ShapeGradientDialog_TryCreateResult_ParsesTwoRgbColors()
     {
         ShapeGradientDialog.TryCreateResult("31,119,180; 180,210,240", out var result, out _).Should().BeTrue();
