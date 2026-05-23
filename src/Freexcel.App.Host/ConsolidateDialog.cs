@@ -20,6 +20,7 @@ public sealed class ConsolidateDialog : Window
     private readonly ComboBox _functionBox = new();
     private readonly TextBox _referenceBox = new();
     private readonly ListBox _referencesList = new() { Height = 72 };
+    private readonly Button _deleteReferenceButton = new() { Content = "_Delete", Width = 76, IsEnabled = false };
     private readonly TextBox _destinationBox = new();
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
     private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
@@ -40,6 +41,7 @@ public sealed class ConsolidateDialog : Window
         _referenceBox.Text = defaultSource;
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
+        _referencesList.SelectionChanged += (_, _) => UpdateReferenceButtons();
 
         _destinationBox.Text = defaultDestination;
         var root = new StackPanel { Margin = new Thickness(12) };
@@ -59,10 +61,9 @@ public sealed class ConsolidateDialog : Window
         };
         var addReferenceButton = new Button { Content = "_Add", Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         addReferenceButton.Click += AddReferenceButton_Click;
-        var deleteReferenceButton = new Button { Content = "_Delete", Width = 76 };
-        deleteReferenceButton.Click += DeleteReferenceButton_Click;
+        _deleteReferenceButton.Click += DeleteReferenceButton_Click;
         referenceButtons.Children.Add(addReferenceButton);
-        referenceButtons.Children.Add(deleteReferenceButton);
+        referenceButtons.Children.Add(_deleteReferenceButton);
         root.Children.Add(referenceButtons);
         root.Children.Add(new Label { Content = "_All references:", Target = _referencesList, Padding = new Thickness(0) });
         root.Children.Add(_referencesList);
@@ -79,6 +80,7 @@ public sealed class ConsolidateDialog : Window
         root.Children.Add(_createLinksBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
+        UpdateReferenceButtons();
     }
 
     public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
@@ -223,7 +225,11 @@ public sealed class ConsolidateDialog : Window
     {
         if (_referencesList.SelectedItem is { } selected)
             _referencesList.Items.Remove(selected);
+        UpdateReferenceButtons();
     }
+
+    private void UpdateReferenceButtons() =>
+        _deleteReferenceButton.IsEnabled = _referencesList.SelectedItem is not null;
 
     private void Accept()
     {
