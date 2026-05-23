@@ -18,6 +18,9 @@ public sealed class SaveWorkbookWriterTests
             var adapter = new FakeAdapter((savedWorkbook, stream) =>
             {
                 savedWorkbook.Should().BeSameAs(workbook);
+                stream.Should().BeOfType<FileStream>();
+                stream.CanRead.Should().BeTrue();
+                stream.CanSeek.Should().BeTrue();
                 using var writer = new StreamWriter(stream, leaveOpen: true);
                 writer.Write("saved payload");
             });
@@ -33,7 +36,7 @@ public sealed class SaveWorkbookWriterTests
             (await File.ReadAllTextAsync(tempPath)).Should().Be("saved payload");
             progressUpdates.Should().Contain(update => update.Detail.StartsWith("Saving file (serializing)", StringComparison.Ordinal));
             progressUpdates.Should().Contain(update => update.Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
-            progressUpdates.Should().Contain(update => update.Percent == 85);
+            progressUpdates.Should().Contain(update => update.Percent == 99);
             progressUpdates.Should().Contain(update => update.Percent == 100);
         }
         finally

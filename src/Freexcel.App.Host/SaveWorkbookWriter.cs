@@ -15,20 +15,26 @@ public sealed class SaveWorkbookWriter
         Workbook workbook,
         IProgress<SaveProgressUpdate> progress)
     {
-        var bytes = await RunStageAsync(
+        progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("serializing", TimeSpan.Zero), 1));
+        await RunStageAsync(
             progress,
-            "serializing",
+            "writing",
             1,
-            85,
+            99,
             TimeSpan.FromSeconds(30),
             () =>
             {
-                using var memory = new MemoryStream();
-                adapter.Save(workbook, memory);
-                return memory.ToArray();
+                using var file = new FileStream(
+                    path,
+                    FileMode.Create,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    BufferSize,
+                    FileOptions.SequentialScan);
+                adapter.Save(workbook, file);
+                return true;
             });
 
-        await WriteFileBytesWithProgressAsync(path, bytes, progress);
         progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("done", TimeSpan.Zero), 100));
     }
 
@@ -77,36 +83,6 @@ public sealed class SaveWorkbookWriter
         {
             var percent = OpenWorkbookProgressPlanner.CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
             progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail(detail, stopwatch.Elapsed), percent));
-        }
-    }
-
-    private static async Task WriteFileBytesWithProgressAsync(
-        string path,
-        byte[] bytes,
-        IProgress<SaveProgressUpdate> progress)
-    {
-        progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("writing", TimeSpan.Zero), 85));
-        await using var file = new FileStream(
-            path,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            BufferSize,
-            useAsync: true);
-
-        var startTimestamp = Stopwatch.GetTimestamp();
-        var written = 0;
-        while (written < bytes.Length)
-        {
-            var count = Math.Min(BufferSize, bytes.Length - written);
-            await file.WriteAsync(bytes.AsMemory(written, count));
-            written += count;
-
-            var elapsed = Stopwatch.GetElapsedTime(startTimestamp);
-            var percent = bytes.Length == 0
-                ? 99
-                : 85 + written * 14d / bytes.Length;
-            progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("writing", elapsed), percent));
         }
     }
 
