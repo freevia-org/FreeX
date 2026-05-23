@@ -746,7 +746,8 @@ public partial class MainWindow
         bool? preserveFormattingOnUpdate = null,
         bool? showFieldHeaders = null,
         bool? showContextualTooltips = null,
-        bool? showPropertiesInTooltips = null)
+        bool? showPropertiesInTooltips = null,
+        bool? showClassicLayout = null)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -782,7 +783,8 @@ public partial class MainWindow
                     preserveFormattingOnUpdate,
                     showFieldHeaders,
                     showContextualTooltips,
-                    showPropertiesInTooltips),
+                    showPropertiesInTooltips,
+                    showClassicLayout),
                 "PivotTable Options"))
             return;
 
@@ -1002,7 +1004,8 @@ public partial class MainWindow
             preserveFormattingOnUpdate: result.PreserveFormattingOnUpdate,
             showFieldHeaders: result.ShowFieldHeaders,
             showContextualTooltips: result.ShowContextualTooltips,
-            showPropertiesInTooltips: result.ShowPropertiesInTooltips);
+            showPropertiesInTooltips: result.ShowPropertiesInTooltips,
+            showClassicLayout: result.ShowClassicLayout);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
