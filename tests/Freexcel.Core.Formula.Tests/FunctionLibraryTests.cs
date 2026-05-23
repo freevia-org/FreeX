@@ -5005,6 +5005,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sortby_OmittedSortOrder_DefaultsAscending()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(3)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(2)));
+
+        var result = _eval.Evaluate("=SORTBY(A1:A3,B1:B3,)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 0].Should().Be(new TextValue("B"));
+        rv.Cells[1, 0].Should().Be(new TextValue("C"));
+        rv.Cells[2, 0].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
     public void Sortby_TreatsScalarArrayAndKeyAsSingleCellArrays()
     {
         var result = _eval.Evaluate("=SORTBY(5,1)", MakeSheet())
