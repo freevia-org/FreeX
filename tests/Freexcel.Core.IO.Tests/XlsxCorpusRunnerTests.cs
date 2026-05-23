@@ -704,6 +704,13 @@ public class XlsxCorpusRunnerTests
             sheet.Pictures.Count,
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
+            sheet.AllowEditRanges
+                .OrderBy(range => range.Start.Row)
+                .ThenBy(range => range.Start.Col)
+                .ThenBy(range => range.End.Row)
+                .ThenBy(range => range.End.Col)
+                .Select(ToRangeSummary)
+                .ToArray(),
             sheet.AllowEditRanges.Count,
             sheet.PrintArea is not null,
             sheet.PrintTitleRows is not null,
@@ -1283,6 +1290,7 @@ public class XlsxCorpusRunnerTests
         int PictureCount,
         bool HasBackgroundImage,
         bool IsProtected,
+        IReadOnlyList<ChartRangeSummary> AllowEditRanges,
         int AllowEditRangeCount,
         bool HasPrintArea,
         bool HasPrintTitleRows,
