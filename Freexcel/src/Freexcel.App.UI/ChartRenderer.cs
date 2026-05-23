@@ -168,7 +168,7 @@ public static partial class ChartRenderer
             return stockModel;
         }
 
-        if (chart.Type == ChartType.Surface)
+        if (chart.Type is ChartType.Surface or ChartType.ThreeDSurface)
         {
             var surfaceModel = BuildSurfaceModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             AddChartDataTableAnnotations(surfaceModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
