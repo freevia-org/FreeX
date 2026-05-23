@@ -31,6 +31,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
     private readonly bool? _enableRefresh;
+    private readonly bool? _preserveSourceSortFilter;
     private readonly int? _missingItemsLimit;
     private readonly bool _updateMissingItemsLimit;
     private readonly bool? _printTitles;
@@ -64,6 +65,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? refreshOnOpen = null,
         bool? saveSourceData = null,
         bool? enableRefresh = null,
+        bool? preserveSourceSortFilter = null,
         int? missingItemsLimit = null,
         bool updateMissingItemsLimit = false,
         bool? printTitles = null,
@@ -112,6 +114,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
         _enableRefresh = enableRefresh;
+        _preserveSourceSortFilter = preserveSourceSortFilter;
         _missingItemsLimit = NormalizeMissingItemsLimit(missingItemsLimit);
         _updateMissingItemsLimit = updateMissingItemsLimit;
         _printTitles = printTitles;
@@ -191,6 +194,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache.SaveData = saveSourceData;
             if (_enableRefresh is { } enableRefresh)
                 cache.EnableRefresh = enableRefresh;
+            if (_preserveSourceSortFilter is { } preserveSourceSortFilter)
+                cache.PreserveSourceSortFilter = preserveSourceSortFilter;
             if (_updateMissingItemsLimit)
                 cache.MissingItemsLimit = _missingItemsLimit;
         }
@@ -239,6 +244,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? RefreshOnLoad,
         bool? SaveData,
         bool? EnableRefresh,
+        bool? PreserveSourceSortFilter,
         int? MissingItemsLimit,
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
@@ -274,6 +280,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
                 cache?.EnableRefresh,
+                cache?.PreserveSourceSortFilter,
                 cache?.MissingItemsLimit,
                 pivotTable.PrintTitles,
                 pivotTable.PrintExpandCollapseButtons,
@@ -321,6 +328,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                     cache.SaveData = saveData;
                 if (EnableRefresh is { } enableRefresh)
                     cache.EnableRefresh = enableRefresh;
+                if (PreserveSourceSortFilter is { } preserveSourceSortFilter)
+                    cache.PreserveSourceSortFilter = preserveSourceSortFilter;
                 cache.MissingItemsLimit = MissingItemsLimit;
             }
         }
