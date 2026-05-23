@@ -61,8 +61,15 @@ internal static class XlsxAdvancedConditionalFormatWriter
             if (root is null)
                 continue;
 
+            var newX14DataBars = advancedRules
+                .Where(cf => cf.RuleType == CfRuleType.DataBar && !cf.DataBarGradient && !HasExistingX14Id(cf))
+                .ToList();
+
             foreach (var cf in advancedRules)
                 root.Add(ToAdvancedConditionalFormattingXml(cf, workbookNs, dxfIds));
+
+            if (newX14DataBars.Count > 0)
+                AppendX14ConditionalFormattingsExt(root, newX14DataBars, workbookNs);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
@@ -355,6 +362,17 @@ internal static class XlsxAdvancedConditionalFormatWriter
                 if (cf.DataBarMaxLength.HasValue)
                     dataBar.SetAttributeValue("maxLength", cf.DataBarMaxLength.Value.ToString(CultureInfo.InvariantCulture));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(dataBar, cf, worksheetNs));
+                if (!cf.DataBarGradient && !HasExistingX14Id(cf))
+                {
+                    XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+                    rule.Add(new XElement(
+                        worksheetNs + "extLst",
+                        new XElement(
+                            worksheetNs + "ext",
+                            new XAttribute("uri", "{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"),
+                            new XElement(x14Ns + "id", $"{{{cf.Id.ToString().ToUpperInvariant()}}}"))));
+                }
+
                 break;
             case CfRuleType.IconSet:
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
@@ -495,6 +513,61 @@ internal static class XlsxAdvancedConditionalFormatWriter
             CellFillPatternStyle.DarkTrellis => "darkTrellis",
             _ => "solid"
         };
+
+    private static bool HasExistingX14Id(ConditionalFormat cf)
+    {
+        if (cf.NativeChildXmls is null)
+            return false;
+
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        foreach (var xml in cf.NativeChildXmls)
+        {
+            try
+            {
+                var el = XElement.Parse(xml);
+                if (el.Name.LocalName == "extLst" && el.Descendants(x14Ns + "id").Any())
+                    return true;
+            }
+            catch
+            {
+                // Ignore malformed native XML.
+            }
+        }
+
+        return false;
+    }
+
+    private static void AppendX14ConditionalFormattingsExt(
+        XElement worksheetRoot,
+        IReadOnlyList<ConditionalFormat> newGradientFalseRules,
+        XNamespace worksheetNs)
+    {
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
+
+        var x14CfElements = newGradientFalseRules.Select(cf => new XElement(
+            x14Ns + "conditionalFormatting",
+            new XAttribute("sqref", cf.AppliesTo.ToString()),
+            new XElement(
+                x14Ns + "cfRule",
+                new XAttribute("type", "dataBar"),
+                new XAttribute("id", $"{{{cf.Id.ToString().ToUpperInvariant()}}}"),
+                new XElement(
+                    x14Ns + "dataBar",
+                    new XAttribute("minLength", (cf.DataBarMinLength ?? 0).ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("maxLength", (cf.DataBarMaxLength ?? 100).ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("gradient", "0"),
+                    new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMin")),
+                    new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMax")))))).ToList();
+
+        worksheetRoot.Add(new XElement(
+            worksheetNs + "extLst",
+            new XElement(
+                worksheetNs + "ext",
+                new XAttribute(XNamespace.Xmlns + "x14", x14Ns.NamespaceName),
+                new XAttribute("uri", x14CfUri),
+                new XElement(x14Ns + "conditionalFormattings", x14CfElements))));
+    }
 
     private static bool IsAdvancedConditionalFormat(ConditionalFormat cf) =>
         cf.RuleType is CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet or
