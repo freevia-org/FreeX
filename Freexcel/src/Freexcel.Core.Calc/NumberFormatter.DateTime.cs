@@ -29,7 +29,16 @@ public static partial class NumberFormatter
     private static string FormatDateTime(double oaDate, string format)
     {
         var (_, cleanFmt) = NumberFormatColorMapper.ExtractColor(format);
+        if (TryResolveSpecialDateTimeLocaleToken(cleanFmt, out var specialDateTimeFormat))
+        {
+            try
+            {
+                return FormatDateTimeValue(DateTime.FromOADate(oaDate), specialDateTimeFormat, CultureInfo.InvariantCulture.DateTimeFormat);
+            }
+            catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
+        }
         cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
+
         var elapsedMatch = Regex.Match(cleanFmt, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
         if (elapsedMatch.Success)
             return FormatElapsedTime(oaDate, RemoveSpacingAndFillDirectives(cleanFmt), elapsedMatch);
@@ -101,6 +110,21 @@ public static partial class NumberFormatter
         }
 
         return result.ToString();
+    }
+
+    private static bool TryResolveSpecialDateTimeLocaleToken(string format, out string excelFormat)
+    {
+        var match = Regex.Match(format, @"^\s*\[\$-F(?<kind>400|800)\]\s*$", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            excelFormat = "";
+            return false;
+        }
+
+        excelFormat = string.Equals(match.Groups["kind"].Value, "800", StringComparison.OrdinalIgnoreCase)
+            ? "dddd, mmmm d, yyyy"
+            : "h:mm:ss AM/PM";
+        return true;
     }
 
     private static bool TryGetFractionalSecondPrecision(string format, out int precision)
