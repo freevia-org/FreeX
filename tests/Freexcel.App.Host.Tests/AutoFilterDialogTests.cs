@@ -97,6 +97,35 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void BuildResult_WithSearchUsesVisibleMatchesUnlessAddingCurrentSelection()
+    {
+        var items = new[]
+        {
+            new AutoFilterDialogItem("Apple", "Apple", true),
+            new AutoFilterDialogItem("Apricot", "Apricot", false),
+            new AutoFilterDialogItem("Banana", "Banana", true)
+        };
+
+        var searchOnly = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            items,
+            "ap",
+            "",
+            addCurrentSelectionToFilter: false);
+        var addCurrentSelection = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            items,
+            "ap",
+            "",
+            addCurrentSelectionToFilter: true);
+
+        searchOnly.SelectedValues.Should().Equal("Apple");
+        searchOnly.CriteriaText.Should().Be("Apple");
+        addCurrentSelection.SelectedValues.Should().Equal("Apple", "Banana");
+        addCurrentSelection.CriteriaText.Should().Be("Apple, Banana");
+    }
+
+    [Fact]
     public void BuildResult_CarriesOptionalColorFilter()
     {
         var color = new CellColor(33, 115, 70);
@@ -230,7 +259,10 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("_searchBox.TextChanged");
         source.Should().Contain("FilterItems(_allItems, _searchBox.Text)");
-        source.Should().Contain("BuildResult(GetSortDirection(), _allItems");
+        source.Should().Contain("GetSortDirection()");
+        source.Should().Contain("_allItems");
+        source.Should().Contain("_addCurrentSelectionToFilterBox.IsChecked == true");
+        source.Should().Contain("GetResultItemsForSearchMode");
     }
 
     [Fact]
@@ -249,6 +281,7 @@ public sealed class AutoFilterDialogTests
             "_Date Filters",
             "_Select All",
             "_Clear All",
+            "_Add current selection to filter",
             "_OK",
             "_Cancel"
         })
