@@ -9,6 +9,12 @@ public enum AutoFilterSortDirection
     Descending
 }
 
+public enum AutoFilterDialogAction
+{
+    Apply,
+    ClearFilter
+}
+
 public sealed record AutoFilterDialogItem(string DisplayText, string Value, bool IsSelected)
 {
     public bool IsSelected { get; set; } = IsSelected;
@@ -19,7 +25,8 @@ public sealed record AutoFilterDialogResult(
     IReadOnlyList<string> SelectedValues,
     string SearchText,
     string CriteriaText,
-    AutoFilterColorFilter? ColorFilter = null);
+    AutoFilterColorFilter? ColorFilter = null,
+    AutoFilterDialogAction Action = AutoFilterDialogAction.Apply);
 
 public sealed record AutoFilterColorFilter(AutoFilterColorFilterKind Kind, CellColor? Color);
 
