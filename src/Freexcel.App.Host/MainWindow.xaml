@@ -3189,6 +3189,7 @@
                                     <Border x:Name="TabBorder"
                                             CornerRadius="3,3,0,0" Padding="10,3,10,1"
                                             Cursor="Hand"
+                                            Focusable="True"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                             MouseMove="SheetTab_MouseMove"
                                             MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"

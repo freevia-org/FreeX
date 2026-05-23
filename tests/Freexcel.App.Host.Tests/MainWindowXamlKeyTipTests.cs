@@ -97,7 +97,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         selectionSource.Should().Contain("if (FocusShellRegion(current))");
         selectionSource.Should().Contain("return FormulaBar.Focus();");
-        selectionSource.Should().Contain("return AddSheetButton.Focus();");
+        selectionSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
         selectionSource.Should().Contain("return ZoomSlider.Focus();");
     }
 
