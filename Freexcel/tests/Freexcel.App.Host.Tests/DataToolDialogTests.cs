@@ -825,7 +825,8 @@ public sealed class DataToolDialogTests
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
-        source.Should().Contain("Header = \"Inputs\"");
+        source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
+        source.Should().NotContain("Header = \"Inputs\"");
         source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
     }
 
