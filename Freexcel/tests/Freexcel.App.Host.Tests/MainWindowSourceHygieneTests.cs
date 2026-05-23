@@ -76,6 +76,14 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void GetData_IncludesDelimitedTextAdapters()
+    {
+        var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataCommandsSource.Should().Contain("\".csv\", \".txt\", \".tsv\", \".tab\"");
+    }
+
+    [Fact]
     public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
