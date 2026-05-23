@@ -383,6 +383,14 @@ public class PhaseCFinancialTests
     // ── INTRATE ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void Disc_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("DISC(43831,44197,97,100,5)").Should().Be("#NUM!");
+        CalcError("DISC(43831,44197,97,100,-1)").Should().Be("#NUM!");
+        CalcError("DISC(43831,44197,97,100,1E309)").Should().Be("#NUM!");
+    }
+
+    [Fact]
     public void Intrate_SimpleCase()
     {
         // Settlement 43831, Maturity 44197, Invest 90, Redeem 100
@@ -392,6 +400,14 @@ public class PhaseCFinancialTests
     }
 
     // ── RECEIVED ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Intrate_InvalidBasis_ReturnsNumError()
+    {
+        CalcError("INTRATE(43831,44197,90,100,5)").Should().Be("#NUM!");
+        CalcError("INTRATE(43831,44197,90,100,-1)").Should().Be("#NUM!");
+        CalcError("INTRATE(43831,44197,90,100,1E309)").Should().Be("#NUM!");
+    }
 
     [Fact]
     public void Received_SimpleCase()

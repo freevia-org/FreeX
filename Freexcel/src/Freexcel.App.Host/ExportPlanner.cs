@@ -142,7 +142,7 @@ internal static class ExportPlanner
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
-        var quality = DescribeQuality(options.Quality);
+        var quality = DescribeQualityForFormat(options.Quality, format);
         var printAreas = options.IgnorePrintAreas
             ? "print areas are ignored"
             : null;
@@ -221,4 +221,9 @@ internal static class ExportPlanner
         quality == ExportQuality.MinimumSize
             ? "minimum size"
             : "standard quality";
+
+    private static string DescribeQualityForFormat(ExportQuality quality, ExportFormat format) =>
+        quality == ExportQuality.MinimumSize && format == ExportFormat.Xps
+            ? "minimum size is PDF-only"
+            : DescribeQuality(quality);
 }
