@@ -4020,6 +4020,16 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("Hello Excel"));
 
     [Fact]
+    public void Replace_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Qx"));
+        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQy"));
+        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("😀Qx"));
+    }
+
+    [Fact]
     public void Replace_StartNumError_PropagatesError()
     {
         var sheet = MakeSheet();
