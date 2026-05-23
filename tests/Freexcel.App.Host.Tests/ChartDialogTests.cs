@@ -169,6 +169,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTitlesDialog_LabelsTitleEditorsWithExcelAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("AddInput(stack, \"_Chart title:\", _chartTitleBox)");
+        source.Should().Contain("AddInput(stack, \"_Primary horizontal axis title:\", _xAxisTitleBox)");
+        source.Should().Contain("AddInput(stack, \"Primary _vertical axis title:\", _yAxisTitleBox)");
+        source.Should().Contain("new Label { Content = label, Target = box");
+    }
+
+    [Fact]
     public void ChartStyleDialog_ExposesAutomaticAndCommonStyleOptions()
     {
         var options = ChartStyleDialog.GetStyleOptions();
