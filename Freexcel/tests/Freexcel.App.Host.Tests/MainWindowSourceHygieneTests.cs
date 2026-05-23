@@ -1108,7 +1108,6 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
         source.Should().Contain("retained when opening XLSX files");
-        source.Should().NotContain("InsertChartOfType(ChartType.Surface)");
         source.Should().NotContain("InsertChartOfType(ChartType.Treemap)");
         source.Should().NotContain("InsertChartOfType(ChartType.Sunburst)");
         source.Should().NotContain("InsertChartOfType(ChartType.Histogram)");
@@ -1122,12 +1121,16 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDArea)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDColumn)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
+        source.Should().Contain("InsertChartOfType(ChartType.Surface)");
+        source.Should().Contain("InsertChartOfType(ChartType.ThreeDSurface)");
         xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DColumnMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DBarMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ChartSurfaceMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"Chart3DSurfaceMenuItem_Click\"");
         xaml.Should().Contain("Surface");
         xaml.Should().Contain("Treemap");
         xaml.Should().Contain("Sunburst");
@@ -1142,6 +1145,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("3D Area");
         xaml.Should().Contain("3D Column");
         xaml.Should().Contain("3D Bar");
+        xaml.Should().Contain("3D Surface");
     }
 
     [Fact]
