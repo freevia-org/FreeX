@@ -245,18 +245,24 @@ internal static class DelimitedTextWorkbookReader
                 "yyyy-MM-dd",
                 "yyyy-MM-dd HH:mm",
                 "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss.FFFFFFF",
                 "yyyy-MM-ddTHH:mm",
                 "yyyy-MM-ddTHH:mm:ss",
+                "yyyy-MM-ddTHH:mm:ss.FFFFFFF",
                 "M/d/yyyy",
                 "M/d/yyyy HH:mm",
                 "M/d/yyyy HH:mm:ss",
+                "M/d/yyyy HH:mm:ss.FFFFFFF",
                 "M/d/yyyy h:mm tt",
                 "M/d/yyyy h:mm:ss tt",
+                "M/d/yyyy h:mm:ss.FFFFFFF tt",
                 "M/d/yy",
                 "M/d/yy HH:mm",
                 "M/d/yy HH:mm:ss",
+                "M/d/yy HH:mm:ss.FFFFFFF",
                 "M/d/yy h:mm tt",
                 "M/d/yy h:mm:ss tt",
+                "M/d/yy h:mm:ss.FFFFFFF tt",
                 "MMMM d, yyyy",
                 "MMM d, yyyy",
                 "d-MMMM-yyyy",
@@ -274,7 +280,7 @@ internal static class DelimitedTextWorkbookReader
         var trimmed = field.Trim();
         if (TimeSpan.TryParseExact(
             trimmed,
-            ["h\\:mm", "hh\\:mm", "h\\:mm\\:ss", "hh\\:mm\\:ss"],
+            ["h\\:mm", "hh\\:mm", "h\\:mm\\:ss", "hh\\:mm\\:ss", "h\\:mm\\:ss\\.FFFFFFF", "hh\\:mm\\:ss\\.FFFFFFF"],
             CultureInfo.InvariantCulture,
             out time))
         {
@@ -283,7 +289,7 @@ internal static class DelimitedTextWorkbookReader
 
         if (DateTime.TryParseExact(
             trimmed,
-            ["h:mm tt", "hh:mm tt", "h:mm:ss tt", "hh:mm:ss tt"],
+            ["h:mm tt", "hh:mm tt", "h:mm:ss tt", "hh:mm:ss tt", "h:mm:ss.FFFFFFF tt", "hh:mm:ss.FFFFFFF tt"],
             CultureInfo.InvariantCulture,
             DateTimeStyles.NoCurrentDateDefault,
             out var dateTime))
