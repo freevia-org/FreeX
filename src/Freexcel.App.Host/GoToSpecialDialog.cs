@@ -9,14 +9,19 @@ public sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label);
 public sealed class GoToSpecialDialog : Window
 {
     private readonly List<RadioButton> _buttons = [];
+    private readonly CheckBox _numbersBox = new() { Content = "_Numbers", IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
+    private readonly CheckBox _textBox = new() { Content = "_Text", IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
+    private readonly CheckBox _logicalsBox = new() { Content = "_Logicals", IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
+    private readonly CheckBox _errorsBox = new() { Content = "_Errors", IsChecked = true, Margin = new Thickness(0, 0, 0, 4) };
 
     public GoToSpecialKind SelectedKind { get; private set; } = GoToSpecialKind.Blanks;
+    public GoToSpecialOptions SelectedOptions { get; private set; } = new();
 
     public GoToSpecialDialog()
     {
         Title = "Go To Special";
         Width = 430;
-        Height = 390;
+        Height = 438;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -47,12 +52,16 @@ public sealed class GoToSpecialDialog : Window
                 Tag = choice.Kind,
                 Margin = new Thickness(0, 0, 12, 6)
             };
+            button.Checked += (_, _) => RefreshValueTypeOptions();
             _buttons.Add(button);
             AddChoice(optionGrid, button, choiceRow++);
         }
 
+        content.Children.Add(CreateValueTypeGroup());
+
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
+        RefreshValueTypeOptions();
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
         DockPanel.SetDock(buttons, Dock.Bottom);
@@ -99,6 +108,21 @@ public sealed class GoToSpecialDialog : Window
         return grid;
     }
 
+    private GroupBox CreateValueTypeGroup()
+    {
+        var panel = new WrapPanel { Margin = new Thickness(8, 6, 8, 4) };
+        panel.Children.Add(_numbersBox);
+        panel.Children.Add(_textBox);
+        panel.Children.Add(_logicalsBox);
+        panel.Children.Add(_errorsBox);
+        return new GroupBox
+        {
+            Header = "Values for constants and formulas",
+            Margin = new Thickness(0, 0, 0, 10),
+            Content = panel
+        };
+    }
+
     private static void AddChoice(Grid grid, RadioButton button, int index)
     {
         var row = index / 2;
@@ -114,6 +138,31 @@ public sealed class GoToSpecialDialog : Window
     {
         var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
         SelectedKind = selected?.Tag is GoToSpecialKind kind ? kind : GoToSpecialKind.Blanks;
+        SelectedOptions = new GoToSpecialOptions(GetSelectedValueTypes());
         DialogResult = true;
+    }
+
+    private GoToSpecialValueTypes GetSelectedValueTypes()
+    {
+        var valueTypes = GoToSpecialValueTypes.None;
+        if (_numbersBox.IsChecked == true)
+            valueTypes |= GoToSpecialValueTypes.Numbers;
+        if (_textBox.IsChecked == true)
+            valueTypes |= GoToSpecialValueTypes.Text;
+        if (_logicalsBox.IsChecked == true)
+            valueTypes |= GoToSpecialValueTypes.Logicals;
+        if (_errorsBox.IsChecked == true)
+            valueTypes |= GoToSpecialValueTypes.Errors;
+        return valueTypes == GoToSpecialValueTypes.None ? GoToSpecialValueTypes.All : valueTypes;
+    }
+
+    private void RefreshValueTypeOptions()
+    {
+        var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
+        var enabled = selected?.Tag is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
+        _numbersBox.IsEnabled = enabled;
+        _textBox.IsEnabled = enabled;
+        _logicalsBox.IsEnabled = enabled;
+        _errorsBox.IsEnabled = enabled;
     }
 }
