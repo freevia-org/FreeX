@@ -243,10 +243,25 @@ public partial class MainWindow
         }
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
+        contextMenu.Opened -= SheetTabContextMenu_Opened;
+        contextMenu.Opened += SheetTabContextMenu_Opened;
         contextMenu.PlacementTarget = target;
         contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         contextMenu.IsOpen = true;
         return true;
+    }
+
+    private static void SheetTabContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu contextMenu)
+            return;
+
+        var firstEnabledItem = contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        if (firstEnabledItem is null)
+            return;
+
+        firstEnabledItem.Focus();
+        Keyboard.Focus(firstEnabledItem);
     }
 
     private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
