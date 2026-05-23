@@ -264,6 +264,77 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_AddsChartDataTableAnnotations()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            DataTable = new ChartDataTableModel
+            {
+                ShowHorizontalBorder = true,
+                ShowVerticalBorder = true,
+                ShowOutline = true
+            }
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "20"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "40")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .Contain(["North | South", "Q1 | 10 | 20", "Q2 | 30 | 40"]);
+    }
+
+    [Fact]
+    public void ColumnRenderer_AddsLegendKeysToChartDataTableWhenRequested()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+            DataTable = new ChartDataTableModel
+            {
+                ShowLegendKeys = true
+            }
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "20")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .Contain("* North | * South");
+    }
+
+    [Fact]
     public void PivotChartRenderer_AddsFieldButtonAnnotations()
     {
         var sheetId = SheetId.New();

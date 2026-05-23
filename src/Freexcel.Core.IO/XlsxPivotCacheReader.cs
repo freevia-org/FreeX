@@ -47,6 +47,7 @@ internal static class XlsxPivotCacheReader
                 RefreshOnLoad = XlsxXmlAttributeReader.ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
                 SaveData = XlsxXmlAttributeReader.ReadBoolAttribute(root, "saveData", defaultValue: true),
                 EnableRefresh = XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
+                MissingItemsLimit = XlsxXmlAttributeReader.ReadIntAttribute(root, "missingItemsLimit"),
                 RefreshedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "refreshedVersion"),
                 RefreshedBy = root.Attribute("refreshedBy")?.Value
             };
