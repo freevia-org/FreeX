@@ -98,6 +98,12 @@ public sealed class FindReplaceDialogXamlTests
         AssertNamedButton(document, presentation, xaml, "FindFormatButton", "For_mat...", "FindFormatButton_Click");
         AssertNamedButton(document, presentation, xaml, "ReplaceFindFormatButton", "For_mat...", "FindFormatButton_Click");
         AssertNamedButton(document, presentation, xaml, "ReplaceWithFormatButton", "For_mat...", "ReplaceWithFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "FindClearFormatButton", "_Clear", "FindClearFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceFindClearFormatButton", "_Clear", "FindClearFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceWithClearFormatButton", "_Clear", "ReplaceWithClearFormatButton_Click");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "FindClearFormatButton", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceFindClearFormatButton", "Visibility", "Collapsed");
+        AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceWithClearFormatButton", "Visibility", "Collapsed");
 
         AssertNamedElement(document, presentation, xaml, "DataGrid", "FindResultsGrid");
     }
@@ -196,6 +202,10 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font)");
         source.Should().Contain("FindFormatButton_Click");
         source.Should().Contain("ReplaceWithFormatButton_Click");
+        source.Should().Contain("FindClearFormatButton_Click");
+        source.Should().Contain("ReplaceWithClearFormatButton_Click");
+        source.Should().Contain("UpdateFormatStateButtons");
+        source.Should().Contain("Format Set...");
         source.Should().Contain("replacementFormat: _replaceFormatDiff");
         source.Should().Contain("FindResultsGrid_SelectionChanged");
         source.Should().Contain("_navigateTo(row.Address)");
@@ -218,6 +228,20 @@ public sealed class FindReplaceDialogXamlTests
     {
         document.Descendants(presentation + elementName)
             .Single(element => element.Attribute(xaml + "Name")?.Value == controlName);
+    }
+
+    private static void AssertNamedElementHasAttribute(
+        XDocument document,
+        XNamespace presentation,
+        XNamespace xaml,
+        string elementName,
+        string controlName,
+        string attributeName,
+        string value)
+    {
+        document.Descendants(presentation + elementName)
+            .Single(element => element.Attribute(xaml + "Name")?.Value == controlName)
+            .Attribute(attributeName)?.Value.Should().Be(value);
     }
 
     private static void AssertCheckBoxContent(
