@@ -103,6 +103,23 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_FindAllResultsUseExcelLikeResultColumns()
+    {
+        var document = LoadDialogXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var grid = document.Descendants(presentation + "DataGrid")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "FindResultsGrid");
+
+        grid.Attribute("SelectionChanged")?.Value.Should().Be("FindResultsGrid_SelectionChanged");
+        grid.Descendants(presentation + "DataGridTextColumn")
+            .Select(element => element.Attribute("Header")?.Value)
+            .Should()
+            .Equal("Book", "Sheet", "Name", "Cell", "Value", "Formula");
+    }
+
+    [Fact]
     public void Dialog_OrdersReplaceBetweenFindNextAndReplaceAll()
     {
         var document = LoadDialogXaml();
@@ -143,6 +160,29 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void BuildFindResultRows_ProjectsWorkbookSheetNameCellValueAndFormula()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Budget");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(a1, Cell.FromFormula("=SUM(B2:B3)"));
+        sheet.SetCell(b2, new TextValue("Budget match"));
+        workbook.DefineNamedRange("InputCell", new GridRange(b2, b2));
+
+        var rows = FindReplaceDialogPlanner.BuildFindResultRows(
+            workbook,
+            [
+                new FindResult(a1, "=SUM(B2:B3)"),
+                new FindResult(b2, "Budget match")
+            ]);
+
+        rows.Should().Equal(
+            new FindResultRow("Book1", "Budget", "", a1, "A1", "=SUM(B2:B3)", "=SUM(B2:B3)"),
+            new FindResultRow("Book1", "Budget", "InputCell", b2, "B2", "Budget match", ""));
+    }
+
+    [Fact]
     public void Dialog_SourcePreservesHandlersAndSelectsReplaceTabForReplaceMode()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
@@ -157,6 +197,9 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FindFormatButton_Click");
         source.Should().Contain("ReplaceWithFormatButton_Click");
         source.Should().Contain("replacementFormat: _replaceFormatDiff");
+        source.Should().Contain("FindResultsGrid_SelectionChanged");
+        source.Should().Contain("_navigateTo(row.Address)");
+        source.Should().Contain("BuildFindResultRows(_getWorkbook(), _results)");
         source.Should().Contain("OptionsExpander_Expanded");
         source.Should().Contain("OptionsExpander.Header = \"_Options <<\"");
         source.Should().Contain("OptionsExpander_Collapsed");
