@@ -9685,6 +9685,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesMultipleWorkbookFileRecoveryProperties()
+    {
+        var workbook = new Workbook("WorkbookMultiFileRecoveryRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(
+                new XElement(workbookNs + "fileRecoveryPr",
+                    new XAttribute("autoRecover", "1"),
+                    new XAttribute("crashSave", "1")),
+                new XElement(workbookNs + "fileRecoveryPr",
+                    new XAttribute("dataExtractLoad", "1"),
+                    new XAttribute("repairLoad", "1")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorkbookXml = LoadPackageXml(savedArchive.GetEntry("xl/workbook.xml")!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var recoveryBlocks = savedWorkbookXml.Root!.Elements(ns + "fileRecoveryPr").ToArray();
+        recoveryBlocks.Should().HaveCount(2);
+        recoveryBlocks[0].Attribute("autoRecover")!.Value.Should().Be("1");
+        recoveryBlocks[1].Attribute("repairLoad")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookSmartTagMetadata()
     {
         var workbook = new Workbook("WorkbookSmartTagRetentionTest");
