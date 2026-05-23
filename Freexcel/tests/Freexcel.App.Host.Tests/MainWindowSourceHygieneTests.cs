@@ -142,6 +142,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageContextMenu_FocusesFirstEnabledMenuItem()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        backstageSource.Should().Contain("menu.Opened += BackstageContextMenu_Opened;");
+        backstageSource.Should().Contain("private static void BackstageContextMenu_Opened(object sender, RoutedEventArgs e)");
+        backstageSource.Should().Contain("menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)");
+        backstageSource.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+    }
+
+    [Fact]
     public void BackstageF6_CyclesWithinOverlayBeforeWorkbookShellFallback()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));

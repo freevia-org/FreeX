@@ -54,6 +54,54 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddPivotTableCommand_RejectsProtectedTargetSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotTableCommand(
+            sheet.Id,
+            Range(sheet, "A1", "B3"),
+            Range(sheet, "D3", "E5"),
+            "PivotTable1",
+            rowFieldIndexes: [0],
+            dataFieldIndexes: [1]).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.PivotCaches.Should().BeEmpty();
+        sheet.PivotTables.Should().BeEmpty();
+        sheet.GetCell(Addr(sheet, "D3")).Should().BeNull();
+    }
+
+    [Fact]
+    public void AddPivotTableCommand_AllowsProtectedTargetSheetWithUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("PivotProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotTableCommand(
+            sheet.Id,
+            Range(sheet, "A1", "B3"),
+            Range(sheet, "D3", "E5"),
+            "PivotTable1",
+            rowFieldIndexes: [0],
+            dataFieldIndexes: [1]).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.PivotCaches.Should().ContainSingle();
+        sheet.PivotTables.Should().ContainSingle();
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Category"));
+    }
+
+    [Fact]
     public void RefreshPivotTableCommand_RefreshesAndUndoRestoresPreviousCells()
     {
         var workbook = new Workbook("PivotCommandTest");
@@ -1469,6 +1517,40 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddSlicerCommand_RejectsProtectedPivotSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("AddSlicerProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.Slicers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddSlicerCommand_AllowsProtectedPivotSheetWithUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("AddSlicerProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddSlicerCommand("Category Slicer", "PivotTable1", "Category").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.Slicers.Should().ContainSingle();
+    }
+
+    [Fact]
     public void AddSlicerCommand_UsesSourceSheetHeadersWhenPivotIsOnAnotherSheet()
     {
         var workbook = new Workbook("AddCrossSheetSlicerCommandTest");
@@ -1622,6 +1704,40 @@ public sealed class PivotTableCommandTests
         command.Revert(ctx);
 
         workbook.Timelines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddTimelineCommand_RejectsProtectedPivotSheetWithoutUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("AddTimelineProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedTimelineData(sheet);
+        sheet.PivotTables.Add(CreateDateAmountPivot(sheet));
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        workbook.Timelines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddTimelineCommand_AllowsProtectedPivotSheetWithUsePivotReportsPermission()
+    {
+        var workbook = new Workbook("AddTimelineProtectionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedTimelineData(sheet);
+        sheet.PivotTables.Add(CreateDateAmountPivot(sheet));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddTimelineCommand("Date Timeline", "PivotTable1", "Date").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.Timelines.Should().ContainSingle();
     }
 
     [Fact]
@@ -1801,6 +1917,34 @@ public sealed class PivotTableCommandTests
         sheet.PivotTables.Add(pivot);
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
         return (sheet, ctx, pivot);
+    }
+
+    private static PivotTableModel CreateCategoryAmountPivot(Sheet sheet)
+    {
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        return pivot;
+    }
+
+    private static PivotTableModel CreateDateAmountPivot(Sheet sheet)
+    {
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.Day));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        return pivot;
     }
 
     private static ConfigurePivotTableOptionsCommand CreateBasicPivotOptionsCommand(

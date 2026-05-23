@@ -175,6 +175,8 @@ public sealed class AddSlicerCommand : IWorkbookCommand
         var target = FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
         if (target is null)
             return new CommandOutcome(false, "Connected PivotTable was not found.");
+        if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+            return protectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(target.Value.PivotTable.SourceRange.Start.Sheet) ?? target.Value.Sheet;
         var headers = ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
@@ -473,6 +475,8 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         var target = FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
         if (target is null)
             return new CommandOutcome(false, "Connected PivotTable was not found.");
+        if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
+            return protectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(target.Value.PivotTable.SourceRange.Start.Sheet) ?? target.Value.Sheet;
         var headers = ReadPivotHeaders(sourceSheet, target.Value.PivotTable);

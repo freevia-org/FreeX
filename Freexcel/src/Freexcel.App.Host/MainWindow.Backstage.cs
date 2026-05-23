@@ -85,8 +85,23 @@ public partial class MainWindow
         }
 
         menu.PlacementTarget = focusedElement;
+        menu.Opened -= BackstageContextMenu_Opened;
+        menu.Opened += BackstageContextMenu_Opened;
         menu.IsOpen = true;
         return true;
+    }
+
+    private static void BackstageContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var firstEnabledItem = menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled);
+        if (firstEnabledItem is null)
+            return;
+
+        firstEnabledItem.Focus();
+        Keyboard.Focus(firstEnabledItem);
     }
 
     private void OpenPrintBackstage()
