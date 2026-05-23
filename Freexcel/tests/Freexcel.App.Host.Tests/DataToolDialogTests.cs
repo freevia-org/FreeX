@@ -355,6 +355,30 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_GuessesHeadersFromFirstRowShape()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(42));
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2));
+
+        RemoveDuplicatesDialog.GuessHasHeaders(sheet, range).Should().BeTrue();
+
+        var numericSheet = new Sheet(sheetId, "Numbers");
+        numericSheet.SetCell(new CellAddress(sheetId, 1, 1), new NumberValue(10));
+        numericSheet.SetCell(new CellAddress(sheetId, 1, 2), new NumberValue(20));
+        numericSheet.SetCell(new CellAddress(sheetId, 2, 1), new NumberValue(10));
+        numericSheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(30));
+
+        RemoveDuplicatesDialog.GuessHasHeaders(numericSheet, range).Should().BeFalse();
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_ExcludesHeaderRowOnlyWhenHeadersAreEnabled()
     {
         var sheetId = SheetId.New();
