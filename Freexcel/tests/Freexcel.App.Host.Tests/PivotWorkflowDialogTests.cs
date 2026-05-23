@@ -116,7 +116,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDataSourceDialog_ExposesReferencePickerForSourceRange()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("CreateReferenceEditor(_sourceBox");
         source.Should().Contain("Select PivotTable source range");
@@ -126,7 +126,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotAuxiliaryDialogs_LabelEditableFieldsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         foreach (var content in new[]
         {
@@ -166,7 +166,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void InsertSlicerDialog_ExposesExcelLikeFieldSelectionShell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Choose fields");
         source.Should().Contain("_Field to connect");
@@ -186,7 +186,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void InsertTimelineDialog_ExposesExcelLikeDateFieldSelectionShell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Choose date fields");
         source.Should().Contain("_Date field to connect");
@@ -211,7 +211,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartTypeDialog_ExposesSelectableRecommendedPivotCharts()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Recommended PivotCharts");
         source.Should().Contain("All Charts");
@@ -406,7 +406,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         foreach (var content in new[]
         {
@@ -437,7 +437,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_ExposesPrintingTab()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Header = \"Printing\"");
         source.Should().Contain("Show expand/collapse _buttons");
@@ -449,7 +449,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_ExposesExcelLikeGroupsInsideTabs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         foreach (var content in new[]
         {
@@ -472,7 +472,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_LabelsEditableOptionsWithAccessKeyTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         foreach (var content in new[]
         {
@@ -492,7 +492,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_ExposesAccessKeysForModeledCheckboxes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         foreach (var content in new[]
         {
@@ -645,7 +645,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotFieldGroupingDialog_ExposesExcelLikeGroupingSections()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Selection");
         source.Should().Contain("Group by");
@@ -665,7 +665,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotCalculatedFieldDialog_ExposesExcelLikeFormulaEditorShell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Name and formula");
         source.Should().Contain("Formula:");
@@ -676,7 +676,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotCalculatedFieldDialog_ExposesFieldsListAndInsertFieldControl()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("private readonly ListBox _fieldList");
         source.Should().Contain("Available _fields");
@@ -709,7 +709,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotCalculatedItemDialog_ExposesExcelLikeFormulaEditorShell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Field and item");
         source.Should().NotContain("Calculated items are evaluated within the selected field");
@@ -720,7 +720,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotCalculatedItemDialog_ExposesFieldItemListsAndInsertionControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("private readonly ListBox _fieldList");
         source.Should().Contain("private readonly ListBox _itemList");
@@ -797,7 +797,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartOptionsDialog_ExposesExcelLikeStyleAndFieldButtonGroups()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Chart style");
         source.Should().Contain("_styleGallery");
@@ -846,12 +846,23 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotAuxiliaryDialogs_ExposeAccessKeysForModeledCheckboxes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+        var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Content = \"_Show field buttons on chart\"");
         source.Should().Contain("Content = \"Report _filter buttons\"");
         source.Should().Contain("Content = \"_Axis field buttons\"");
         source.Should().Contain("Content = \"_Value field buttons\"");
         source.Should().Contain("Content = \"_Ungroup selected field\"");
+    }
+
+    private static string ReadPivotWorkflowSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "PivotWorkflowDialogs.cs",
+                "PivotTableOptionsDialog.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 }
