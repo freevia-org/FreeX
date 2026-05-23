@@ -253,6 +253,8 @@ internal static class XlsxPivotTableWriter
             new XAttribute("showMemberPropertyTips", pivot.ShowPropertiesInTooltips ? "1" : "0"),
             new XAttribute("showDropZones", pivot.ShowClassicLayout ? "1" : "0"),
             new XAttribute("mergeItem", pivot.MergeAndCenterLabels ? "1" : "0"),
+            new XAttribute("showEmptyRow", pivot.ShowItemsWithNoDataOnRows ? "1" : "0"),
+            new XAttribute("showEmptyCol", pivot.ShowItemsWithNoDataOnColumns ? "1" : "0"),
             new XAttribute("pageOverThenDown", pivot.PageOverThenDown ? "1" : "0"),
             new XAttribute("pageWrap", Math.Max(0, pivot.PageWrap).ToString(CultureInfo.InvariantCulture)),
             new XAttribute("showDrill", pivot.ShowExpandCollapseButtons ? "1" : "0"),
