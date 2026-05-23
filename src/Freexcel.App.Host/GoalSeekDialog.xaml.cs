@@ -12,16 +12,22 @@ namespace Freexcel.App.Host;
 public partial class GoalSeekDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly Action<GoalSeekRangeSelectionRequest>? _requestRangeSelection;
 
     public CellAddress? SetCell { get; private set; }
     public double TargetValue { get; private set; }
     public CellAddress? ChangingCell { get; private set; }
+    public GoalSeekRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     /// <param name="sheetId">The active sheet ID, used when parsing bare A1 references.</param>
     /// <param name="selectedCell">Optional pre-selected cell to pre-populate the Set Cell box.</param>
-    public GoalSeekDialog(SheetId sheetId, CellAddress? selectedCell)
+    public GoalSeekDialog(
+        SheetId sheetId,
+        CellAddress? selectedCell,
+        Action<GoalSeekRangeSelectionRequest>? requestRangeSelection = null)
     {
         _sheetId = sheetId;
+        _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
 
         if (selectedCell.HasValue)
@@ -58,7 +64,30 @@ public partial class GoalSeekDialog : Window
             return;
 
         var target = targetName == nameof(SetCellBox) ? SetCellBox : ChangingCellBox;
+        RangeSelectionRequest = CreateRangeSelectionRequest(GetRangeSelectionTarget(targetName), target.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
         target.Focus();
         target.SelectAll();
     }
+
+    public static GoalSeekRangeSelectionRequest CreateRangeSelectionRequest(
+        GoalSeekRangeSelectionTarget target,
+        string currentText) =>
+        new(target, currentText.Trim(), CollapseDialog: true);
+
+    private static GoalSeekRangeSelectionTarget GetRangeSelectionTarget(string targetName) =>
+        targetName == nameof(SetCellBox)
+            ? GoalSeekRangeSelectionTarget.SetCell
+            : GoalSeekRangeSelectionTarget.ChangingCell;
 }
+
+public enum GoalSeekRangeSelectionTarget
+{
+    SetCell,
+    ChangingCell
+}
+
+public sealed record GoalSeekRangeSelectionRequest(
+    GoalSeekRangeSelectionTarget Target,
+    string CurrentText,
+    bool CollapseDialog = true);
