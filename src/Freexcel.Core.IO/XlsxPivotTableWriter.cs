@@ -251,6 +251,7 @@ internal static class XlsxPivotTableWriter
             new XAttribute("showDataTips", pivot.ShowContextualTooltips ? "1" : "0"),
             new XAttribute("showMemberPropertyTips", pivot.ShowPropertiesInTooltips ? "1" : "0"),
             new XAttribute("showDropZones", pivot.ShowClassicLayout ? "1" : "0"),
+            new XAttribute("mergeItem", pivot.MergeAndCenterLabels ? "1" : "0"),
             new XAttribute("showDrill", pivot.ShowExpandCollapseButtons ? "1" : "0"),
             new XAttribute("itemPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),

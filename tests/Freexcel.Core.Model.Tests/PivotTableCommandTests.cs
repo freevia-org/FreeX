@@ -803,6 +803,7 @@ public sealed class PivotTableCommandTests
             TargetRange = Range(sheet, "D3", "F8"),
             ReportLayout = PivotReportLayout.Compact,
             CompactRowLabelIndent = 5,
+            MergeAndCenterLabels = true,
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             ShowExpandCollapseButtons = false,
@@ -834,6 +835,7 @@ public sealed class PivotTableCommandTests
         command.Apply(ctx).Success.Should().BeTrue();
 
         pivot.CompactRowLabelIndent.Should().Be(5);
+        pivot.MergeAndCenterLabels.Should().BeTrue();
         pivot.PrintTitles.Should().BeTrue();
         pivot.PrintExpandCollapseButtons.Should().BeTrue();
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
@@ -865,6 +867,7 @@ public sealed class PivotTableCommandTests
             ShowContextualTooltips = true,
             ShowPropertiesInTooltips = true,
             ShowClassicLayout = false,
+            MergeAndCenterLabels = false,
             PrintExpandCollapseButtons = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
@@ -881,6 +884,7 @@ public sealed class PivotTableCommandTests
             repeatItemLabels: true,
             blankLineAfterItems: false,
             styleName: "PivotStyleLight16",
+            mergeAndCenterLabels: true,
             showExpandCollapseButtons: false,
             showContextualTooltips: false,
             showPropertiesInTooltips: false,
@@ -890,6 +894,7 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
+        pivot.MergeAndCenterLabels.Should().BeTrue();
         pivot.ShowExpandCollapseButtons.Should().BeFalse();
         pivot.ShowContextualTooltips.Should().BeFalse();
         pivot.ShowPropertiesInTooltips.Should().BeFalse();
@@ -899,6 +904,7 @@ public sealed class PivotTableCommandTests
 
         command.Revert(ctx);
 
+        pivot.MergeAndCenterLabels.Should().BeFalse();
         pivot.ShowExpandCollapseButtons.Should().BeTrue();
         pivot.ShowContextualTooltips.Should().BeTrue();
         pivot.ShowPropertiesInTooltips.Should().BeTrue();
