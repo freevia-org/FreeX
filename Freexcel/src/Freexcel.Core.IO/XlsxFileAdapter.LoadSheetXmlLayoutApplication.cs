@@ -25,6 +25,10 @@ public sealed partial class XlsxFileAdapter
         sheet.ShowRulers = layout.ShowRulers;
         sheet.ZoomPercent = layout.ZoomPercent;
         sheet.ShowFormulas = layout.ShowFormulas;
+        if (layout.DefaultColumnWidth is { } defaultColumnWidth)
+            sheet.DefaultColumnWidth = defaultColumnWidth;
+        if (layout.DefaultRowHeight is { } defaultRowHeight)
+            sheet.DefaultRowHeight = defaultRowHeight;
         sheet.BackgroundImage = layout.BackgroundImage;
         sheet.CodeName = layout.CodeName;
 
