@@ -77,7 +77,7 @@ public sealed class GoToDialogsTests
 
         source.Should().Contain("new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges)");
         source.Should().Contain("dialog.SelectedSpecialKind is { } specialKind");
-        source.Should().Contain("SelectGoToSpecialMatches(specialKind, showEmptyMessage: true)");
+        source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
     }
 
     [Fact]
@@ -132,6 +132,29 @@ public sealed class GoToDialogsTests
         source.Should().NotContain("shown for parity");
         source.Should().NotContain("The selectable options match");
         source.Should().Contain("DialogButtonRowFactory.Create");
+    }
+
+    [Fact]
+    public void GoToSpecialDialog_ExposesExcelConstantsAndFormulasSuboptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToSpecialDialog.cs"));
+
+        source.Should().Contain("Content = \"_Numbers\"");
+        source.Should().Contain("Content = \"_Text\"");
+        source.Should().Contain("Content = \"_Logicals\"");
+        source.Should().Contain("Content = \"_Errors\"");
+        source.Should().Contain("RefreshValueTypeOptions");
+        source.Should().Contain("SelectedOptions = new GoToSpecialOptions(GetSelectedValueTypes())");
+    }
+
+    [Fact]
+    public void MainWindow_GoToSpecialPassesDialogValueTypeOptionsToService()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));
+
+        source.Should().Contain("dialog.SelectedOptions");
+        source.Should().Contain("SelectGoToSpecialMatches(specialKind, dialog.SelectedSpecialOptions, showEmptyMessage: true)");
+        source.Should().Contain("GoToSpecialService.Find(_workbook, sheet, range, kind, range.Start, options)");
     }
 
     [Fact]
