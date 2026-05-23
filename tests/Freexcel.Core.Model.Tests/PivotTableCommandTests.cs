@@ -811,6 +811,32 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableOptionsCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotOptionsCommandTest");
+        sheet.IsProtected = true;
+
+        var outcome = CreateBasicPivotOptionsCommand(sheet.Id, pivot.Name, showRowGrandTotals: false).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        pivot.ShowRowGrandTotals.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_AllowsProtectedSheetWithUsePivotReportsPermission()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ProtectedPivotOptionsCommandTest");
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.UsePivotTableReports);
+
+        var outcome = CreateBasicPivotOptionsCommand(sheet.Id, pivot.Name, showRowGrandTotals: false).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        pivot.ShowRowGrandTotals.Should().BeFalse();
+    }
+
+    [Fact]
     public void ConfigurePivotTableOptionsCommand_UpdatesEmptyValueTextRefreshesAndUndoRestores()
     {
         var workbook = new Workbook("PivotEmptyValueOptionsCommandTest");
@@ -1776,6 +1802,21 @@ public sealed class PivotTableCommandTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
         return (sheet, ctx, pivot);
     }
+
+    private static ConfigurePivotTableOptionsCommand CreateBasicPivotOptionsCommand(
+        SheetId sheetId,
+        string pivotTableName,
+        bool showRowGrandTotals = true) =>
+        new(
+            sheetId,
+            pivotTableName,
+            showRowGrandTotals,
+            showColumnGrandTotals: true,
+            showSubtotals: true,
+            PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: false,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleMedium9");
 
     private static void SeedTimelineData(Sheet sheet)
     {
