@@ -1073,6 +1073,9 @@ public class XlsxCorpusRunnerTests
             chart.Title ?? "",
             chart.XAxisTitle ?? "",
             chart.YAxisTitle ?? "",
+            CaptureChartVisualSummary(chart),
+            CaptureChartAxisSummary(chart, isXAxis: true),
+            CaptureChartAxisSummary(chart, isXAxis: false),
             chart.ShowLegend,
             chart.IsPivotChart,
             chart.Uses1904DateSystem,
@@ -1128,6 +1131,71 @@ public class XlsxCorpusRunnerTests
                 dataTable.ShowVerticalBorder,
                 dataTable.ShowOutline,
                 dataTable.ShowLegendKeys);
+
+    private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
+        new(
+            chart.ChartTitleTextColor is null ? "" : ToColorSummary(chart.ChartTitleTextColor.Value),
+            chart.ChartTitleFontSize,
+            chart.AxisTitleTextColor is null ? "" : ToColorSummary(chart.AxisTitleTextColor.Value),
+            chart.AxisTitleFontSize,
+            chart.ChartAreaFillColor is null ? "" : ToColorSummary(chart.ChartAreaFillColor.Value),
+            chart.ChartAreaFillThemeColor,
+            chart.PlotAreaFillColor is null ? "" : ToColorSummary(chart.PlotAreaFillColor.Value),
+            chart.PlotAreaFillThemeColor,
+            chart.PlotAreaBorderColor is null ? "" : ToColorSummary(chart.PlotAreaBorderColor.Value),
+            chart.PlotAreaBorderThemeColor,
+            chart.PlotAreaBorderThickness,
+            chart.LegendTextColor is null ? "" : ToColorSummary(chart.LegendTextColor.Value),
+            chart.LegendTextThemeColor,
+            chart.LegendFillColor is null ? "" : ToColorSummary(chart.LegendFillColor.Value),
+            chart.LegendFillThemeColor,
+            chart.LegendBorderColor is null ? "" : ToColorSummary(chart.LegendBorderColor.Value),
+            chart.LegendBorderThemeColor,
+            chart.LegendBorderThickness,
+            chart.LegendFontSize);
+
+    private static ChartAxisSummary CaptureChartAxisSummary(ChartModel chart, bool isXAxis) =>
+        isXAxis
+            ? new ChartAxisSummary(
+                chart.XAxisMinimum,
+                chart.XAxisMaximum,
+                chart.XAxisMajorUnit,
+                chart.XAxisMinorUnit,
+                chart.XAxisLogScale,
+                chart.XAxisNumberFormat,
+                chart.ShowXAxisMajorGridlines,
+                chart.ShowXAxisMinorGridlines,
+                chart.XAxisMajorGridlineColor is null ? "" : ToColorSummary(chart.XAxisMajorGridlineColor.Value),
+                chart.XAxisMinorGridlineColor is null ? "" : ToColorSummary(chart.XAxisMinorGridlineColor.Value),
+                chart.XAxisGridlineThickness,
+                chart.XAxisMajorTickStyle,
+                chart.XAxisMinorTickStyle,
+                chart.ShowXAxisLabels,
+                chart.XAxisLabelTextColor is null ? "" : ToColorSummary(chart.XAxisLabelTextColor.Value),
+                chart.XAxisLabelFontSize,
+                chart.XAxisLabelAngle,
+                chart.XAxisLineColor is null ? "" : ToColorSummary(chart.XAxisLineColor.Value),
+                chart.XAxisLineThickness)
+            : new ChartAxisSummary(
+                chart.YAxisMinimum,
+                chart.YAxisMaximum,
+                chart.YAxisMajorUnit,
+                chart.YAxisMinorUnit,
+                chart.YAxisLogScale,
+                chart.YAxisNumberFormat,
+                chart.ShowYAxisMajorGridlines,
+                chart.ShowYAxisMinorGridlines,
+                chart.YAxisMajorGridlineColor is null ? "" : ToColorSummary(chart.YAxisMajorGridlineColor.Value),
+                chart.YAxisMinorGridlineColor is null ? "" : ToColorSummary(chart.YAxisMinorGridlineColor.Value),
+                chart.YAxisGridlineThickness,
+                chart.YAxisMajorTickStyle,
+                chart.YAxisMinorTickStyle,
+                chart.ShowYAxisLabels,
+                chart.YAxisLabelTextColor is null ? "" : ToColorSummary(chart.YAxisLabelTextColor.Value),
+                chart.YAxisLabelFontSize,
+                chart.YAxisLabelAngle,
+                chart.YAxisLineColor is null ? "" : ToColorSummary(chart.YAxisLineColor.Value),
+                chart.YAxisLineThickness);
 
     private static ChartColorMapSummary? CaptureChartColorMapSummary(ChartColorMapOverrideModel? colorMap) =>
         colorMap is null
@@ -2045,6 +2113,9 @@ public class XlsxCorpusRunnerTests
         string Title,
         string XAxisTitle,
         string YAxisTitle,
+        ChartVisualSummary Visual,
+        ChartAxisSummary XAxis,
+        ChartAxisSummary YAxis,
         bool ShowLegend,
         bool IsPivotChart,
         bool Uses1904DateSystem,
@@ -2087,6 +2158,48 @@ public class XlsxCorpusRunnerTests
         ChartDataTableSummary? DataTable,
         Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
+
+    private sealed record ChartVisualSummary(
+        string ChartTitleTextColor,
+        double ChartTitleFontSize,
+        string AxisTitleTextColor,
+        double AxisTitleFontSize,
+        string ChartAreaFillColor,
+        WorkbookThemeColorReference? ChartAreaFillThemeColor,
+        string PlotAreaFillColor,
+        WorkbookThemeColorReference? PlotAreaFillThemeColor,
+        string PlotAreaBorderColor,
+        WorkbookThemeColorReference? PlotAreaBorderThemeColor,
+        double PlotAreaBorderThickness,
+        string LegendTextColor,
+        WorkbookThemeColorReference? LegendTextThemeColor,
+        string LegendFillColor,
+        WorkbookThemeColorReference? LegendFillThemeColor,
+        string LegendBorderColor,
+        WorkbookThemeColorReference? LegendBorderThemeColor,
+        double LegendBorderThickness,
+        double LegendFontSize);
+
+    private sealed record ChartAxisSummary(
+        double? Minimum,
+        double? Maximum,
+        double? MajorUnit,
+        double? MinorUnit,
+        bool LogScale,
+        ChartDataLabelNumberFormat NumberFormat,
+        bool ShowMajorGridlines,
+        bool ShowMinorGridlines,
+        string MajorGridlineColor,
+        string MinorGridlineColor,
+        double GridlineThickness,
+        ChartAxisTickStyle MajorTickStyle,
+        ChartAxisTickStyle MinorTickStyle,
+        bool ShowLabels,
+        string LabelTextColor,
+        double LabelFontSize,
+        double LabelAngle,
+        string LineColor,
+        double LineThickness);
 
     private sealed record ChartColorMapSummary(
         bool UseMasterColorMapping,

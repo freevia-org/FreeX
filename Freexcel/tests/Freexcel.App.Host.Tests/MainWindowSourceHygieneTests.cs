@@ -142,6 +142,24 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageF6_CyclesWithinOverlayBeforeWorkbookShellFallback()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        const string backstageRoute = "if (IsStartScreenVisible() && TryHandleBackstageShellFocusCycle";
+        const string workbookFallback = "ExecuteCommandShortcut(commandShortcut, this, e);";
+
+        selectionSource.Should().Contain(backstageRoute);
+        selectionSource.IndexOf(backstageRoute, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(selectionSource.IndexOf(workbookFallback, StringComparison.Ordinal));
+        backstageSource.Should().Contain("private bool TryHandleBackstageShellFocusCycle(bool reverse)");
+        backstageSource.Should().Contain("IsInsideStartScreenOverlay(focusedElement)");
+        backstageSource.Should().Contain("StartScreenOverlay.MoveFocus");
+    }
+
+    [Fact]
     public void GetData_IncludesDelimitedTextAdapters()
     {
         var dataCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
