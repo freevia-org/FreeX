@@ -19,6 +19,17 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_FallsBackToWindows1252WhenUtf8DecodingFails()
+    {
+        using var stream = new MemoryStream([0x43, 0x61, 0x66, 0xE9, 0x0D, 0x0A]);
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Café"));
+    }
+
+    [Fact]
     public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("A,B\rC,D\r"));
