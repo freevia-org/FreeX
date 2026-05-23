@@ -163,6 +163,8 @@ public sealed partial class Sheet
                 ShowPropertiesInTooltips = pt.ShowPropertiesInTooltips,
                 ShowClassicLayout = pt.ShowClassicLayout,
                 MergeAndCenterLabels = pt.MergeAndCenterLabels,
+                PageOverThenDown = pt.PageOverThenDown,
+                PageWrap = pt.PageWrap,
                 EmptyValueText = pt.EmptyValueText,
                 AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
                 PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
