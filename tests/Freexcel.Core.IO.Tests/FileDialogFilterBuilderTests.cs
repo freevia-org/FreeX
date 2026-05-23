@@ -24,12 +24,31 @@ public sealed class FileDialogFilterBuilderTests
         var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
 
         filter.Should().Be(
+            "All supported files (*.xlsx;*.xlsm;*.xltx;*.csv)|*.xlsx;*.xlsm;*.xltx;*.csv|" +
             "Excel Workbook (*.xlsx)|*.xlsx|" +
             "Excel Macro-Enabled Workbook (*.xlsm)|*.xlsm|" +
             "Excel Template (*.xltx)|*.xltx|" +
             "CSV (Comma-separated values) (*.csv)|*.csv|" +
-            "All supported files (*.xlsx;*.xlsm;*.xltx;*.csv)|*.xlsx;*.xlsm;*.xltx;*.csv|" +
             "All files (*.*)|*.*");
+    }
+
+    [Fact]
+    public void BuildOpenFilter_DeduplicatesExtensionsInAllSupportedFilter()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true)
+            ]),
+            new FakeAdapter([
+                new FileFormatDescriptor(".XLSX", "Excel Workbook Alias", CanOpen: true, CanSave: false),
+                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            ])
+        };
+
+        var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
+
+        filter.Should().StartWith("All supported files (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|");
     }
 
     [Fact]
@@ -58,7 +77,7 @@ public sealed class FileDialogFilterBuilderTests
             new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
         ]);
 
-        var result = FileDialogFilterBuilder.FindOpenAdapter([adapter], ".XLSM", out var format);
+        var result = FileDialogFilterBuilder.FindOpenAdapter([adapter], " XLSM ", out var format);
 
         result.Should().BeSameAs(adapter);
         format.Should().NotBeNull();

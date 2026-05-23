@@ -9,16 +9,18 @@ public static class FileDialogFilterBuilder
             .Where(format => format.CanOpen)
             .ToList();
 
-        var parts = formats
-            .Select(format => $"{format.FormatName} (*{format.Extension})|*{format.Extension}")
-            .ToList();
+        var parts = new List<string>();
 
         if (formats.Count > 0)
         {
-            var allSupported = string.Join(';', formats.Select(format => $"*{format.Extension}"));
+            var allSupported = string.Join(';', formats
+                .Select(format => NormalizeExtension(format.Extension))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(extension => $"*{extension}"));
             parts.Add($"All supported files ({allSupported})|{allSupported}");
         }
 
+        parts.AddRange(formats.Select(format => $"{format.FormatName} (*{format.Extension})|*{format.Extension}"));
         parts.Add("All files (*.*)|*.*");
         return string.Join('|', parts);
     }
@@ -55,16 +57,25 @@ public static class FileDialogFilterBuilder
         Func<FileFormatDescriptor, bool> predicate,
         out FileFormatDescriptor? format)
     {
+        var normalizedExtension = NormalizeExtension(extension);
         foreach (var adapter in adapters)
         {
             format = adapter.Formats.FirstOrDefault(candidate =>
                 predicate(candidate) &&
-                string.Equals(candidate.Extension, extension, StringComparison.OrdinalIgnoreCase));
+                string.Equals(NormalizeExtension(candidate.Extension), normalizedExtension, StringComparison.OrdinalIgnoreCase));
             if (format is not null)
                 return adapter;
         }
 
         format = null;
         return null;
+    }
+
+    private static string NormalizeExtension(string extension)
+    {
+        extension = extension.Trim();
+        return extension.StartsWith(".", StringComparison.Ordinal)
+            ? extension
+            : $".{extension}";
     }
 }
