@@ -813,6 +813,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀x"));
+        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("x😀"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -1051,6 +1061,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Find_WithinTextError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -1084,6 +1105,15 @@ public class FunctionLibraryTests
         var sheet = MakeSheet();
         // "h*o" matches "hello"
         _eval.Evaluate("=SEARCH(\"h?llo\",\"hello\")", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Search_WildcardQuestionTreatsSurrogatePairAsSingleCharacter()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=SEARCH(\"?x\",\"😀x\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"??\",\"😀\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1145,6 +1175,17 @@ public class FunctionLibraryTests
     }
 
     // ── REPT ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Mid_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("x"));
+        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("y"));
+    }
 
     [Fact]
     public void Mid_StartNumError_PropagatesError()
@@ -4007,6 +4048,16 @@ public class FunctionLibraryTests
     [Fact] public void Replace_Middle_ReplacesCorrectly() =>
         _eval.Evaluate("=REPLACE(\"Hello World\",7,5,\"Excel\")", MakeSheet())
             .Should().Be(new TextValue("Hello Excel"));
+
+    [Fact]
+    public void Replace_DoesNotSplitSurrogatePairs()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Qx"));
+        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQy"));
+        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("😀Qx"));
+    }
 
     [Fact]
     public void Replace_StartNumError_PropagatesError()

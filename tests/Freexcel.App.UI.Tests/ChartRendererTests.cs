@@ -1782,6 +1782,50 @@ public sealed class ChartRendererTests
         series.Items[0].Close.Should().Be(13);
     }
 
+    [Fact]
+    public void StockRenderer_UsesVolumeColumnAndOhlcColumnsForVolumeOpenHighLowClose()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 6))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Volume"),
+                Cell(1, 3, "Open"),
+                Cell(1, 4, "High"),
+                Cell(1, 5, "Low"),
+                Cell(1, 6, "Close"),
+                Cell(2, 1, "Mon"),
+                Cell(2, 2, "1000"),
+                Cell(2, 3, "10"),
+                Cell(2, 4, "15"),
+                Cell(2, 5, "9"),
+                Cell(2, 6, "13"),
+                Cell(3, 1, "Tue"),
+                Cell(3, 2, "1200"),
+                Cell(3, 3, "13"),
+                Cell(3, 4, "18"),
+                Cell(3, 5, "12"),
+                Cell(3, 6, "16")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        model.Series[0].Should().BeOfType<RectangleBarSeries>();
+        var stockSeries = model.Series[1].Should().BeOfType<HighLowSeries>().Subject;
+        stockSeries.Items[0].Open.Should().Be(10);
+        stockSeries.Items[0].High.Should().Be(15);
+        stockSeries.Items[0].Low.Should().Be(9);
+        stockSeries.Items[0].Close.Should().Be(13);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
         var method = typeof(ChartRenderer).GetMethod(

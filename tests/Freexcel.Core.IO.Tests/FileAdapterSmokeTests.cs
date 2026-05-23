@@ -6756,6 +6756,64 @@ public partial class FileAdapterSmokeTests
         loadedChart.Title.Should().Be(chartType.ToString());
     }
 
+    [Fact]
+    public void XlsxAdapter_Save_WritesVolumeOpenHighLowCloseStockChartPackagePart()
+    {
+        var workbook = new Workbook("StockVolumeChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        string[] headers = ["Date", "Volume", "Open", "High", "Low", "Close"];
+        for (var i = 0; i < headers.Length; i++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)i + 1), new TextValue(headers[i]));
+
+        for (uint row = 2; row <= 4; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Day {row - 1}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(1000 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(10 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 4), new NumberValue(15 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 5), new NumberValue(9 + row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 6), new NumberValue(13 + row));
+        }
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Stock,
+            StockSubtype = StockChartSubtype.VolumeOpenHighLowClose,
+            Title = "OHLCV",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 6)),
+            ShowHighLowLines = true,
+            ShowUpDownBars = true
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + "barChart").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "barChart").Descendants(chartNs + "ser").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "stockChart").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "stockChart").Descendants(chartNs + "ser").Should().HaveCount(4);
+            chartXml.Descendants(chartNs + "hiLowLines").Should().ContainSingle();
+            chartXml.Descendants(chartNs + "upDownBars").Should().ContainSingle();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Stock);
+        loadedChart.StockSubtype.Should().Be(StockChartSubtype.VolumeOpenHighLowClose);
+        loadedChart.DataRange.End.Col.Should().Be(6);
+        loadedChart.ShowHighLowLines.Should().BeTrue();
+        loadedChart.ShowUpDownBars.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(ChartType.Pie)]
     [InlineData(ChartType.Doughnut)]
