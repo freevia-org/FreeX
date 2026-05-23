@@ -546,7 +546,7 @@ public sealed class MainWindowSourceHygieneTests
         var pivotSourcePath = Path.Combine(appHostDirectory, "MainWindow.PivotCommands.cs");
 
         File.Exists(pivotSourcePath).Should().BeTrue();
-        var pivotSource = File.ReadAllText(pivotSourcePath);
+        var pivotSource = ReadPivotCommandSource();
 
         mainSource.Should().NotContain("private void PivotTableBtn_Click(");
         mainSource.Should().NotContain("private void RefreshPivotTableBtn_Click(");
@@ -1160,7 +1160,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void InsertPivotTable_NewWorksheetDestination_UsesUndoableCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
 
         source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
         source.Should().Contain("command.CreatedSheetId");
@@ -1575,7 +1575,7 @@ public sealed class MainWindowSourceHygieneTests
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = ReadPivotCommandSource();
 
         xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
         xaml.Should().NotContain("Cycle grand totals");
@@ -1649,5 +1649,16 @@ public sealed class MainWindowSourceHygieneTests
 
         gridStatusSource.Should().Contain("private sealed record ColumnResizeSnapshot(");
         gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
+    }
+
+    private static string ReadPivotCommandSource()
+    {
+        return string.Join(
+            "\n",
+            new[]
+            {
+                "MainWindow.PivotCommands.cs",
+                "MainWindow.PivotSlicerTimeline.cs"
+            }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 }
