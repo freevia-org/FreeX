@@ -29,7 +29,8 @@ public enum ChartType
     ThreeDColumn,
     ThreeDBar,
     ThreeDArea,
-    ThreeDLine
+    ThreeDLine,
+    ThreeDSurface
 }
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }

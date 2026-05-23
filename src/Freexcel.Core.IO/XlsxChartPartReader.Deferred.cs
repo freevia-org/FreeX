@@ -15,7 +15,7 @@ public static partial class XlsxChartPartReader
             var chartType = element.Name.LocalName switch
             {
                 "surfaceChart" => ChartType.Surface,
-                "surface3DChart" => ChartType.Surface,
+                "surface3DChart" => ChartType.ThreeDSurface,
                 "treemapChart" => ChartType.Treemap,
                 "sunburstChart" => ChartType.Sunburst,
                 "histogramChart" => XlsxChartSeriesRangeReader.HasDescendant(element, "paretoLine") ? ChartType.Pareto : ChartType.Histogram,
