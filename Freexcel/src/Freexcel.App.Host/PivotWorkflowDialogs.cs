@@ -1076,7 +1076,9 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowExpandCollapseButtons = true,
     bool AutofitColumnsOnUpdate = true,
     bool PreserveFormattingOnUpdate = true,
-    bool ShowFieldHeaders = true);
+    bool ShowFieldHeaders = true,
+    bool ShowContextualTooltips = true,
+    bool ShowPropertiesInTooltips = true);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -1099,6 +1101,8 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _rowHeadersBox = new() { Content = "Row _headers" };
     private readonly CheckBox _columnHeadersBox = new() { Content = "Column hea_ders" };
     private readonly CheckBox _fieldHeadersBox = new() { Content = "Display field _captions and filter drop-downs", IsChecked = true };
+    private readonly CheckBox _contextualTooltipsBox = new() { Content = "Show contextual _tooltips", IsChecked = true };
+    private readonly CheckBox _propertiesInTooltipsBox = new() { Content = "Show _properties in tooltips", IsChecked = true };
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
@@ -1156,7 +1160,9 @@ public sealed class PivotTableOptionsDialog : Window
             showExpandCollapseButtons: pivotTable.ShowExpandCollapseButtons,
             autofitColumnsOnUpdate: pivotTable.AutofitColumnsOnUpdate,
             preserveFormattingOnUpdate: pivotTable.PreserveFormattingOnUpdate,
-            showFieldHeaders: pivotTable.ShowFieldHeaders);
+            showFieldHeaders: pivotTable.ShowFieldHeaders,
+            showContextualTooltips: pivotTable.ShowContextualTooltips,
+            showPropertiesInTooltips: pivotTable.ShowPropertiesInTooltips);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -1184,7 +1190,9 @@ public sealed class PivotTableOptionsDialog : Window
         bool showExpandCollapseButtons = true,
         bool autofitColumnsOnUpdate = true,
         bool preserveFormattingOnUpdate = true,
-        bool showFieldHeaders = true) =>
+        bool showFieldHeaders = true,
+        bool showContextualTooltips = true,
+        bool showPropertiesInTooltips = true) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -1211,7 +1219,9 @@ public sealed class PivotTableOptionsDialog : Window
             showExpandCollapseButtons,
             autofitColumnsOnUpdate,
             preserveFormattingOnUpdate,
-            showFieldHeaders);
+            showFieldHeaders,
+            showContextualTooltips,
+            showPropertiesInTooltips);
 
     private DockPanel CreateContent()
     {
@@ -1272,6 +1282,8 @@ public sealed class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _rowHeadersBox);
         AddCheckBox(stylePanel, _columnHeadersBox);
         AddCheckBox(stylePanel, _fieldHeadersBox);
+        AddCheckBox(stylePanel, _contextualTooltipsBox);
+        AddCheckBox(stylePanel, _propertiesInTooltipsBox);
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         AddCheckBox(stylePanel, _showExpandCollapseBox);
@@ -1366,6 +1378,8 @@ public sealed class PivotTableOptionsDialog : Window
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _fieldHeadersBox.IsChecked = result.ShowFieldHeaders;
+        _contextualTooltipsBox.IsChecked = result.ShowContextualTooltips;
+        _propertiesInTooltipsBox.IsChecked = result.ShowPropertiesInTooltips;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
         _emptyCellsBox.Text = result.EmptyValueText ?? "";
@@ -1414,7 +1428,9 @@ public sealed class PivotTableOptionsDialog : Window
             _showExpandCollapseBox.IsChecked == true,
             _autofitColumnsBox.IsChecked == true,
             _preserveFormattingBox.IsChecked == true,
-            _fieldHeadersBox.IsChecked == true);
+            _fieldHeadersBox.IsChecked == true,
+            _contextualTooltipsBox.IsChecked == true,
+            _propertiesInTooltipsBox.IsChecked == true);
         DialogResult = true;
     }
 

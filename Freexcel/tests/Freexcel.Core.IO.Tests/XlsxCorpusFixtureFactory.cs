@@ -601,7 +601,9 @@ internal static class XlsxCorpusFixtureFactory
             Type = DvType.List,
             Formula1 = "Apple,Banana,Cherry",
             ErrorTitle = "Invalid choice",
-            ErrorMessage = "Choose a listed item."
+            ErrorMessage = "Choose a listed item.",
+            PromptTitle = "Pick a fruit",
+            PromptMessage = "Select Apple, Banana, or Cherry."
         });
         sheet.DataValidations.Add(new DataValidation
         {
@@ -738,6 +740,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "C1", new NumberValue(3));
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Corpus Image 1",
             Anchor = Addr(sheet, "E2"),
             Kind = PictureKind.Image,
             ImageBytes = MinimalPngBytes(),
@@ -762,6 +765,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "A1", new TextValue("Drawing objects"));
         sheet.TextBoxes.Add(new TextBoxModel
         {
+            Name = "Corpus Text Box 1",
             Anchor = Addr(sheet, "B2"),
             Text = "Corpus note",
             Width = 200,
@@ -772,6 +776,7 @@ internal static class XlsxCorpusFixtureFactory
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
+            Name = "Corpus Ellipse 1",
             Anchor = Addr(sheet, "D5"),
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
@@ -972,8 +977,8 @@ internal static class XlsxCorpusFixtureFactory
             PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
             RefreshOnLoad = true
         };
-        cache.Fields.Add(new PivotCacheFieldModel("Region", SharedItems: ["North", "South"]));
-        cache.Fields.Add(new PivotCacheFieldModel("Category", SharedItems: ["Hardware", "Software", "Services"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
+        cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
         cache.Fields.Add(new PivotCacheFieldModel("Amount", 4, ContainsNumber: true, MinValue: 80, MaxValue: 125));
         workbook.PivotCaches.Add(cache);
 
@@ -1045,6 +1050,7 @@ internal static class XlsxCorpusFixtureFactory
         Set(sheet, "C2", new NumberValue(8));
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Additional Corpus Image 1",
             Anchor = Addr(sheet, "F2"),
             Kind = PictureKind.Image,
             ImageBytes = MinimalPngBytes(),

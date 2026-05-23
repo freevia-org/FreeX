@@ -131,7 +131,7 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
         double rawSerial = ToNumber(args[0]);
         if (!double.IsFinite(rawSerial) || rawSerial < 0 || rawSerial >= 2958466.0) return ErrorValue.Num;
-        double rawReturnType = args.Count > 1 ? ToNumber(args[1]) : 1;
+        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
         int daySerial = (int)Math.Floor(rawSerial);

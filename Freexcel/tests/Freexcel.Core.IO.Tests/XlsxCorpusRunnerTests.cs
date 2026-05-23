@@ -63,6 +63,55 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedCorpusRows_IncludeNamedVisualObjects()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(tag => tag is "images" or "text-boxes" or "shapes"))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("visual object identity should be covered by deterministic generated fixtures");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        var workbooks = rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id)).ToArray();
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.Pictures)
+            .Should().Contain(picture => !string.IsNullOrWhiteSpace(picture.Name));
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.TextBoxes)
+            .Should().Contain(textBox => !string.IsNullOrWhiteSpace(textBox.Name));
+        workbooks
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DrawingShapes)
+            .Should().Contain(shape => !string.IsNullOrWhiteSpace(shape.Name));
+    }
+
+    [Fact]
+    public void GeneratedCorpusRows_IncludeDataValidationMessages()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-pass")
+            .Where(row => row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("data-validation"))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("validation prompt/error message metadata should be covered by deterministic generated fixtures");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreate(row.Id));
+
+        rows.Select(row => XlsxCorpusFixtureFactory.Create(row.Id))
+            .SelectMany(workbook => workbook.Sheets)
+            .SelectMany(sheet => sheet.DataValidations)
+            .Should().Contain(validation =>
+                !string.IsNullOrWhiteSpace(validation.ErrorTitle) &&
+                !string.IsNullOrWhiteSpace(validation.ErrorMessage) &&
+                !string.IsNullOrWhiteSpace(validation.PromptTitle) &&
+                !string.IsNullOrWhiteSpace(validation.PromptMessage));
+    }
+
+    [Fact]
     public void GeneratedKnownGapRows_DeclareExpectedWarningsAndNotes()
     {
         var rows = ReadManifestRows()
@@ -590,6 +639,7 @@ public class XlsxCorpusRunnerTests
             workbook.SheetCount,
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
+            workbook.PivotCaches.Select(CapturePivotCacheSummary).ToArray(),
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
             workbook.PivotTableStyles.Count,
@@ -602,6 +652,7 @@ public class XlsxCorpusRunnerTests
             sheet.CellCount,
             sheet.EnumerateCells().Count(item => item.Cell.HasFormula),
             sheet.MergedRegions.Count,
+            sheet.DataValidations.Select(CaptureDataValidationSummary).ToArray(),
             sheet.DataValidations.Count,
             sheet.ConditionalFormats.Count,
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
@@ -611,14 +662,19 @@ public class XlsxCorpusRunnerTests
             sheet.Hyperlinks.Count,
             sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
+            sheet.PivotTables.Select(CapturePivotTableSummary).ToArray(),
             sheet.PivotTables.Count,
             sheet.PivotTables.Sum(pivot => pivot.RowFields.Count + pivot.ColumnFields.Count + pivot.PageFields.Count + pivot.DataFields.Count),
             sheet.StructuredTables.Select(CaptureStructuredTableSummary).ToArray(),
             sheet.StructuredTables.Count,
             sheet.StructuredTables.Sum(table => table.Columns.Count),
+            sheet.Sparklines.Select(sparkline => new SparklineSummary(sparkline.Kind, ToRangeSummary(sparkline.DataRange), sparkline.Location.Row, sparkline.Location.Col)).ToArray(),
             sheet.Sparklines.Count,
+            sheet.TextBoxes.Select(CaptureTextBoxSummary).ToArray(),
             sheet.TextBoxes.Count,
+            sheet.DrawingShapes.Select(CaptureDrawingShapeSummary).ToArray(),
             sheet.DrawingShapes.Count,
+            sheet.Pictures.Select(CapturePictureSummary).ToArray(),
             sheet.Pictures.Count,
             sheet.BackgroundImage is not null,
             sheet.IsProtected,
@@ -665,6 +721,41 @@ public class XlsxCorpusRunnerTests
                 chart.DataRange.End.Row,
                 chart.DataRange.End.Col));
 
+    private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
+        new(
+            cache.CacheId,
+            cache.SourceType,
+            cache.SourceSheetName ?? "",
+            cache.SourceReference ?? "",
+            cache.SourceTableName ?? "",
+            cache.ConnectionId,
+            cache.IsOlap,
+            cache.RefreshOnLoad,
+            cache.SaveData,
+            cache.EnableRefresh,
+            cache.MissingItemsLimit,
+            cache.RefreshedVersion,
+            cache.Fields
+                .Select(field => new PivotCacheFieldSummary(
+                    field.Name,
+                    field.NumberFormatId,
+                    field.SharedItemCount,
+                    field.ContainsBlank,
+                    field.ContainsString,
+                    field.ContainsNumber,
+                    field.ContainsDate,
+                    field.ContainsMixedTypes,
+                    field.ContainsSemiMixedTypes,
+                    field.ContainsNonDate,
+                    field.ContainsInteger,
+                    field.ContainsLongText,
+                    field.MinValue,
+                    field.MaxValue,
+                    field.MinDate ?? "",
+                    field.MaxDate ?? "",
+                    field.SharedItems?.ToArray() ?? []))
+                .ToArray());
+
     private static StructuredTableSummary CaptureStructuredTableSummary(StructuredTableModel table) =>
         new(
             table.Name,
@@ -690,6 +781,120 @@ public class XlsxCorpusRunnerTests
                     column.CalculatedColumnFormula ?? "",
                     column.TotalsRowFormula ?? ""))
                 .ToArray());
+
+    private static PivotTableSummary CapturePivotTableSummary(PivotTableModel pivot) =>
+        new(
+            pivot.Name,
+            pivot.CacheId,
+            ToRangeSummary(pivot.SourceRange),
+            ToRangeSummary(pivot.TargetRange),
+            pivot.ShowSubtotals,
+            pivot.SubtotalPlacement,
+            pivot.ShowRowGrandTotals,
+            pivot.ShowColumnGrandTotals,
+            pivot.RepeatItemLabels,
+            pivot.BlankLineAfterItems,
+            pivot.ReportLayout,
+            pivot.StyleName,
+            pivot.ShowRowHeaders,
+            pivot.ShowColumnHeaders,
+            pivot.ShowRowStripes,
+            pivot.ShowColumnStripes,
+            pivot.ShowFieldHeaders,
+            pivot.EmptyValueText ?? "",
+            pivot.AutofitColumnsOnUpdate,
+            pivot.PreserveFormattingOnUpdate,
+            pivot.ShowExpandCollapseButtons,
+            pivot.PrintTitles,
+            pivot.PrintExpandCollapseButtons,
+            pivot.RowFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.ColumnFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.PageFields.Select(CapturePivotFieldSummary).ToArray(),
+            pivot.DataFields.Select(CapturePivotDataFieldSummary).ToArray());
+
+    private static PivotFieldSummary CapturePivotFieldSummary(PivotFieldModel field) =>
+        new(
+            field.SourceFieldIndex,
+            field.SelectedItem ?? "",
+            field.SelectedItems?.ToArray() ?? [],
+            field.Grouping,
+            field.GroupStart,
+            field.GroupEnd,
+            field.GroupInterval);
+
+    private static PivotDataFieldSummary CapturePivotDataFieldSummary(PivotDataFieldModel field) =>
+        new(
+            field.SourceFieldIndex,
+            field.Name,
+            field.SummaryFunction,
+            field.NumberFormatId,
+            field.CalculatedFieldName ?? "",
+            field.ShowValuesAs,
+            field.BaseFieldIndex,
+            field.BaseItem ?? "",
+            field.NumberFormatCode ?? "");
+
+    private static ChartRangeSummary ToRangeSummary(GridRange range) =>
+        new(
+            range.Start.Row,
+            range.Start.Col,
+            range.End.Row,
+            range.End.Col);
+
+    private static TextBoxSummary CaptureTextBoxSummary(TextBoxModel textBox) =>
+        new(
+            textBox.Name ?? "",
+            textBox.Text,
+            textBox.AltText ?? "",
+            textBox.Anchor.Row,
+            textBox.Anchor.Col,
+            textBox.Width,
+            textBox.Height,
+            textBox.RotationDegrees,
+            textBox.IsVisible);
+
+    private static DrawingShapeSummary CaptureDrawingShapeSummary(DrawingShapeModel shape) =>
+        new(
+            shape.Name ?? "",
+            shape.Kind,
+            shape.AltText ?? "",
+            shape.Anchor.Row,
+            shape.Anchor.Col,
+            shape.Width,
+            shape.Height,
+            shape.RotationDegrees,
+            shape.IsVisible);
+
+    private static PictureSummary CapturePictureSummary(PictureModel picture) =>
+        new(
+            picture.Name ?? "",
+            picture.Kind,
+            picture.AltText ?? "",
+            picture.Anchor.Row,
+            picture.Anchor.Col,
+            picture.Width,
+            picture.Height,
+            picture.RotationDegrees,
+            picture.IsVisible,
+            picture.ContentType ?? "",
+            picture.ImageBytes?.Length ?? 0);
+
+    private static DataValidationSummary CaptureDataValidationSummary(DataValidation validation) =>
+        new(
+            validation.Type,
+            validation.Operator,
+            validation.Formula1 ?? "",
+            validation.Formula2 ?? "",
+            validation.AllowBlank,
+            validation.ShowDropdown,
+            validation.AlertStyle,
+            validation.ShowInputMessage,
+            validation.ShowErrorMessage,
+            validation.ErrorTitle ?? "",
+            validation.ErrorMessage ?? "",
+            validation.PromptTitle ?? "",
+            validation.PromptMessage ?? "",
+            ToRangeSummary(validation.AppliesTo));
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -909,6 +1114,7 @@ public class XlsxCorpusRunnerTests
         int SheetCount,
         int NamedRangeCount,
         bool IsStructureProtected,
+        IReadOnlyList<PivotCacheSummary> PivotCaches,
         int PivotCacheCount,
         int PivotCacheFieldCount,
         int PivotTableStyleCount,
@@ -920,6 +1126,7 @@ public class XlsxCorpusRunnerTests
         int CellCount,
         int FormulaCount,
         int MergedRegionCount,
+        IReadOnlyList<DataValidationSummary> DataValidations,
         int DataValidationCount,
         int ConditionalFormatCount,
         int ColorScaleConditionalFormatCount,
@@ -929,14 +1136,19 @@ public class XlsxCorpusRunnerTests
         int HyperlinkCount,
         IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
+        IReadOnlyList<PivotTableSummary> PivotTables,
         int PivotTableCount,
         int PivotTableFieldCount,
         IReadOnlyList<StructuredTableSummary> StructuredTables,
         int StructuredTableCount,
         int StructuredTableColumnCount,
+        IReadOnlyList<SparklineSummary> Sparklines,
         int SparklineCount,
+        IReadOnlyList<TextBoxSummary> TextBoxes,
         int TextBoxCount,
+        IReadOnlyList<DrawingShapeSummary> DrawingShapes,
         int DrawingShapeCount,
+        IReadOnlyList<PictureSummary> Pictures,
         int PictureCount,
         bool HasBackgroundImage,
         bool IsProtected,
@@ -1004,6 +1216,146 @@ public class XlsxCorpusRunnerTests
         string TotalsRowFunction,
         string CalculatedColumnFormula,
         string TotalsRowFormula);
+
+    private sealed record PivotTableSummary(
+        string Name,
+        int CacheId,
+        ChartRangeSummary SourceRange,
+        ChartRangeSummary TargetRange,
+        bool ShowSubtotals,
+        PivotSubtotalPlacement SubtotalPlacement,
+        bool ShowRowGrandTotals,
+        bool ShowColumnGrandTotals,
+        bool RepeatItemLabels,
+        bool BlankLineAfterItems,
+        PivotReportLayout ReportLayout,
+        string StyleName,
+        bool ShowRowHeaders,
+        bool ShowColumnHeaders,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
+        bool ShowFieldHeaders,
+        string EmptyValueText,
+        bool AutofitColumnsOnUpdate,
+        bool PreserveFormattingOnUpdate,
+        bool ShowExpandCollapseButtons,
+        bool PrintTitles,
+        bool PrintExpandCollapseButtons,
+        IReadOnlyList<PivotFieldSummary> RowFields,
+        IReadOnlyList<PivotFieldSummary> ColumnFields,
+        IReadOnlyList<PivotFieldSummary> PageFields,
+        IReadOnlyList<PivotDataFieldSummary> DataFields);
+
+    private sealed record PivotCacheSummary(
+        int CacheId,
+        PivotCacheSourceType SourceType,
+        string SourceSheetName,
+        string SourceReference,
+        string SourceTableName,
+        int? ConnectionId,
+        bool IsOlap,
+        bool RefreshOnLoad,
+        bool SaveData,
+        bool EnableRefresh,
+        int? MissingItemsLimit,
+        int? RefreshedVersion,
+        IReadOnlyList<PivotCacheFieldSummary> Fields);
+
+    private sealed record PivotCacheFieldSummary(
+        string Name,
+        int? NumberFormatId,
+        int? SharedItemCount,
+        bool ContainsBlank,
+        bool ContainsString,
+        bool ContainsNumber,
+        bool ContainsDate,
+        bool ContainsMixedTypes,
+        bool ContainsSemiMixedTypes,
+        bool ContainsNonDate,
+        bool ContainsInteger,
+        bool ContainsLongText,
+        double? MinValue,
+        double? MaxValue,
+        string MinDate,
+        string MaxDate,
+        IReadOnlyList<string> SharedItems);
+
+    private sealed record PivotFieldSummary(
+        int SourceFieldIndex,
+        string SelectedItem,
+        IReadOnlyList<string> SelectedItems,
+        PivotFieldGrouping Grouping,
+        double? GroupStart,
+        double? GroupEnd,
+        double? GroupInterval);
+
+    private sealed record PivotDataFieldSummary(
+        int SourceFieldIndex,
+        string Name,
+        string SummaryFunction,
+        int? NumberFormatId,
+        string CalculatedFieldName,
+        PivotShowValuesAs ShowValuesAs,
+        int? BaseFieldIndex,
+        string BaseItem,
+        string NumberFormatCode);
+
+    private sealed record SparklineSummary(
+        SparklineKind Kind,
+        ChartRangeSummary DataRange,
+        uint LocationRow,
+        uint LocationColumn);
+
+    private sealed record TextBoxSummary(
+        string Name,
+        string Text,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible);
+
+    private sealed record DrawingShapeSummary(
+        string Name,
+        DrawingShapeKind Kind,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible);
+
+    private sealed record PictureSummary(
+        string Name,
+        PictureKind Kind,
+        string AltText,
+        uint AnchorRow,
+        uint AnchorColumn,
+        double Width,
+        double Height,
+        double RotationDegrees,
+        bool IsVisible,
+        string ContentType,
+        int ImageByteCount);
+
+    private sealed record DataValidationSummary(
+        DvType Type,
+        DvOperator Operator,
+        string Formula1,
+        string Formula2,
+        bool AllowBlank,
+        bool ShowDropdown,
+        DvAlertStyle AlertStyle,
+        bool ShowInputMessage,
+        bool ShowErrorMessage,
+        string ErrorTitle,
+        string ErrorMessage,
+        string PromptTitle,
+        string PromptMessage,
+        ChartRangeSummary AppliesTo);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,

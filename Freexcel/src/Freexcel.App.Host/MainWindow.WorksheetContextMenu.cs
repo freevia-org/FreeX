@@ -16,8 +16,9 @@ public partial class MainWindow
             SetActiveCell(actualAddr);
 
         var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
+        var state = GetWorksheetContextMenuState(actualAddr);
         var menu = new ContextMenu();
-        foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind))
+        foreach (var command in WorksheetContextMenuPlanner.BuildCommands(targetKind, state))
         {
             if (command.IsSeparator)
             {
@@ -25,7 +26,7 @@ public partial class MainWindow
                 continue;
             }
 
-            var item = new MenuItem { Header = command.AccessHeader };
+            var item = new MenuItem { Header = command.AccessHeader, IsEnabled = command.IsEnabled };
             item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, actualAddr);
             menu.Items.Add(item);
         }
@@ -268,5 +269,17 @@ public partial class MainWindow
             DrawingObjectTargetKind.TextBox => WorksheetContextMenuTargetKind.TextBox,
             _ => WorksheetContextMenuTargetKind.Worksheet
         };
+    }
+
+    private WorksheetContextMenuState GetWorksheetContextMenuState(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return WorksheetContextMenuState.Default;
+
+        return new WorksheetContextMenuState(
+            HasThreadedComment: sheet.ThreadedComments.ContainsKey(address),
+            HasNote: sheet.Comments.ContainsKey(address),
+            HasHyperlink: sheet.Hyperlinks.ContainsKey(address));
     }
 }
