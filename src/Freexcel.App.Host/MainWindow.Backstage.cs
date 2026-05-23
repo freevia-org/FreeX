@@ -54,6 +54,21 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private bool TryOpenFocusedBackstageContextMenu()
+    {
+        if (!IsStartScreenVisible() ||
+            Keyboard.FocusedElement is not FrameworkElement focusedElement ||
+            !IsInsideStartScreenOverlay(focusedElement) ||
+            focusedElement.ContextMenu is not { } menu)
+        {
+            return false;
+        }
+
+        menu.PlacementTarget = focusedElement;
+        menu.IsOpen = true;
+        return true;
+    }
+
     private void OpenPrintBackstage()
     {
         ShowStartScreen();
