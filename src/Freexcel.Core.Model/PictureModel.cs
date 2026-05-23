@@ -29,6 +29,7 @@ public sealed class PictureModel
     public double CropTop { get; set; }
     public double CropRight { get; set; }
     public double CropBottom { get; set; }
+    public bool IsSourceLoaded { get; set; }
 }
 
 public sealed record PictureCellSnapshot(uint RowOffset, uint ColumnOffset, string Text);
