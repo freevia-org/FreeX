@@ -569,6 +569,13 @@ public partial class MainWindow
 
         if (e.Key is Key.Home or Key.End)
         {
+            var direction = e.Key switch
+            {
+                Key.Home => FocusNavigationDirection.First,
+                Key.End => FocusNavigationDirection.Last,
+                _ => FocusNavigationDirection.Next
+            };
+            MoveFocusedRibbonElement(focusedElement, direction);
             e.Handled = true;
             return true;
         }
