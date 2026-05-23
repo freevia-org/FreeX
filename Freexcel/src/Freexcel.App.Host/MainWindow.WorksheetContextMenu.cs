@@ -227,6 +227,9 @@ public partial class MainWindow
 
     private void OpenKeyboardContextMenu()
     {
+        if (TryOpenFocusedSheetTabContextMenu())
+            return;
+
         var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
         OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
     }
