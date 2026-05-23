@@ -1112,6 +1112,9 @@ public class XlsxCorpusRunnerTests
             chart.BarGapWidth,
             chart.BarOverlap,
             chart.VaryColorsByPoint,
+            CaptureChartTrendlineSummary(chart),
+            CaptureChartErrorBarSummary(chart),
+            chart.ShowDropLines,
             chart.StockSubtype,
             chart.ShowHighLowLines,
             chart.ShowUpDownBars,
@@ -1131,6 +1134,27 @@ public class XlsxCorpusRunnerTests
                 dataTable.ShowVerticalBorder,
                 dataTable.ShowOutline,
                 dataTable.ShowLegendKeys);
+
+    private static ChartTrendlineSummary CaptureChartTrendlineSummary(ChartModel chart) =>
+        new(
+            chart.ShowLinearTrendline,
+            chart.TrendlineType,
+            chart.TrendlinePeriod,
+            chart.TrendlineOrder,
+            chart.ShowTrendlineEquation,
+            chart.ShowTrendlineRSquared,
+            chart.TrendlineColor is null ? "" : ToColorSummary(chart.TrendlineColor.Value),
+            chart.TrendlineThemeColor,
+            chart.TrendlineThickness,
+            chart.TrendlineDashStyle);
+
+    private static ChartErrorBarSummary CaptureChartErrorBarSummary(ChartModel chart) =>
+        new(
+            chart.ShowErrorBars,
+            chart.ErrorBarKind,
+            chart.ErrorBarDirection,
+            chart.ErrorBarValue,
+            chart.ErrorBarEndCaps);
 
     private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
         new(
@@ -2156,6 +2180,9 @@ public class XlsxCorpusRunnerTests
         int? BarGapWidth,
         int? BarOverlap,
         bool? VaryColorsByPoint,
+        ChartTrendlineSummary Trendline,
+        ChartErrorBarSummary ErrorBars,
+        bool ShowDropLines,
         StockChartSubtype StockSubtype,
         bool ShowHighLowLines,
         bool ShowUpDownBars,
@@ -2207,6 +2234,25 @@ public class XlsxCorpusRunnerTests
         double LabelAngle,
         string LineColor,
         double LineThickness);
+
+    private sealed record ChartTrendlineSummary(
+        bool Show,
+        ChartTrendlineType Type,
+        int Period,
+        int Order,
+        bool ShowEquation,
+        bool ShowRSquared,
+        string Color,
+        WorkbookThemeColorReference? ThemeColor,
+        double Thickness,
+        ChartLineDashStyle DashStyle);
+
+    private sealed record ChartErrorBarSummary(
+        bool Show,
+        ChartErrorBarKind Kind,
+        ChartErrorBarDirection Direction,
+        double Value,
+        bool EndCaps);
 
     private sealed record ChartColorMapSummary(
         bool UseMasterColorMapping,
