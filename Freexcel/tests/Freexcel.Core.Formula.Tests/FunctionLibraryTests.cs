@@ -5208,6 +5208,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void ChooserowsAndChoosecols_HugeFiniteIndex_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new TextValue("A")), (2,1,new TextValue("B")));
+
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSEROWS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,2147483648)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CHOOSECOLS(A1:A2,-2147483649)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Vstack_AppendsRowsAndPadsShorterArraysWithNA()
     {
         var sheet = MakeSheet(
