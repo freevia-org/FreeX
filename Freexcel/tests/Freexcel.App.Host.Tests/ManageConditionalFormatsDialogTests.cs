@@ -132,10 +132,24 @@ public sealed class ManageConditionalFormatsDialogTests
         source.Should().Contain("typeof(Button)");
         source.Should().Contain("new Binding(nameof(ConditionalFormat.AppliesTo))");
         source.Should().Contain("new AppliesToRangeConverter(_sheet.Id)");
-        source.Should().Contain("ToolTipProperty, \"Select Applies To range text\"");
+        source.Should().Contain("ToolTipProperty, \"Collapse dialog and select Applies To range\"");
+        source.Should().Contain("AutomationProperties.NameProperty, \"Select Applies To range\"");
+        source.Should().Contain("AutomationProperties.HelpTextProperty");
         source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest");
+        source.Should().Contain("_requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest)");
         source.Should().Contain("RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1");
         source.Should().Contain("SetBinding(UIElement.IsEnabledProperty, new Binding(\"IsSelected\")");
+    }
+
+    [Fact]
+    public void CreateAppliesToRangeSelectionRequest_UsesExcelCollapseIntent()
+    {
+        var ruleId = Guid.NewGuid();
+
+        ManageConditionalFormatsDialog.CreateAppliesToRangeSelectionRequest(ruleId, " $A$1:$C$5 ")
+            .Should()
+            .Be(new ConditionalFormatAppliesToRangeSelectionRequest(ruleId, "$A$1:$C$5", CollapseDialog: true));
     }
 
     [Fact]
