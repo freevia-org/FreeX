@@ -2,6 +2,8 @@ using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -144,7 +146,36 @@ public sealed class RemainingDialogTests
         pageBreakSource.Should().Contain("_Reset all page breaks");
         pageBreakSource.Should().Contain("_rowBreakBox");
         pageBreakSource.Should().Contain("_columnBreakBox");
+        pageBreakSource.Should().Contain("RefreshInputStates");
+        pageBreakSource.Should().Contain("_rowBreakBox.IsEnabled = _insertRowButton.IsChecked == true");
+        pageBreakSource.Should().Contain("_columnBreakBox.IsEnabled = _insertColumnButton.IsChecked == true");
         pageBreakSource.Should().NotContain("ObjectSizeDialog.CreateSingleInputContent(\"Page break:\"");
+    }
+
+    [Fact]
+    public void PageBreakDialog_EnablesOnlyInputsForSelectedAction()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PageBreakDialog("row 12");
+            var insertColumnButton = GetField<RadioButton>(dialog, "_insertColumnButton");
+            var resetAllButton = GetField<RadioButton>(dialog, "_resetAllButton");
+            var rowBreakBox = GetField<TextBox>(dialog, "_rowBreakBox");
+            var columnBreakBox = GetField<TextBox>(dialog, "_columnBreakBox");
+
+            rowBreakBox.IsEnabled.Should().BeTrue();
+            columnBreakBox.IsEnabled.Should().BeFalse();
+
+            insertColumnButton.IsChecked = true;
+            rowBreakBox.IsEnabled.Should().BeFalse();
+            columnBreakBox.IsEnabled.Should().BeTrue();
+
+            resetAllButton.IsChecked = true;
+            rowBreakBox.IsEnabled.Should().BeFalse();
+            columnBreakBox.IsEnabled.Should().BeFalse();
+
+            dialog.Close();
+        });
     }
 
     [Fact]
@@ -399,5 +430,13 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("Content = \"_Close Preview\"");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
+    }
+
+    private static T GetField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
 }
