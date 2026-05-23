@@ -523,21 +523,32 @@ public static partial class PivotTableRefreshService
             return;
 
         for (var colOffset = 0; colOffset < rowLabelColumnCount - 1; colOffset++)
-            MergeRepeatedLabelsInColumn(sheet, materialized, bodyStart.Row + 1, bodyStart.Col + (uint)colOffset);
+            MergeRepeatedLabelsInColumn(
+                sheet,
+                materialized,
+                bodyStart.Row + 1,
+                bodyStart.Col + (uint)colOffset,
+                bodyStart.Col + (uint)rowLabelColumnCount - 1);
     }
 
     private static void MergeRepeatedLabelsInColumn(
         Sheet sheet,
         GridRange materialized,
         uint firstBodyRow,
-        uint labelCol)
+        uint labelCol,
+        uint lastRowLabelCol)
     {
         uint? spanStart = null;
         string? spanText = null;
         for (var row = firstBodyRow; row <= materialized.End.Row + 1; row++)
         {
             var text = row <= materialized.End.Row ? GetMergeableLabelText(sheet, row, labelCol) : null;
+            var suppressedContinuation = text is null &&
+                spanStart is not null &&
+                row <= materialized.End.Row &&
+                HasInnerRowLabelValue(sheet, row, labelCol, lastRowLabelCol);
             if (spanStart is not null &&
+                !suppressedContinuation &&
                 (!string.Equals(text, spanText, StringComparison.Ordinal) || text is null))
             {
                 MergeLabelSpan(sheet, spanStart.Value, row - 1, labelCol);
@@ -564,6 +575,17 @@ public static partial class PivotTableRefreshService
         }
 
         return text.Value;
+    }
+
+    private static bool HasInnerRowLabelValue(Sheet sheet, uint row, uint labelCol, uint lastRowLabelCol)
+    {
+        for (var col = labelCol + 1; col <= lastRowLabelCol; col++)
+        {
+            if (GetMergeableLabelText(sheet, row, col) is not null)
+                return true;
+        }
+
+        return false;
     }
 
     private static void MergeLabelSpan(Sheet sheet, uint startRow, uint endRow, uint col)
