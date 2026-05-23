@@ -609,9 +609,11 @@ public class XlsxCorpusRunnerTests
             sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.IconSet),
             sheet.Comments.Count,
             sheet.Hyperlinks.Count,
+            sheet.Charts.Select(CaptureChartSummary).ToArray(),
             sheet.Charts.Count,
             sheet.PivotTables.Count,
             sheet.PivotTables.Sum(pivot => pivot.RowFields.Count + pivot.ColumnFields.Count + pivot.PageFields.Count + pivot.DataFields.Count),
+            sheet.StructuredTables.Select(CaptureStructuredTableSummary).ToArray(),
             sheet.StructuredTables.Count,
             sheet.StructuredTables.Sum(table => table.Columns.Count),
             sheet.Sparklines.Count,
@@ -650,6 +652,44 @@ public class XlsxCorpusRunnerTests
             sheet.GroupHiddenRows.Count,
             sheet.GroupHiddenCols.Count,
             sheet.GetStyleOnlyEntries().Count());
+
+    private static ChartSummary CaptureChartSummary(ChartModel chart) =>
+        new(
+            chart.Type,
+            chart.Title ?? "",
+            chart.ShowLegend,
+            chart.IsPivotChart,
+            new ChartRangeSummary(
+                chart.DataRange.Start.Row,
+                chart.DataRange.Start.Col,
+                chart.DataRange.End.Row,
+                chart.DataRange.End.Col));
+
+    private static StructuredTableSummary CaptureStructuredTableSummary(StructuredTableModel table) =>
+        new(
+            table.Name,
+            table.DisplayName,
+            table.StyleName ?? "",
+            table.HasAutoFilter,
+            table.TotalsRowShown,
+            table.ShowFirstColumn,
+            table.ShowLastColumn,
+            table.ShowRowStripes,
+            table.ShowColumnStripes,
+            new ChartRangeSummary(
+                table.Range.Start.Row,
+                table.Range.Start.Col,
+                table.Range.End.Row,
+                table.Range.End.Col),
+            table.Columns
+                .Select(column => new StructuredTableColumnSummary(
+                    column.Id,
+                    column.Name,
+                    column.TotalsRowLabel ?? "",
+                    column.TotalsRowFunction ?? "",
+                    column.CalculatedColumnFormula ?? "",
+                    column.TotalsRowFormula ?? ""))
+                .ToArray());
 
     private static WorkbookSummary CapturePublicComparableSummary(Workbook workbook)
     {
@@ -887,9 +927,11 @@ public class XlsxCorpusRunnerTests
         int IconSetConditionalFormatCount,
         int CommentCount,
         int HyperlinkCount,
+        IReadOnlyList<ChartSummary> Charts,
         int ChartCount,
         int PivotTableCount,
         int PivotTableFieldCount,
+        IReadOnlyList<StructuredTableSummary> StructuredTables,
         int StructuredTableCount,
         int StructuredTableColumnCount,
         int SparklineCount,
@@ -928,6 +970,40 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenRowCount,
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
+
+    private sealed record ChartSummary(
+        ChartType Type,
+        string Title,
+        bool ShowLegend,
+        bool IsPivotChart,
+        ChartRangeSummary DataRange);
+
+    private sealed record ChartRangeSummary(
+        uint StartRow,
+        uint StartColumn,
+        uint EndRow,
+        uint EndColumn);
+
+    private sealed record StructuredTableSummary(
+        string Name,
+        string DisplayName,
+        string StyleName,
+        bool HasAutoFilter,
+        bool TotalsRowShown,
+        bool ShowFirstColumn,
+        bool ShowLastColumn,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
+        ChartRangeSummary Range,
+        IReadOnlyList<StructuredTableColumnSummary> Columns);
+
+    private sealed record StructuredTableColumnSummary(
+        int Id,
+        string Name,
+        string TotalsRowLabel,
+        string TotalsRowFunction,
+        string CalculatedColumnFormula,
+        string TotalsRowFormula);
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
