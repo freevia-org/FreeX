@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -99,6 +100,7 @@ public sealed class ConsolidateDialog : Window
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
         UpdateReferenceButtons();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
@@ -221,6 +223,12 @@ public sealed class ConsolidateDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _functionBox.Focus();
+        Keyboard.Focus(_functionBox);
     }
 
     private void AddReferenceButton_Click(object sender, RoutedEventArgs e)
