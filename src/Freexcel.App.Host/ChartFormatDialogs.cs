@@ -169,9 +169,45 @@ public sealed class ChartAreaLegendDialog : Window
             return;
         }
 
+        if (!TryReadOptionalColor(_plotAreaFillBox, out var plotAreaFillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _plotAreaFillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_plotAreaBorderBox, out var plotAreaBorderColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _plotAreaBorderBox);
+            return;
+        }
+
         if (!TryReadClampedDouble(_plotAreaBorderThicknessBox, min: 0, max: 10, out var plotAreaBorderThickness))
         {
             ShowInvalidInputWarning("Enter a plot area border width from 0 to 10 points.", _plotAreaBorderThicknessBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_legendTextBox, out var legendTextColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _legendTextBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_legendFillBox, out var legendFillColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _legendFillBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_legendBorderBox, out var legendBorderColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _legendBorderBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_legendBorderThicknessBox, min: 0, max: 10, out var legendBorderThickness))
+        {
+            ShowInvalidInputWarning("Enter a legend border width from 0 to 10 points.", _legendBorderThicknessBox);
             return;
         }
 
@@ -183,16 +219,16 @@ public sealed class ChartAreaLegendDialog : Window
 
         Result = CreateResult(
             chartAreaFillColor,
-            ChartDialogHelpers.ParseColor(_plotAreaFillBox.Text),
-            ChartDialogHelpers.ParseColor(_plotAreaBorderBox.Text),
+            plotAreaFillColor,
+            plotAreaBorderColor,
             plotAreaBorderThickness,
             _showLegendBox.IsChecked == true,
             ChartDialogHelpers.Selected(_legendPositionBox, ChartLegendPosition.Right),
             _legendOverlayBox.IsChecked == true,
-            ChartDialogHelpers.ParseColor(_legendTextBox.Text),
-            ChartDialogHelpers.ParseColor(_legendFillBox.Text),
-            ChartDialogHelpers.ParseColor(_legendBorderBox.Text),
-            ChartDialogHelpers.ParseDouble(_legendBorderThicknessBox.Text, 0),
+            legendTextColor,
+            legendFillColor,
+            legendBorderColor,
+            legendBorderThickness,
             legendFontSize);
         DialogResult = true;
     }

@@ -609,7 +609,13 @@ public sealed class ChartDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
 
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _chartAreaFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _plotAreaFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _plotAreaBorderBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a plot area border width from 0 to 10 points.\", _plotAreaBorderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendTextBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendBorderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend border width from 0 to 10 points.\", _legendBorderThicknessBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend font size from 6 to 72 points.\", _legendFontSizeBox);");
         source.Should().Contain("MessageBox.Show(");
         source.Should().Contain("this,");
