@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -62,6 +63,13 @@ public sealed class FillSeriesStepDialog : Window
         _stepBox.Text = step.ToString(CultureInfo.InvariantCulture);
         _stopBox.Text = "";
         Content = CreateSeriesContent();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _columnsButton.Focus();
+        Keyboard.Focus(_columnsButton);
     }
 
     public static bool TryCreateResult(string? input, out FillSeriesStepDialogResult result, out string? error)
