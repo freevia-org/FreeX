@@ -5964,6 +5964,10 @@ public partial class FileAdapterSmokeTests
             Top = 90,
             Width = 260,
             Height = 160,
+            ShowSeriesLines = true,
+            SeriesLineColor = new CellColor(91, 155, 213),
+            SeriesLineThickness = 1.5,
+            SeriesLineDashStyle = ChartLineDashStyle.Dot,
             SeriesFormats =
             [
                 new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)),
@@ -5995,6 +5999,10 @@ public partial class FileAdapterSmokeTests
         loadedChart.Top.Should().BeApproximately(90, 0.01);
         loadedChart.Width.Should().BeApproximately(260, 0.01);
         loadedChart.Height.Should().BeApproximately(160, 0.01);
+        loadedChart.ShowSeriesLines.Should().BeTrue();
+        loadedChart.SeriesLineColor.Should().Be(new CellColor(91, 155, 213));
+        loadedChart.SeriesLineThickness.Should().Be(1.5);
+        loadedChart.SeriesLineDashStyle.Should().Be(ChartLineDashStyle.Dot);
         loadedChart.SeriesFormats.Should().Contain(
             new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)));
         loadedChart.SeriesFormats.Should().Contain(
