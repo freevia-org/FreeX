@@ -418,9 +418,15 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double x = ToNumber(args[0]);
         double df = Math.Truncate(ToNumber(args[1]));
         bool cum = ToBool(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TDistScalar(value, df, cum));
+        return TDistScalar(args[0], df, cum);
+    }
+
+    private static ScalarValue TDistScalar(ScalarValue xValue, double df, bool cum)
+    {
+        double x = ToNumber(xValue);
         if (df < 1) return ErrorValue.Num;
         return cum ? NumberResult(TCdf(x, df)) : NumberResult(TPdf(x, df));
     }
@@ -429,8 +435,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double x = ToNumber(args[0]);
         double df = Math.Truncate(ToNumber(args[1]));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TDistRtScalar(value, df));
+        return TDistRtScalar(args[0], df);
+    }
+
+    private static ScalarValue TDistRtScalar(ScalarValue xValue, double df)
+    {
+        double x = ToNumber(xValue);
         if (df < 1) return ErrorValue.Num;
         if (x < 0) return ErrorValue.Num;
         return NumberResult(1.0 - TCdf(x, df));
@@ -440,8 +452,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double x = ToNumber(args[0]);
         double df = Math.Truncate(ToNumber(args[1]));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TDist2TScalar(value, df));
+        return TDist2TScalar(args[0], df);
+    }
+
+    private static ScalarValue TDist2TScalar(ScalarValue xValue, double df)
+    {
+        double x = ToNumber(xValue);
         if (df < 1) return ErrorValue.Num;
         if (x < 0) return ErrorValue.Num;
         return NumberResult(2.0 * (1.0 - TCdf(x, df)));
@@ -451,8 +469,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double prob = ToNumber(args[0]);
         double df = Math.Truncate(ToNumber(args[1]));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TInvScalar(value, df));
+        return TInvScalar(args[0], df);
+    }
+
+    private static ScalarValue TInvScalar(ScalarValue probabilityValue, double df)
+    {
+        double prob = ToNumber(probabilityValue);
         if (df < 1 || prob <= 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(TInv(prob, df));
     }
@@ -461,8 +485,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double prob = ToNumber(args[0]);
         double df = Math.Truncate(ToNumber(args[1]));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TInv2TScalar(value, df));
+        return TInv2TScalar(args[0], df);
+    }
+
+    private static ScalarValue TInv2TScalar(ScalarValue probabilityValue, double df)
+    {
+        double prob = ToNumber(probabilityValue);
         if (df < 1 || prob <= 0 || prob > 1) return ErrorValue.Num;
         // T.INV.2T(p, df) returns the positive t s.t. P(|T| > t) = p
         // i.e. the one-tail area is p/2, so we solve TCdf(-t) = p/2
