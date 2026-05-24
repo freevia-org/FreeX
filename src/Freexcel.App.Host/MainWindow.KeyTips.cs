@@ -364,6 +364,10 @@ public partial class MainWindow
         ISet<FrameworkElement> seen) =>
         seen.Add(element) &&
         !ReferenceEquals(element, KeyTipOverlay) &&
+        element.IsVisible &&
+        element.ActualWidth > 0 &&
+        element.ActualHeight > 0 &&
+        (scope != RibbonKeyTipScope.Commands || !IsInsideUnselectedTabItem(element)) &&
         ShouldShowKeyTipElement(element, scope) &&
         !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
 

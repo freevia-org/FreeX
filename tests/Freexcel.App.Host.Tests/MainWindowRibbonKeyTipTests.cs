@@ -163,6 +163,30 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupKeyTip_RoutesThroughVisibleOverflowGroup()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SetRibbonWidth(220);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.E);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Home");
+            harness.KeyTipScope.Should().Be("Commands", "E should be treated as the first character of the visible Editing group keytip ED");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.HandleKeyTip(Key.D);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Find & Select").Should().Be("FD");
+        });
+    }
+
+    [Fact]
     public void FormulasFunctionLibraryDynamicMenu_IsKeyTipRoutable()
     {
         RunSta(() =>
@@ -213,6 +237,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _handleActiveRibbonKeyTip;
         private readonly MethodInfo _tryHandleDirectRibbonKeyTip;
         private readonly MethodInfo _getVisibleKeyTipElements;
+        private readonly MethodInfo _updateRibbonCompactMode;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
@@ -228,6 +253,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleDirectRibbonKeyTip");
             _getVisibleKeyTipElements = typeof(MainWindow).GetMethod("GetVisibleKeyTipElements", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
+            _updateRibbonCompactMode = typeof(MainWindow).GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -309,6 +336,21 @@ public sealed class MainWindowRibbonKeyTipTests
             PumpDispatcher();
             configureWorkbook?.Invoke(workbookRef.Current);
             return new MainWindowHarness(window);
+        }
+
+        public void SetRibbonWidth(double width)
+        {
+            if (_window.FindName("RibbonTabs") is TabControl ribbonTabs)
+            {
+                ribbonTabs.Width = width;
+                ribbonTabs.SelectedIndex = 1;
+            }
+
+            _window.WindowState = WindowState.Normal;
+            _window.Width = width;
+            _window.UpdateLayout();
+            _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
         }
 
         public void EnterKeyTipScope(string scope)
