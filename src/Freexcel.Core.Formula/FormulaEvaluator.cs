@@ -1062,7 +1062,8 @@ public sealed class FormulaEvaluator
              or "BIN2DEC" or "HEX2DEC" or "OCT2DEC"
              or "DEC2BIN" or "DEC2HEX" or "DEC2OCT"
              or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX"
-             or "CONVERT";
+             or "CONVERT"
+             or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
