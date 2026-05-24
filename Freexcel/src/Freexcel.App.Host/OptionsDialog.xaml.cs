@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.IO;
 using Freexcel.Core.Commands;
 
@@ -26,7 +27,11 @@ public partial class OptionsDialog : Window
         DisabledFormulaErrorCodesResult = new HashSet<string>(_disabledFormulaErrorCodes, StringComparer.OrdinalIgnoreCase);
         Result = opts;
         InitializeComponent();
-        Loaded += (_, _) => Populate();
+        Loaded += (_, _) =>
+        {
+            Populate();
+            FocusInitialKeyboardTarget();
+        };
         TabList.SelectedIndex = 0;
     }
 
@@ -100,6 +105,12 @@ public partial class OptionsDialog : Window
         PanelAddIns.Visibility = selected == "_Add-ins" ? Visibility.Visible : Visibility.Collapsed;
         PanelTrustCenter.Visibility = selected == "_Trust Center" ? Visibility.Visible : Visibility.Collapsed;
         PanelView.Visibility = selected == "_View" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        TabList.Focus();
+        Keyboard.Focus(TabList);
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
