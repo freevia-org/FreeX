@@ -55,6 +55,14 @@ internal static class PdfTextOverlayExtractor
             foreach (UIElement child in panel.Children)
                 Extract(child, x, y, overlays);
         }
+        else if (element is Decorator { Child: UIElement decoratorChild })
+        {
+            Extract(decoratorChild, x, y, overlays);
+        }
+        else if (element is ContentControl { Content: UIElement contentChild })
+        {
+            Extract(contentChild, x, y, overlays);
+        }
     }
 
     private static double ReadLeft(UIElement element)
