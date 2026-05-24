@@ -145,6 +145,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (sDto.PageOrder is { } pageOrder && Enum.IsDefined(pageOrder))
                 sheet.PageOrder = pageOrder;
             sheet.FirstPageNumber = sDto.FirstPageNumber is > 0 ? sDto.FirstPageNumber : null;
+            sheet.UsePrinterDefaults = sDto.UsePrinterDefaults;
+            sheet.PrintCopies = sDto.PrintCopies is > 0 ? sDto.PrintCopies : null;
             sheet.PrintBlackAndWhite = sDto.PrintBlackAndWhite;
             sheet.PrintDraftQuality = sDto.PrintDraftQuality;
             sheet.PrintQualityDpi = sDto.PrintQualityDpi is > 0 ? sDto.PrintQualityDpi : null;
