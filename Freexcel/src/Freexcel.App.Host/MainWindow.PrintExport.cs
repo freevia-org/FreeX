@@ -81,7 +81,8 @@ public partial class MainWindow
                 options.Quality,
                 CreatePdfBookmarks(options),
                 options.InitialView,
-                options.OpenMode);
+                options.OpenMode,
+                includeSelectableText: true);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
