@@ -26,7 +26,8 @@ public sealed class GroupRowsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } p) return p;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousLevels = [];
         _previouslyHiddenByGroup = [];
