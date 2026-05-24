@@ -345,6 +345,7 @@ public sealed class HeaderFooterDialogXamlTests
             "HeaderFooterDialog.xaml.cs",
             "HeaderFooterDialog.TextHelpers.cs",
             "HeaderFooterDialog.Result.cs",
+            "HeaderFooterDialog.Pictures.cs",
             "HeaderFooterPictureFormatDialog.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
