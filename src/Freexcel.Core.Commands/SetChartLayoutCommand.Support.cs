@@ -162,7 +162,10 @@ public sealed partial class SetChartLayoutCommand
         || format.ShowSeriesName is not null
         || format.ShowLegendKey is not null
         || format.ShowPercentage is not null
-        || format.ShowBubbleSize is not null;
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
 
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {
