@@ -413,6 +413,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SheetNameDialogOpenedFromKeyboard_FocusesNameBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class SheetNameDialog", "public sealed record UnhideSheetDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
+    }
+
+    [Fact]
     public void UnhideSheetDialog_CreateResult_CapturesSelectedSheetName()
     {
         UnhideSheetDialog.CreateResult("  Hidden Sheet  ").Should().Be(new UnhideSheetDialogResult("Hidden Sheet"));
