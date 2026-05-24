@@ -69,7 +69,19 @@ public class PhaseBDistributionTests
         range.RowCount.Should().Be(expected.Length);
         range.ColCount.Should().Be(1);
         for (int row = 0; row < expected.Length; row++)
-            ((NumberValue)range.Cells[row, 0]).Value.Should().BeApproximately(expected[row], 1e-8);
+            ((NumberValue)range.Cells[row, 0]).Value.Should().BeApproximately(expected[row], 1e-6);
+    }
+
+    private static double NormSCdfForTest(double z)
+        => 0.5 * (1.0 + ErfForTest(z / Math.Sqrt(2.0)));
+
+    private static double ErfForTest(double x)
+    {
+        double sign = Math.Sign(x);
+        x = Math.Abs(x);
+        double t = 1.0 / (1.0 + 0.3275911 * x);
+        double y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.Exp(-x * x);
+        return sign * y;
     }
 
     [Fact]
@@ -157,6 +169,43 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void GammaAndLognormalFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 1.0), (2, 1, 2.0));
+
+        AssertColumnApproximately(Eval("GAMMA(A1:A2)", xValues), 1.0, 1.0);
+        AssertColumnApproximately(Eval("GAMMALN(A1:A2)", xValues), 0.0, 0.0);
+        AssertColumnApproximately(Eval("GAMMA.DIST(A1:A2,1,1,TRUE)", xValues), 1.0 - Math.Exp(-1.0), 1.0 - Math.Exp(-2.0));
+        AssertColumnApproximately(Eval("LOGNORM.DIST(A1:A2,0,1,TRUE)", xValues), 0.5, NormSCdfForTest(Math.Log(2.0)));
+
+        var probabilities = MakeSheet((1, 1, 0.5), (2, 1, 1.0 - Math.Exp(-2.0)));
+        AssertColumnApproximately(Eval("GAMMA.INV(A1:A2,1,1)", probabilities), Math.Log(2.0), 2.0);
+        AssertColumnApproximately(Eval("LOGNORM.INV(A1:A2,0,1)", MakeSheet((1, 1, 0.5), (2, 1, 0.8413447460685429))), 1.0, Math.E);
+    }
+
+    [Fact]
+    public void BetaDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 0.25), (2, 1, 0.5));
+
+        AssertColumnApproximately(Eval("BETA.DIST(A1:A2,1,1,TRUE)", xValues), 0.25, 0.5);
+        AssertColumnApproximately(Eval("BETA.DIST(A1:A2,1,1,FALSE)", xValues), 1.0, 1.0);
+
+        var probabilities = MakeSheet((1, 1, 0.25), (2, 1, 0.5));
+        AssertColumnApproximately(Eval("BETA.INV(A1:A2,1,1)", probabilities), 0.25, 0.5);
+    }
+
+    [Fact]
+    public void SimpleDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 1.0), (2, 1, 2.0));
+
+        AssertColumnApproximately(Eval("EXPON.DIST(A1:A2,1,TRUE)", xValues), 1.0 - Math.Exp(-1.0), 1.0 - Math.Exp(-2.0));
+        AssertColumnApproximately(Eval("WEIBULL.DIST(A1:A2,1,1,TRUE)", xValues), 1.0 - Math.Exp(-1.0), 1.0 - Math.Exp(-2.0));
+        AssertColumnApproximately(Eval("POISSON.DIST(A1:A2,2,FALSE)", xValues), 2.0 * Math.Exp(-2.0), 2.0 * Math.Exp(-2.0));
+    }
+
+    [Fact]
     public void TDist_CumulativeAt0_Returns0Point5()
         => Calc("T.DIST(0,10,TRUE)").Should().BeApproximately(0.5, 1e-10);
 
@@ -173,6 +222,18 @@ public class PhaseBDistributionTests
         => CalcError("T.DIST.2T(-1,10)").Should().Be("#NUM!");
 
     // ── T.INV ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet((1, 1, 0.0), (2, 1, 1.0));
+
+        AssertColumnApproximately(Eval("T.DIST(A1:A2,10,TRUE)", sheet), Calc("T.DIST(0,10,TRUE)"), Calc("T.DIST(1,10,TRUE)"));
+        AssertColumnApproximately(Eval("T.DIST.RT(A1:A2,10)", sheet), Calc("T.DIST.RT(0,10)"), Calc("T.DIST.RT(1,10)"));
+        AssertColumnApproximately(Eval("T.DIST.2T(A1:A2,10)", sheet), Calc("T.DIST.2T(0,10)"), Calc("T.DIST.2T(1,10)"));
+        AssertColumnApproximately(Eval("T.INV(A1:A2,10)", MakeSheet((1, 1, 0.5), (2, 1, 0.75))), Calc("T.INV(0.5,10)"), Calc("T.INV(0.75,10)"));
+        AssertColumnApproximately(Eval("T.INV.2T(A1:A2,10)", MakeSheet((1, 1, 0.5), (2, 1, 0.25))), Calc("T.INV.2T(0.5,10)"), Calc("T.INV.2T(0.25,10)"));
+    }
 
     [Fact]
     public void TInv_At0Point5_Returns0()

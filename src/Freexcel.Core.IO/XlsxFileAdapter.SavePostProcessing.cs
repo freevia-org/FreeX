@@ -20,6 +20,12 @@ public sealed partial class XlsxFileAdapter
             return worksheetPathMap;
         }
 
+        packageStream.Position = 0;
+        XlsxWorkbookMetadataWriter.SaveWorkbookProperties(packageStream, workbook);
+
+        packageStream.Position = 0;
+        XlsxWorkbookMetadataWriter.SaveWorkbookViewProperties(packageStream, workbook);
+
         if (workbook.IsStructureProtected)
         {
             packageStream.Position = 0;

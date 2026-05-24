@@ -267,6 +267,37 @@ public sealed record ChartPointDataLabelFormat(
         TextThemeColor?.Resolve(theme) ?? TextColor;
 }
 
+public sealed record ChartSeriesDataLabelFormat(
+    int SeriesIndex,
+    CellColor? FillColor = null,
+    CellColor? BorderColor = null,
+    double? BorderThickness = null,
+    CellColor? TextColor = null,
+    double? FontSize = null,
+    WorkbookThemeColorReference? FillThemeColor = null,
+    WorkbookThemeColorReference? BorderThemeColor = null,
+    WorkbookThemeColorReference? TextThemeColor = null,
+    ChartDataLabelPosition? Position = null,
+    bool? ShowValue = null,
+    bool? ShowCategoryName = null,
+    bool? ShowSeriesName = null,
+    bool? ShowLegendKey = null,
+    bool? ShowPercentage = null,
+    bool? ShowBubbleSize = null,
+    string? NumberFormatCode = null,
+    bool? NumberFormatSourceLinked = null,
+    string? SeparatorText = null)
+{
+    public CellColor? ResolveFillColor(WorkbookTheme theme) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor;
+
+    public CellColor? ResolveBorderColor(WorkbookTheme theme) =>
+        BorderThemeColor?.Resolve(theme) ?? BorderColor;
+
+    public CellColor? ResolveTextColor(WorkbookTheme theme) =>
+        TextThemeColor?.Resolve(theme) ?? TextColor;
+}
+
 /// <summary>Lightweight chart definition stored on a Sheet.</summary>
 public sealed class ChartModel
 {
@@ -525,6 +556,7 @@ public sealed class ChartModel
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
     public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];
+    public List<ChartSeriesDataLabelFormat> SeriesDataLabelFormats { get; set; } = [];
     public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];
     public bool UseComboLineForSecondarySeries { get; set; }
     public double Left   { get; set; } = 50;

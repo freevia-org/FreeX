@@ -113,7 +113,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartTypeDialogs_ExposeExcelInsertAndChangeSurfaces()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var source = ReadChartTypeDialogSource();
 
         source.Should().Contain("Recommended Charts");
         source.Should().Contain("All Charts");
@@ -147,9 +147,9 @@ public sealed class ChartDialogTests
     [Fact]
     public void InsertChartDialogOpenedFromKeyboard_FocusesRecommendedGallery()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var source = ReadChartTypeDialogSource();
         var dialogSource = source[
-            source.IndexOf("public sealed class InsertChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed partial class InsertChartDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record ChangeChartTypeDialogResult", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -173,7 +173,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChangeChartTypeDialogOpenedFromKeyboard_FocusesSubtypeGallery()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var source = ReadChartTypeDialogSource();
         var dialogSource = source[source.IndexOf("public sealed class ChangeChartTypeDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -331,7 +331,7 @@ public sealed class ChartDialogTests
     public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
     {
         var source = ReadChartDialogSource();
-        var dialogSource = source[source.IndexOf("public sealed class SelectDataSourceDialog", StringComparison.Ordinal)..];
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -462,7 +462,7 @@ public sealed class ChartDialogTests
     public void ChartFormatDialogs_ExposeKeyboardAccessKeysForOptionControls()
     {
         var source = string.Concat(
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs")),
+            ReadChartTypeDialogSource(),
             ReadChartFormatDialogSource());
 
         foreach (var content in new[]
@@ -855,6 +855,16 @@ public sealed class ChartDialogTests
         string.Join(Environment.NewLine, new[]
         {
             "ChartDialogs.cs",
-            "SelectDataSourceDialog.cs"
+            "SelectDataSourceDialog.cs",
+            "SelectDataSourceDialog.Planning.cs"
+        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
+
+    private static string ReadChartTypeDialogSource() =>
+        string.Join(Environment.NewLine, new[]
+        {
+            "ChartTypeDialogs.cs",
+            "ChartTypeDialogs.Planner.cs",
+            "ChartTypeDialogs.PickerUi.cs",
+            "ChartTypeDialogs.Change.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 }

@@ -173,19 +173,40 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is null) return;
         var addr = SheetGrid.SelectedRange.Value.Start;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var defaultText = sheet is null || !sheet.ThreadedComments.TryGetValue(addr, out var existing)
-            ? string.Empty
-            : existing.Text;
-        var dialog = new TextEntryDialog("Threaded Comment", $"Threaded comment for {addr.ToA1()}:", defaultText) { Owner = this };
+        ThreadedComment? existing = null;
+        sheet?.ThreadedComments.TryGetValue(addr, out existing);
+        var dialog = new ThreadedCommentDialog(addr.ToA1(), existing) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Threaded Comment",
-                SheetGrid.SelectedRange.Value,
-                currentRange => new SetThreadedCommentCommand(_currentSheetId, currentRange.Start, dialog.Result.Text)))
-            return;
 
-        UpdateViewport();
-        MessageBox.Show($"Threaded comment added to {addr.ToA1()}.", "Threaded Comment", MessageBoxButton.OK, MessageBoxImage.Information);
+        var result = dialog.Result;
+        var range = SheetGrid.SelectedRange.Value;
+        var changed = false;
+
+        if (existing is null && result.ReplyText is not null)
+        {
+            changed = TryExecuteRepeatableCurrentRangeCommand(
+                "Threaded Comment",
+                range,
+                r => new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText));
+        }
+        else if (existing is not null && result.ReplyText is not null)
+        {
+            changed = TryExecuteRepeatableCurrentRangeCommand(
+                "Reply to Comment",
+                range,
+                r => new AddThreadedCommentReplyCommand(_currentSheetId, r.Start, result.ReplyText));
+        }
+
+        if (existing is not null && result.IsResolved != existing.IsResolved)
+        {
+            TryExecuteRepeatableCurrentRangeCommand(
+                result.IsResolved ? "Resolve Comment" : "Unresolve Comment",
+                range,
+                r => new ResolveThreadedCommentCommand(_currentSheetId, r.Start, result.IsResolved));
+            changed = true;
+        }
+
+        if (changed) UpdateViewport();
     }
 
     private void ReviewDeleteCommentBtn_Click(object sender, RoutedEventArgs e)
@@ -383,7 +404,49 @@ public partial class MainWindow
 
     private void SendFeedbackBtn_Click(object sender, RoutedEventArgs e)
     {
+        var context = CreateIssueReportContext();
+        _diagnostics?.RecordEvent("report_issue_opened", new Dictionary<string, string?>
+        {
+            ["source"] = "help"
+        });
+
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppInfo.FeedbackUrl, UseShellExecute = true });
+        { FileName = AppIssueReporter.CreateIssueUrl(context), UseShellExecute = true });
+    }
+
+    private void CopyDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var context = CreateIssueReportContext();
+        var diagnosticsText = AppIssueReporter.CreateDiagnosticsText(context);
+
+        try
+        {
+            System.Windows.Clipboard.SetText(diagnosticsText);
+            _diagnostics?.RecordEvent("diagnostics_copied", new Dictionary<string, string?>
+            {
+                ["source"] = "help"
+            });
+            ShowOwnedMessage(
+                "Diagnostics copied to the clipboard.",
+                "Copy Diagnostics",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowOwnedMessage(
+                $"Could not copy diagnostics to the clipboard:\n{ex.Message}",
+                "Copy Diagnostics",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private AppIssueReportContext CreateIssueReportContext()
+    {
+        return AppIssueReporter.CreateContext(
+            AppInfo.FeedbackUrl,
+            _diagnosticsMetadata,
+            _diagnosticsOptions.IsEnabled);
     }
 }

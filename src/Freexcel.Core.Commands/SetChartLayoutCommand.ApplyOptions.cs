@@ -390,6 +390,17 @@ public sealed partial class SetChartLayoutCommand
                 .OrderBy(format => format.SeriesIndex)
                 .ToList();
         }
+        if (options.SeriesDataLabelFormats is not null)
+        {
+            var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
+            chart.SeriesDataLabelFormats = options.SeriesDataLabelFormats
+                .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
+                .GroupBy(format => format.SeriesIndex)
+                .Select(group => ClampSeriesDataLabelFormat(group.Last()))
+                .Where(HasSeriesDataLabelFormatting)
+                .OrderBy(format => format.SeriesIndex)
+                .ToList();
+        }
         if (options.PointDataLabelFormats is not null)
         {
             var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);

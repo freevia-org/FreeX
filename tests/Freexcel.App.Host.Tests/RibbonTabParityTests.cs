@@ -251,6 +251,7 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonTooltip.Title=\"Report Layout\"");
         ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonTooltip.Title=\"Banded Rows\"");
+        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("Content=\"Banded Columns\"");
         ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonTooltip.Title=\"PivotTable Styles\"");
     }
 
@@ -265,7 +266,8 @@ public sealed class RibbonTabParityTests
         ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
             "Help Online",
             "Contact Support",
-            "Send Feedback",
+            "Report Issue",
+            "Copy Diagnostics",
             "Show Training",
             "What's New",
             "About Freexcel");

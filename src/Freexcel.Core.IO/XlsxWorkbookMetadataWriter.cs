@@ -7,6 +7,78 @@ namespace Freexcel.Core.IO;
 
 internal static class XlsxWorkbookMetadataWriter
 {
+    public static void SaveWorkbookProperties(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var workbookProperties = root.Element(workbookNs + "workbookPr");
+        if (workbookProperties is null)
+        {
+            if (!workbook.Uses1904DateSystem)
+                return;
+
+            workbookProperties = new XElement(workbookNs + "workbookPr");
+            root.AddFirst(workbookProperties);
+        }
+
+        workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    public static void SaveWorkbookViewProperties(Stream xlsxStream, Workbook workbook)
+    {
+        if (workbook.ShowSheetTabs is null &&
+            workbook.SheetTabRatio is null &&
+            workbook.FirstVisibleSheetIndex is null &&
+            workbook.ActiveSheetIndex is null)
+        {
+            return;
+        }
+
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var bookViews = root.Element(workbookNs + "bookViews");
+        if (bookViews is null)
+        {
+            bookViews = new XElement(workbookNs + "bookViews");
+            var sheets = root.Element(workbookNs + "sheets");
+            if (sheets is not null)
+                sheets.AddBeforeSelf(bookViews);
+            else
+                root.Add(bookViews);
+        }
+
+        var primaryView = bookViews.Elements(workbookNs + "workbookView").FirstOrDefault()
+            ?? new XElement(workbookNs + "workbookView");
+        if (primaryView.Parent is null)
+            bookViews.AddFirst(primaryView);
+
+        primaryView.SetAttributeValue("showSheetTabs", workbook.ShowSheetTabs is { } showSheetTabs ? showSheetTabs ? "1" : "0" : null);
+        primaryView.SetAttributeValue("tabRatio", ClampWorkbookViewInteger(workbook.SheetTabRatio, 0, 1000));
+        primaryView.SetAttributeValue("firstSheet", ClampWorkbookViewInteger(workbook.FirstVisibleSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
+        primaryView.SetAttributeValue("activeTab", ClampWorkbookViewInteger(workbook.ActiveSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -97,4 +169,7 @@ internal static class XlsxWorkbookMetadataWriter
             ch is >= '0' and <= '9' ||
             ch is >= 'A' and <= 'F' ||
             ch is >= 'a' and <= 'f');
+
+    private static int? ClampWorkbookViewInteger(int? value, int min, int max) =>
+        value is { } intValue ? Math.Clamp(intValue, min, max) : null;
 }

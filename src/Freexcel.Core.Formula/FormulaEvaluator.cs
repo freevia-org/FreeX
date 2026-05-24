@@ -1063,7 +1063,12 @@ public sealed class FormulaEvaluator
              or "DEC2BIN" or "DEC2HEX" or "DEC2OCT"
              or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX"
              or "CONVERT"
-             or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE";
+             or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE"
+             or "GAMMA" or "GAMMALN" or "GAMMALN.PRECISE" or "GAMMA.DIST" or "GAMMA.INV"
+             or "LOGNORM.DIST" or "LOGNORM.INV"
+             or "BETA.DIST" or "BETA.INV"
+             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST"
+             or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";

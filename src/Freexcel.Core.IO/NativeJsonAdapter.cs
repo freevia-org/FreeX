@@ -28,6 +28,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         var workbook = new Workbook(dto.Name);
         if (dto.Theme is { } theme)
             workbook.Theme = ToWorkbookTheme(theme);
+        workbook.Uses1904DateSystem = dto.Uses1904DateSystem;
+        workbook.ShowSheetTabs = dto.ShowSheetTabs;
+        workbook.SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.SheetTabRatio, 1000);
+        workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.FirstVisibleSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
+        workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.ActiveSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
         workbook.IsStructureProtected = dto.IsStructureProtected;
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
