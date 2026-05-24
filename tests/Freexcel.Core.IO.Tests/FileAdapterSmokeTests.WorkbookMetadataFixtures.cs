@@ -334,9 +334,11 @@ public partial class FileAdapterSmokeTests
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "functionGroups",
                 new XAttribute("builtInGroupCount", "16"),
+                new XAttribute("customFunctionGroupFlag", "keep"),
                 new XElement(
                     workbookNs + "functionGroup",
-                    new XAttribute("name", "FreexcelNativeFunctions"))));
+                    new XAttribute("name", "FreexcelNativeFunctions"),
+                    new XAttribute("customGroupFlag", "keep"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
