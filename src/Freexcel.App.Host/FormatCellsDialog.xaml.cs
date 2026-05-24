@@ -219,6 +219,12 @@ public partial class FormatCellsDialog : Window
         int? indentLevel = FormatCellsInputParser.TryParseIndentLevel(DlgIndentLevelBox.Text);
 
         int? textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(DlgTextRotationBox.Text);
+        if (textRotation is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
+            ShowInvalidInputWarning("Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.", DlgTextRotationBox);
+            return;
+        }
 
         CellBorder borderTop = ParseBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, _current.BorderTop);
         CellBorder borderRight = ParseBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, _current.BorderRight);
@@ -260,6 +266,20 @@ public partial class FormatCellsDialog : Window
             _borderPresetInside);
 
         DialogResult = true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
     }
 }
 

@@ -650,25 +650,18 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
-    public void FormatCellsDialog_DoesNotEmitUnsupportedTextRotation()
+    public void FormatCellsDialog_RejectsUnsupportedTextRotationWithOwnedWarning()
     {
-        StaTestRunner.Run(() =>
-        {
-            var current = new CellStyle { TextRotation = 45 };
-            var dialog = ShowDialogForTest(current);
-            try
-            {
-                GetControl<TextBox>(dialog, "DlgTextRotationBox").Text = "999";
-                ClickOkForTest(dialog);
+        var source = ReadFormatCellsDialogSource();
 
-                dialog.ResultDiff.Should().NotBeNull();
-                dialog.ResultDiff!.TextRotation.Should().BeNull();
-            }
-            finally
-            {
-                dialog.Close();
-            }
-        });
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.\", DlgTextRotationBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
