@@ -104,7 +104,7 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
-            anchors.Add(ToAbsoluteChartAnchor(chart, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
+            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
         }
 
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, new XDocument(
@@ -171,6 +171,22 @@ internal static class XlsxWorksheetChartWriter
                     : new XAttribute("TargetMode", externalData.TargetMode)))));
     }
 
+    private static XElement ToChartAnchor(
+        ChartModel chart,
+        Sheet sheet,
+        int chartIndex,
+        string chartRelId,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs) =>
+        chart.DrawingAnchorKind switch
+        {
+            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs)
+        };
+
     private static XElement ToAbsoluteChartAnchor(
         ChartModel chart,
         int chartIndex,
@@ -198,6 +214,111 @@ internal static class XlsxWorksheetChartWriter
                         new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
                         new XElement(chartNs + "chart", new XAttribute(relNs + "id", chartRelId))))),
             new XElement(spreadsheetDrawingNs + "clientData"));
+
+    private static XElement ToOneCellChartAnchor(
+        ChartModel chart,
+        Sheet sheet,
+        int chartIndex,
+        string chartRelId,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs)
+    {
+        var from = ToAnchorMarker(sheet, chart.Left, chart.Top);
+        return new XElement(spreadsheetDrawingNs + "oneCellAnchor",
+            ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
+            new XElement(spreadsheetDrawingNs + "ext",
+                new XAttribute("cx", PixelsToEmus(chart.Width)),
+                new XAttribute("cy", PixelsToEmus(chart.Height))),
+            ToChartGraphicFrame(chart, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+            new XElement(spreadsheetDrawingNs + "clientData"));
+    }
+
+    private static XElement ToTwoCellChartAnchor(
+        ChartModel chart,
+        Sheet sheet,
+        int chartIndex,
+        string chartRelId,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs)
+    {
+        var from = ToAnchorMarker(sheet, chart.Left, chart.Top);
+        var to = ToAnchorMarker(sheet, chart.Left + chart.Width, chart.Top + chart.Height);
+        return new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+            ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
+            ToAnchorMarkerXml("to", to, spreadsheetDrawingNs),
+            ToChartGraphicFrame(chart, chartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+            new XElement(spreadsheetDrawingNs + "clientData"));
+    }
+
+    private static XElement ToChartGraphicFrame(
+        ChartModel chart,
+        int chartIndex,
+        string chartRelId,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs) =>
+        new(spreadsheetDrawingNs + "graphicFrame",
+            new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
+                new XElement(spreadsheetDrawingNs + "cNvPr",
+                    new XAttribute("id", chartIndex + 1),
+                    new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}"))),
+                new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
+            new XElement(spreadsheetDrawingNs + "xfrm"),
+            new XElement(drawingNs + "graphic",
+                new XElement(drawingNs + "graphicData",
+                    new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
+                    new XElement(chartNs + "chart", new XAttribute(relNs + "id", chartRelId)))));
+
+    private static XElement ToAnchorMarkerXml(string name, AnchorMarker marker, XNamespace spreadsheetDrawingNs) =>
+        new(spreadsheetDrawingNs + name,
+            new XElement(spreadsheetDrawingNs + "col", marker.Column),
+            new XElement(spreadsheetDrawingNs + "colOff", PixelsToEmus(marker.ColumnOffset)),
+            new XElement(spreadsheetDrawingNs + "row", marker.Row),
+            new XElement(spreadsheetDrawingNs + "rowOff", PixelsToEmus(marker.RowOffset)));
+
+    private static AnchorMarker ToAnchorMarker(Sheet sheet, double left, double top) =>
+        new(
+            ToMarkerIndex(left, sheet.DefaultColumnWidth * 8, column => sheet.IsColEffectivelyHidden(column), column => sheet.ColumnWidths.GetValueOrDefault(column, sheet.DefaultColumnWidth) * 8),
+            ToMarkerIndex(top, sheet.DefaultRowHeight, row => sheet.IsRowEffectivelyHidden(row), row => sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight)));
+
+    private static MarkerAxis ToMarkerIndex(double pixels, double defaultSize, Func<uint, bool> isHidden, Func<uint, double> getSize)
+    {
+        var remaining = Math.Max(0, pixels);
+        var index = 0u;
+        while (index < 16384)
+        {
+            var oneBasedIndex = index + 1;
+            var size = isHidden(oneBasedIndex) ? 0 : Math.Max(0, getSize(oneBasedIndex));
+            if (size <= 0)
+            {
+                index++;
+                continue;
+            }
+
+            if (remaining < size)
+                return new MarkerAxis(index, remaining);
+
+            remaining -= size;
+            index++;
+        }
+
+        return new MarkerAxis(index, Math.Min(remaining, Math.Max(0, defaultSize)));
+    }
+
+    private readonly record struct MarkerAxis(uint Index, double Offset);
+
+    private readonly record struct AnchorMarker(MarkerAxis ColumnAxis, MarkerAxis RowAxis)
+    {
+        public uint Column => ColumnAxis.Index;
+        public double ColumnOffset => ColumnAxis.Offset;
+        public uint Row => RowAxis.Index;
+        public double RowOffset => RowAxis.Offset;
+    }
 
     private static long PixelsToEmus(double pixels) =>
         (long)Math.Round(Math.Max(0, pixels) * 9525.0);

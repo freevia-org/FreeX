@@ -341,7 +341,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             Left = chart.Left,
             Top = chart.Top,
             Width = chart.Width,
-            Height = chart.Height
+            Height = chart.Height,
+            DrawingAnchorKind = chart.DrawingAnchorKind
         };
 
     private static CellAddress RemapAddress(CellAddress address, SheetId sheetId) =>

@@ -74,6 +74,8 @@ public enum ChartAxisDisplayUnit
     Trillions
 }
 
+public enum ChartDrawingAnchorKind { Absolute, OneCell, TwoCell }
+
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
 public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
@@ -450,6 +452,7 @@ public sealed class ChartModel
     public double Top    { get; set; } = 50;
     public double Width  { get; set; } = 400;
     public double Height { get; set; } = 300;
+    public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
 
     public CellColor? ResolveChartAreaFillColor(WorkbookTheme theme) =>
         ChartAreaFillThemeColor?.Resolve(theme) ?? ChartAreaFillColor;
