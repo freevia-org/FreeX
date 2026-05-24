@@ -299,6 +299,7 @@ public sealed class ChartModel
     public int XAxisLabelSkip { get; set; }
     public int XAxisTickMarkSkip { get; set; }
     public int XAxisLabelOffset { get; set; }
+    public bool XAxisNoMultiLevelLabels { get; set; }
     public CellColor? XAxisLineColor { get; set; }
     public double XAxisLineThickness { get; set; } = 1;
     public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;

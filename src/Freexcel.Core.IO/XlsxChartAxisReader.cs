@@ -242,6 +242,7 @@ internal static class XlsxChartAxisReader
         chart.XAxisLabelSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickLblSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
+        chart.XAxisNoMultiLevelLabels = ReadBool(axisElement.Element(ChartNs + "noMultiLvlLbl")?.Attribute("val")?.Value);
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
     }
 
@@ -381,4 +382,7 @@ internal static class XlsxChartAxisReader
 
     private static int? ReadInt(string? value) =>
         int.TryParse(value, out var result) ? result : null;
+
+    private static bool ReadBool(string? value) =>
+        value is "1" or "true";
 }
