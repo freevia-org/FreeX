@@ -176,9 +176,13 @@ public sealed partial class NativeJsonAdapter
         public double DataLabelFontSize { get; set; } = 11;
         public double DataLabelAngle { get; set; }
         public bool ShowLinearTrendline { get; set; }
+        public string? TrendlineName { get; set; }
         public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
         public int TrendlinePeriod { get; set; } = 2;
         public int TrendlineOrder { get; set; } = 2;
+        public double? TrendlineForward { get; set; }
+        public double? TrendlineBackward { get; set; }
+        public double? TrendlineIntercept { get; set; }
         public bool ShowTrendlineEquation { get; set; }
         public bool ShowTrendlineRSquared { get; set; }
         public CellColor? TrendlineColor { get; set; }
