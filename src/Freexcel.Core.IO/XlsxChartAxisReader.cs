@@ -28,6 +28,8 @@ internal static class XlsxChartAxisReader
             var yAxis = FindAxisById(valueAxes, axisIds.Skip(1).FirstOrDefault()) ?? valueAxes.Skip(1).FirstOrDefault();
             chart.XAxisTitle = ReadAxisTitle(xAxis);
             chart.YAxisTitle = ReadAxisTitle(yAxis);
+            chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(xAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
+            chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(yAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
             chart.HideXAxis = ReadBool(xAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             chart.HideYAxis = ReadBool(yAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             chart.XAxisPosition = FromXlsxAxisPosition(xAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
@@ -44,6 +46,7 @@ internal static class XlsxChartAxisReader
         var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
+        chart.XAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(categoryAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
         chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
         ApplyAxisTitleFormatting(categoryAxis, chart);
@@ -51,6 +54,7 @@ internal static class XlsxChartAxisReader
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
+        chart.YAxisTitleLayout = XlsxChartMetadataReader.ReadManualLayout(valueAxis?.Element(ChartNs + "title")?.Element(ChartNs + "layout"));
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
         ApplyAxisTitleFormatting(valueAxis, chart);

@@ -44,7 +44,9 @@ public sealed partial class NativeJsonAdapter
         public ChartManualLayoutModel? TitleLayout { get; set; }
         public bool TitleOverlay { get; set; }
         public string? XAxisTitle { get; set; }
+        public ChartManualLayoutModel? XAxisTitleLayout { get; set; }
         public string? YAxisTitle { get; set; }
+        public ChartManualLayoutModel? YAxisTitleLayout { get; set; }
         public bool HideXAxis { get; set; }
         public bool HideYAxis { get; set; }
         public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;

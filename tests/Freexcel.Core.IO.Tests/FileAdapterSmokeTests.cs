@@ -7340,6 +7340,8 @@ public partial class FileAdapterSmokeTests
             Title = "Sales",
             XAxisTitle = "Month",
             YAxisTitle = "Amount",
+            XAxisTitleLayout = new ChartManualLayoutModel { XMode = "edge", X = 0.25, Y = 0.86 },
+            YAxisTitleLayout = new ChartManualLayoutModel { XMode = "edge", X = 0.02, Y = 0.35 },
             DataRange = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 4, 2))
@@ -7354,6 +7356,8 @@ public partial class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.XAxisTitle.Should().Be("Month");
         loadedChart.YAxisTitle.Should().Be("Amount");
+        loadedChart.XAxisTitleLayout.Should().BeEquivalentTo(new ChartManualLayoutModel { XMode = "edge", X = 0.25, Y = 0.86 });
+        loadedChart.YAxisTitleLayout.Should().BeEquivalentTo(new ChartManualLayoutModel { XMode = "edge", X = 0.02, Y = 0.35 });
     }
 
     [Fact]
