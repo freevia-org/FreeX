@@ -8055,6 +8055,7 @@ public partial class FileAdapterSmokeTests
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Column,
+            XAxisIsDateAxis = true,
             XAxisLineColor = new CellColor(10, 20, 30),
             XAxisLineThickness = 0,
             XAxisLabelSkip = 2,
@@ -8074,13 +8075,14 @@ public partial class FileAdapterSmokeTests
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
-        chartXml.Descendants(chartNs + "catAx")
+        chartXml.Descendants(chartNs + "catAx").Should().BeEmpty();
+        chartXml.Descendants(chartNs + "dateAx")
             .Single()
             .Element(chartNs + "spPr")!
             .Element(drawingNs + "ln")!
             .Attribute("w")!
             .Value.Should().Be("6350");
-        var categoryAxis = chartXml.Descendants(chartNs + "catAx").Single();
+        var categoryAxis = chartXml.Descendants(chartNs + "dateAx").Single();
         categoryAxis.Element(chartNs + "tickLblSkip")!.Attribute("val")!.Value.Should().Be("2");
         categoryAxis.Element(chartNs + "tickMarkSkip")!.Attribute("val")!.Value.Should().Be("3");
         categoryAxis.Element(chartNs + "lblOffset")!.Attribute("val")!.Value.Should().Be("250");
@@ -8088,6 +8090,7 @@ public partial class FileAdapterSmokeTests
         saved.Position = 0;
         var loaded = new XlsxFileAdapter().Load(saved);
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.XAxisIsDateAxis.Should().BeTrue();
         loadedChart.XAxisLabelSkip.Should().Be(2);
         loadedChart.XAxisTickMarkSkip.Should().Be(3);
         loadedChart.XAxisLabelOffset.Should().Be(250);
