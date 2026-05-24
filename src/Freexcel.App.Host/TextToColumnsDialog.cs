@@ -277,7 +277,10 @@ public sealed partial class TextToColumnsDialog : Window
         try
         {
             if (!TryParseDestination(_destinationBox.Text, _defaultDestination, out var destination))
+            {
+                FocusInvalidDestinationInput();
                 throw new ArgumentException("Enter a single destination cell, such as F2.");
+            }
 
             Result = _fixedWidthButton.IsChecked == true
                 ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount), BuildAdvancedOptions())
@@ -295,6 +298,15 @@ public sealed partial class TextToColumnsDialog : Window
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private void FocusInvalidDestinationInput()
+    {
+        _wizardStep = 3;
+        UpdateWizardStep();
+        _destinationBox.Focus();
+        Keyboard.Focus(_destinationBox);
+        _destinationBox.SelectAll();
     }
 
     public static TextToColumnsRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>

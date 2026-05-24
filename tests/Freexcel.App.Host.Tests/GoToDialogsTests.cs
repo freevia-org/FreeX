@@ -111,6 +111,18 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToDialogInvalidReference_RefocusesAndSelectsReferenceBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
+
+        source.Should().Contain("FocusReferenceInput();");
+        source.Should().Contain("private void FocusReferenceInput()");
+        source.Should().Contain("_addressBox.Focus();");
+        source.Should().Contain("_addressBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_addressBox);");
+    }
+
+    [Fact]
     public void MainWindow_GoToDialogRoutesSpecialSelectionThroughGoToSpecialService()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));
