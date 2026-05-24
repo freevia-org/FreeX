@@ -39,6 +39,8 @@ internal static class DelimitedTextWorkbookReader
                 var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
                 if (!fields[i].WasQuoted && TryReadFormula(field, out var formulaText))
                     sheet.SetCell(address, Cell.FromFormula(formulaText));
+                else if (ShouldPreserveQuotedFormulaLikeText(fields[i]))
+                    sheet.SetCell(address, new TextValue(field));
                 else
                     sheet.SetCell(address, CoerceValue(field));
             }
@@ -149,6 +151,11 @@ internal static class DelimitedTextWorkbookReader
     }
 
     internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
+
+    private static bool ShouldPreserveQuotedFormulaLikeText(DelimitedTextField field) =>
+        field.WasQuoted &&
+        field.Value.Length > 0 &&
+        field.Value[0] is '=' or '+' or '-' or '@';
 
     private static TextReader CreateTextReader(Stream stream)
     {
