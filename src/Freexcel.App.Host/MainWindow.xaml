@@ -2563,7 +2563,7 @@
                                 <Button Content="Allow Edit Ranges" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
                                         local:RibbonTooltip.Title="Allow Edit Ranges"
                                         local:RibbonTooltip.KeyTip="AR"
-                                        local:RibbonTooltip.Description="Add a range that remains editable when the sheet is protected."/>
+                                        local:RibbonTooltip.Description="Add, delete, or clear ranges that remain editable when the sheet is protected."/>
                                 <Button Content="Share" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
                                         local:RibbonTooltip.Title="Share"
                                         local:RibbonTooltip.KeyTip="SH"

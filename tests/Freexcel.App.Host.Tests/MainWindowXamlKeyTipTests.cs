@@ -513,7 +513,7 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void AllowEditRangesTooltip_DisclosesAddRangePromptWorkflow()
+    public void AllowEditRangesTooltip_DisclosesRangeManagerWorkflow()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
@@ -524,8 +524,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "AllowEditRangesBtn_Click");
 
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Add");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("range");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("manager");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("delete");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clear");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("ranges");
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("permissions");
     }
 

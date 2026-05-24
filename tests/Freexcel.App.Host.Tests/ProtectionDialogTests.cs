@@ -136,6 +136,53 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void AllowEditRangeDialog_ExposesExcelLikeRangeManagerActions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+
+        source.Should().Contain("public enum AllowEditRangeDialogAction");
+        source.Should().Contain("public sealed record AllowEditRangeDialogResult");
+        source.Should().Contain("private readonly ListBox _existingRangesBox");
+        source.Should().Contain("Content = \"_Delete\"");
+        source.Should().Contain("Content = \"Clear _All\"");
+        source.Should().Contain("private void DeleteSelectedRange_Click");
+        source.Should().Contain("private void ClearAllRanges_Click");
+        source.Should().Contain("CreateRemoveResult");
+        source.Should().Contain("CreateClearResult");
+    }
+
+    [Fact]
+    public void AllowEditRangesWorkflow_ExecutesAddRemoveAndClearCommands()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("new AllowEditRangeDialog(_currentSheetId, defaultRange, sheet.AllowEditRanges)");
+        source.Should().Contain("AllowEditRangeDialogAction.Add");
+        source.Should().Contain("new AllowEditRangeCommand(_currentSheetId, range)");
+        source.Should().Contain("AllowEditRangeDialogAction.Remove");
+        source.Should().Contain("new RemoveAllowEditRangeCommand(_currentSheetId, range)");
+        source.Should().Contain("AllowEditRangeDialogAction.Clear");
+        source.Should().Contain("new ClearAllowEditRangesCommand(_currentSheetId)");
+    }
+
+    [Fact]
+    public void AllowEditRangeDialog_CreateResults_CaptureRequestedAction()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
+
+        AllowEditRangeDialog.CreateAddResult(range)
+            .Should()
+            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Add, range));
+        AllowEditRangeDialog.CreateRemoveResult(range)
+            .Should()
+            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Remove, range));
+        AllowEditRangeDialog.CreateClearResult()
+            .Should()
+            .Be(new AllowEditRangeDialogResult(AllowEditRangeDialogAction.Clear, null));
+    }
+
+    [Fact]
     public void AllowEditRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AllowEditRangeDialog.CreateRangeSelectionRequest(" $A$1:$C$10 ")
