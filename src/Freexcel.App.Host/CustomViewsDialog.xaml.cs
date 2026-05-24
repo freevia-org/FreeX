@@ -55,7 +55,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void ShowButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewsList.SelectedItem is not CustomViewViewModel vm) return;
+        if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
         var outcome = _commandBus.Execute(_workbook.Id, new ApplyCustomViewCommand(vm.Name));
         if (!outcome.Success)
         {
@@ -96,7 +96,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewsList.SelectedItem is not CustomViewViewModel vm) return;
+        if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
 
         var outcome = _commandBus.Execute(_workbook.Id, new DeleteCustomViewCommand(vm.Name));
         if (!outcome.Success)
