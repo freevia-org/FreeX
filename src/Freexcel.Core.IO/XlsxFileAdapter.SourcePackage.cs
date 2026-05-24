@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 
 using Freexcel.Core.Model;
 
@@ -60,18 +61,30 @@ public sealed partial class XlsxFileAdapter
 
     private static bool HasUnsupportedConditionalFormatting(ZipArchive archive)
     {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         foreach (var worksheetEntry in archive.Entries.Where(entry =>
                      entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
                      entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
         {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            if (worksheetXml.Root?
-                    .Elements(worksheetNs + "conditionalFormatting")
-                    .Any(block => block.Elements(worksheetNs + "cfRule")
-                        .Any(rule => !IsSupportedConditionalFormatRuleType(rule.Attribute("type")?.Value))) == true)
+            using var stream = worksheetEntry.Open();
+            using var reader = XmlReader.Create(stream, new XmlReaderSettings
             {
-                return true;
+                DtdProcessing = DtdProcessing.Prohibit,
+                IgnoreComments = true,
+                IgnoreProcessingInstructions = true,
+                IgnoreWhitespace = true,
+            });
+
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element ||
+                    !string.Equals(reader.LocalName, "cfRule", StringComparison.Ordinal) ||
+                    !string.Equals(reader.NamespaceURI, "http://schemas.openxmlformats.org/spreadsheetml/2006/main", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!IsSupportedConditionalFormatRuleType(reader.GetAttribute("type")))
+                    return true;
             }
         }
 

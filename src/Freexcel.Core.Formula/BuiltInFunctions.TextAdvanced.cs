@@ -95,8 +95,11 @@ public static partial class BuiltInFunctions
 
         var result = new StringBuilder();
         if (value < 0) result.Append("ลบ");
-        result.Append(ThaiNumberToText(baht));
-        result.Append("บาท");
+        if (baht > 0 || satang == 0)
+        {
+            result.Append(ThaiNumberToText(baht));
+            result.Append("บาท");
+        }
         result.Append(satang == 0 ? "ถ้วน" : ThaiNumberToText(satang) + "สตางค์");
         return TextResult(result.ToString());
     }
