@@ -49,6 +49,18 @@ internal static class PdfTextOverlayExtractor
                 textBlock.FontStyle == FontStyles.Italic || textBlock.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBlock.Foreground)));
         }
+        else if (element is AccessText accessText && NormalizeAccessText(accessText.Text) is { Length: > 0 } accessTextValue)
+        {
+            overlays.Add(new PdfTextOverlay(
+                accessTextValue,
+                x,
+                y,
+                accessText.FontSize,
+                accessText.FontFamily.Source,
+                accessText.FontWeight >= FontWeights.SemiBold,
+                accessText.FontStyle == FontStyles.Italic || accessText.FontStyle == FontStyles.Oblique,
+                ResolveColor(accessText.Foreground)));
+        }
 
         if (element is Panel panel)
         {
@@ -85,6 +97,16 @@ internal static class PdfTextOverlayExtractor
         }
 
         return string.Concat(parts);
+    }
+
+    private static string NormalizeAccessText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "";
+
+        return text.Replace("__", "\u0000", StringComparison.Ordinal)
+            .Replace("_", "", StringComparison.Ordinal)
+            .Replace("\u0000", "_", StringComparison.Ordinal);
     }
 
     private static double ReadLeft(UIElement element)
