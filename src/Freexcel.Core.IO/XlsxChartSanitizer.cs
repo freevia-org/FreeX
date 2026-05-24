@@ -46,6 +46,14 @@ internal static class XlsxChartSanitizer
             chart.TrendlineThickness = 1.5;
             chart.TrendlineDashStyle = ChartLineDashStyle.Dash;
         }
+        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
+        {
+            chart.ShowSeriesLines = false;
+            chart.SeriesLineColor = null;
+            chart.SeriesLineThemeColor = null;
+            chart.SeriesLineThickness = 1;
+            chart.SeriesLineDashStyle = ChartLineDashStyle.Solid;
+        }
 
         var dataPointCount = ChartTypeSupport.GetDataPointCount(chart);
         if (chart.ExplodedSliceIndex < 0 || chart.ExplodedSliceIndex >= dataPointCount)

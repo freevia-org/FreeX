@@ -1026,7 +1026,11 @@ internal static class XlsxCorpusFixtureFactory
             PackagePart = "xl/pivotTables/pivotTable2.xml",
             StyleName = style.Name,
             ShowRowStripes = true,
-            RepeatItemLabels = false
+            RepeatItemLabels = false,
+            DataCaption = "Corpus Values",
+            GrandTotalCaption = "Corpus Grand Total",
+            MissingCaption = "(corpus missing)",
+            ErrorCaption = "(corpus error)"
         };
         pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
         pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
@@ -1283,6 +1287,16 @@ internal static class XlsxCorpusFixtureFactory
                 ShowLegendKeys = true
             },
             SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196), Smooth: true, InvertIfNegative: true)]
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.StackedColumn,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "Stacked With Series Lines",
+            ShowSeriesLines = true,
+            SeriesLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5),
+            SeriesLineThickness = 1.5,
+            SeriesLineDashStyle = ChartLineDashStyle.Dot
         });
         sheet.Charts.Add(new ChartModel
         {

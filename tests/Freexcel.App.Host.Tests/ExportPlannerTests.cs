@@ -128,10 +128,46 @@ public class ExportPlannerTests
             IgnorePrintAreas: true,
             PageRange: new ExportPageRange(2, 4),
             Quality: ExportQuality.MinimumSize,
-            CreateBookmarks: true);
+            BookmarkMode: PdfBookmarkMode.SheetNames);
 
         ExportPlanner.DescribeOptions(options)
             .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; bookmarks use sheet names; open after publishing.");
+    }
+
+    [Theory]
+    [InlineData("sheet", "bookmarks use sheet names")]
+    [InlineData("print-title", "bookmarks use print titles")]
+    [InlineData("page-number", "bookmarks use page numbers")]
+    public void ExportOptions_DescribePdfBookmarkModes(string mode, string expectedPart)
+    {
+        var bookmarkMode = mode switch
+        {
+            "print-title" => PdfBookmarkMode.PrintTitles,
+            "page-number" => PdfBookmarkMode.PageNumbers,
+            _ => PdfBookmarkMode.SheetNames
+        };
+        var options = new ExportOptions(
+            ExportContentScope.EntireWorkbook,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: false,
+            BookmarkMode: bookmarkMode);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be($"Entire workbook; standard quality; document properties are included; {expectedPart}.");
+    }
+
+    [Fact]
+    public void ExportOptions_DescribePdfInitialViewAndOpenMode()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            InitialView: PdfInitialView.OneColumn,
+            OpenMode: PdfOpenMode.FullScreen);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; opens as one continuous column; opens full screen; document properties are not included.");
     }
 
     [Fact]
@@ -153,7 +189,7 @@ public class ExportPlannerTests
             ExportContentScope.EntireWorkbook,
             IncludeDocumentProperties: true,
             OpenAfterPublish: false,
-            CreateBookmarks: true);
+            BookmarkMode: PdfBookmarkMode.PrintTitles);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be("Entire workbook; standard quality; document properties are included; bookmarks are PDF-only.");
@@ -203,7 +239,8 @@ public class ExportPlannerTests
                 IgnorePrintAreas: true,
                 PageRange: new ExportPageRange(3, 3),
                 Quality: ExportQuality.MinimumSize,
-                CreateBookmarks: true));
+                CreateBookmarks: true,
+                BookmarkMode: PdfBookmarkMode.SheetNames));
     }
 
     [Fact]
@@ -606,6 +643,35 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_AppliesRequestedInitialViewAndOpenMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    initialView: PdfInitialView.OneColumn,
+                    openMode: PdfOpenMode.FullScreen);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadPageLayout(pdf).Should().Be("/OneColumn");
+                pdf.PageMode.Should().Be(PdfPageMode.FullScreen);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
     {
         StaTestRunner.Run(() =>
@@ -930,8 +996,10 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("CreatePdfBookmarks(options)");
-        printExport.Should().Contain("options.CreateBookmarks");
-        printExport.Should().Contain("new PdfBookmark(sheet.Name, pageIndex)");
+        printExport.Should().Contain("options.EffectiveBookmarkMode");
+        printExport.Should().Contain(": sheet.Name");
+        printExport.Should().Contain("BuildPrintTitleBookmark(sheet)");
+        printExport.Should().Contain("Page {pageIndex + 1 + offset}");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 

@@ -13,6 +13,7 @@ public sealed partial class NativeJsonAdapter
         public bool IsPivotChart { get; set; }
         public string? PivotSourceSheetName { get; set; }
         public string? PivotTableName { get; set; }
+        public int? PivotSourceFormatId { get; set; }
         public int? PivotCacheId { get; set; }
         public int? ChartStyleId { get; set; }
         public string? PivotFormatsXml { get; set; }
@@ -164,6 +165,11 @@ public sealed partial class NativeJsonAdapter
         public ThemeColorReferenceDto? HighLowLineThemeColor { get; set; }
         public double HighLowLineThickness { get; set; } = 1;
         public ChartLineDashStyle HighLowLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
+        public bool ShowSeriesLines { get; set; }
+        public CellColor? SeriesLineColor { get; set; }
+        public ThemeColorReferenceDto? SeriesLineThemeColor { get; set; }
+        public double SeriesLineThickness { get; set; } = 1;
+        public ChartLineDashStyle SeriesLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
         public bool ShowUpDownBars { get; set; }
         public int? UpDownBarGapWidth { get; set; }
         public CellColor? UpBarFillColor { get; set; }

@@ -61,6 +61,7 @@ public sealed partial class NativeJsonAdapter
         chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
         if (chart.Type != ChartType.Stock)
             chart.StockSubtype = StockChartSubtype.HighLowClose;
+        chart.PivotSourceFormatId = ClampNullableInt(chart.PivotSourceFormatId, 0, int.MaxValue);
         chart.BubbleScale = Math.Clamp(chart.BubbleScale, 0, 300);
         chart.BubbleSizeRepresents = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.BubbleSizeRepresents, ChartBubbleSizeRepresents.Area);
         if (chart.Type != ChartType.Bubble)
@@ -105,6 +106,16 @@ public sealed partial class NativeJsonAdapter
         chart.DropLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DropLineDashStyle, ChartLineDashStyle.Solid);
         chart.HighLowLineThickness = Math.Clamp(chart.HighLowLineThickness, 0.5, 10);
         chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
+        chart.SeriesLineThickness = Math.Clamp(chart.SeriesLineThickness, 0.5, 10);
+        chart.SeriesLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.SeriesLineDashStyle, ChartLineDashStyle.Solid);
+        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
+        {
+            chart.ShowSeriesLines = false;
+            chart.SeriesLineColor = null;
+            chart.SeriesLineThemeColor = null;
+            chart.SeriesLineThickness = 1;
+            chart.SeriesLineDashStyle = ChartLineDashStyle.Solid;
+        }
         chart.UpDownBarGapWidth = ClampNullableInt(chart.UpDownBarGapWidth, 0, 500);
         chart.UpBarBorderThickness = ClampNullableDouble(chart.UpBarBorderThickness, 0, 10);
         chart.DownBarBorderThickness = ClampNullableDouble(chart.DownBarBorderThickness, 0, 10);

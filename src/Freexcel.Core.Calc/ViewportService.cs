@@ -54,16 +54,17 @@ public sealed partial class ViewportService : IViewportService
                         cell.StyleId,
                         null,
                         style,
-                        cfIcon
+                        cfIcon,
+                        HasCellComment(sheet, addr)
                     ));
                 }
                 else
                 {
                     var styleOnlyId = sheet.GetStyleOnly(rowMetric.Row, colMetric.Col);
+                    var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
                     if (styleOnlyId.HasValue)
                     {
                         var style = workbook.GetStyle(styleOnlyId.Value);
-                        var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
                         var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfContext);
                         if (cfStyle != null)
                             style = MergeStyles(style, cfStyle);
@@ -77,8 +78,23 @@ public sealed partial class ViewportService : IViewportService
                             styleOnlyId.Value,
                             null,
                             style,
-                            cfIcon
+                            cfIcon,
+                            HasCellComment(sheet, addr)
                         ));
+                    }
+                    else if (HasCellComment(sheet, addr))
+                    {
+                        cells.Add(new DisplayCell(
+                            rowMetric.Row,
+                            colMetric.Col,
+                            BlankValue.Instance,
+                            "",
+                            null,
+                            StyleId.Default,
+                            null,
+                            workbook.GetStyle(StyleId.Default),
+                            null,
+                            true));
                     }
                 }
             }
@@ -441,7 +457,8 @@ public sealed partial class ViewportService : IViewportService
                 styleOnlyId.Value,
                 null,
                 style,
-                cfIcon));
+                cfIcon,
+                HasCellComment(sheet, addr)));
             return;
         }
 
@@ -465,9 +482,14 @@ public sealed partial class ViewportService : IViewportService
             cell.StyleId,
             null,
             style,
-            cfIcon));
+            cfIcon,
+            HasCellComment(sheet, addr)));
         }
     }
+
+    private static bool HasCellComment(Sheet sheet, CellAddress address) =>
+        sheet.Comments.ContainsKey(address) ||
+        sheet.ThreadedComments.ContainsKey(address);
 
     // ── Conditional format evaluation ─────────────────────────────────────────
 
