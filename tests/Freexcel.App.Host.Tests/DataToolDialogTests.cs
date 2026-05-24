@@ -522,6 +522,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialogInvalidSubtotalColumns_FocusesFirstSubtotalColumnChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("FocusSubtotalColumnChoices();");
+        source.Should().Contain("private void FocusSubtotalColumnChoices()");
+        source.Should().Contain("_subtotalColumnBoxes.FirstOrDefault()");
+        source.Should().Contain("firstColumnBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(firstColumnBox);");
+    }
+
+    [Fact]
     public void SubtotalDialog_OrdersControlsLikeExcelSubtotalDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));

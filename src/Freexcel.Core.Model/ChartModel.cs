@@ -424,6 +424,8 @@ public sealed class ChartModel
     public double? TrendlineIntercept { get; set; }
     public bool ShowTrendlineEquation { get; set; }
     public bool ShowTrendlineRSquared { get; set; }
+    public string? TrendlineLabelNumberFormatCode { get; set; }
+    public bool? TrendlineLabelNumberFormatSourceLinked { get; set; }
     public CellColor? TrendlineColor { get; set; }
     public WorkbookThemeColorReference? TrendlineThemeColor { get; set; }
     public double TrendlineThickness { get; set; } = 1.5;
