@@ -16,12 +16,16 @@ internal static class PdfDocumentExporter
     private const double StandardDpi = 96.0;
     private const double MinimumSizeDpi = 72.0;
 
-    public static void Save(FixedDocument document, string path, PdfDocumentProperties? properties = null)
+    public static void Save(
+        FixedDocument document,
+        string path,
+        PdfDocumentProperties? properties = null,
+        string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        SavePages(document, path, properties, firstPageIndex: 0, lastPageIndexInclusive: document.Pages.Count - 1);
+        SavePages(document, path, properties, firstPageIndex: 0, lastPageIndexInclusive: document.Pages.Count - 1, pdfLanguage: pdfLanguage);
     }
 
     public static void Save(
@@ -33,7 +37,8 @@ internal static class PdfDocumentExporter
         IReadOnlyList<PdfBookmark>? bookmarks = null,
         PdfInitialView initialView = PdfInitialView.SinglePage,
         PdfOpenMode openMode = PdfOpenMode.Normal,
-        bool includeSelectableText = false)
+        bool includeSelectableText = false,
+        string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -43,7 +48,7 @@ internal static class PdfDocumentExporter
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
         var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
-        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode, includeSelectableText);
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode, includeSelectableText, pdfLanguage);
     }
 
     internal static double ResolveRasterDpi(ExportQuality quality) =>
@@ -61,7 +66,8 @@ internal static class PdfDocumentExporter
         IReadOnlyList<PdfBookmark>? bookmarks = null,
         PdfInitialView initialView = PdfInitialView.SinglePage,
         PdfOpenMode openMode = PdfOpenMode.Normal,
-        bool includeSelectableText = false)
+        bool includeSelectableText = false,
+        string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
     {
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
@@ -74,7 +80,7 @@ internal static class PdfDocumentExporter
         if (includeSelectableText)
             pdf.Options.CompressContentStreams = false;
         pdf.Info.Creator = "Freexcel";
-        ApplyDefaultCatalogMetadata(pdf);
+        ApplyDefaultCatalogMetadata(pdf, pdfLanguage);
         ApplyDefaultViewerPreferences(pdf, initialView);
         ApplyProperties(pdf, properties);
 
@@ -158,9 +164,9 @@ internal static class PdfDocumentExporter
     private static string? NormalizeProperty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static void ApplyDefaultCatalogMetadata(PdfDocument pdf)
+    private static void ApplyDefaultCatalogMetadata(PdfDocument pdf, string? pdfLanguage)
     {
-        pdf.Internals.Catalog.Elements.SetString("/Lang", "en-US");
+        pdf.Internals.Catalog.Elements.SetString("/Lang", ExportPlanner.NormalizePdfLanguage(pdfLanguage));
     }
 
     private static void SetDisplayDocumentTitlePreference(PdfDocument pdf)
