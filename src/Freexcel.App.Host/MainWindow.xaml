@@ -2195,10 +2195,14 @@
                                             local:RibbonTooltip.KeyTip="R"
                                             local:RibbonTooltip.Description="Insert a function you have used recently."/>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="Math"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMathBtn_Click"
-                                                local:RibbonTooltip.Title="Math &amp; Trig"
-                                                local:RibbonTooltip.KeyTip="M"
-                                                local:RibbonTooltip.Description="Browse and insert math and trigonometry functions."/>
+                                        <Button Content="Financial" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaFinancialBtn_Click"
+                                                local:RibbonTooltip.Title="Financial"
+                                                local:RibbonTooltip.KeyTip="I"
+                                                local:RibbonTooltip.Description="Browse and insert financial functions like PMT, NPV, and IRR."/>
+                                        <Button Content="Logical"  Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLogicalBtn_Click"
+                                                local:RibbonTooltip.Title="Logical Functions"
+                                                local:RibbonTooltip.KeyTip="L"
+                                                local:RibbonTooltip.Description="Browse and insert logical functions like IF, AND, OR, and NOT."/>
                                         <Button Content="Text"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaTextBtn_Click"
                                                 local:RibbonTooltip.Title="Text Functions"
                                                 local:RibbonTooltip.KeyTip="T"
@@ -2209,14 +2213,14 @@
                                                 local:RibbonTooltip.Description="Browse and insert date and time functions like TODAY and NOW."/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="Logical"  Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLogicalBtn_Click"
-                                                local:RibbonTooltip.Title="Logical Functions"
-                                                local:RibbonTooltip.KeyTip="L"
-                                                local:RibbonTooltip.Description="Browse and insert logical functions like IF, AND, OR, and NOT."/>
                                         <Button Content="Lookup"   Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLookupBtn_Click"
                                                 local:RibbonTooltip.Title="Lookup &amp; Reference"
                                                 local:RibbonTooltip.KeyTip="K"
                                                 local:RibbonTooltip.Description="Browse and insert lookup functions like VLOOKUP, HLOOKUP, and INDEX."/>
+                                        <Button Content="Math"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMathBtn_Click"
+                                                local:RibbonTooltip.Title="Math &amp; Trig"
+                                                local:RibbonTooltip.KeyTip="M"
+                                                local:RibbonTooltip.Description="Browse and insert math and trigonometry functions."/>
                                         <Button Content="More…"    Width="40" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMoreBtn_Click"
                                                 local:RibbonTooltip.Title="More Functions"
                                                 local:RibbonTooltip.KeyTip="MF"
