@@ -29,7 +29,7 @@ public partial class FormatCellsDialog
     }
 
     private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderLineColorBox, allowNoColor: false);
+        PickColorInto(DlgBorderLineColorBox, allowNoColor: false, "Border Color");
 
     private void DlgBorderLineColorSwatchButton_Click(object sender, RoutedEventArgs e)
     {
@@ -38,16 +38,16 @@ public partial class FormatCellsDialog
     }
 
     private void DlgBorderTopColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderTopColorBox, allowNoColor: false);
+        PickColorInto(DlgBorderTopColorBox, allowNoColor: false, "Top Border Color");
 
     private void DlgBorderRightColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderRightColorBox, allowNoColor: false);
+        PickColorInto(DlgBorderRightColorBox, allowNoColor: false, "Right Border Color");
 
     private void DlgBorderBottomColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderBottomColorBox, allowNoColor: false);
+        PickColorInto(DlgBorderBottomColorBox, allowNoColor: false, "Bottom Border Color");
 
     private void DlgBorderLeftColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderLeftColorBox, allowNoColor: false);
+        PickColorInto(DlgBorderLeftColorBox, allowNoColor: false, "Left Border Color");
 
     private void DlgBorderPresetNoneButton_Click(object sender, RoutedEventArgs e) =>
         ApplyBorderClearPreset();
