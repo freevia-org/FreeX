@@ -6324,6 +6324,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Bahttext_RoundsHalfAwayFromZeroAtSatangBoundary()
+    {
+        _eval.Evaluate("=BAHTTEXT(1.005)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งบาทหนึ่งสตางค์"));
+    }
+
+    [Fact]
+    public void Bahttext_OmitsZeroBahtForSatangOnlyAmounts()
+    {
+        _eval.Evaluate("=BAHTTEXT(0.005)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งสตางค์"));
+    }
+
+    [Fact]
     public void Encodeurl_EncodesReservedSpacesAndUnicodeAsUtf8PercentEscapes()
     {
         _eval.Evaluate("=ENCODEURL(\"https://example.com/a b?q=São Paulo&x=1\")", MakeSheet())

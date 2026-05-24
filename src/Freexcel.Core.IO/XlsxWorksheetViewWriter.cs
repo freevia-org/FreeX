@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
@@ -83,11 +84,13 @@ internal static class XlsxWorksheetViewWriter
         if (root is null)
             return;
 
+        var changed = false;
         var sheetViews = root.Element(worksheetNs + "sheetViews");
         if (sheetViews is null)
         {
             sheetViews = new XElement(worksheetNs + "sheetViews");
             root.AddFirst(sheetViews);
+            changed = true;
         }
 
         var sheetView = sheetViews.Elements(worksheetNs + "sheetView").FirstOrDefault();
@@ -95,37 +98,53 @@ internal static class XlsxWorksheetViewWriter
         {
             sheetView = new XElement(worksheetNs + "sheetView", new XAttribute("workbookViewId", "0"));
             sheetViews.Add(sheetView);
+            changed = true;
         }
 
-        sheetView.SetAttributeValue("view", ToXlsxWorksheetViewMode(
+        changed |= SetAttributeIfDifferent(sheetView, "view", ToXlsxWorksheetViewMode(
             XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal)));
-        sheetView.SetAttributeValue("showGridLines", sheet.ShowGridlines ? null : "0");
-        sheetView.SetAttributeValue("showRowColHeaders", sheet.ShowHeadings ? null : "0");
-        sheetView.SetAttributeValue("showRuler", sheet.ShowRulers ? null : "0");
-        sheetView.SetAttributeValue("zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent);
-        sheetView.SetAttributeValue("showFormulas", sheet.ShowFormulas ? "1" : null);
-        sheetView.SetAttributeValue("topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
+        changed |= SetAttributeIfDifferent(sheetView, "showGridLines", sheet.ShowGridlines ? null : "0");
+        changed |= SetAttributeIfDifferent(sheetView, "showRowColHeaders", sheet.ShowHeadings ? null : "0");
+        changed |= SetAttributeIfDifferent(sheetView, "showRuler", sheet.ShowRulers ? null : "0");
+        changed |= SetAttributeIfDifferent(sheetView, "zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture));
+        changed |= SetAttributeIfDifferent(sheetView, "showFormulas", sheet.ShowFormulas ? "1" : null);
+        changed |= SetAttributeIfDifferent(sheetView, "topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
         if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
         {
-            sheetView.Elements(worksheetNs + "selection").Remove();
-            sheetView.Add(new XElement(
-                worksheetNs + "selection",
-                new XAttribute("activeCell", activeCell),
-                new XAttribute("sqref", activeCell)));
+            var selections = sheetView.Elements(worksheetNs + "selection").ToList();
+            if (selections.Count != 1 ||
+                !string.Equals(selections[0].Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal) ||
+                !string.Equals(selections[0].Attribute("sqref")?.Value, activeCell, StringComparison.Ordinal))
+            {
+                selections.Remove();
+                sheetView.Add(new XElement(
+                    worksheetNs + "selection",
+                    new XAttribute("activeCell", activeCell),
+                    new XAttribute("sqref", activeCell)));
+                changed = true;
+            }
         }
 
         if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
             (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
         {
-            sheetView.Elements(worksheetNs + "pane").Remove();
-            sheetView.AddFirst(new XElement(
+            var pane = new XElement(
                 worksheetNs + "pane",
                 sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", splitColumn) : null,
                 sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", splitRow) : null,
-                new XAttribute("state", "split")));
+                new XAttribute("state", "split"));
+            var existingPanes = sheetView.Elements(worksheetNs + "pane").ToList();
+            if (existingPanes.Count != 1 ||
+                !XNode.DeepEquals(existingPanes[0], pane))
+            {
+                existingPanes.Remove();
+                sheetView.AddFirst(pane);
+                changed = true;
+            }
         }
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
     }
 
     private static string? ToOptionalA1(uint? row, uint? col)
@@ -140,5 +159,23 @@ internal static class XlsxWorksheetViewWriter
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static bool SetAttributeIfDifferent(XElement element, XName name, string? value)
+    {
+        if (value is null)
+        {
+            if (element.Attribute(name) is null)
+                return false;
+
+            element.SetAttributeValue(name, null);
+            return true;
+        }
+
+        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(name, value);
+        return true;
     }
 }

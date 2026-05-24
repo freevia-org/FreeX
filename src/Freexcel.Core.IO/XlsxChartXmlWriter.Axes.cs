@@ -25,6 +25,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisLogBase,
                 chart.XAxisReverseOrder,
                 chart.XAxisNumberFormat,
+                chart.XAxisNumberFormatCode,
+                chart.XAxisNumberFormatSourceLinked,
                 chart.ShowXAxisMajorGridlines,
                 chart.ShowXAxisMinorGridlines,
                 chart.XAxisMajorGridlineColor,
@@ -64,6 +66,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
+                chart.YAxisNumberFormatCode,
+                chart.YAxisNumberFormatSourceLinked,
                 chart.ShowYAxisMajorGridlines,
                 chart.ShowYAxisMinorGridlines,
                 chart.YAxisMajorGridlineColor,
@@ -106,6 +110,8 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisLogBase,
                     chart.YAxisReverseOrder,
                     chart.YAxisNumberFormat,
+                    chart.YAxisNumberFormatCode,
+                    chart.YAxisNumberFormatSourceLinked,
                     false,
                     false,
                     null,
@@ -150,6 +156,8 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLogBase,
             chart.YAxisReverseOrder,
             chart.YAxisNumberFormat,
+            chart.YAxisNumberFormatCode,
+            chart.YAxisNumberFormatSourceLinked,
             chart.ShowYAxisMajorGridlines,
             chart.ShowYAxisMinorGridlines,
             chart.YAxisMajorGridlineColor,
@@ -193,6 +201,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
+                chart.YAxisNumberFormatCode,
+                chart.YAxisNumberFormatSourceLinked,
                 false,
                 false,
                 null,
@@ -264,6 +274,8 @@ internal static partial class XlsxChartXmlWriter
         double? logBase,
         bool reverseOrder,
         ChartDataLabelNumberFormat numberFormat,
+        string? numberFormatCode,
+        bool? numberFormatSourceLinked,
         bool showMajorGridlines,
         bool showMinorGridlines,
         CellColor? majorGridlineColor,
@@ -300,8 +312,8 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
             ToAxisTitleXml(title, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
             new XElement(chartNs + "numFmt",
-                new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat)),
-                new XAttribute("sourceLinked", numberFormat == ChartDataLabelNumberFormat.General ? "1" : "0")),
+                new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
+                new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
             ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
             ToAxisUnitXml("majorUnit", majorUnit, chartNs),
@@ -526,4 +538,12 @@ internal static partial class XlsxChartXmlWriter
             ChartDataLabelNumberFormat.Percent => "0%",
             _ => "General"
         };
+
+    private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format, string? formatCode) =>
+        string.IsNullOrWhiteSpace(formatCode)
+            ? ToXlsxNumberFormatCode(format)
+            : formatCode;
+
+    private static string ToXlsxNumberFormatSourceLinked(ChartDataLabelNumberFormat format, bool? sourceLinked) =>
+        (sourceLinked ?? format == ChartDataLabelNumberFormat.General) ? "1" : "0";
 }

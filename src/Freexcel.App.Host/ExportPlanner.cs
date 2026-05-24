@@ -64,7 +64,8 @@ internal sealed record ExportOptions(
     PdfBookmarkMode BookmarkMode = PdfBookmarkMode.None,
     PdfInitialView InitialView = PdfInitialView.SinglePage,
     PdfOpenMode OpenMode = PdfOpenMode.Normal,
-    bool BitmapTextWhenFontsMayNotBeEmbedded = false)
+    bool BitmapTextWhenFontsMayNotBeEmbedded = false,
+    string PdfLanguage = ExportPlanner.DefaultPdfLanguage)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -89,6 +90,8 @@ internal sealed record ExportRequest(
 
 internal static class ExportPlanner
 {
+    public const string DefaultPdfLanguage = "en-US";
+
     public const string PdfFallbackMessage =
         "PDF export uses Freexcel's print renderer. XPS export remains available for Windows print-pipeline workflows.";
 
@@ -149,11 +152,12 @@ internal static class ExportPlanner
         var bitmapText = options.BitmapTextWhenFontsMayNotBeEmbedded
             ? "bitmap text when fonts may not be embedded"
             : null;
+        var language = DescribePdfLanguage(options.PdfLanguage, ExportFormat.Pdf);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -193,12 +197,16 @@ internal static class ExportPlanner
         };
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, format);
         var bitmapText = DescribeBitmapTextOption(options.BitmapTextWhenFontsMayNotBeEmbedded, format);
+        var language = DescribePdfLanguage(options.PdfLanguage, format);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, open);
     }
+
+    public static string NormalizePdfLanguage(string? pdfLanguage) =>
+        string.IsNullOrWhiteSpace(pdfLanguage) ? DefaultPdfLanguage : pdfLanguage.Trim();
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
     {
@@ -287,6 +295,17 @@ internal static class ExportPlanner
         return format == ExportFormat.Xps
             ? "bitmap text is PDF-only"
             : "bitmap text when fonts may not be embedded";
+    }
+
+    private static string? DescribePdfLanguage(string? pdfLanguage, ExportFormat format)
+    {
+        var normalized = NormalizePdfLanguage(pdfLanguage);
+        if (string.Equals(normalized, DefaultPdfLanguage, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return format == ExportFormat.Xps
+            ? "PDF language is PDF-only"
+            : $"PDF language {normalized}";
     }
 
     private static string? DescribeInitialView(PdfInitialView initialView) =>
