@@ -19,6 +19,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ConditionalFormatThresholdDialogOpenedFromKeyboard_FocusesThresholdBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_thresholdBox.Focus();");
+        source.Should().Contain("_thresholdBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+    }
+
+    [Fact]
     public void RowHeightDialog_TryCreateResult_RejectsNonPositiveHeights()
     {
         RowHeightDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
