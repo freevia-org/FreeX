@@ -30,6 +30,21 @@ internal enum PdfBookmarkMode
     PageNumbers
 }
 
+internal enum PdfInitialView
+{
+    SinglePage,
+    OneColumn,
+    TwoColumnLeft,
+    TwoColumnRight
+}
+
+internal enum PdfOpenMode
+{
+    Normal,
+    Outlines,
+    FullScreen
+}
+
 internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
@@ -46,7 +61,9 @@ internal sealed record ExportOptions(
     ExportPageRange? PageRange = null,
     ExportQuality Quality = ExportQuality.Standard,
     bool CreateBookmarks = false,
-    PdfBookmarkMode BookmarkMode = PdfBookmarkMode.None)
+    PdfBookmarkMode BookmarkMode = PdfBookmarkMode.None,
+    PdfInitialView InitialView = PdfInitialView.SinglePage,
+    PdfOpenMode OpenMode = PdfOpenMode.Normal)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -122,6 +139,8 @@ internal static class ExportPlanner
         var printAreas = options.IgnorePrintAreas
             ? "print areas are ignored"
             : null;
+        var initialView = DescribeInitialView(options.InitialView);
+        var openMode = DescribeOpenMode(options.OpenMode);
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
@@ -130,7 +149,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, bookmarks, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -160,6 +179,8 @@ internal static class ExportPlanner
         var printAreas = options.IgnorePrintAreas
             ? "print areas are ignored"
             : null;
+        var initialView = format == ExportFormat.Pdf ? DescribeInitialView(options.InitialView) : null;
+        var openMode = format == ExportFormat.Pdf ? DescribeOpenMode(options.OpenMode) : null;
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
@@ -171,7 +192,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, bookmarks, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, open);
     }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
@@ -252,4 +273,21 @@ internal static class ExportPlanner
             _ => "bookmarks use sheet names"
         };
     }
+
+    private static string? DescribeInitialView(PdfInitialView initialView) =>
+        initialView switch
+        {
+            PdfInitialView.OneColumn => "opens as one continuous column",
+            PdfInitialView.TwoColumnLeft => "opens as two columns with odd pages left",
+            PdfInitialView.TwoColumnRight => "opens as two columns with odd pages right",
+            _ => null
+        };
+
+    private static string? DescribeOpenMode(PdfOpenMode openMode) =>
+        openMode switch
+        {
+            PdfOpenMode.Outlines => "opens with bookmarks visible",
+            PdfOpenMode.FullScreen => "opens full screen",
+            _ => null
+        };
 }
