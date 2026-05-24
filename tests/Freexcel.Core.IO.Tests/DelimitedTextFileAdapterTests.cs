@@ -7,6 +7,17 @@ namespace Freexcel.Core.IO.Tests;
 
 public sealed class DelimitedTextFileAdapterTests
 {
+    [Fact]
+    public void Load_DecodesBufferedTextWithoutCopyingMemoryStreamToArray()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "DelimitedTextWorkbookReader.cs"));
+
+        source.Should().NotContain(
+            "memory.ToArray()",
+            "text load should decode the buffered stream segment without duplicating the full byte array");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData(".tsv")]
@@ -341,5 +352,20 @@ public sealed class DelimitedTextFileAdapterTests
         var act = () => adapter.Save(new Workbook("Book1"), new MemoryStream());
 
         act.Should().Throw<NotSupportedException>();
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
     }
 }
