@@ -69,11 +69,16 @@ public sealed class ColorPickerDialogTests
     [Fact]
     public void DialogXaml_ExposesExcelLikePaletteSectionsAndPreview()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
+        var xamlPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml");
+        var xaml = File.ReadAllText(xamlPath);
+        var document = XDocument.Load(xamlPath);
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         xaml.Should().Contain("<TabControl");
-        xaml.Should().Contain("<TabItem Header=\"_Standard\"");
-        xaml.Should().Contain("<TabItem Header=\"_Custom\"");
+        document.Descendants(presentation + "TabItem")
+            .Select(tab => (string?)tab.Attribute("Header"))
+            .Should()
+            .Contain(["_Standard", "_Custom"]);
         xaml.Should().Contain("Theme Colors");
         xaml.Should().Contain("Standard Colors");
         xaml.Should().Contain("Current");

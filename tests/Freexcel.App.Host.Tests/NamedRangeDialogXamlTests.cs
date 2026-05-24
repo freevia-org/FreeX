@@ -185,6 +185,20 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameManagerWarnings_FocusRelevantNameManagerField()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        source.Should().Contain("FocusNamesListOrNewButton();");
+        source.Should().Contain("private void FocusNamesListOrNewButton()");
+        source.Should().Contain("FocusRefersToSummary();");
+        source.Should().Contain("private void FocusRefersToSummary()");
+        source.Should().Contain("RefersToBox.Focus();");
+        source.Should().Contain("RefersToBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(RefersToBox);");
+    }
+
+    [Fact]
     public void Planner_FiltersWorkbookAndWorksheetScopedNames()
     {
         var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");

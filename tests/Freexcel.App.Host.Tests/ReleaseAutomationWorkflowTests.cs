@@ -14,6 +14,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: write");
+        workflow.Should().Contain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: \"true\"");
         workflow.Should().Contain("dotnet restore Freexcel.slnx");
         workflow.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
         workflow.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
