@@ -261,11 +261,23 @@ public sealed partial class XlsxFileAdapter
         try { XlsxNamedRangeMapper.Save(workbook, xlWorkbook); }
         catch { /* ignore named-range save failures */ }
 
+        if (CanSavePackageInPlace(stream))
+        {
+            stream.Position = 0;
+            stream.SetLength(0);
+            xlWorkbook.SaveAs(stream);
+            ApplyPackagePostProcessing(workbook, stream);
+            stream.Position = stream.Length;
+            return;
+        }
+
         using var packageStream = new MemoryStream();
         xlWorkbook.SaveAs(packageStream);
         ApplyPackagePostProcessing(workbook, packageStream);
-
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
     }
+
+    private static bool CanSavePackageInPlace(Stream stream) =>
+        stream.CanRead && stream.CanWrite && stream.CanSeek;
 }
