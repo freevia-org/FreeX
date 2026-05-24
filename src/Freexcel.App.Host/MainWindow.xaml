@@ -2552,7 +2552,7 @@
                                         local:RibbonTooltip.Title="Spelling"
                                         local:RibbonTooltip.KeyTip="S"
                                         local:RibbonTooltip.Description="Find known misspellings in text cells on the active sheet with replace, replace all, and ignore choices."/>
-                                <Button Content="Workbook Stats" Width="104" Height="22"
+                                <Button Content="Workbook Statistics" Width="132" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
                                         Click="WorkbookStatisticsBtn_Click"
