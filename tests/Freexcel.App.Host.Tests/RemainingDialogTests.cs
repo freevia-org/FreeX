@@ -26,6 +26,18 @@ public sealed class RemainingDialogTests
         error.Should().Contain("positive");
     }
 
+    [Fact]
+    public void RowHeightDialogOpenedFromKeyboard_FocusesHeightBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_heightBox.Focus();");
+        source.Should().Contain("_heightBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_heightBox);");
+    }
+
     [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
@@ -498,6 +510,16 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
+    }
+
+    private static string ReadClassSource(string fileName, string startMarker, string endMarker)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName));
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
     }
 
     private static string ReadObjectDialogSources() =>

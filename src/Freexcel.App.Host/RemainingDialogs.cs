@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -56,6 +57,14 @@ public sealed class RowHeightDialog : Window
         ShowInTaskbar = false;
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
         Content = ObjectSizeDialog.CreateSingleInputContent("Row _height:", _heightBox, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _heightBox.Focus();
+        _heightBox.SelectAll();
+        Keyboard.Focus(_heightBox);
     }
 
     public static bool TryCreateResult(string? input, out RowHeightDialogResult result, out string? error)
