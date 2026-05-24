@@ -13084,7 +13084,11 @@ public partial class FileAdapterSmokeTests
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
             AltTextTitle = "Sales pivot",
-            AltTextDescription = "Pivot summary for sales"
+            AltTextDescription = "Pivot summary for sales",
+            DataCaption = "Values",
+            GrandTotalCaption = "Overall Total",
+            MissingCaption = "(missing)",
+            ErrorCaption = "(error)"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
@@ -13122,6 +13126,10 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("indent")!.Value.Should().Be("4");
             pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
             pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
+            pivotXml.Root!.Attribute("dataCaption")!.Value.Should().Be("Values");
+            pivotXml.Root!.Attribute("grandTotalCaption")!.Value.Should().Be("Overall Total");
+            pivotXml.Root!.Attribute("missingCaption")!.Value.Should().Be("(missing)");
+            pivotXml.Root!.Attribute("errorCaption")!.Value.Should().Be("(error)");
         }
 
         saved.Position = 0;
@@ -13145,6 +13153,10 @@ public partial class FileAdapterSmokeTests
         loadedPivot.PrintExpandCollapseButtons.Should().BeTrue();
         loadedPivot.AltTextTitle.Should().Be("Sales pivot");
         loadedPivot.AltTextDescription.Should().Be("Pivot summary for sales");
+        loadedPivot.DataCaption.Should().Be("Values");
+        loadedPivot.GrandTotalCaption.Should().Be("Overall Total");
+        loadedPivot.MissingCaption.Should().Be("(missing)");
+        loadedPivot.ErrorCaption.Should().Be("(error)");
     }
 
     [Fact]
