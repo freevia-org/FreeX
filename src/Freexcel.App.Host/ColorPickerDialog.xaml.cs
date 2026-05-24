@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 
@@ -14,6 +15,7 @@ public partial class ColorPickerDialog : Window
     private bool _updatingSlider;
     private readonly CellColor? _currentColor;
     private CellColor? _customSpectrumBaseColor;
+    private Button? _initialFocusButton;
 
     public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false)
     {
@@ -29,6 +31,7 @@ public partial class ColorPickerDialog : Window
         SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, initialColor);
         if (initialColor is { } color)
             SetCustomColorText(color);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public CellColor? SelectedColor { get; private set; }
@@ -189,7 +192,15 @@ public partial class ColorPickerDialog : Window
             Tag = swatch.Color
         };
         button.Click += SwatchButton_Click;
+        _initialFocusButton ??= button;
         return button;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _initialFocusButton?.Focus();
+        if (_initialFocusButton is not null)
+            Keyboard.Focus(_initialFocusButton);
     }
 
     private void SwatchButton_Click(object sender, RoutedEventArgs e)
