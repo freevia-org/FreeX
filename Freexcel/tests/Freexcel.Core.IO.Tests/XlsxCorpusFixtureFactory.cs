@@ -1282,7 +1282,7 @@ internal static class XlsxCorpusFixtureFactory
                 ShowOutline = true,
                 ShowLegendKeys = true
             },
-            SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196))]
+            SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196), Smooth: true)]
         });
         sheet.Charts.Add(new ChartModel
         {

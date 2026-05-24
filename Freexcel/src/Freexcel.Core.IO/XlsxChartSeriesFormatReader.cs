@@ -37,7 +37,6 @@ internal static class XlsxChartSeriesFormatReader
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
-
         if (fillColor is null &&
             fillThemeColor is null &&
             strokeColor is null &&
@@ -81,6 +80,7 @@ internal static class XlsxChartSeriesFormatReader
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
+        var smooth = XlsxChartScalarReader.ReadOptionalBool(series.Element(ChartNs + "smooth")?.Attribute("val")?.Value);
 
         var marker = series.Element(ChartNs + "marker");
         var markerStyle = marker?.Element(ChartNs + "symbol") is { } symbolElement
@@ -106,7 +106,8 @@ internal static class XlsxChartSeriesFormatReader
             fillColor is null &&
             fillThemeColor is null &&
             markerStyle is null &&
-            markerSize is null)
+            markerSize is null &&
+            smooth is null)
         {
             return false;
         }
@@ -120,7 +121,8 @@ internal static class XlsxChartSeriesFormatReader
             MarkerStyle: markerStyle,
             MarkerSize: markerSize,
             FillThemeColor: fillThemeColor,
-            StrokeThemeColor: strokeThemeColor);
+            StrokeThemeColor: strokeThemeColor,
+            Smooth: smooth);
         return true;
     }
 
