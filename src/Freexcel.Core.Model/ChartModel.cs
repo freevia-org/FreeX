@@ -49,6 +49,8 @@ public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
+public enum ChartAxisTickLabelPosition { NextTo, Low, High }
+
 public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
 
 public enum ChartAxisCrossBetween { Between, MidCategory }
@@ -309,6 +311,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
     public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowXAxisLabels { get; set; } = true;
+    public ChartAxisTickLabelPosition XAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
     public CellColor? XAxisLabelTextColor { get; set; }
     public WorkbookThemeColorReference? XAxisLabelTextThemeColor { get; set; }
     public double XAxisLabelFontSize { get; set; } = 11;
@@ -341,6 +344,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
     public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowYAxisLabels { get; set; } = true;
+    public ChartAxisTickLabelPosition YAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
     public CellColor? YAxisLabelTextColor { get; set; }
     public WorkbookThemeColorReference? YAxisLabelTextThemeColor { get; set; }
     public double YAxisLabelFontSize { get; set; } = 11;
