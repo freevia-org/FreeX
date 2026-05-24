@@ -265,6 +265,7 @@ public sealed partial class NativeJsonAdapter
                 SecondaryAxisSeriesIndexes = chartDto.SecondaryAxisSeriesIndexes ?? [],
                 ComboLineSeriesIndexes = chartDto.ComboLineSeriesIndexes ?? [],
                 SeriesFormats = chartDto.SeriesFormats ?? [],
+                SeriesDataLabelFormats = chartDto.SeriesDataLabelFormats ?? [],
                 PointDataLabelFormats = chartDto.PointDataLabelFormats ?? [],
                 UseComboLineForSecondarySeries = chartDto.UseComboLineForSecondarySeries,
                 Left = chartDto.Left,
