@@ -76,6 +76,17 @@ public sealed class RemainingDialogTests
         source.Should().Contain("StopValue");
     }
 
+    [Fact]
+    public void FillSeriesStepDialogOpenedFromKeyboard_FocusesSelectedSeriesDirection()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_columnsButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_columnsButton);");
+    }
+
     [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
