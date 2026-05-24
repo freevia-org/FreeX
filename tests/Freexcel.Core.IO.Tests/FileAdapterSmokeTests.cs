@@ -11703,6 +11703,7 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.Uses1904DateSystem.Should().BeTrue();
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();

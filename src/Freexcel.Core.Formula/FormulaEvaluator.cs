@@ -1066,7 +1066,8 @@ public sealed class FormulaEvaluator
              or "NORM.DIST" or "NORM.INV" or "NORM.S.DIST" or "NORM.S.INV" or "STANDARDIZE"
              or "GAMMA" or "GAMMALN" or "GAMMALN.PRECISE" or "GAMMA.DIST" or "GAMMA.INV"
              or "LOGNORM.DIST" or "LOGNORM.INV"
-             or "BETA.DIST" or "BETA.INV";
+             or "BETA.DIST" or "BETA.INV"
+             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";

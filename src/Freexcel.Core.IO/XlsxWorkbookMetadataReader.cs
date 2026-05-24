@@ -70,6 +70,27 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static bool LoadUses1904DateSystem(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return false;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            return XlsxXmlAttributeReader.ReadBoolAttribute(
+                workbookXml.Root?.Element(workbookNs + "workbookPr"),
+                "date1904");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try

@@ -247,16 +247,25 @@ internal static class XlsxWorkbookMetadataPreserver
         if (sourceWorkbookProperties is null)
             return false;
 
+        XName[] modeledAttributes = [workbookNs + "date1904"];
         var targetWorkbookProperties = targetRoot.Element(workbookNs + "workbookPr");
         if (targetWorkbookProperties is null)
         {
-            targetRoot.AddFirst(new XElement(sourceWorkbookProperties));
+            var cloned = new XElement(sourceWorkbookProperties);
+            foreach (var attribute in modeledAttributes)
+                cloned.Attribute(attribute)?.Remove();
+
+            if (!cloned.HasAttributes && !cloned.HasElements)
+                return false;
+
+            targetRoot.AddFirst(cloned);
             return true;
         }
 
         return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
             sourceWorkbookProperties,
-            targetWorkbookProperties);
+            targetWorkbookProperties,
+            modeledAttributes);
     }
 
     private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
