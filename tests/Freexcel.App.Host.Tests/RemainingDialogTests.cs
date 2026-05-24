@@ -71,7 +71,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record UnhideSheetDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record __NoNextRemainingDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -564,7 +564,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void UnhideSheetDialogOpenedFromKeyboard_FocusesSheetList()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class UnhideSheetDialog", "public sealed record FillSeriesStepDialogResult");
+        var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -683,6 +683,7 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageBreakDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ForecastSheetDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SheetNameDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "UnhideSheetDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FillSeriesStepDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
