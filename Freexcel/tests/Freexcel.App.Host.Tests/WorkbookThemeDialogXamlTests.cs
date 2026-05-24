@@ -67,6 +67,18 @@ public sealed class WorkbookThemeDialogXamlTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesThemeNameBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("ThemeNameBox.Focus();");
+        source.Should().Contain("ThemeNameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(ThemeNameBox);");
+    }
+
+    [Fact]
     public void Dialog_ExposesKeyboardAccessKeysForThemeFieldsColorsAndButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
