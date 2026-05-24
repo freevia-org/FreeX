@@ -94,6 +94,33 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_AppliesPivotStyleToMatrixGrandTotalColumn()
+    {
+        var workbook = new Workbook("PivotGrandTotalColumnStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I8"),
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "H2").Should().Be("Grand Total");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "H3"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(221, 235, 247));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "H4"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Fact]
     public void Refresh_AppliesPivotStyleHeaderFlagsToRowAndColumnHeadersSeparately()
     {
         var workbook = new Workbook("PivotStyleHeaderFlagRenderTest");
