@@ -262,6 +262,7 @@ public partial class PageSetupDialog : Window
         if (!PageMarginInputParser.TryParse(marginsText, out var margins, out var marginError))
         {
             MessageBox.Show(this, marginError, "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidMarginInput();
             return;
         }
 
@@ -270,6 +271,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter non-negative header and footer margins in inches.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidHeaderFooterMargin();
             return;
         }
 
@@ -280,6 +282,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter scaling as percent 10-400 or pages wide x tall, for example 1x1.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidScalingInput();
             return;
         }
 
@@ -287,6 +290,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter a non-zero first page number, or leave it blank for Automatic.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidPageTabNumber(FirstPageNumberBox);
             return;
         }
 
@@ -294,6 +298,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter a positive print quality DPI value, or leave it blank for printer default.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidPageTabNumber(PrintQualityBox);
             return;
         }
 
@@ -378,6 +383,64 @@ public partial class PageSetupDialog : Window
             ? ColumnsRepeatBox
             : RowsRepeatBox;
         PageSetupTabs.SelectedItem = SheetTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private void FocusInvalidPageTabNumber(TextBox target)
+    {
+        PageSetupTabs.SelectedItem = PageTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private void FocusInvalidScalingInput()
+    {
+        TextBox target;
+        if (FitToRadioButton.IsChecked == true)
+        {
+            target = int.TryParse(FitPagesWideBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) && wide > 0
+                ? FitPagesTallBox
+                : FitPagesWideBox;
+        }
+        else
+        {
+            target = ScalePercentBox;
+        }
+
+        PageSetupTabs.SelectedItem = PageTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private void FocusInvalidMarginInput()
+    {
+        foreach (var target in new[] { LeftMarginBox, RightMarginBox, TopMarginBox, BottomMarginBox })
+        {
+            if (!PageLayoutInputParser.TryParseMarginDistance(target.Text, out _))
+            {
+                FocusMarginsTabTextBox(target);
+                return;
+            }
+        }
+
+        FocusMarginsTabTextBox(LeftMarginBox);
+    }
+
+    private void FocusInvalidHeaderFooterMargin()
+    {
+        FocusMarginsTabTextBox(
+            PageLayoutInputParser.TryParseMarginDistance(HeaderMarginBox.Text, out _)
+                ? FooterMarginBox
+                : HeaderMarginBox);
+    }
+
+    private void FocusMarginsTabTextBox(TextBox target)
+    {
+        PageSetupTabs.SelectedItem = MarginsTab;
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
