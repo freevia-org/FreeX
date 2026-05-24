@@ -429,40 +429,92 @@
                                             local:RibbonTooltip.Description="Apply or change borders on the selected cells.">
                                         <Button.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="All Borders"          local:RibbonTooltip.KeyTip="A" Click="BorderAllMenuItem_Click"/>
-                                                <MenuItem Header="Outside Borders"      local:RibbonTooltip.KeyTip="O" Click="BorderOutsideMenuItem_Click"/>
-                                                <MenuItem Header="Inside Borders"       local:RibbonTooltip.KeyTip="I" Click="BorderInsideMenuItem_Click"/>
-                                                <MenuItem Header="No Border"            local:RibbonTooltip.KeyTip="N" Click="BorderNoneMenuItem_Click"/>
+                                                <MenuItem Header="All Borders"          local:RibbonTooltip.KeyTip="A" Click="BorderAllMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="All"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Outside Borders"      local:RibbonTooltip.KeyTip="O" Click="BorderOutsideMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Outside"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Inside Borders"       local:RibbonTooltip.KeyTip="I" Click="BorderInsideMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Inside"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="No Border"            local:RibbonTooltip.KeyTip="N" Click="BorderNoneMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="None"/></MenuItem.Icon>
+                                                </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="Bottom Border"        local:RibbonTooltip.KeyTip="B" Click="BorderBottomMenuItem_Click"/>
-                                                <MenuItem Header="Top Border"           local:RibbonTooltip.KeyTip="T" Click="BorderTopMenuItem_Click"/>
-                                                <MenuItem Header="Left Border"          local:RibbonTooltip.KeyTip="L" Click="BorderLeftMenuItem_Click"/>
-                                                <MenuItem Header="Right Border"         local:RibbonTooltip.KeyTip="R" Click="BorderRightMenuItem_Click"/>
+                                                <MenuItem Header="Bottom Border"        local:RibbonTooltip.KeyTip="B" Click="BorderBottomMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Bottom"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Top Border"           local:RibbonTooltip.KeyTip="T" Click="BorderTopMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Top"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Left Border"          local:RibbonTooltip.KeyTip="L" Click="BorderLeftMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Left"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Right Border"         local:RibbonTooltip.KeyTip="R" Click="BorderRightMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="Right"/></MenuItem.Icon>
+                                                </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="Thick Bottom Border"  local:RibbonTooltip.KeyTip="K" Click="BorderThickBottomMenuItem_Click"/>
-                                                <MenuItem Header="Bottom Double Border" local:RibbonTooltip.KeyTip="D" Click="BorderBottomDoubleMenuItem_Click"/>
+                                                <MenuItem Header="Thick Bottom Border"  local:RibbonTooltip.KeyTip="K" Click="BorderThickBottomMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="ThickBottom"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Bottom Double Border" local:RibbonTooltip.KeyTip="D" Click="BorderBottomDoubleMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="BottomDouble"/></MenuItem.Icon>
+                                                </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="Thick Box Border" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click"/>
-                                                <MenuItem Header="Top and Bottom Border" local:RibbonTooltip.KeyTip="U" Click="BorderTopAndBottomMenuItem_Click"/>
-                                                <MenuItem Header="Top and Thick Bottom Border" local:RibbonTooltip.KeyTip="H" Click="BorderTopAndThickBottomMenuItem_Click"/>
-                                                <MenuItem Header="Top and Double Bottom Border" local:RibbonTooltip.KeyTip="J" Click="BorderTopAndDoubleBottomMenuItem_Click"/>
+                                                <MenuItem Header="Thick Box Border" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="ThickBox"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Top and Bottom Border" local:RibbonTooltip.KeyTip="U" Click="BorderTopAndBottomMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="TopAndBottom"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Top and Thick Bottom Border" local:RibbonTooltip.KeyTip="H" Click="BorderTopAndThickBottomMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="TopAndThickBottom"/></MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Top and Double Bottom Border" local:RibbonTooltip.KeyTip="J" Click="BorderTopAndDoubleBottomMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="TopAndDoubleBottom"/></MenuItem.Icon>
+                                                </MenuItem>
                                                 <Separator/>
                                                 <MenuItem Header="Line Color" local:RibbonTooltip.KeyTip="C">
-                                                    <MenuItem Header="Black" local:RibbonTooltip.KeyTip="K" Click="BorderLineColorBlackMenuItem_Click"/>
-                                                    <MenuItem Header="Gray" local:RibbonTooltip.KeyTip="G" Click="BorderLineColorGrayMenuItem_Click"/>
-                                                    <MenuItem Header="Accent 1" local:RibbonTooltip.KeyTip="1" Click="BorderLineColorAccent1MenuItem_Click"/>
-                                                    <MenuItem Header="Accent 2" local:RibbonTooltip.KeyTip="2" Click="BorderLineColorAccent2MenuItem_Click"/>
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="ColorBlack"/></MenuItem.Icon>
+                                                    <MenuItem Header="Black" local:RibbonTooltip.KeyTip="K" Click="BorderLineColorBlackMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="ColorBlack"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Gray" local:RibbonTooltip.KeyTip="G" Click="BorderLineColorGrayMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="ColorGray"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Accent 1" local:RibbonTooltip.KeyTip="1" Click="BorderLineColorAccent1MenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="ColorAccent1"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Accent 2" local:RibbonTooltip.KeyTip="2" Click="BorderLineColorAccent2MenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="ColorAccent2"/></MenuItem.Icon>
+                                                    </MenuItem>
                                                 </MenuItem>
                                                 <MenuItem Header="Line Style" local:RibbonTooltip.KeyTip="S">
-                                                    <MenuItem Header="Thin" local:RibbonTooltip.KeyTip="T" Click="BorderLineStyleThinMenuItem_Click"/>
-                                                    <MenuItem Header="Medium" local:RibbonTooltip.KeyTip="M" Click="BorderLineStyleMediumMenuItem_Click"/>
-                                                    <MenuItem Header="Thick" local:RibbonTooltip.KeyTip="K" Click="BorderLineStyleThickMenuItem_Click"/>
-                                                    <MenuItem Header="Dashed" local:RibbonTooltip.KeyTip="D" Click="BorderLineStyleDashedMenuItem_Click"/>
-                                                    <MenuItem Header="Dotted" local:RibbonTooltip.KeyTip="O" Click="BorderLineStyleDottedMenuItem_Click"/>
-                                                    <MenuItem Header="Double" local:RibbonTooltip.KeyTip="U" Click="BorderLineStyleDoubleMenuItem_Click"/>
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="StyleThin"/></MenuItem.Icon>
+                                                    <MenuItem Header="Thin" local:RibbonTooltip.KeyTip="T" Click="BorderLineStyleThinMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="StyleThin"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Medium" local:RibbonTooltip.KeyTip="M" Click="BorderLineStyleMediumMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="StyleMedium"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Thick" local:RibbonTooltip.KeyTip="K" Click="BorderLineStyleThickMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="StyleThick"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Dashed" local:RibbonTooltip.KeyTip="D" Click="BorderLineStyleDashedMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="StyleDashed"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Dotted" local:RibbonTooltip.KeyTip="O" Click="BorderLineStyleDottedMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="StyleDotted"/></MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Double" local:RibbonTooltip.KeyTip="U" Click="BorderLineStyleDoubleMenuItem_Click">
+                                                        <MenuItem.Icon><local:BorderMenuIcon Kind="StyleDouble"/></MenuItem.Icon>
+                                                    </MenuItem>
                                                 </MenuItem>
                                                 <Separator/>
-                                                <MenuItem Header="More Borders..." local:RibbonTooltip.KeyTip="M" Click="BorderMoreMenuItem_Click"/>
+                                                <MenuItem Header="More Borders..." local:RibbonTooltip.KeyTip="M" Click="BorderMoreMenuItem_Click">
+                                                    <MenuItem.Icon><local:BorderMenuIcon Kind="More"/></MenuItem.Icon>
+                                                </MenuItem>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <Grid Width="15" Height="15" SnapsToDevicePixels="True">
