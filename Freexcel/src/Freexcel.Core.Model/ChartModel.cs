@@ -345,6 +345,17 @@ public sealed class ChartModel
     public double HighLowLineThickness { get; set; } = 1;
     public ChartLineDashStyle HighLowLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowUpDownBars { get; set; }
+    public int? UpDownBarGapWidth { get; set; }
+    public CellColor? UpBarFillColor { get; set; }
+    public WorkbookThemeColorReference? UpBarFillThemeColor { get; set; }
+    public CellColor? UpBarBorderColor { get; set; }
+    public WorkbookThemeColorReference? UpBarBorderThemeColor { get; set; }
+    public double? UpBarBorderThickness { get; set; }
+    public CellColor? DownBarFillColor { get; set; }
+    public WorkbookThemeColorReference? DownBarFillThemeColor { get; set; }
+    public CellColor? DownBarBorderColor { get; set; }
+    public WorkbookThemeColorReference? DownBarBorderThemeColor { get; set; }
+    public double? DownBarBorderThickness { get; set; }
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];

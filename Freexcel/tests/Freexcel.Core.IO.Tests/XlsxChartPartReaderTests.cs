@@ -817,7 +817,11 @@ public sealed class XlsxChartPartReaderTests
                     <c:hiLowLines>
                       <c:spPr><a:ln w="25400"><a:solidFill><a:schemeClr val="accent4"/></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr>
                     </c:hiLowLines>
-                    <c:upDownBars/>
+                    <c:upDownBars>
+                      <c:gapWidth val="180"/>
+                      <c:upBars><c:spPr><a:solidFill><a:srgbClr val="70AD47"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="548235"/></a:solidFill></a:ln></c:spPr></c:upBars>
+                      <c:downBars><c:spPr><a:solidFill><a:srgbClr val="C00000"/></a:solidFill><a:ln w="25400"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:ln></c:spPr></c:downBars>
+                    </c:upDownBars>
                   </c:lineChart>
                 </c:plotArea>
               </c:chart>
@@ -838,6 +842,14 @@ public sealed class XlsxChartPartReaderTests
         chart.HighLowLineColor.Should().BeNull();
         chart.HighLowLineThickness.Should().Be(2);
         chart.HighLowLineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+        chart.UpDownBarGapWidth.Should().Be(180);
+        chart.UpBarFillColor.Should().Be(new CellColor(112, 173, 71));
+        chart.UpBarBorderColor.Should().Be(new CellColor(84, 130, 53));
+        chart.UpBarBorderThickness.Should().Be(1);
+        chart.DownBarFillColor.Should().Be(new CellColor(192, 0, 0));
+        chart.DownBarBorderThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2));
+        chart.DownBarBorderColor.Should().BeNull();
+        chart.DownBarBorderThickness.Should().Be(2);
     }
 
     [Fact]

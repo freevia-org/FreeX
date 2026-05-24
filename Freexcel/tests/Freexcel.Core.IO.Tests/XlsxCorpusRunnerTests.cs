@@ -1156,7 +1156,7 @@ public class XlsxCorpusRunnerTests
                 chart.HighLowLineThemeColor,
                 chart.HighLowLineThickness,
                 chart.HighLowLineDashStyle),
-            chart.ShowUpDownBars,
+            CaptureChartUpDownBarsSummary(chart),
             CaptureChartDataTableSummary(chart.DataTable),
             CaptureChart3DViewSummary(chart.ThreeDView),
             new ChartRangeSummary(
@@ -1248,6 +1248,36 @@ public class XlsxCorpusRunnerTests
             themeColor,
             thickness,
             dashStyle);
+
+    private static ChartUpDownBarsSummary CaptureChartUpDownBarsSummary(ChartModel chart) =>
+        new(
+            chart.ShowUpDownBars,
+            chart.UpDownBarGapWidth,
+            CaptureChartBarShapeSummary(
+                chart.UpBarFillColor,
+                chart.UpBarFillThemeColor,
+                chart.UpBarBorderColor,
+                chart.UpBarBorderThemeColor,
+                chart.UpBarBorderThickness),
+            CaptureChartBarShapeSummary(
+                chart.DownBarFillColor,
+                chart.DownBarFillThemeColor,
+                chart.DownBarBorderColor,
+                chart.DownBarBorderThemeColor,
+                chart.DownBarBorderThickness));
+
+    private static ChartBarShapeSummary CaptureChartBarShapeSummary(
+        CellColor? fillColor,
+        WorkbookThemeColorReference? fillThemeColor,
+        CellColor? borderColor,
+        WorkbookThemeColorReference? borderThemeColor,
+        double? borderThickness) =>
+        new(
+            fillColor is null ? "" : ToColorSummary(fillColor.Value),
+            fillThemeColor,
+            borderColor is null ? "" : ToColorSummary(borderColor.Value),
+            borderThemeColor,
+            borderThickness);
 
     private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
         new(
@@ -2283,7 +2313,7 @@ public class XlsxCorpusRunnerTests
         ChartGuideLineSummary DropLines,
         StockChartSubtype StockSubtype,
         ChartGuideLineSummary HighLowLines,
-        bool ShowUpDownBars,
+        ChartUpDownBarsSummary UpDownBars,
         ChartDataTableSummary? DataTable,
         Chart3DViewSummary? ThreeDView,
         ChartRangeSummary DataRange);
@@ -2362,6 +2392,19 @@ public class XlsxCorpusRunnerTests
         WorkbookThemeColorReference? ThemeColor,
         double Thickness,
         ChartLineDashStyle DashStyle);
+
+    private sealed record ChartUpDownBarsSummary(
+        bool Show,
+        int? GapWidth,
+        ChartBarShapeSummary UpBars,
+        ChartBarShapeSummary DownBars);
+
+    private sealed record ChartBarShapeSummary(
+        string FillColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        string BorderColor,
+        WorkbookThemeColorReference? BorderThemeColor,
+        double? BorderThickness);
 
     private sealed record ChartColorMapSummary(
         bool UseMasterColorMapping,
