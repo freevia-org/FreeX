@@ -83,6 +83,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
         public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowXAxisLabels { get; set; } = true;
+        public ChartAxisTickLabelPosition XAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
         public CellColor? XAxisLabelTextColor { get; set; }
         public ThemeColorReferenceDto? XAxisLabelTextThemeColor { get; set; }
         public double XAxisLabelFontSize { get; set; } = 11;
@@ -115,6 +116,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
         public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowYAxisLabels { get; set; } = true;
+        public ChartAxisTickLabelPosition YAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
         public CellColor? YAxisLabelTextColor { get; set; }
         public ThemeColorReferenceDto? YAxisLabelTextThemeColor { get; set; }
         public double YAxisLabelFontSize { get; set; } = 11;
