@@ -105,6 +105,7 @@ internal sealed class ExportOptionsDialog : Window
                 !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error))
             {
                 MessageBox.Show(this, error, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
+                FocusInvalidPageRangeInput();
                 return;
             }
 
@@ -145,6 +146,15 @@ internal sealed class ExportOptionsDialog : Window
     {
         _fromPageBox.IsEnabled = enabled;
         _toPageBox.IsEnabled = enabled;
+    }
+
+    private void FocusInvalidPageRangeInput()
+    {
+        _pagesRangeButton.IsChecked = true;
+        SetPageRangeFieldsEnabled(true);
+        _fromPageBox.Focus();
+        _fromPageBox.SelectAll();
+        Keyboard.Focus(_fromPageBox);
     }
 
     public static ExportOptions CreateResult(
