@@ -115,59 +115,62 @@ internal static class XlsxClosedXmlCellMapper
         };
     }
 
-    public static void ApplyStyle(IXLCell xlCell, CellStyle style)
+    public static void ApplyStyle(IXLCell xlCell, CellStyle style) =>
+        ApplyStyle(xlCell.Style, style);
+
+    public static void ApplyStyle(IXLStyle xlStyle, CellStyle style)
     {
         var def = CellStyle.Default;
 
-        if (style.Bold != def.Bold) xlCell.Style.Font.Bold = style.Bold;
-        if (style.Italic != def.Italic) xlCell.Style.Font.Italic = style.Italic;
+        if (style.Bold != def.Bold) xlStyle.Font.Bold = style.Bold;
+        if (style.Italic != def.Italic) xlStyle.Font.Italic = style.Italic;
         if (style.Underline != def.Underline)
-            xlCell.Style.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
+            xlStyle.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
         if (style.Strikethrough != def.Strikethrough)
-            xlCell.Style.Font.Strikethrough = style.Strikethrough;
+            xlStyle.Font.Strikethrough = style.Strikethrough;
         if (style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize))
-            xlCell.Style.Font.FontSize = style.FontSize;
-        if (style.FontName != def.FontName) xlCell.Style.Font.FontName = style.FontName;
+            xlStyle.Font.FontSize = style.FontSize;
+        if (style.FontName != def.FontName) xlStyle.Font.FontName = style.FontName;
         if (style.FontColor != def.FontColor)
-            xlCell.Style.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
+            xlStyle.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
 
         if (style.FillPatternStyle != CellFillPatternStyle.None)
         {
-            xlCell.Style.Fill.PatternType = MapFillPatternStyleInverse(style.FillPatternStyle);
+            xlStyle.Fill.PatternType = MapFillPatternStyleInverse(style.FillPatternStyle);
             if (style.FillColor.HasValue)
-                xlCell.Style.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
+                xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
             if (style.FillPatternColor.HasValue)
-                xlCell.Style.Fill.PatternColor = XLColor.FromArgb(255, style.FillPatternColor.Value.R, style.FillPatternColor.Value.G, style.FillPatternColor.Value.B);
+                xlStyle.Fill.PatternColor = XLColor.FromArgb(255, style.FillPatternColor.Value.R, style.FillPatternColor.Value.G, style.FillPatternColor.Value.B);
         }
         else if (style.FillColor.HasValue)
         {
-            xlCell.Style.Fill.PatternType = XLFillPatternValues.Solid;
-            xlCell.Style.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
+            xlStyle.Fill.PatternType = XLFillPatternValues.Solid;
+            xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
         }
 
         if (style.BorderTop.Style != BorderStyle.None)
         {
-            xlCell.Style.Border.TopBorder = MapBorderStyleInverse(style.BorderTop.Style);
-            xlCell.Style.Border.TopBorderColor = XLColor.FromArgb(255, style.BorderTop.Color.R, style.BorderTop.Color.G, style.BorderTop.Color.B);
+            xlStyle.Border.TopBorder = MapBorderStyleInverse(style.BorderTop.Style);
+            xlStyle.Border.TopBorderColor = XLColor.FromArgb(255, style.BorderTop.Color.R, style.BorderTop.Color.G, style.BorderTop.Color.B);
         }
         if (style.BorderRight.Style != BorderStyle.None)
         {
-            xlCell.Style.Border.RightBorder = MapBorderStyleInverse(style.BorderRight.Style);
-            xlCell.Style.Border.RightBorderColor = XLColor.FromArgb(255, style.BorderRight.Color.R, style.BorderRight.Color.G, style.BorderRight.Color.B);
+            xlStyle.Border.RightBorder = MapBorderStyleInverse(style.BorderRight.Style);
+            xlStyle.Border.RightBorderColor = XLColor.FromArgb(255, style.BorderRight.Color.R, style.BorderRight.Color.G, style.BorderRight.Color.B);
         }
         if (style.BorderBottom.Style != BorderStyle.None)
         {
-            xlCell.Style.Border.BottomBorder = MapBorderStyleInverse(style.BorderBottom.Style);
-            xlCell.Style.Border.BottomBorderColor = XLColor.FromArgb(255, style.BorderBottom.Color.R, style.BorderBottom.Color.G, style.BorderBottom.Color.B);
+            xlStyle.Border.BottomBorder = MapBorderStyleInverse(style.BorderBottom.Style);
+            xlStyle.Border.BottomBorderColor = XLColor.FromArgb(255, style.BorderBottom.Color.R, style.BorderBottom.Color.G, style.BorderBottom.Color.B);
         }
         if (style.BorderLeft.Style != BorderStyle.None)
         {
-            xlCell.Style.Border.LeftBorder = MapBorderStyleInverse(style.BorderLeft.Style);
-            xlCell.Style.Border.LeftBorderColor = XLColor.FromArgb(255, style.BorderLeft.Color.R, style.BorderLeft.Color.G, style.BorderLeft.Color.B);
+            xlStyle.Border.LeftBorder = MapBorderStyleInverse(style.BorderLeft.Style);
+            xlStyle.Border.LeftBorderColor = XLColor.FromArgb(255, style.BorderLeft.Color.R, style.BorderLeft.Color.G, style.BorderLeft.Color.B);
         }
 
         if (style.HorizontalAlignment != def.HorizontalAlignment)
-            xlCell.Style.Alignment.Horizontal = style.HorizontalAlignment switch
+            xlStyle.Alignment.Horizontal = style.HorizontalAlignment switch
             {
                 HorizontalAlignment.Left => XLAlignmentHorizontalValues.Left,
                 HorizontalAlignment.Center => XLAlignmentHorizontalValues.Center,
@@ -178,7 +181,7 @@ internal static class XlsxClosedXmlCellMapper
             };
 
         if (style.VerticalAlignment != def.VerticalAlignment)
-            xlCell.Style.Alignment.Vertical = style.VerticalAlignment switch
+            xlStyle.Alignment.Vertical = style.VerticalAlignment switch
             {
                 VerticalAlignment.Top => XLAlignmentVerticalValues.Top,
                 VerticalAlignment.Center => XLAlignmentVerticalValues.Center,
@@ -188,22 +191,22 @@ internal static class XlsxClosedXmlCellMapper
             };
 
         if (style.WrapText != def.WrapText)
-            xlCell.Style.Alignment.WrapText = style.WrapText;
+            xlStyle.Alignment.WrapText = style.WrapText;
 
         if (style.ShrinkToFit != def.ShrinkToFit)
-            xlCell.Style.Alignment.ShrinkToFit = style.ShrinkToFit;
+            xlStyle.Alignment.ShrinkToFit = style.ShrinkToFit;
 
         if (style.TextRotation != def.TextRotation && IsSupportedTextRotation(style.TextRotation))
-            xlCell.Style.Alignment.TextRotation = style.TextRotation;
+            xlStyle.Alignment.TextRotation = style.TextRotation;
 
         if (style.NumberFormat != def.NumberFormat)
-            xlCell.Style.NumberFormat.Format = style.NumberFormat;
+            xlStyle.NumberFormat.Format = style.NumberFormat;
 
         if (style.Locked != def.Locked)
-            xlCell.Style.Protection.Locked = style.Locked;
+            xlStyle.Protection.Locked = style.Locked;
 
         if (style.Hidden != def.Hidden)
-            xlCell.Style.Protection.Hidden = style.Hidden;
+            xlStyle.Protection.Hidden = style.Hidden;
     }
 
     private static bool TryGetUnifiedNumber(XLCellValue value, out double number)

@@ -19,6 +19,7 @@ public sealed class XlsxFileAdapterFormatTests
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
+        saveSource.Should().Contain("GetStyleOnlyRuns");
         savePostProcessingSource.Should().NotContain("GetUsedCells()");
         diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
