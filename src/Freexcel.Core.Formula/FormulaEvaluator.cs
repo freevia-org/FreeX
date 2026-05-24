@@ -1043,6 +1043,7 @@ public sealed class FormulaEvaluator
              or "DISC" or "INTRATE" or "RECEIVED"
              or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"
              or "COUPDAYBS" or "COUPDAYS" or "COUPDAYSNC" or "COUPNCD" or "COUPNUM" or "COUPPCD"
+             or "PRICE" or "YIELD" or "PRICEDISC" or "PRICEMAT" or "YIELDDISC" or "YIELDMAT" or "DURATION" or "MDURATION"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
              or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
              or "FIND" or "SEARCH"
