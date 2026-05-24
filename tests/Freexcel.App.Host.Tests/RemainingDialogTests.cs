@@ -425,6 +425,27 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void RowAndColumnSizeDialogsInvalidInput_ShowOwnedWarningsAndRefocusInputs()
+    {
+        var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+        var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
+
+        rowSource.Should().Contain("MessageBox.Show(");
+        rowSource.Should().Contain("this,");
+        rowSource.Should().Contain("error ?? \"Enter a positive row height.\"");
+        rowSource.Should().Contain("MessageBoxImage.Warning");
+        rowSource.Should().Contain("FocusInvalidHeightInput();");
+        rowSource.Should().Contain("private void FocusInvalidHeightInput()");
+
+        columnSource.Should().Contain("MessageBox.Show(");
+        columnSource.Should().Contain("this,");
+        columnSource.Should().Contain("error ?? \"Enter a positive column width.\"");
+        columnSource.Should().Contain("MessageBoxImage.Warning");
+        columnSource.Should().Contain("FocusInvalidWidthInput();");
+        columnSource.Should().Contain("private void FocusInvalidWidthInput()");
+    }
+
+    [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
         SparklineDialog.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
