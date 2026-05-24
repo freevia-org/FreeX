@@ -173,8 +173,21 @@ internal static partial class XlsxChartXmlWriter
             chart.ErrorBarKind is ChartErrorBarKind.Percentage or ChartErrorBarKind.FixedValue
                 ? new XElement(chartNs + "val", new XAttribute("val", Math.Clamp(chart.ErrorBarValue, 0, 1000).ToString(CultureInfo.InvariantCulture)))
                 : null,
+            chart.ErrorBarKind == ChartErrorBarKind.Custom
+                ? ToErrorBarRangeXml("plus", chart.ErrorBarPlusRangeFormula, chartNs)
+                : null,
+            chart.ErrorBarKind == ChartErrorBarKind.Custom
+                ? ToErrorBarRangeXml("minus", chart.ErrorBarMinusRangeFormula, chartNs)
+                : null,
             ToErrorBarShapeProperties(chart, chartNs, drawingNs));
     }
+
+    private static XElement? ToErrorBarRangeXml(string name, string? formula, XNamespace chartNs) =>
+        string.IsNullOrWhiteSpace(formula)
+            ? null
+            : new XElement(chartNs + name,
+                new XElement(chartNs + "numRef",
+                    new XElement(chartNs + "f", formula)));
 
     private static XElement? ToErrorBarShapeProperties(
         ChartModel chart,
@@ -202,6 +215,7 @@ internal static partial class XlsxChartXmlWriter
         {
             ChartErrorBarKind.Percentage => "percentage",
             ChartErrorBarKind.FixedValue => "fixedVal",
+            ChartErrorBarKind.Custom => "cust",
             _ => "stdErr"
         };
 

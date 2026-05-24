@@ -78,7 +78,7 @@ public enum ChartDrawingAnchorKind { Absolute, OneCell, TwoCell }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
-public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
+public enum ChartErrorBarKind { StandardError, Percentage, FixedValue, Custom }
 
 public enum ChartErrorBarDirection { Both, Plus, Minus }
 
@@ -391,6 +391,8 @@ public sealed class ChartModel
     public bool ShowDataLabelPercentage { get; set; }
     public ChartDataLabelSeparator DataLabelSeparator { get; set; } = ChartDataLabelSeparator.Comma;
     public ChartDataLabelNumberFormat DataLabelNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? DataLabelNumberFormatCode { get; set; }
+    public bool? DataLabelNumberFormatSourceLinked { get; set; }
     public bool ShowDataLabelCallouts { get; set; }
     public CellColor? DataLabelFillColor { get; set; }
     public WorkbookThemeColorReference? DataLabelFillThemeColor { get; set; }
@@ -419,6 +421,8 @@ public sealed class ChartModel
     public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
     public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
     public double ErrorBarValue { get; set; } = 5;
+    public string? ErrorBarPlusRangeFormula { get; set; }
+    public string? ErrorBarMinusRangeFormula { get; set; }
     public bool ErrorBarEndCaps { get; set; } = true;
     public CellColor? ErrorBarColor { get; set; }
     public WorkbookThemeColorReference? ErrorBarThemeColor { get; set; }

@@ -19,6 +19,10 @@ public sealed record FormatPictureDialogResult(
 
 public sealed class FormatPictureDialog : Window
 {
+    private readonly TabControl _tabs = new();
+    private readonly TabItem _sizeTab = new() { Header = "_Size" };
+    private readonly TabItem _cropTab = new() { Header = "_Crop" };
+    private readonly TabItem _altTextTab = new() { Header = "_Alt Text" };
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
     private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
@@ -129,11 +133,39 @@ public sealed class FormatPictureDialog : Window
                 out var error))
         {
             MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidInput(error);
             return;
         }
 
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInvalidInput(string? error)
+    {
+        if (string.Equals(error, "Enter a numeric rotation in degrees.", StringComparison.Ordinal))
+        {
+            _tabs.SelectedItem = _sizeTab;
+            FocusAndSelect(_rotationBox);
+            return;
+        }
+
+        if (string.Equals(error, "Enter positive width and height values.", StringComparison.Ordinal))
+        {
+            _tabs.SelectedItem = _sizeTab;
+            FocusAndSelect(string.IsNullOrWhiteSpace(_heightBox.Text) ? _heightBox : _widthBox);
+            return;
+        }
+
+        _tabs.SelectedItem = _cropTab;
+        FocusAndSelect(_cropLeftBox);
+    }
+
+    private static void FocusAndSelect(TextBox box)
+    {
+        box.Focus();
+        box.SelectAll();
+        Keyboard.Focus(box);
     }
 
     private void FocusInitialKeyboardTarget()
@@ -149,11 +181,13 @@ public sealed class FormatPictureDialog : Window
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var tabs = new TabControl();
-        tabs.Items.Add(new TabItem { Header = "_Size", Content = CreateSizeTab() });
-        tabs.Items.Add(new TabItem { Header = "_Crop", Content = CreateCropTab(cropEnabled) });
-        tabs.Items.Add(new TabItem { Header = "_Alt Text", Content = CreateAltTextTab() });
-        root.Children.Add(tabs);
+        _sizeTab.Content = CreateSizeTab();
+        _cropTab.Content = CreateCropTab(cropEnabled);
+        _altTextTab.Content = CreateAltTextTab();
+        _tabs.Items.Add(_sizeTab);
+        _tabs.Items.Add(_cropTab);
+        _tabs.Items.Add(_altTextTab);
+        root.Children.Add(_tabs);
 
         var buttons = DialogButtonRowFactory.Create(Accept, 72);
         Grid.SetRow(buttons, 1);

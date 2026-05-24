@@ -223,8 +223,8 @@ internal static partial class XlsxChartXmlWriter
         return new XElement(chartNs + "dLbls",
             new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(chart.DataLabelPosition))),
             new XElement(chartNs + "numFmt",
-                new XAttribute("formatCode", ToXlsxNumberFormatCode(chart.DataLabelNumberFormat)),
-                new XAttribute("sourceLinked", chart.DataLabelNumberFormat == ChartDataLabelNumberFormat.General ? "1" : "0")),
+                new XAttribute("formatCode", ToXlsxNumberFormatCode(chart.DataLabelNumberFormat, chart.DataLabelNumberFormatCode)),
+                new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(chart.DataLabelNumberFormat, chart.DataLabelNumberFormatSourceLinked))),
             ToShapeProperties(
                 chartNs,
                 drawingNs,

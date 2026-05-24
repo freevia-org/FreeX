@@ -152,7 +152,9 @@ public sealed class ObjectDialogTests
     {
         var objectSource = ReadObjectDialogSources();
         var formatPictureSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
-        var namedRangeSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+        var namedRangeSource =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NameDefinitionDialog.cs"));
         var shapeGradientSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
 
         foreach (var source in new[] { objectSource, formatPictureSource, namedRangeSource, shapeGradientSource })
@@ -342,6 +344,23 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_heightBox.Focus();");
         source.Should().Contain("_heightBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_heightBox);");
+    }
+
+    [Fact]
+    public void FormatPictureDialogInvalidInput_SelectsRelevantTabAndField()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("private readonly TabControl _tabs = new();");
+        source.Should().Contain("private readonly TabItem _sizeTab = new() { Header = \"_Size\" };");
+        source.Should().Contain("private readonly TabItem _cropTab = new() { Header = \"_Crop\" };");
+        source.Should().Contain("FocusInvalidInput(error);");
+        source.Should().Contain("private void FocusInvalidInput(string? error)");
+        source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
+        source.Should().Contain("_tabs.SelectedItem = _cropTab;");
+        source.Should().Contain("FocusAndSelect(_rotationBox);");
+        source.Should().Contain("FocusAndSelect(_cropLeftBox);");
+        source.Should().Contain("Keyboard.Focus(box);");
     }
 
     [Fact]

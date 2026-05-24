@@ -16,7 +16,11 @@ internal static class XlsxChartDataLabelReader
 
         chart.ShowDataLabels = true;
         chart.DataLabelPosition = FromXlsxDataLabelPosition(dataLabels.Element(ChartNs + "dLblPos")?.Attribute("val")?.Value);
-        chart.DataLabelNumberFormat = XlsxChartAxisReader.FromXlsxNumberFormatCode(dataLabels.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
+        var numberFormatElement = dataLabels.Element(ChartNs + "numFmt");
+        var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
+        chart.DataLabelNumberFormat = XlsxChartAxisReader.FromXlsxNumberFormatCode(numberFormatCode);
+        chart.DataLabelNumberFormatCode = numberFormatCode;
+        chart.DataLabelNumberFormatSourceLinked = ReadNullableBool(numberFormatElement?.Attribute("sourceLinked")?.Value);
         chart.ShowDataLabelValue = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showVal")?.Attribute("val")?.Value);
         chart.ShowDataLabelLegendKey = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value);
         chart.ShowDataLabelBubbleSize = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value);

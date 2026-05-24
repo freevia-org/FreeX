@@ -47,6 +47,8 @@ internal static class XlsxChartTrendlineErrorBarReader
         chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
         chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
         chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
+        chart.ErrorBarPlusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "plus"));
+        chart.ErrorBarMinusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "minus"));
 
         if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
@@ -274,6 +276,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         {
             "percentage" => ChartErrorBarKind.Percentage,
             "fixedVal" => ChartErrorBarKind.FixedValue,
+            "cust" => ChartErrorBarKind.Custom,
             _ => ChartErrorBarKind.StandardError
         };
 
@@ -287,4 +290,10 @@ internal static class XlsxChartTrendlineErrorBarReader
 
     private static double? ReadOptionalDouble(string? value) =>
         XlsxChartScalarReader.ReadOptionalDouble(value);
+
+    private static string? ReadErrorBarRangeFormula(XElement? element) =>
+        element?
+            .Descendants(ChartNs + "f")
+            .Select(formula => formula.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 }
