@@ -12,9 +12,16 @@ public partial class GridView
         CellBorder border,
         Point p1,
         Point p2,
-        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null,
+        Dictionary<CellBorder, Pen>? borderPenCache = null)
     {
         if (border.Style == BorderStyle.None) return;
+
+        if (borderPenCache is not null && borderPenCache.TryGetValue(border, out var cachedPen))
+        {
+            dc.DrawLine(cachedPen, p1, p2);
+            return;
+        }
 
         double thickness = border.Style switch
         {
@@ -32,6 +39,9 @@ public partial class GridView
         };
 
         var pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
+        if (pen.CanFreeze)
+            pen.Freeze();
+        borderPenCache?.Add(border, pen);
 
         dc.DrawLine(pen, p1, p2);
     }

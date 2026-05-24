@@ -47,6 +47,18 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().NotContain("new SolidColorBrush");
     }
 
+    [Fact]
+    public void RenderCells_ReusesBorderPensWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var borderPenCache = new Dictionary<CellBorder, Pen>();");
+        renderCells.Should().Contain("brushCache, borderPenCache");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
