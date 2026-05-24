@@ -112,6 +112,34 @@ public sealed class RibbonCommandPresentationPlannerTests
         icon.Kind.Should().Be(expectedKind);
     }
 
+    [Theory]
+    [InlineData("Charts", RibbonCommandIconAccent.Chart)]
+    [InlineData("Get & Transform Data", RibbonCommandIconAccent.Data)]
+    [InlineData("Themes", RibbonCommandIconAccent.Theme)]
+    [InlineData("Protect", RibbonCommandIconAccent.Protect)]
+    [InlineData("Help", RibbonCommandIconAccent.Help)]
+    public void GetGroupIcon_AssignsExcelLikeAccentFamilies(string groupName, RibbonCommandIconAccent expectedAccent)
+    {
+        RibbonCommandPresentationPlanner.GetGroupIcon(groupName).Accent.Should().Be(expectedAccent);
+    }
+
+    [Fact]
+    public void MainRibbonGroupLabels_MapToSemanticIcons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var ribbonXaml = xaml[
+            xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal)..xaml.IndexOf("<Grid Grid.Row=\"3\"", StringComparison.Ordinal)];
+        var genericGroupLabels = Regex
+            .Matches(ribbonXaml, "<TextBlock Text=\"(?<label>[^\"]+)\" Style=\"\\{StaticResource GroupLbl\\}\"")
+            .Select(match => match.Groups["label"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .Where(label => RibbonCommandPresentationPlanner.GetGroupIcon(label).Kind == RibbonCommandIconKind.Generic)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        genericGroupLabels.Should().BeEmpty("collapsed ribbon groups should use a semantic icon rather than the generic fallback");
+    }
+
     [Fact]
     public void MainRibbonCommandTitles_MapToSemanticIcons()
     {

@@ -221,6 +221,10 @@ public sealed class FormatCellsDialogXamlTests
                     .Should().Be("$#,##0.00");
                 FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
                     .Should().Be("# ?/?");
+                FormatCellsDialog.ResolveNumberFormat("Long date ([$-F800])", 0)
+                    .Should().Be("[$-F800]");
+                FormatCellsDialog.ResolveNumberFormat("Long time ([$-F400])", 0)
+                    .Should().Be("[$-F400]");
             }
             finally
             {
@@ -263,7 +267,16 @@ public sealed class FormatCellsDialogXamlTests
                 {
                     "m/d/yyyy",
                     "mmmm d, yyyy",
-                    "d-mmm-yy"
+                    "d-mmm-yy",
+                    "Long date ([$-F800])"
+                });
+
+                categories.SelectedItem = "Time";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "h:mm AM/PM",
+                    "h:mm:ss",
+                    "Long time ([$-F400])"
                 });
 
                 categories.SelectedItem = "Custom";
@@ -276,6 +289,11 @@ public sealed class FormatCellsDialogXamlTests
                     "m/d/yyyy",
                     "h:mm AM/PM"
                 });
+
+                categories.SelectedItem = "Special";
+                types.Items.Cast<string>().Should().Contain("000-00-0000");
+                FormatCellsDialog.ResolveNumberFormat("000-00-0000", 0)
+                    .Should().Be("000-00-0000");
             }
             finally
             {

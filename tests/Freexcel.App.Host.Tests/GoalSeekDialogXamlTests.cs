@@ -73,6 +73,18 @@ public sealed class GoalSeekDialogXamlTests
         source.Should().Contain("Keyboard.Focus(SetCellBox);");
     }
 
+    [Fact]
+    public void InvalidInputMessage_RefocusesAndSelectsOffendingField()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekDialog.xaml.cs"));
+
+        source.Should().Contain("FocusInvalidInput(error);");
+        source.Should().Contain("private void FocusInvalidInput(string error)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
     [Theory]
     [InlineData("SetCellBox", GoalSeekRangeSelectionTarget.SetCell, "$A$1")]
     [InlineData("ChangingCellBox", GoalSeekRangeSelectionTarget.ChangingCell, "$B$2")]

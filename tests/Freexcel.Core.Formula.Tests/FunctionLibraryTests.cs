@@ -6352,6 +6352,16 @@ public class FunctionLibraryTests
         _eval.Evaluate("=NUMBERVALUE(\"1.234\",\".\",\".\")", MakeSheet())
             .Should().Be(ErrorValue.Value);
 
+    [Fact]
+    public void Numbervalue_ExplicitBlankDecimalSeparator_ReturnsValueError() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1234\",)", MakeSheet())
+            .Should().Be(ErrorValue.Value);
+
+    [Fact]
+    public void Numbervalue_ExplicitBlankGroupSeparator_ReturnsValueError() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1234\",\".\",)", MakeSheet())
+            .Should().Be(ErrorValue.Value);
+
     // ── SQRTPI additional ────────────────────────────────────────────────────
 
     [Fact]

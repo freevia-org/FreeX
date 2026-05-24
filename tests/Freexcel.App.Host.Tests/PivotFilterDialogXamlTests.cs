@@ -83,6 +83,19 @@ public sealed class PivotFilterDialogXamlTests
         source.Should().Contain($"Keyboard.Focus({target});");
     }
 
+    [Theory]
+    [InlineData("PivotLabelFilterDialog.xaml.cs", "FocusInvalidLabelValue")]
+    [InlineData("PivotValueFilterDialog.xaml.cs", "FocusInvalidValueFilterInput")]
+    public void PivotConditionDialogInvalidCriteria_RefocusesAndSelectsValueBox(string sourceFile, string helperName)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", sourceFile));
+
+        source.Should().Contain($"{helperName}(");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
     [Fact]
     public void PivotValueFieldSettingsDialog_ExposesAccessKeyedFieldsTabsAndButtons()
     {

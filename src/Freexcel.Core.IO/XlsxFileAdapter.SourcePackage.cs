@@ -28,12 +28,16 @@ public sealed partial class XlsxFileAdapter
         XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorksheetDrawingPartMerger.Merge(sourceArchive, generatedArchive);
         XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive);
-        XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
+        if (HasSourcePackagePart(sourceArchive, "xl/printerSettings/"))
+            XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
         XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
     }
+
+    private static bool HasSourcePackagePart(ZipArchive archive, string prefix) =>
+        archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
 
     private sealed record XlsxSourcePackage(byte[] Buffer, int Offset, int Count)
