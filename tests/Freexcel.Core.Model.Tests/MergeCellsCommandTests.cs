@@ -79,6 +79,22 @@ public class MergeCellsCommandTests
     }
 
     [Fact]
+    public void Merge_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+
+        var outcome = new MergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(range);
+    }
+
+    [Fact]
     public void Unmerge_RemovesExistingRegion()
     {
         var (_, sheet, ctx) = Setup();
@@ -106,6 +122,40 @@ public class MergeCellsCommandTests
         cmd.Revert(ctx);
 
         sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(range);
+    }
+
+    [Fact]
+    public void Unmerge_RejectsProtectedSheetWithoutFormatCellsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+        sheet.AddMergedRegion(range);
+
+        var outcome = new UnmergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(range);
+    }
+
+    [Fact]
+    public void Unmerge_AllowsProtectedSheetWithFormatCellsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+        sheet.AddMergedRegion(range);
+
+        var outcome = new UnmergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
     }
 
     [Fact]
