@@ -45,6 +45,33 @@ public sealed class SaveWorkbookWriterTests
         }
     }
 
+    [Fact]
+    public async Task SaveAsync_PreservesExistingFileWhenAdapterFails()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fxjson");
+        await File.WriteAllTextAsync(tempPath, "original");
+        try
+        {
+            var workbook = new Workbook("Saved");
+            workbook.AddSheet("Sheet1");
+            var adapter = new FakeAdapter((_, _) => throw new InvalidOperationException("boom"));
+            var saver = new SaveWorkbookWriter();
+
+            var act = async () => await saver.SaveAsync(
+                tempPath,
+                adapter,
+                workbook,
+                new ImmediateProgress<SaveProgressUpdate>(_ => { }));
+
+            await act.Should().ThrowAsync<InvalidOperationException>();
+            (await File.ReadAllTextAsync(tempPath)).Should().Be("original");
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
     private sealed class FakeAdapter(Action<Workbook, Stream> save) : IFileAdapter
     {
         public string Extension => ".fxjson";

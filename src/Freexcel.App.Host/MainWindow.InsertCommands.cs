@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Diagnostics;
 using System.Windows;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -74,12 +75,13 @@ public partial class MainWindow
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is null) return;
-        var dialog = new HyperlinkDialog { Owner = this };
+        if (SheetGrid.SelectedRange is not { } selectedRange) return;
+        var prefill = HyperlinkDialogPrefill.FromCell(_workbook.GetSheet(_currentSheetId), selectedRange.Start);
+        var dialog = new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Link",
-                SheetGrid.SelectedRange.Value,
+                selectedRange,
                 currentRange => new SetHyperlinkCommand(
                     _currentSheetId,
                     currentRange.Start,
@@ -91,6 +93,82 @@ public partial class MainWindow
                         dialog.Result.Bookmark))))
             return;
         UpdateViewport();
+    }
+
+    private bool TryOpenHyperlink(CellAddress address)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (!HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan) || plan is null)
+            return false;
+
+        if (plan.Kind == HyperlinkNavigationKind.WorksheetCell)
+        {
+            if (TryNavigateToWorkbookReference(plan.Target))
+                return true;
+
+            MessageBox.Show("The hyperlink target could not be found.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(plan.Target) { UseShellExecute = true });
+        }
+        catch
+        {
+            MessageBox.Show("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        return true;
+    }
+
+    private bool TryNavigateToWorkbookReference(string reference)
+    {
+        if (!TryParseWorkbookReference(reference, out var sheetName, out var row, out var col))
+            return false;
+
+        var sheet = _workbook.Sheets.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+        if (sheet is null)
+            return false;
+
+        var address = new CellAddress(sheet.Id, row, col);
+        NavigateToCell(address);
+        return true;
+    }
+
+    private static bool TryParseWorkbookReference(string reference, out string sheetName, out uint row, out uint col)
+    {
+        sheetName = "";
+        row = 0;
+        col = 0;
+
+        var trimmed = reference.Trim();
+        var bang = trimmed.LastIndexOf('!');
+        if (bang <= 0 || bang == trimmed.Length - 1)
+            return false;
+
+        sheetName = trimmed[..bang].Trim().Trim('\'').Replace("''", "'");
+        var cellText = trimmed[(bang + 1)..].Trim().TrimStart('$');
+        var letterCount = cellText.TakeWhile(char.IsLetter).Count();
+        if (letterCount == 0 || letterCount == cellText.Length)
+            return false;
+
+        var colText = cellText[..letterCount].Replace("$", "", StringComparison.Ordinal);
+        var rowText = cellText[letterCount..].TrimStart('$');
+        if (!uint.TryParse(rowText, out row) || row is < 1 or > CellAddress.MaxRow)
+            return false;
+
+        try
+        {
+            col = CellAddress.ColumnNameToNumber(colText);
+        }
+        catch
+        {
+            return false;
+        }
+
+        return col is >= 1 and <= CellAddress.MaxCol && sheetName.Length > 0;
     }
 
     private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>

@@ -46,6 +46,19 @@ public class UndoRedoTests
     }
 
     [Fact]
+    public void UndoRedo_EditCell_ReturnsAffectedCellForIncrementalRecalculation()
+    {
+        var (wb, sheet, bus) = CreateHarness();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new NumberValue(10));
+
+        bus.Execute(wb.Id, new EditCellsCommand(sheet.Id, addr, new NumberValue(99)));
+
+        bus.Undo(wb.Id).AffectedCells.Should().Equal(addr);
+        bus.Redo(wb.Id).AffectedCells.Should().Equal(addr);
+    }
+
+    [Fact]
     public void Undo_StyleCommand_RemovesAppliedStyle()
     {
         var (wb, sheet, bus) = CreateHarness();

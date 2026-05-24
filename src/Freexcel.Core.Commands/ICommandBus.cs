@@ -46,6 +46,11 @@ public interface IWorkbookCommand
     void Revert(ICommandContext ctx);
 }
 
+public interface IAffectedCellsCommand
+{
+    IReadOnlyList<CellAddress> AffectedCells { get; }
+}
+
 /// <summary>Context provided to commands for accessing workbook state.</summary>
 public interface ICommandContext
 {
