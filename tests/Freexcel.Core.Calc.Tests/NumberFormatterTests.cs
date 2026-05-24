@@ -651,6 +651,14 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Fact]
+    public void CustomNumberSubset_EmptyTextSectionSuppressesTextDisplay()
+    {
+        var result = NumberFormatter.Format(new TextValue("hello"), "0;0;0;");
+
+        Assert.Equal("", result);
+    }
+
     [Theory]
     [InlineData("@ \"units\"", "A1", "A1 units")]
     [InlineData("\"SKU \"@", "A1", "SKU A1")]
