@@ -37,7 +37,8 @@ internal static class XlsxChartAxisReader
             return;
         }
 
-        var categoryAxis = plotArea.Element(ChartNs + "catAx");
+        var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
+        chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
         ApplyAxisTitleFormatting(categoryAxis, chart);
         ApplyCategoryAxisProperties(categoryAxis, chart);

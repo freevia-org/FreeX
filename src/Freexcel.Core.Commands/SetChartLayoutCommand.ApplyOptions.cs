@@ -106,6 +106,8 @@ public sealed partial class SetChartLayoutCommand
             chart.ShowXAxisMajorGridlines = options.ShowXAxisMajorGridlines.Value;
         if (options.ShowXAxisMinorGridlines is not null)
             chart.ShowXAxisMinorGridlines = options.ShowXAxisMinorGridlines.Value;
+        if (options.XAxisIsDateAxis is not null)
+            chart.XAxisIsDateAxis = options.XAxisIsDateAxis.Value;
         if (options.XAxisMajorGridlineColor is not null)
             chart.XAxisMajorGridlineColor = options.XAxisMajorGridlineColor;
         if (options.XAxisMinorGridlineColor is not null)

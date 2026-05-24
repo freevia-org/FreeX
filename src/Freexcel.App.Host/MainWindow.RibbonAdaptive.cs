@@ -426,7 +426,10 @@ public partial class MainWindow
 
         item.Click += (_, args) =>
         {
-            if (args.OriginalSource is MenuItem original && original.Items.Count > 0)
+            if (!ReferenceEquals(args.OriginalSource, item))
+                return;
+
+            if (sourceItem.Items.Count > 0)
                 return;
 
             sourceItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, sourceItem));

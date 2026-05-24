@@ -179,6 +179,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             XAxisNumberFormat = chart.XAxisNumberFormat,
             ShowXAxisMajorGridlines = chart.ShowXAxisMajorGridlines,
             ShowXAxisMinorGridlines = chart.ShowXAxisMinorGridlines,
+            XAxisIsDateAxis = chart.XAxisIsDateAxis,
             XAxisMajorGridlineColor = chart.XAxisMajorGridlineColor,
             XAxisMinorGridlineColor = chart.XAxisMinorGridlineColor,
             XAxisGridlineThickness = chart.XAxisGridlineThickness,
