@@ -364,6 +364,7 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("cell styles") ||
         name == "pivottable" ||
         name is "table" ||
+        name.Contains("add-ins") ||
         name.Contains("recommended chart") ||
         name.Contains("recommended pivottable") ||
         name == "insert picture" ||

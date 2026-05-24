@@ -64,6 +64,7 @@ public sealed partial class NativeJsonAdapter
         chart.DataLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelPosition, ChartDataLabelPosition.BestFit);
         chart.DataLabelSeparator = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelSeparator, ChartDataLabelSeparator.Comma);
         chart.DataLabelNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.DataLabelNumberFormatCode = string.IsNullOrWhiteSpace(chart.DataLabelNumberFormatCode) ? null : chart.DataLabelNumberFormatCode;
         chart.DrawingAnchorKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DrawingAnchorKind, ChartDrawingAnchorKind.Absolute);
         chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
         if (chart.Type != ChartType.Stock)

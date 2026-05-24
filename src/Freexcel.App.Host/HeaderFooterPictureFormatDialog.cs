@@ -60,11 +60,24 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         if (!ObjectSizeDialog.TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var size))
         {
             MessageBox.Show(this, "Enter positive width and height values.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidSizeInput();
             return;
         }
 
         Result = Result with { Width = size.Width, Height = size.Height };
         DialogResult = true;
+    }
+
+    private void FocusInvalidSizeInput()
+    {
+        FocusAndSelect(string.IsNullOrWhiteSpace(_widthBox.Text) ? _widthBox : _heightBox);
+    }
+
+    private static void FocusAndSelect(TextBox box)
+    {
+        box.Focus();
+        box.SelectAll();
+        Keyboard.Focus(box);
     }
 
     private void FocusInitialKeyboardTarget()

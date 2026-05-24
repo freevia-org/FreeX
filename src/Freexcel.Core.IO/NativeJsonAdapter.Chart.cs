@@ -172,6 +172,8 @@ public sealed partial class NativeJsonAdapter
                 ShowDataLabelPercentage = chartDto.ShowDataLabelPercentage,
                 DataLabelSeparator = chartDto.DataLabelSeparator,
                 DataLabelNumberFormat = chartDto.DataLabelNumberFormat,
+                DataLabelNumberFormatCode = chartDto.DataLabelNumberFormatCode,
+                DataLabelNumberFormatSourceLinked = chartDto.DataLabelNumberFormatSourceLinked,
                 ShowDataLabelCallouts = chartDto.ShowDataLabelCallouts,
                 DataLabelFillColor = chartDto.DataLabelFillColor,
                 DataLabelFillThemeColor = ToThemeColorReference(chartDto.DataLabelFillThemeColor),

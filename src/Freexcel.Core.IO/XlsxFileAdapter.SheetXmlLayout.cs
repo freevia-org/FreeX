@@ -54,7 +54,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
-        IReadOnlyList<(uint Row, uint Col)> ExplicitStyleOnlyCells,
+        IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
@@ -319,13 +319,13 @@ public sealed partial class XlsxFileAdapter
             codeName);
     }
 
-    private static IReadOnlyList<(uint Row, uint Col)> ReadExplicitStyleOnlyCells(XDocument worksheetXml, XNamespace worksheetNs)
+    private static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(XDocument worksheetXml, XNamespace worksheetNs)
     {
-        var result = new List<(uint Row, uint Col)>();
+        var result = new List<(uint Row, uint Col, int StyleIndex)>();
 
         foreach (var cell in worksheetXml.Descendants(worksheetNs + "c"))
         {
-            if (string.IsNullOrWhiteSpace(cell.Attribute("s")?.Value) ||
+            if (!int.TryParse(cell.Attribute("s")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleIndex) ||
                 cell.Element(worksheetNs + "f") is not null ||
                 cell.Element(worksheetNs + "v") is not null ||
                 cell.Element(worksheetNs + "is") is not null)
@@ -337,7 +337,7 @@ public sealed partial class XlsxFileAdapter
             if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, SheetId.New(), out var address))
                 continue;
 
-            result.Add((address.Row, address.Col));
+            result.Add((address.Row, address.Col, styleIndex));
         }
 
         return result;
