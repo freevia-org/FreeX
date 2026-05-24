@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -41,6 +42,7 @@ public partial class PivotFieldFilterDialog : Window
         _view = CollectionViewSource.GetDefaultView(FilterItemsList.ItemsSource);
         _view.Filter = FilterItem;
         UpdateSelectAllState();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public IReadOnlyList<string> SelectedItems { get; private set; } = [];
@@ -94,6 +96,12 @@ public partial class PivotFieldFilterDialog : Window
     {
         var visible = _items.Where(item => FilterItem(item)).ToList();
         SelectAllCheckBox.IsChecked = visible.Count > 0 && visible.All(item => item.IsChecked);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        FilterSearchBox.Focus();
+        Keyboard.Focus(FilterSearchBox);
     }
 
     private sealed class PivotFilterItem(string caption, string value, bool isChecked)
