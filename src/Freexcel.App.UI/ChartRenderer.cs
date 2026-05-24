@@ -175,6 +175,12 @@ public static partial class ChartRenderer
             return surfaceModel;
         }
 
+        if (chart.Type == ChartType.Waterfall)
+            return BuildWaterfallModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Histogram)
+            return BuildHistogramModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, theme);
+
         // Column / Line: one series per data column
         List<DataPoint>? firstSeriesPoints = null;
         for (uint col = dataStartCol; col <= endCol; col++)

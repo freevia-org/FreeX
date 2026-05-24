@@ -14,9 +14,15 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double rawYear = ToNumber(args[0]);
         double rawMonth = ToNumber(args[1]);
         double rawDay = ToNumber(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DateScalar(value, rawMonth, rawDay));
+        return DateScalar(args[0], rawMonth, rawDay);
+    }
+
+    private static ScalarValue DateScalar(ScalarValue yearValue, double rawMonth, double rawDay)
+    {
+        double rawYear = ToNumber(yearValue);
         if (!double.IsFinite(rawYear) || !double.IsFinite(rawMonth) || !double.IsFinite(rawDay))
             return ErrorValue.Num;
         if (rawYear > int.MaxValue || rawMonth > int.MaxValue || rawDay > int.MaxValue ||
@@ -285,7 +291,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double rawH = ToNumber(args[0]), rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
+        double rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TimeScalar(value, rawM, rawS));
+        return TimeScalar(args[0], rawM, rawS);
+    }
+
+    private static ScalarValue TimeScalar(ScalarValue hourValue, double rawM, double rawS)
+    {
+        double rawH = ToNumber(hourValue);
         if (!double.IsFinite(rawH) || !double.IsFinite(rawM) || !double.IsFinite(rawS)) return ErrorValue.Num;
         if (rawH < 0 || rawM < 0 || rawS < 0) return ErrorValue.Num;
         if (rawH > 32767 || rawM > 32767 || rawS > 32767) return ErrorValue.Num;
