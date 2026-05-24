@@ -1720,6 +1720,28 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DateTimeSecondRangeArguments_SpillElementwise()
+    {
+        var offsets = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(DATE(2024,1,31),A1:A2)", offsets),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(DATE(2024,1,31),A1:A2)", offsets),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY(DATE(2024,1,1),A1:A2)", offsets),
+            new NumberValue(new DateTime(2024, 1, 2).ToOADate()),
+            new NumberValue(new DateTime(2024, 1, 3).ToOADate()));
+        AssertColumn(_eval.Evaluate("=WEEKDAY(DATE(2024,1,7),A1:A2)", offsets), new NumberValue(1), new NumberValue(7));
+    }
+
+    [Fact]
     public void Weekday_ReturnType1_SundayIs1()
     {
         // 2024-01-07 is a Sunday

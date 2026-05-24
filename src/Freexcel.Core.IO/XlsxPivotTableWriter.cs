@@ -241,18 +241,34 @@ internal static partial class XlsxPivotTableWriter
         return new XElement(
             workbookNs + "pivotFields",
             new XAttribute("count", Math.Max(0, maxFieldIndex + 1).ToString(CultureInfo.InvariantCulture)),
-            Enumerable.Range(0, Math.Max(0, maxFieldIndex + 1)).Select(index => new XElement(
-                workbookNs + "pivotField",
-                pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisRow") : null,
-                pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
-                pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
-                pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
-                pivot.ShowSubtotals && pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? new XAttribute("subtotalTop", "1") : null,
-                new XAttribute("showAll", "0"),
-                new XElement(workbookNs + "items",
-                    new XAttribute("count", "1"),
-                    new XElement(workbookNs + "item", new XAttribute("t", "default"))))));
+            Enumerable.Range(0, Math.Max(0, maxFieldIndex + 1)).Select(index =>
+            {
+                var metadataField = FindPivotField(pivot, index);
+                return new XElement(
+                    workbookNs + "pivotField",
+                    pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisRow") : null,
+                    pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
+                    pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
+                    pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
+                    pivot.ShowSubtotals && pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? new XAttribute("subtotalTop", "1") : null,
+                    new XAttribute("showAll", metadataField?.ShowAll == true ? "1" : "0"),
+                    ToOptionalBoolAttribute("includeNewItemsInFilter", metadataField?.IncludeNewItemsInFilter),
+                    ToOptionalBoolAttribute("multipleItemSelectionAllowed", metadataField?.MultipleItemSelectionAllowed),
+                    ToOptionalBoolAttribute("dragToRow", metadataField?.DragToRow),
+                    ToOptionalBoolAttribute("dragToCol", metadataField?.DragToColumn),
+                    ToOptionalBoolAttribute("dragToPage", metadataField?.DragToPage),
+                    ToOptionalBoolAttribute("dragToData", metadataField?.DragToData),
+                    new XElement(workbookNs + "items",
+                        new XAttribute("count", "1"),
+                        new XElement(workbookNs + "item", new XAttribute("t", "default"))));
+            }));
     }
+
+    private static PivotFieldModel? FindPivotField(PivotTableModel pivot, int sourceFieldIndex) =>
+        pivot.RowFields
+            .Concat(pivot.ColumnFields)
+            .Concat(pivot.PageFields)
+            .LastOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
 
     private static XElement? ToPivotFieldCollectionXml(string elementName, IReadOnlyList<PivotFieldModel> fields, XNamespace workbookNs) =>
         fields.Count == 0

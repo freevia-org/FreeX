@@ -252,9 +252,7 @@ public sealed partial class XlsxFileAdapter
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
-        var chartParts = XlsxWorksheetDrawingPartReader.ReadChartParts(archive, worksheetPath, worksheetXml);
-        var pictureParts = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, worksheetPath, worksheetXml);
-        var (textBoxParts, shapeParts) = XlsxWorksheetDrawingPartReader.ReadShapeParts(archive, worksheetPath, worksheetXml);
+        var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
         var sparklines = XlsxSparklineMapper.Read(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
@@ -307,10 +305,10 @@ public sealed partial class XlsxFileAdapter
             rowHeights,
             columnWidths,
             comments,
-            chartParts,
-            pictureParts,
-            textBoxParts,
-            shapeParts,
+            drawingParts.ChartParts,
+            drawingParts.PictureParts,
+            drawingParts.TextBoxParts,
+            drawingParts.ShapeParts,
             sparklines,
             advancedConditionalFormats,
             dataValidationNativeMetadata,
