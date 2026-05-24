@@ -142,6 +142,20 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialogInvalidCriteria_ReturnsToSettingsTabAndKeyboardFocusesInvalidFormula()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+        var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml.cs"));
+
+        xaml.Should().Contain("<TabControl x:Name=\"ValidationTabs\"");
+        xaml.Should().Contain("<TabItem x:Name=\"SettingsTab\" Header=\"_Settings\"");
+        codeBehind.Should().Contain("FocusInvalidCriteriaInput(typeTag, opTag);");
+        codeBehind.Should().Contain("private void FocusInvalidCriteriaInput(string typeTag, string opTag)");
+        codeBehind.Should().Contain("ValidationTabs.SelectedItem = SettingsTab;");
+        codeBehind.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void DataValidationDialog_UsesExcelLikeSectionLabelsAndListSourcePicker()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));

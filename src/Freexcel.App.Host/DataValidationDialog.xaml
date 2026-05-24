@@ -12,8 +12,8 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0" Margin="0,0,0,12">
-            <TabItem Header="_Settings">
+        <TabControl x:Name="ValidationTabs" Grid.Row="0" Margin="0,0,0,12">
+            <TabItem x:Name="SettingsTab" Header="_Settings">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
