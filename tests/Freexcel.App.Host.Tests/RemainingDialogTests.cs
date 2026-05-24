@@ -71,7 +71,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record ForecastSheetDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -371,7 +371,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SingleInputMiniDialogs_UseAccessKeyedLabelsAndSharedButtonRows()
     {
-        var remainingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+        var remainingSource = ReadRemainingDialogSources();
         var objectSource = ReadObjectDialogSources();
 
         remainingSource.Should().Contain("Format cells greater _than:");
@@ -402,7 +402,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ForecastSheetDialogOpenedFromKeyboard_FocusesPeriodsBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ForecastSheetDialog", "public sealed record SheetNameDialogResult");
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -668,6 +668,7 @@ public sealed class RemainingDialogTests
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageBreakDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ForecastSheetDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FillSeriesStepDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
