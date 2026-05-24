@@ -74,8 +74,42 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args[0] is RangeValue left || args[1] is RangeValue right)
+            return ExactRange(args[0], args[1]);
+
         return new BoolValue(string.Equals(ToText(args[0]), ToText(args[1]), StringComparison.Ordinal));
     }
+
+    private static ScalarValue ExactRange(ScalarValue left, ScalarValue right)
+    {
+        var leftRange = left as RangeValue;
+        var rightRange = right as RangeValue;
+        int rows = leftRange?.RowCount ?? rightRange?.RowCount ?? 1;
+        int cols = leftRange?.ColCount ?? rightRange?.ColCount ?? 1;
+        if (leftRange is not null && !CanBroadcastExactRange(leftRange, rows, cols)) return ErrorValue.Value;
+        if (rightRange is not null && !CanBroadcastExactRange(rightRange, rows, cols)) return ErrorValue.Value;
+
+        var result = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                var l = ExactValueAt(left, r, c);
+                var rr = ExactValueAt(right, r, c);
+                if (l is ErrorValue le) return le;
+                if (rr is ErrorValue re) return re;
+                result[r, c] = new BoolValue(string.Equals(ToText(l), ToText(rr), StringComparison.Ordinal));
+            }
+
+        return new RangeValue(result);
+    }
+
+    private static bool CanBroadcastExactRange(RangeValue range, int rows, int cols) =>
+        (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
+
+    private static ScalarValue ExactValueAt(ScalarValue value, int row, int col) =>
+        value is RangeValue range
+            ? range.Cells[range.RowCount == 1 ? 0 : row, range.ColCount == 1 ? 0 : col]
+            : value;
 
     private static ScalarValue Code(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

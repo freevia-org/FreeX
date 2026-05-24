@@ -6241,6 +6241,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Exact_RangeArgument_SpillsElementwiseComparison()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("x")),
+            (2, 1, new TextValue("y")));
+
+        var result = _eval.Evaluate("=EXACT(A1:A2,\"x\")", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new BoolValue(true));
+        result.Cells[1, 0].Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
     public void Today_ReturnsCurrentDateSerialWithoutTime()
     {
         _eval.Evaluate("=TODAY()", MakeSheet())
