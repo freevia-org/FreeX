@@ -12,7 +12,11 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         sheet.PrintCopies is > 0 ||
         sheet.PrintQualityVerticalDpi is > 0 ||
         sheet.FitToPage is not null ||
-        sheet.AutoPageBreaks is not null;
+        sheet.AutoPageBreaks is not null ||
+        sheet.OutlineSummaryBelow is not null ||
+        sheet.OutlineSummaryRight is not null ||
+        sheet.ShowOutlineSymbols is not null ||
+        sheet.ApplyOutlineStyles is not null;
 
     public static void Save(
         Stream packageStream,
@@ -42,6 +46,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
             var changed = false;
             changed |= ApplyPageSetupAttributes(root, workbookNs, sheet);
             changed |= ApplyPageSetupProperties(root, workbookNs, sheet);
+            changed |= ApplyOutlineProperties(root, workbookNs, sheet);
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
@@ -87,6 +92,36 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         var changed = false;
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "fitToPage", sheet.FitToPage);
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "autoPageBreaks", sheet.AutoPageBreaks);
+        return changed;
+    }
+
+    private static bool ApplyOutlineProperties(XElement root, XNamespace workbookNs, Sheet sheet)
+    {
+        var sheetProperties = root.Element(workbookNs + "sheetPr");
+        var outlineProperties = sheetProperties?.Element(workbookNs + "outlinePr");
+        if (outlineProperties is null)
+        {
+            if (sheet.OutlineSummaryBelow is null &&
+                sheet.OutlineSummaryRight is null &&
+                sheet.ShowOutlineSymbols is null &&
+                sheet.ApplyOutlineStyles is null)
+            {
+                return false;
+            }
+
+            sheetProperties ??= new XElement(workbookNs + "sheetPr");
+            if (sheetProperties.Parent is null)
+                root.AddFirst(sheetProperties);
+
+            outlineProperties = new XElement(workbookNs + "outlinePr");
+            sheetProperties.Add(outlineProperties);
+        }
+
+        var changed = false;
+        changed |= SetOptionalBoolAttribute(outlineProperties, "summaryBelow", sheet.OutlineSummaryBelow);
+        changed |= SetOptionalBoolAttribute(outlineProperties, "summaryRight", sheet.OutlineSummaryRight);
+        changed |= SetOptionalBoolAttribute(outlineProperties, "showOutlineSymbols", sheet.ShowOutlineSymbols);
+        changed |= SetOptionalBoolAttribute(outlineProperties, "applyStyles", sheet.ApplyOutlineStyles);
         return changed;
     }
 

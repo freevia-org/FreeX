@@ -79,6 +79,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var entry in sDto.ColOutlineLevels ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index) && NativeJsonValueSanitizer.IsValidOutlineLevel(entry.Value))
                     sheet.ColOutlineLevels[entry.Index] = entry.Value;
+            sheet.OutlineSummaryBelow = sDto.OutlineSummaryBelow;
+            sheet.OutlineSummaryRight = sDto.OutlineSummaryRight;
+            sheet.ShowOutlineSymbols = sDto.ShowOutlineSymbols;
+            sheet.ApplyOutlineStyles = sDto.ApplyOutlineStyles;
             foreach (var row in sDto.GroupHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.GroupHiddenRows.Add(row);
