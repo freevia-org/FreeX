@@ -262,6 +262,7 @@ public partial class PageSetupDialog : Window
         if (!PageMarginInputParser.TryParse(marginsText, out var margins, out var marginError))
         {
             MessageBox.Show(this, marginError, "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidMarginInput();
             return;
         }
 
@@ -270,6 +271,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter non-negative header and footer margins in inches.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidHeaderFooterMargin();
             return;
         }
 
@@ -388,6 +390,36 @@ public partial class PageSetupDialog : Window
     private void FocusInvalidPageTabNumber(TextBox target)
     {
         PageSetupTabs.SelectedItem = PageTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private void FocusInvalidMarginInput()
+    {
+        foreach (var target in new[] { LeftMarginBox, RightMarginBox, TopMarginBox, BottomMarginBox })
+        {
+            if (!PageLayoutInputParser.TryParseMarginDistance(target.Text, out _))
+            {
+                FocusMarginsTabTextBox(target);
+                return;
+            }
+        }
+
+        FocusMarginsTabTextBox(LeftMarginBox);
+    }
+
+    private void FocusInvalidHeaderFooterMargin()
+    {
+        FocusMarginsTabTextBox(
+            PageLayoutInputParser.TryParseMarginDistance(HeaderMarginBox.Text, out _)
+                ? FooterMarginBox
+                : HeaderMarginBox);
+    }
+
+    private void FocusMarginsTabTextBox(TextBox target)
+    {
+        PageSetupTabs.SelectedItem = MarginsTab;
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
