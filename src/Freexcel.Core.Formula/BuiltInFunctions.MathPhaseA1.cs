@@ -9,7 +9,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Sqrtpi(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, SqrtpiScalar);
+        return SqrtpiScalar(args[0]);
+    }
+
+    private static ScalarValue SqrtpiScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n) || n < 0) return ErrorValue.Num;
         return NumberResult(Math.Sqrt(n * Math.PI));
     }
@@ -67,15 +73,23 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
 
-        double x = ToNumber(args[0]);
         double n = ToNumber(args[1]);
         double m = ToNumber(args[2]);
-        if (!double.IsFinite(x) || !double.IsFinite(n) || !double.IsFinite(m))
+        if (!double.IsFinite(n) || !double.IsFinite(m))
             return ErrorValue.Num;
 
         var coeffs = args[3] is RangeValue coeffRange
             ? coeffRange
             : SingleCellArray(args[3]);
+
+        if (args[0] is RangeValue xRange) return MapUnaryTextRange(xRange, value => SeriesSumScalar(value, n, m, coeffs));
+        return SeriesSumScalar(args[0], n, m, coeffs);
+    }
+
+    private static ScalarValue SeriesSumScalar(ScalarValue xValue, double n, double m, RangeValue coeffs)
+    {
+        double x = ToNumber(xValue);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
 
         double sum = 0;
         int i = 0;

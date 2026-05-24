@@ -1,5 +1,6 @@
 param(
     [string]$SourceInventory = "docs\TOOLBAR_ICON_DESIGN_INVENTORY.md",
+    [string]$ReviewNotesPath = "docs\ICONSET_REVIEW_NOTES.json",
     [string]$OutputPath = "docs\ICONSET_PREVIEW.html",
     [switch]$SkipExcelLinkValidation
 )
@@ -317,10 +318,28 @@ function HtmlEncode {
     return [System.Net.WebUtility]::HtmlEncode($Text)
 }
 
+function Get-ReviewKey {
+    param(
+        [string]$Tab,
+        [string]$Section,
+        [string]$Command
+    )
+
+    return "$Tab|$Section|$Command"
+}
+
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $sourcePath = Join-Path $repoRoot $SourceInventory
+$reviewNotesFullPath = Join-Path $repoRoot $ReviewNotesPath
 $outputFullPath = Join-Path $repoRoot $OutputPath
 $lines = Get-Content -LiteralPath $sourcePath
+$reviewNotes = @{}
+if (Test-Path -LiteralPath $reviewNotesFullPath) {
+    $reviewData = Get-Content -LiteralPath $reviewNotesFullPath -Raw | ConvertFrom-Json
+    foreach ($entry in $reviewData.rows) {
+        $reviewNotes[(Get-ReviewKey $entry.tab $entry.section $entry.command)] = $entry
+    }
+}
 
 $rows = [System.Collections.Generic.List[object]]::new()
 $tab = ""
@@ -402,12 +421,12 @@ foreach ($row in $rows) {
     if ($row.Tab -ne $lastTab) {
         $lastTab = $row.Tab
         $lastSection = ""
-        $htmlRows.Add("<tr class=""tab-row""><th colspan=""8"">$(HtmlEncode $row.Tab)</th></tr>")
+        $htmlRows.Add("<tr class=""tab-row""><th colspan=""10"">$(HtmlEncode $row.Tab)</th></tr>")
     }
 
     if ($row.Section -ne $lastSection) {
         $lastSection = $row.Section
-        $htmlRows.Add("<tr class=""section-row""><th colspan=""8"">$(HtmlEncode $row.Section)</th></tr>")
+        $htmlRows.Add("<tr class=""section-row""><th colspan=""10"">$(HtmlEncode $row.Section)</th></tr>")
     }
 
     $hasNoIcon = $row.Notes -match 'No icon|Keep as text control|native slider'
@@ -432,6 +451,10 @@ foreach ($row in $rows) {
     } else {
         "<span class=""missing"">mapping needed</span>"
     }
+    $reviewKey = Get-ReviewKey $row.Tab $row.Section $row.Command
+    $review = if ($reviewNotes.ContainsKey($reviewKey)) { $reviewNotes[$reviewKey] } else { $null }
+    $finding = if ($review -and $review.finding) { [string]$review.finding } else { "Pending line-by-line review." }
+    $action = if ($review -and $review.action) { [string]$review.action } else { "" }
 
     $htmlRows.Add(@"
 <tr>
@@ -442,6 +465,8 @@ foreach ($row in $rows) {
   <td>$large</td>
   <td>$excelCell</td>
   <td class="notes">$(HtmlEncode $row.Notes)</td>
+  <td class="review">$(HtmlEncode $finding)</td>
+  <td class="review">$(HtmlEncode $action)</td>
   <td class="comments"></td>
 </tr>
 "@)
@@ -473,12 +498,14 @@ $html = @"
     .missing { display: inline-block; color: #9a3412; font-size: 11px; line-height: 1.2; }
     .no-icon { color: #666; font-size: 12px; font-style: italic; }
     .notes { color: #555; font-size: 12px; }
+    .review { font-size: 12px; color: #243b2f; }
     .comments { background: #fffdf5; min-width: 160px; }
     col.label { width: 145px; }
     col.slug { width: 150px; }
     col.icon { width: 210px; }
     col.excel { width: 190px; }
     col.notes { width: 260px; }
+    col.review { width: 260px; }
     col.comments { width: 180px; }
     @media print {
       header, thead th { position: static; }
@@ -490,12 +517,12 @@ $html = @"
 <body>
   <header>
     <h1>Freexcel Iconset Preview</h1>
-    <div class="meta">Generated from <code>$SourceInventory</code>. Freexcel columns show current SVG assets from <code>src/Freexcel.App.Host/Resources/CommandIconsSvg</code>. Excel comparison icons are linked by ImageMso name to Spreadsheet1's Microsoft Office ImageMso gallery for review reference.</div>
+    <div class="meta">Generated from <code>$SourceInventory</code> and <code>$ReviewNotesPath</code>. Freexcel columns show current SVG assets from <code>src/Freexcel.App.Host/Resources/CommandIconsSvg</code>. Excel comparison icons are linked by ImageMso name to Spreadsheet1's Microsoft Office ImageMso gallery for review reference.</div>
   </header>
   <main>
     <table>
       <colgroup>
-        <col class="label"><col class="slug"><col class="icon"><col class="icon"><col class="icon"><col class="excel"><col class="notes"><col class="comments">
+        <col class="label"><col class="slug"><col class="icon"><col class="icon"><col class="icon"><col class="excel"><col class="notes"><col class="review"><col class="review"><col class="comments">
       </colgroup>
       <thead>
         <tr>
@@ -506,6 +533,8 @@ $html = @"
           <th>Freexcel large</th>
           <th>MS Excel comparison</th>
           <th>Design note</th>
+          <th>Review finding</th>
+          <th>Action taken</th>
           <th>Comments</th>
         </tr>
       </thead>

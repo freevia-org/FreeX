@@ -1,28 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Synchronous Scrolling">
-  <defs>
-    <style>
-      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
-      .b,.blue{fill:#0078d4}
-      .o,.orange{fill:#f7630c}
-      .y,.yellow,.paleyellow{fill:#ffb900}
-      .rd,.red{fill:#d32f2f}
-      .p,.purple{fill:#8b5cf6}
-      .w,.paper,.bg{fill:#ffffff}
-      .k,.gray{fill:#242424}
-      .f,.soft{fill:#f3f2f1}
-      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
-      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
-      .paleblue{fill:#dcecff}
-      .palered{fill:#ffd7d7}
-      .none{fill:none}
-</style>
-  </defs>
-  <rect width="54" height="54" fill="none"/>
-  <g><path stroke="#202124" stroke-width="1.9" fill="none" d="M15.12 16.2a9.72 9.72 0 0 1 15.12 0M38.88 37.8a9.72 9.72 0 0 1 -15.12 0"/><path stroke="#217346" stroke-width="1.6" d="M17.28 25.92h19.44"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Synchronous Scrolling" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4" y="7" width="10" height="17" fill="#ffffff" stroke="#5c5c5c" stroke-width="1"/>
+  <rect x="18" y="7" width="10" height="17" fill="#ffffff" stroke="#5c5c5c" stroke-width="1"/>
+  <path d="M6 12H12M6 16H12M20 12H26M20 16H26" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M13 26C17 29 21 29 25 26M23 24L25 26L22 28" fill="none" stroke="#0078d4" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 4C15 1 11 1 7 4M9 6L7 4L10 2" fill="none" stroke="#0078d4" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-

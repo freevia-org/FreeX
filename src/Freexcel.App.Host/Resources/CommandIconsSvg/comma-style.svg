@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Comma Style">
   <rect width="32" height="32" fill="none"/>
-  <text x="16" y="13" font-size="31" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">,</text>
+  <text x="16" y="14" font-size="29" fill="#242424" font-family="Georgia, 'Times New Roman', serif" font-weight="700" text-anchor="middle" dominant-baseline="central">,</text>
+  <path d="M8 24H24" fill="none" stroke="#107c41" stroke-width="1"/>
 </svg>

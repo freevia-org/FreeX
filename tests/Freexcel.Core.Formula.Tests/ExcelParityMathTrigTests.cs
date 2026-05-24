@@ -141,6 +141,22 @@ public sealed class ExcelParityMathTrigTests
         Number("=AGGREGATE(9,4,B1:B3)", sheet).Should().Be(60);
     }
 
+    [Fact]
+    public void MathPhaseA1Functions_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 3, new NumberValue(1)), (2, 3, new NumberValue(3)));
+
+        var sqrtpi = _eval.Evaluate("=SQRTPI(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        ((NumberValue)sqrtpi.At(1, 1)).Value.Should().BeApproximately(Math.Sqrt(2 * Math.PI), 1e-10);
+        ((NumberValue)sqrtpi.At(2, 1)).Value.Should().BeApproximately(Math.Sqrt(3 * Math.PI), 1e-10);
+
+        var series = _eval.Evaluate("=SERIESSUM(A1:A2,0,1,C1:C2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        series.At(1, 1).Should().Be(new NumberValue(7));
+        series.At(2, 1).Should().Be(new NumberValue(10));
+    }
+
     private double Number(string formula) => Number(formula, MakeSheet());
 
     private double Number(string formula, Sheet sheet)

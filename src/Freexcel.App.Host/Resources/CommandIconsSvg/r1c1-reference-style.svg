@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="R1C1 Reference Style">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><text x="27" y="32.4" text-anchor="middle" font-size="16.2" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" dominant-baseline="central">R1C1</text>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="R1C1 Reference Style" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5" y="6" width="22" height="18" fill="#ffffff" stroke="#5c5c5c" stroke-width="1"/>
+  <path d="M5 11H27M12 6V24M19 6V24" fill="none" stroke="#5c5c5c" stroke-width="1"/>
+  <rect x="12" y="11" width="7" height="6" fill="#dcecff"/>
+  <text x="16" y="27" text-anchor="middle" font-size="6" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600">R1C1</text>
 </svg>
-
