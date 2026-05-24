@@ -418,6 +418,19 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void DiscreteDistributionFunctions_RangeArguments_SpillElementwise()
+    {
+        var counts = MakeSheet((1, 1, 4.0), (2, 1, 6.0));
+        var alphaValues = MakeSheet((1, 1, 0.25), (2, 1, 0.75));
+        var sampleSuccesses = MakeSheet((1, 1, 0.0), (2, 1, 1.0));
+
+        AssertColumnApproximately(Eval("BINOM.DIST(A1:A2,10,0.5,FALSE)", counts), Calc("BINOM.DIST(4,10,0.5,FALSE)"), Calc("BINOM.DIST(6,10,0.5,FALSE)"));
+        AssertColumnApproximately(Eval("BINOM.INV(10,0.5,A1:A2)", alphaValues), Calc("BINOM.INV(10,0.5,0.25)"), Calc("BINOM.INV(10,0.5,0.75)"));
+        AssertColumnApproximately(Eval("NEGBINOM.DIST(A1:A2,5,0.25,FALSE)", counts), Calc("NEGBINOM.DIST(4,5,0.25,FALSE)"), Calc("NEGBINOM.DIST(6,5,0.25,FALSE)"));
+        AssertColumnApproximately(Eval("HYPERGEOM.DIST(A1:A2,4,2,10,FALSE)", sampleSuccesses), Calc("HYPERGEOM.DIST(0,4,2,10,FALSE)"), Calc("HYPERGEOM.DIST(1,4,2,10,FALSE)"));
+    }
+
+    [Fact]
     public void BinomDist_Cumulative_KnownCase()
     {
         // BINOM.DIST(6,10,0.5,TRUE)

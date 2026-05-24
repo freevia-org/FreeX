@@ -886,10 +886,16 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        int k = (int)Math.Truncate(ToNumber(args[0]));
         int n = (int)Math.Truncate(ToNumber(args[1]));
         double p = ToNumber(args[2]);
         bool cum = ToBool(args[3]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BinomDistScalar(value, n, p, cum));
+        return BinomDistScalar(args[0], n, p, cum);
+    }
+
+    private static ScalarValue BinomDistScalar(ScalarValue kValue, int n, double p, bool cum)
+    {
+        int k = (int)Math.Truncate(ToNumber(kValue));
         if (k < 0 || n < 0 || k > n || p < 0 || p > 1) return ErrorValue.Num;
         return cum ? NumberResult(BinomCdf(k, n, p)) : NumberResult(BinomPmf(k, n, p));
     }
@@ -916,7 +922,13 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         int n = (int)Math.Truncate(ToNumber(args[0]));
         double p = ToNumber(args[1]);
-        double alpha = ToNumber(args[2]);
+        if (args[2] is RangeValue range) return MapUnaryTextRange(range, value => BinomInvScalar(n, p, value));
+        return BinomInvScalar(n, p, args[2]);
+    }
+
+    private static ScalarValue BinomInvScalar(int n, double p, ScalarValue alphaValue)
+    {
+        double alpha = ToNumber(alphaValue);
         if (n < 0 || p < 0 || p > 1 || alpha < 0 || alpha > 1) return ErrorValue.Num;
         double cumP = 0;
         for (int k = 0; k <= n; k++)
@@ -933,10 +945,16 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        int f = (int)Math.Truncate(ToNumber(args[0]));
         int r = (int)Math.Truncate(ToNumber(args[1]));
         double p = ToNumber(args[2]);
         bool cum = ToBool(args[3]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NegbinomDistScalar(value, r, p, cum));
+        return NegbinomDistScalar(args[0], r, p, cum);
+    }
+
+    private static ScalarValue NegbinomDistScalar(ScalarValue failuresValue, int r, double p, bool cum)
+    {
+        int f = (int)Math.Truncate(ToNumber(failuresValue));
         if (f < 0 || r < 1 || p <= 0 || p > 1) return ErrorValue.Num;
 
         if (!cum)
@@ -982,11 +1000,17 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
         if (args[4] is ErrorValue e4) return e4;
-        int s = (int)Math.Truncate(ToNumber(args[0]));   // sample successes
         int n = (int)Math.Truncate(ToNumber(args[1]));   // sample size
         int M = (int)Math.Truncate(ToNumber(args[2]));   // population successes
         int N = (int)Math.Truncate(ToNumber(args[3]));   // population size
         bool cum = ToBool(args[4]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => HypergeomDistScalar(value, n, M, N, cum));
+        return HypergeomDistScalar(args[0], n, M, N, cum);
+    }
+
+    private static ScalarValue HypergeomDistScalar(ScalarValue sampleSuccessesValue, int n, int M, int N, bool cum)
+    {
+        int s = (int)Math.Truncate(ToNumber(sampleSuccessesValue));
         if (s < 0 || n < 0 || M < 0 || N <= 0 || s > n || s > M || n > N || M > N) return ErrorValue.Num;
 
         if (!cum)
