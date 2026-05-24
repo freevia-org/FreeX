@@ -15,8 +15,26 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue formatError) return formatError;
         var fmt = ToText(args[1]);
+        if (args[0] is RangeValue range) return MapTextFuncRange(range, fmt);
+        return TextFormatValue(args[0], fmt);
+    }
+
+    private static RangeValue MapTextFuncRange(RangeValue range, string fmt)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : TextFormatValue(value, fmt);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue TextFormatValue(ScalarValue val, string fmt)
+    {
         // Simple inline formatter (avoids depending on Freexcel.Core.Calc)
-        var val = args[0];
         if (TryCellNumber(val, out double value))
             return TextResult(FormatNumberInline(value, fmt));
         return TextResult(ToText(val));
@@ -493,8 +511,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue ValueFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is NumberValue nv) return nv;
-        var text = ToText(args[0]).Trim();
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ValueScalar);
+        return ValueScalar(args[0]);
+    }
+
+    private static ScalarValue ValueScalar(ScalarValue value)
+    {
+        if (value is NumberValue nv) return nv;
+        var text = ToText(value).Trim();
         var usCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
         if (text.EndsWith('%') &&
             double.TryParse(text[..^1].Trim(), System.Globalization.NumberStyles.Any,
