@@ -79,6 +79,7 @@ public partial class HeaderFooterDialog : Window
         RefreshOptionalSectionState();
         _activeTextBox = HeaderCenterBox;
         UpdatePictureButtonState();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static string InsertToken(string text, int caretIndex, string token)
@@ -94,6 +95,13 @@ public partial class HeaderFooterDialog : Window
             _activeTextBox = textBox;
             UpdatePictureButtonState();
         }
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        HeaderCenterBox.Focus();
+        HeaderCenterBox.SelectAll();
+        Keyboard.Focus(HeaderCenterBox);
     }
 
     private void InsertTokenButton_Click(object sender, RoutedEventArgs e)
@@ -369,6 +377,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateContent(picture.FileName ?? "Header/footer picture");
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private StackPanel CreateContent(string fileName)
@@ -401,6 +410,13 @@ public sealed class HeaderFooterPictureFormatDialog : Window
 
         Result = Result with { Width = size.Width, Height = size.Height };
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _widthBox.Focus();
+        _widthBox.SelectAll();
+        Keyboard.Focus(_widthBox);
     }
 
     private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
