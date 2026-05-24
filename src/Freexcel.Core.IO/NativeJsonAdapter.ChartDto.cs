@@ -92,6 +92,9 @@ public sealed partial class NativeJsonAdapter
         public int XAxisLabelOffset { get; set; }
         public CellColor? XAxisLineColor { get; set; }
         public double XAxisLineThickness { get; set; } = 1;
+        public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
+        public double? XAxisCrossesAt { get; set; }
+        public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
         public double? YAxisMinimum { get; set; }
         public double? YAxisMaximum { get; set; }
         public double? YAxisMajorUnit { get; set; }
@@ -112,6 +115,9 @@ public sealed partial class NativeJsonAdapter
         public double YAxisLabelAngle { get; set; }
         public CellColor? YAxisLineColor { get; set; }
         public double YAxisLineThickness { get; set; } = 1;
+        public ChartAxisCrosses YAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
+        public double? YAxisCrossesAt { get; set; }
+        public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
         public ChartDataTableModel? DataTable { get; set; }
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
