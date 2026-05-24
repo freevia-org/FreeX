@@ -111,6 +111,18 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialogOpenedFromKeyboard_FocusesSourceRange()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_sourceRangeBox.Focus();");
+        source.Should().Contain("_sourceRangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_sourceRangeBox);");
+    }
+
+    [Fact]
     public void PivotTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         PivotTableDialog.CreateRangeSelectionRequest(PivotTableRangeSelectionTarget.DestinationRange, " Report!F3 ")
@@ -525,7 +537,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
     {
-        var source = ReadPivotWorkflowSource();
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableOptionsDialog.cs"));
 
         foreach (var content in new[]
         {
@@ -548,7 +560,11 @@ public sealed class PivotWorkflowDialogTests
             "_printTitlesBox",
             "_printExpandCollapseBox",
             "_altTextTitleBox",
-            "_altTextDescriptionBox"
+            "_altTextDescriptionBox",
+            "Loaded += (_, _) => FocusInitialKeyboardTarget();",
+            "private void FocusInitialKeyboardTarget()",
+            "_reportLayoutBox.Focus();",
+            "Keyboard.Focus(_reportLayoutBox);"
         })
             source.Should().Contain(content);
         source.Should().NotContain("Title and description metadata can be added in a future pass.");

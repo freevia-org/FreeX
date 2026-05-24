@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -103,6 +104,7 @@ public sealed class PivotTableOptionsDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable, PivotCacheModel? cache = null) =>
@@ -445,6 +447,12 @@ public sealed class PivotTableOptionsDialog : Window
             PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
             ParsePageWrap(_pageWrapBox.Text));
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _reportLayoutBox.Focus();
+        Keyboard.Focus(_reportLayoutBox);
     }
 
     private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
