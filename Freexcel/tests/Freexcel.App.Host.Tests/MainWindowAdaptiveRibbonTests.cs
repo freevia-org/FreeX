@@ -145,7 +145,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     [Theory]
     [InlineData("Page Layout", "Themes")]
     [InlineData("Formulas", "Function Library")]
-    [InlineData("Data", "Get & Transform")]
+    [InlineData("Data", "Get & Transform Data")]
     [InlineData("Review", "Proofing")]
     [InlineData("View", "Workbook Views")]
     public void RibbonTabs_KeepPrimaryGroupExpandedAtNormalNarrowWidths(string tab, string primaryGroup)
@@ -159,6 +159,23 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                 primaryGroup,
                 $"{tab} should collapse lower-priority groups before the first Excel-style primary group at normal narrow widths");
+        });
+    }
+
+    [Theory]
+    [InlineData("Data", "Queries & Connections")]
+    [InlineData("View", "Show")]
+    public void RibbonTabs_KeepSecondaryExcelGroupsExpandedAtMediumWidths(string tab, string secondaryGroup)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab(tab, 1120);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                secondaryGroup,
+                $"{tab} should keep the second Excel-style group available at medium widths and collapse later utility groups first");
         });
     }
 

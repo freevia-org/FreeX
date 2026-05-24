@@ -207,6 +207,7 @@ public static partial class XlsxChartPartReader
         chart.BarGapWidth = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value);
         chart.BarOverlap = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value);
         chart.VaryColorsByPoint = XlsxChartScalarReader.ReadOptionalBool(barChart.Element(ChartNs + "varyColors")?.Attribute("val")?.Value);
+        XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(barChart, chart);
     }
 
     private static ChartType ReadBarChartType(XElement barChart, string? barDirection)

@@ -532,17 +532,6 @@
                                         </Grid>
                                     </Button>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button x:Name="FontColorBtn" Width="28" Height="22"
-                                            Style="{StaticResource RibbonIconButton}"
-                                            Click="FontColorBtn_Click"
-                                            local:RibbonTooltip.Title="Font Color"
-                                            local:RibbonTooltip.KeyTip="FC"
-                                            local:RibbonTooltip.Description="Change the color of the text.">
-                                        <StackPanel>
-                                            <TextBlock Text="A" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-3,0,0"/>
-                                            <Rectangle x:Name="FontColorBar" Height="3" Width="17" Fill="#FF0000" Margin="0,0,0,0"/>
-                                        </StackPanel>
-                                    </Button>
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonIconButton}"
                                             Click="FillColorBtn_Click"
@@ -558,6 +547,17 @@
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"/>
                                             <Rectangle x:Name="FillColorBar" Width="0" Height="0" Fill="#FFFF00"/>
                                         </Grid>
+                                    </Button>
+                                    <Button x:Name="FontColorBtn" Width="28" Height="22"
+                                            Style="{StaticResource RibbonIconButton}"
+                                            Click="FontColorBtn_Click"
+                                            local:RibbonTooltip.Title="Font Color"
+                                            local:RibbonTooltip.KeyTip="FC"
+                                            local:RibbonTooltip.Description="Change the color of the text.">
+                                        <StackPanel>
+                                            <TextBlock Text="A" FontFamily="Segoe UI" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-3,0,0"/>
+                                            <Rectangle x:Name="FontColorBar" Height="3" Width="17" Fill="#FF0000" Margin="0,0,0,0"/>
+                                        </StackPanel>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
@@ -2897,7 +2897,7 @@
                                             local:RibbonTooltip.Description="Clearing PivotTable fields from the ribbon is deferred in Freexcel."/>
                                     <Button Content="Select" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="Select"
-                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.KeyTip="SE"
                                             local:RibbonTooltip.Description="PivotTable selection shortcuts are deferred in Freexcel."/>
                                     <Button Content="Move PivotTable" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="Move PivotTable"
@@ -2927,7 +2927,7 @@
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
                                             local:RibbonTooltip.Title="PivotChart"
-                                            local:RibbonTooltip.KeyTip="C"
+                                            local:RibbonTooltip.KeyTip="PC"
                                             local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
                                     <Button Content="Change Chart" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartChangeTypeBtn_Click"
                                             local:RibbonTooltip.Title="Change Chart Type"

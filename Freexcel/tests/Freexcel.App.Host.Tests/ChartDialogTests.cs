@@ -604,6 +604,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataLabelsDialogOpenedFromKeyboard_FocusesShowDataLabelsChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDataLabelsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
     public void ChartTrendlineOptionsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartTrendlineOptionsDialog.CreateResult(
@@ -627,6 +638,17 @@ public sealed class ChartDialogTests
             TrendlineColor: new CellColor(80, 90, 100),
             TrendlineThickness: 2.25,
             TrendlineDashStyle: ChartLineDashStyle.Dot));
+    }
+
+    [Fact]
+    public void ChartTrendlineOptionsDialogOpenedFromKeyboard_FocusesShowTrendlineChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTrendlineOptionsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
     }
 
     [Fact]

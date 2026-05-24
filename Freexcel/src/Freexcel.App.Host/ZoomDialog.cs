@@ -69,8 +69,16 @@ public sealed class ZoomDialog : Window
             .Select(button => button.Tag?.ToString())
             .FirstOrDefault();
         var input = selectedPreset ?? _zoomBox.Text;
-        if (!TryCreateResult(input, out var result, out _))
+        if (!TryCreateResult(input, out var result, out var error))
+        {
+            MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            _customZoomButton.IsChecked = true;
+            _zoomBox.Focus();
+            _zoomBox.SelectAll();
+            Keyboard.Focus(_zoomBox);
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }
