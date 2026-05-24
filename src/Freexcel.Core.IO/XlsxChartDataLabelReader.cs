@@ -17,6 +17,9 @@ internal static class XlsxChartDataLabelReader
         chart.ShowDataLabels = true;
         chart.DataLabelPosition = FromXlsxDataLabelPosition(dataLabels.Element(ChartNs + "dLblPos")?.Attribute("val")?.Value);
         chart.DataLabelNumberFormat = XlsxChartAxisReader.FromXlsxNumberFormatCode(dataLabels.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
+        chart.ShowDataLabelValue = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showVal")?.Attribute("val")?.Value);
+        chart.ShowDataLabelLegendKey = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value);
+        chart.ShowDataLabelBubbleSize = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value);
         chart.ShowDataLabelCategoryName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showCatName")?.Attribute("val")?.Value);
         chart.ShowDataLabelSeriesName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showSerName")?.Attribute("val")?.Value);
         chart.ShowDataLabelPercentage = ChartTypeSupport.SupportsPercentageDataLabels(chart.Type)

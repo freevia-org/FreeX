@@ -283,6 +283,9 @@ public sealed partial class SetChartLayoutCommand
         chart.ShowLegend = snapshot.ShowLegend ?? true;
         chart.ShowDataLabels = snapshot.ShowDataLabels ?? false;
         chart.DataLabelPosition = snapshot.DataLabelPosition ?? ChartDataLabelPosition.BestFit;
+        chart.ShowDataLabelValue = snapshot.ShowDataLabelValue ?? true;
+        chart.ShowDataLabelLegendKey = snapshot.ShowDataLabelLegendKey ?? false;
+        chart.ShowDataLabelBubbleSize = snapshot.ShowDataLabelBubbleSize ?? false;
         chart.ShowDataLabelCategoryName = snapshot.ShowDataLabelCategoryName ?? false;
         chart.ShowDataLabelSeriesName = snapshot.ShowDataLabelSeriesName ?? false;
         chart.ShowDataLabelPercentage = snapshot.ShowDataLabelPercentage ?? false;
