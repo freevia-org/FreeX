@@ -465,6 +465,23 @@ public class PhaseCFinancialTests
     // ── INTRATE ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void DiscountSettlementFunctions_RangeValueArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("DISC(43831,44197,A1:A2,100,0)", (1, 1, 97.0), (2, 1, 98.0)),
+            Calc("DISC(43831,44197,97,100,0)"),
+            Calc("DISC(43831,44197,98,100,0)"));
+        AssertApproxColumn(
+            EvalWithData("INTRATE(43831,44197,A1:A2,100,0)", (1, 1, 90.0), (2, 1, 95.0)),
+            Calc("INTRATE(43831,44197,90,100,0)"),
+            Calc("INTRATE(43831,44197,95,100,0)"));
+        AssertApproxColumn(
+            EvalWithData("RECEIVED(43831,44197,100,A1:A2,0)", (1, 1, 0.05), (2, 1, 0.04)),
+            Calc("RECEIVED(43831,44197,100,0.05,0)"),
+            Calc("RECEIVED(43831,44197,100,0.04,0)"));
+    }
+
+    [Fact]
     public void Disc_InvalidBasis_ReturnsNumError()
     {
         CalcError("DISC(43831,44197,97,100,5)").Should().Be("#NUM!");
