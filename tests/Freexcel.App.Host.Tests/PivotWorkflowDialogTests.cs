@@ -202,7 +202,10 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
     {
-        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotTableDataSourceDialog", "internal static class PivotDialogLayout");
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -293,7 +296,10 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void InsertSlicerDialogOpenedFromKeyboard_FocusesFieldBox()
     {
-        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class InsertSlicerDialog", "public sealed record InsertTimelineDialogResult");
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class InsertSlicerDialog",
+            "public sealed record InsertTimelineDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -323,7 +329,10 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void InsertTimelineDialogOpenedFromKeyboard_FocusesFieldBox()
     {
-        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class InsertTimelineDialog", "public sealed record PivotChartTypeDialogResult");
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class InsertTimelineDialog",
+            "public sealed record PivotChartTypeDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -365,7 +374,10 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartTypeDialogOpenedFromKeyboard_FocusesRecommendedGallery()
     {
-        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotChartTypeDialog", "public sealed class PivotChartOptionsDialogResult");
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotChartTypeDialog",
+            "public sealed class PivotChartOptionsDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -867,7 +879,10 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotFieldGroupingDialogOpenedFromKeyboard_FocusesFieldBox()
     {
-        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotFieldGroupingDialog", "");
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -1078,7 +1093,10 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartOptionsDialogOpenedFromKeyboard_FocusesStyleGallery()
     {
-        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotChartOptionsDialog", "public sealed record PivotFieldGroupingDialogResult");
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotChartOptionsDialog",
+            "public sealed record PivotFieldGroupingDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");

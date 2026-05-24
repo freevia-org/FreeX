@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -51,6 +52,7 @@ public partial class PivotValueFieldSettingsDialog : Window
 
         InitializeComponent();
         LoadOptions(field);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public PivotDataFieldModel ResultDataField { get; private set; }
@@ -137,6 +139,13 @@ public partial class PivotValueFieldSettingsDialog : Window
     }
 
     private void ShowValuesAsBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) => UpdateBaseFieldState();
+
+    private void FocusInitialKeyboardTarget()
+    {
+        CustomNameBox.Focus();
+        CustomNameBox.SelectAll();
+        Keyboard.Focus(CustomNameBox);
+    }
 
     private void NumberFormatButton_Click(object sender, RoutedEventArgs e)
     {

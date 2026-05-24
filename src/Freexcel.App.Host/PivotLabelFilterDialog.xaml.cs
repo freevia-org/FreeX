@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -28,6 +29,7 @@ public partial class PivotLabelFilterDialog : Window
         InitializeComponent();
         LabelFilterKindBox.ItemsSource = Options.Select(option => option.Label);
         LabelFilterKindBox.SelectedIndex = 4;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public PivotLabelFilterModel? ResultFilter { get; private set; }
@@ -51,5 +53,11 @@ public partial class PivotLabelFilterDialog : Window
 
         ResultFilter = new PivotLabelFilterModel(_sourceFieldIndex, kind, value, string.IsNullOrWhiteSpace(value2) ? null : value2);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        LabelFilterKindBox.Focus();
+        Keyboard.Focus(LabelFilterKindBox);
     }
 }

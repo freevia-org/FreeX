@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -40,6 +41,7 @@ public sealed partial class NamedRangeDialog : Window
         UpdateSelectionCommands();
 
         _initialRefersTo = initialRange.HasValue ? FormatRange(initialRange.Value, workbook) : "";
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     // ── List management ───────────────────────────────────────────────────────
@@ -227,6 +229,19 @@ public sealed partial class NamedRangeDialog : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void FocusInitialKeyboardTarget()
+    {
+        if (NamesList.Items.Count > 0)
+        {
+            NamesList.Focus();
+            Keyboard.Focus(NamesList);
+            return;
+        }
+
+        NewButton.Focus();
+        Keyboard.Focus(NewButton);
+    }
+
     private IReadOnlyList<string> GetScopeOptions() =>
         new[] { "Workbook" }
             .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
@@ -349,6 +364,7 @@ internal sealed class NameDefinitionDialog : Window
         };
 
         Content = CreateContent();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private Grid CreateContent()
@@ -420,6 +436,13 @@ internal sealed class NameDefinitionDialog : Window
             _commentBox.Text.Trim(),
             _refersToBox.Text.Trim());
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 }
 
