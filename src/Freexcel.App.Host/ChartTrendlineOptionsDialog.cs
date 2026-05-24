@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -55,6 +56,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartTrendlineOptionsDialogResult FromChart(ChartModel chart) => CreateResult(
@@ -115,6 +117,12 @@ public sealed class ChartTrendlineOptionsDialog : Window
         _colorBox.Text = ChartDialogHelpers.FormatColor(result.Color);
         _thicknessBox.Text = result.Thickness.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _dashBox.SelectedItem = result.DashStyle;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _showBox.Focus();
+        Keyboard.Focus(_showBox);
     }
 
     private void Accept()
