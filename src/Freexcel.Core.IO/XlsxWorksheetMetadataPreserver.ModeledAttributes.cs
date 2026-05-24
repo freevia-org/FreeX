@@ -33,6 +33,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
         "pageOrder",
         "orientation",
         "useFirstPageNumber",
+        "usePrinterDefaults",
+        "copies",
         "blackAndWhite",
         "draft",
         "cellComments",

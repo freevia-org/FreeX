@@ -163,6 +163,8 @@ public sealed partial class NativeJsonAdapter
                 CenterVerticallyOnPage = s.CenterVerticallyOnPage,
                 PageOrder = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrder, WorksheetPageOrder.DownThenOver),
                 FirstPageNumber = s.FirstPageNumber is > 0 ? s.FirstPageNumber : null,
+                UsePrinterDefaults = s.UsePrinterDefaults,
+                PrintCopies = s.PrintCopies is > 0 ? s.PrintCopies : null,
                 PrintBlackAndWhite = s.PrintBlackAndWhite,
                 PrintDraftQuality = s.PrintDraftQuality,
                 PrintQualityDpi = s.PrintQualityDpi is > 0 ? s.PrintQualityDpi : null,

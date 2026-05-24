@@ -162,6 +162,12 @@ public sealed partial class Sheet
     /// <summary>Optional first printed page number. Null means automatic numbering from 1.</summary>
     public int? FirstPageNumber { get; set; }
 
+    /// <summary>Whether Excel should use printer defaults for worksheet page setup.</summary>
+    public bool? UsePrinterDefaults { get; set; }
+
+    /// <summary>Optional number of copies for worksheet print settings.</summary>
+    public int? PrintCopies { get; set; }
+
     /// <summary>Whether the worksheet should be printed in black and white.</summary>
     public bool PrintBlackAndWhite { get; set; }
 

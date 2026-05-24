@@ -21,6 +21,16 @@ public sealed partial class TextToColumnsDialog
         _destinationBox.SelectAll();
     }
 
+    private void FocusInvalidFixedWidthBreaksInput()
+    {
+        _wizardStep = 2;
+        _fixedWidthButton.IsChecked = true;
+        UpdateWizardStep();
+        _fixedWidthBreaksBox.Focus();
+        _fixedWidthBreaksBox.SelectAll();
+        Keyboard.Focus(_fixedWidthBreaksBox);
+    }
+
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
 

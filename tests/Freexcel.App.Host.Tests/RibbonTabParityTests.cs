@@ -139,6 +139,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var dataTab = ExtractTabXaml(xaml, "Data", "Review");
+        var sortFilterGroup = ExtractGroupXaml(dataTab, "Sort & Filter");
 
         ExtractGroupLabels(dataTab).Should().Equal(
             "Get & Transform Data",
@@ -150,6 +151,14 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(dataTab, "Get & Transform Data").Should().Contain("local:RibbonTooltip.Title=\"Get Data\"");
         ExtractGroupXaml(dataTab, "Queries & Connections").Should().Contain("local:RibbonTooltip.Title=\"Refresh All\"");
+        ExtractTooltipTitles(sortFilterGroup).Should().ContainInOrder(
+            "Sort A to Z",
+            "Sort Z to A",
+            "Filter",
+            "Clear Filter",
+            "Advanced Filter");
+        ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Ascending");
+        ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Descending");
         ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"Forecast Sheet\"");
         ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"What-If Analysis\"");
     }

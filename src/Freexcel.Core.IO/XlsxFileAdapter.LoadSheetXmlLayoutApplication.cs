@@ -43,6 +43,8 @@ public sealed partial class XlsxFileAdapter
         sheet.EvenPageHeaderPictures = layout.HeaderFooterPictures.EvenPageHeader;
         sheet.EvenPageFooterPictures = layout.HeaderFooterPictures.EvenPageFooter;
         sheet.CodeName = layout.CodeName;
+        sheet.UsePrinterDefaults = layout.UsePrinterDefaults;
+        sheet.PrintCopies = layout.PrintCopies;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;

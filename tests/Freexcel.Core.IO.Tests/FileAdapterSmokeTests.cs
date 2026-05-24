@@ -3578,7 +3578,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -3677,7 +3678,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.UsePrinterDefaults.Should().BeTrue();
+        loadedSheet.PrintCopies.Should().Be(3);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -12409,6 +12413,8 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintBlackAndWhite = false;
         loadedSheet.PrintDraftQuality = false;
         loadedSheet.PrintQualityDpi = null;
+        loadedSheet.UsePrinterDefaults = false;
+        loadedSheet.PrintCopies = null;
         loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
         loadedSheet.PrintComments = WorksheetPrintComments.None;
 
@@ -12421,8 +12427,8 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
         pageSetup.Should().NotBeNull();
-        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
-        pageSetup.Attribute("copies")!.Value.Should().Be("3");
+        pageSetup!.Attribute("usePrinterDefaults")?.Value.Should().NotBe("1");
+        pageSetup.Attribute("copies")?.Value.Should().NotBe("3");
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
         pageSetup.Attribute("orientation")?.Value.Should().NotBe("landscape");
         pageSetup.Attribute("paperSize")?.Value.Should().NotBe("5");

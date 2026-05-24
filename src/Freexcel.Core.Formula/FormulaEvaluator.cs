@@ -1052,7 +1052,9 @@ public sealed class FormulaEvaluator
              or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
              or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
              or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
-             or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND";
+             or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
+             or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH"
+             or "DATEVALUE" or "TIMEVALUE";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
