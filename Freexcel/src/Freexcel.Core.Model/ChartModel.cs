@@ -210,6 +210,7 @@ public sealed class ChartModel
     public bool IsPivotChart { get; set; }
     public string? PivotSourceSheetName { get; set; }
     public string? PivotTableName { get; set; }
+    public int? PivotSourceFormatId { get; set; }
     public int? PivotCacheId { get; set; }
     public string? PivotFormatsXml { get; set; }
     public bool ShowPivotChartFieldButtons { get; set; } = true;

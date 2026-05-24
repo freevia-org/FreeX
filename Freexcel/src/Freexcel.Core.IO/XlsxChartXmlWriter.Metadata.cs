@@ -206,7 +206,7 @@ internal static partial class XlsxChartXmlWriter
             : chart.PivotSourceSheetName;
         return new XElement(chartNs + "pivotSource",
             new XElement(chartNs + "name", $"{QuoteSheetName(sourceSheetName)}!{chart.PivotTableName}"),
-            new XElement(chartNs + "fmtId", new XAttribute("val", "0")));
+            new XElement(chartNs + "fmtId", new XAttribute("val", Math.Max(0, chart.PivotSourceFormatId ?? 0))));
     }
 
     private static string QuoteSheetName(string sheetName) =>
