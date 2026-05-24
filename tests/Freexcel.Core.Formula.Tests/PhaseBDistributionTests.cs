@@ -250,6 +250,19 @@ public class PhaseBDistributionTests
         => Calc("F.DIST(0,5,10,TRUE)").Should().BeApproximately(0.0, 1e-10);
 
     [Fact]
+    public void FDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 0.5), (2, 1, 2.0));
+        var probabilities = MakeSheet((1, 1, 0.25), (2, 1, 0.75));
+        var rightTailProbabilities = MakeSheet((1, 1, 0.25), (2, 1, 0.05));
+
+        AssertColumnApproximately(Eval("F.DIST(A1:A2,5,10,TRUE)", xValues), Calc("F.DIST(0.5,5,10,TRUE)"), Calc("F.DIST(2,5,10,TRUE)"));
+        AssertColumnApproximately(Eval("F.DIST.RT(A1:A2,5,10)", xValues), Calc("F.DIST.RT(0.5,5,10)"), Calc("F.DIST.RT(2,5,10)"));
+        AssertColumnApproximately(Eval("F.INV(A1:A2,5,10)", probabilities), Calc("F.INV(0.25,5,10)"), Calc("F.INV(0.75,5,10)"));
+        AssertColumnApproximately(Eval("F.INV.RT(A1:A2,5,10)", rightTailProbabilities), Calc("F.INV.RT(0.25,5,10)"), Calc("F.INV.RT(0.05,5,10)"));
+    }
+
+    [Fact]
     public void FDist_RightTailComplementsCdf()
     {
         double cdf = Calc("F.DIST(2,5,10,TRUE)");
@@ -278,6 +291,19 @@ public class PhaseBDistributionTests
     [Fact]
     public void ChiSqDist_CumulativeAt0_Returns0()
         => Calc("CHISQ.DIST(0,5,TRUE)").Should().BeApproximately(0.0, 1e-10);
+
+    [Fact]
+    public void ChiSqDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 2.0), (2, 1, 5.0));
+        var probabilities = MakeSheet((1, 1, 0.5), (2, 1, 0.95));
+        var rightTailProbabilities = MakeSheet((1, 1, 0.25), (2, 1, 0.05));
+
+        AssertColumnApproximately(Eval("CHISQ.DIST(A1:A2,5,TRUE)", xValues), Calc("CHISQ.DIST(2,5,TRUE)"), Calc("CHISQ.DIST(5,5,TRUE)"));
+        AssertColumnApproximately(Eval("CHISQ.DIST.RT(A1:A2,5)", xValues), Calc("CHISQ.DIST.RT(2,5)"), Calc("CHISQ.DIST.RT(5,5)"));
+        AssertColumnApproximately(Eval("CHISQ.INV(A1:A2,5)", probabilities), Calc("CHISQ.INV(0.5,5)"), Calc("CHISQ.INV(0.95,5)"));
+        AssertColumnApproximately(Eval("CHISQ.INV.RT(A1:A2,5)", rightTailProbabilities), Calc("CHISQ.INV.RT(0.25,5)"), Calc("CHISQ.INV.RT(0.05,5)"));
+    }
 
     [Fact]
     public void ChiSqDist_RightTailComplementsCdf()
