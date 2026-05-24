@@ -739,6 +739,21 @@ public class PhaseCFinancialTests
     // ── EFFECT/NOMINAL edge cases ─────────────────────────────────────────
 
     [Fact]
+    public void BondPriceYieldFunctions_RangeValueArgument_SpillElementwise()
+    {
+        var cells = new[] { (1, 1, 0.05), (2, 1, 0.06) };
+
+        AssertApproxColumn(EvalWithData("PRICE(43831,45658,0.08,A1:A2,100,2)", cells), Calc("PRICE(43831,45658,0.08,0.05,100,2)"), Calc("PRICE(43831,45658,0.08,0.06,100,2)"));
+        AssertApproxColumn(EvalWithData("YIELD(43831,45658,0.08,A1:A2,100,2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("YIELD(43831,45658,0.08,99,100,2)"), Calc("YIELD(43831,45658,0.08,101,100,2)"));
+        AssertApproxColumn(EvalWithData("PRICEDISC(43831,44197,A1:A2,100)", cells), Calc("PRICEDISC(43831,44197,0.05,100)"), Calc("PRICEDISC(43831,44197,0.06,100)"));
+        AssertApproxColumn(EvalWithData("YIELDDISC(43831,44197,A1:A2,100)", (1, 1, 95.0), (2, 1, 96.0)), Calc("YIELDDISC(43831,44197,95,100)"), Calc("YIELDDISC(43831,44197,96,100)"));
+        AssertApproxColumn(EvalWithData("PRICEMAT(43831,44197,43831,0.05,A1:A2)", cells), Calc("PRICEMAT(43831,44197,43831,0.05,0.05)"), Calc("PRICEMAT(43831,44197,43831,0.05,0.06)"));
+        AssertApproxColumn(EvalWithData("YIELDMAT(43831,44197,43831,0.05,A1:A2)", (1, 1, 99.0), (2, 1, 101.0)), Calc("YIELDMAT(43831,44197,43831,0.05,99)"), Calc("YIELDMAT(43831,44197,43831,0.05,101)"));
+        AssertApproxColumn(EvalWithData("DURATION(43831,45656,0.08,A1:A2,2)", cells), Calc("DURATION(43831,45656,0.08,0.05,2)"), Calc("DURATION(43831,45656,0.08,0.06,2)"));
+        AssertApproxColumn(EvalWithData("MDURATION(43831,45656,0.08,A1:A2,2)", cells), Calc("MDURATION(43831,45656,0.08,0.05,2)"), Calc("MDURATION(43831,45656,0.08,0.06,2)"));
+    }
+
+    [Fact]
     public void BondAndAccrualFunctions_InvalidBasis_ReturnNumError()
     {
         CalcError("PRICE(43831,45658,0.1,0.1,100,1,5)").Should().Be("#NUM!");

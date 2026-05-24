@@ -1001,13 +1001,19 @@ public static partial class BuiltInFunctions
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
         double rate        = ToNumber(args[2]);
-        double yld         = ToNumber(args[3]);
         double redemption  = ToNumber(args[4]);
         int frequency      = (int)Math.Truncate(ToNumber(args[5]));
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => PriceScalar(settlement, maturity, rate, value, redemption, frequency, basis));
+        return PriceScalar(settlement, maturity, rate, args[3], redemption, frequency, basis);
+    }
+
+    private static ScalarValue PriceScalar(double settlement, double maturity, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
             !double.IsFinite(yld) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -1023,13 +1029,19 @@ public static partial class BuiltInFunctions
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
         double rate        = ToNumber(args[2]);
-        double pr          = ToNumber(args[3]);
         double redemption  = ToNumber(args[4]);
         int frequency      = (int)Math.Truncate(ToNumber(args[5]));
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => YieldScalar(settlement, maturity, rate, value, redemption, frequency, basis));
+        return YieldScalar(settlement, maturity, rate, args[3], redemption, frequency, basis);
+    }
+
+    private static ScalarValue YieldScalar(double settlement, double maturity, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
             !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -1056,11 +1068,17 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
-        double discount    = ToNumber(args[2]);
         double redemption  = ToNumber(args[3]);
+        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (args[2] is RangeValue discountRange) return MapUnaryTextRange(discountRange, value => PricediscScalar(settlement, maturity, value, redemption, basis));
+        return PricediscScalar(settlement, maturity, args[2], redemption, basis);
+    }
+
+    private static ScalarValue PricediscScalar(double settlement, double maturity, ScalarValue discountValue, double redemption, int basis)
+    {
+        double discount = ToNumber(discountValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(discount) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (discount <= 0 || redemption <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -1076,11 +1094,17 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double issue       = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double yld         = ToNumber(args[4]);
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[4] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => PricematScalar(settlement, maturity, issue, rate, value, basis));
+        return PricematScalar(settlement, maturity, issue, rate, args[4], basis);
+    }
+
+    private static ScalarValue PricematScalar(double settlement, double maturity, double issue, double rate, ScalarValue yieldValue, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(rate) || !double.IsFinite(yld))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || yld < 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md) ||
@@ -1097,11 +1121,17 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
-        double pr          = ToNumber(args[2]);
         double redemption  = ToNumber(args[3]);
+        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
+        if (args[2] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => YielddiscScalar(settlement, maturity, value, redemption, basis));
+        return YielddiscScalar(settlement, maturity, args[2], redemption, basis);
+    }
+
+    private static ScalarValue YielddiscScalar(double settlement, double maturity, ScalarValue priceValue, double redemption, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
         if (pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
@@ -1118,11 +1148,17 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double issue       = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double pr          = ToNumber(args[4]);
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[4] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => YieldmatScalar(settlement, maturity, issue, rate, value, basis));
+        return YieldmatScalar(settlement, maturity, issue, rate, args[4], basis);
+    }
+
+    private static ScalarValue YieldmatScalar(double settlement, double maturity, double issue, double rate, ScalarValue priceValue, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(rate) || !double.IsFinite(pr))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (rate < 0 || pr <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md) ||
@@ -1141,12 +1177,18 @@ public static partial class BuiltInFunctions
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
         double coupon      = ToNumber(args[2]);
-        double yld         = ToNumber(args[3]);
         int frequency      = (int)Math.Truncate(ToNumber(args[4]));
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => DurationScalar(settlement, maturity, coupon, value, frequency, basis));
+        return DurationScalar(settlement, maturity, coupon, args[3], frequency, basis);
+    }
+
+    private static ScalarValue DurationScalar(double settlement, double maturity, double coupon, ScalarValue yieldValue, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(coupon) ||
             !double.IsFinite(yld))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
         if (coupon < 0 || yld < 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
@@ -1183,10 +1225,21 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Mduration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var dur = Duration(args, ctx);
+        if (FirstError(args) is { } e) return e;
+        double settlement  = ToNumber(args[0]);
+        double maturity    = ToNumber(args[1]);
+        double coupon      = ToNumber(args[2]);
+        int frequency      = (int)Math.Truncate(ToNumber(args[4]));
+        if (!TryGetFinancialBasis(args, 5, out int basis)) return ErrorValue.Num;
+        if (args[3] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => MdurationScalar(settlement, maturity, coupon, value, frequency, basis));
+        return MdurationScalar(settlement, maturity, coupon, args[3], frequency, basis);
+    }
+
+    private static ScalarValue MdurationScalar(double settlement, double maturity, double coupon, ScalarValue yieldValue, int frequency, int basis)
+    {
+        var dur = DurationScalar(settlement, maturity, coupon, yieldValue, frequency, basis);
         if (dur is not NumberValue dv) return dur;
-        double yld = ToNumber(args[3]);
-        double frequency = Math.Truncate(ToNumber(args[4]));
+        double yld = ToNumber(yieldValue);
         if (frequency <= 0) return ErrorValue.Num;
         return NumberResult(dv.Value / (1 + yld / frequency));
     }
