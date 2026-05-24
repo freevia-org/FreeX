@@ -6522,6 +6522,28 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void AscAndDbcs_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("ï¼¡ï¼¢ï¼£")),
+            (2, 1, new TextValue("ABC")));
+
+        var asc = _eval.Evaluate("=ASC(A1:A2)", sheet);
+        var ascRange = asc.Should().BeOfType<RangeValue>().Subject;
+        ascRange.RowCount.Should().Be(2);
+        ascRange.ColCount.Should().Be(1);
+        ascRange.At(1, 1).Should().Be(_eval.Evaluate("=ASC(A1)", sheet));
+        ascRange.At(2, 1).Should().Be(_eval.Evaluate("=ASC(A2)", sheet));
+
+        var dbcs = _eval.Evaluate("=DBCS(A1:A2)", sheet);
+        var dbcsRange = dbcs.Should().BeOfType<RangeValue>().Subject;
+        dbcsRange.RowCount.Should().Be(2);
+        dbcsRange.ColCount.Should().Be(1);
+        dbcsRange.At(1, 1).Should().Be(_eval.Evaluate("=DBCS(A1)", sheet));
+        dbcsRange.At(2, 1).Should().Be(_eval.Evaluate("=DBCS(A2)", sheet));
+    }
+
+    [Fact]
     public void Phonetic_ReturnsTextOrUpperLeftRangeText()
     {
         var sheet = MakeSheet(
