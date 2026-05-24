@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -177,6 +177,10 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldDialog", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldProperties", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDataValueEditing"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyNumberFormats", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyBorderFormats", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyFontFormats", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyPatternFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyWidthHeightFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveFormatting", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "itemPrintTitles") || XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldPrintTitles"),
@@ -513,6 +517,10 @@ internal static partial class XlsxPivotTableReader
             EnableFieldDialog = pending.EnableFieldDialog,
             EnableFieldProperties = pending.EnableFieldProperties,
             EnableDataValueEditing = pending.EnableDataValueEditing,
+            ApplyNumberFormats = pending.ApplyNumberFormats,
+            ApplyBorderFormats = pending.ApplyBorderFormats,
+            ApplyFontFormats = pending.ApplyFontFormats,
+            ApplyPatternFormats = pending.ApplyPatternFormats,
             AutofitColumnsOnUpdate = pending.AutofitColumnsOnUpdate,
             PreserveFormattingOnUpdate = pending.PreserveFormattingOnUpdate,
             PrintTitles = pending.PrintTitles,
@@ -598,6 +606,10 @@ internal static partial class XlsxPivotTableReader
         bool EnableFieldDialog,
         bool EnableFieldProperties,
         bool EnableDataValueEditing,
+        bool ApplyNumberFormats,
+        bool ApplyBorderFormats,
+        bool ApplyFontFormats,
+        bool ApplyPatternFormats,
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,
         bool PrintTitles,

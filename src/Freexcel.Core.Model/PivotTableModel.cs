@@ -99,6 +99,10 @@ public sealed class PivotTableModel
     public bool PageOverThenDown { get; set; }
     public int PageWrap { get; set; }
     public string? EmptyValueText { get; set; }
+    public bool ApplyNumberFormats { get; set; } = true;
+    public bool ApplyBorderFormats { get; set; } = true;
+    public bool ApplyFontFormats { get; set; } = true;
+    public bool ApplyPatternFormats { get; set; } = true;
     public bool AutofitColumnsOnUpdate { get; set; } = true;
     public bool PreserveFormattingOnUpdate { get; set; } = true;
     public bool ShowExpandCollapseButtons { get; set; } = true;
