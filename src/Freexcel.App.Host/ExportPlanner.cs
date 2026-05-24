@@ -63,7 +63,8 @@ internal sealed record ExportOptions(
     bool CreateBookmarks = false,
     PdfBookmarkMode BookmarkMode = PdfBookmarkMode.None,
     PdfInitialView InitialView = PdfInitialView.SinglePage,
-    PdfOpenMode OpenMode = PdfOpenMode.Normal)
+    PdfOpenMode OpenMode = PdfOpenMode.Normal,
+    bool BitmapTextWhenFontsMayNotBeEmbedded = false)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -145,11 +146,14 @@ internal static class ExportPlanner
             ? "document properties are included"
             : "document properties are not included";
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, ExportFormat.Pdf);
+        var bitmapText = options.BitmapTextWhenFontsMayNotBeEmbedded
+            ? "bitmap text when fonts may not be embedded"
+            : null;
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -188,11 +192,12 @@ internal static class ExportPlanner
             _ => "document properties are not included"
         };
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, format);
+        var bitmapText = DescribeBitmapTextOption(options.BitmapTextWhenFontsMayNotBeEmbedded, format);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, open);
     }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
@@ -272,6 +277,16 @@ internal static class ExportPlanner
             PdfBookmarkMode.PageNumbers => "bookmarks use page numbers",
             _ => "bookmarks use sheet names"
         };
+    }
+
+    private static string? DescribeBitmapTextOption(bool bitmapTextWhenFontsMayNotBeEmbedded, ExportFormat format)
+    {
+        if (!bitmapTextWhenFontsMayNotBeEmbedded)
+            return null;
+
+        return format == ExportFormat.Xps
+            ? "bitmap text is PDF-only"
+            : "bitmap text when fonts may not be embedded";
     }
 
     private static string? DescribeInitialView(PdfInitialView initialView) =>

@@ -128,10 +128,11 @@ public class ExportPlannerTests
             IgnorePrintAreas: true,
             PageRange: new ExportPageRange(2, 4),
             Quality: ExportQuality.MinimumSize,
-            BookmarkMode: PdfBookmarkMode.SheetNames);
+            BookmarkMode: PdfBookmarkMode.SheetNames,
+            BitmapTextWhenFontsMayNotBeEmbedded: true);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; bookmarks use sheet names; open after publishing.");
+            .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; bookmarks use sheet names; bitmap text when fonts may not be embedded; open after publishing.");
     }
 
     [Theory]
@@ -257,6 +258,7 @@ public class ExportPlannerTests
             "Content = \"_Open after publishing\"",
             "Content = \"_Ignore print areas\"",
             "Content = \"Create _PDF bookmarks using sheet names\"",
+            "Content = \"_Bitmap text when fonts may not be embedded\"",
             "Content = \"_Standard\"",
             "Content = \"_Minimum size\"",
             "Content = \"_All\"",
@@ -1047,7 +1049,7 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("CreatePdfBookmarks(options)");
-        printExport.Should().Contain("includeSelectableText: true");
+        printExport.Should().Contain("includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded");
         printExport.Should().Contain("options.EffectiveBookmarkMode");
         printExport.Should().Contain(": sheet.Name");
         printExport.Should().Contain("BuildPrintTitleBookmark(sheet)");

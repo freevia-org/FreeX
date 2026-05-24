@@ -55,6 +55,8 @@ public enum ChartAxisCrossBetween { Between, MidCategory }
 
 public enum ChartAxisLabelAlignment { Center, Left, Right }
 
+public enum ChartDateAxisUnit { Days, Months, Years }
+
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
 public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
@@ -303,6 +305,9 @@ public sealed class ChartModel
     public int XAxisLabelOffset { get; set; }
     public bool XAxisNoMultiLevelLabels { get; set; }
     public ChartAxisLabelAlignment XAxisLabelAlignment { get; set; } = ChartAxisLabelAlignment.Center;
+    public ChartDateAxisUnit? XAxisBaseTimeUnit { get; set; }
+    public ChartDateAxisUnit? XAxisMajorTimeUnit { get; set; }
+    public ChartDateAxisUnit? XAxisMinorTimeUnit { get; set; }
     public CellColor? XAxisLineColor { get; set; }
     public double XAxisLineThickness { get; set; } = 1;
     public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;

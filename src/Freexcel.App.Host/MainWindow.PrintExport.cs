@@ -82,7 +82,7 @@ public partial class MainWindow
                 CreatePdfBookmarks(options),
                 options.InitialView,
                 options.OpenMode,
-                includeSelectableText: true);
+                includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
