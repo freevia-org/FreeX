@@ -17,6 +17,7 @@ public sealed class DrawingShapeModel
     public double Height { get; set; } = 70;
     public double RotationDegrees { get; set; }
     public bool IsVisible { get; set; } = true;
+    public string? Title { get; set; }
     public string? AltText { get; set; }
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }

@@ -942,6 +942,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FormulaBarTextChanged_SkipsFormulaHighlightWorkForSelectionDisplayUpdates()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);");
+        source.Should().Contain("if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)");
+        source.Should().Contain("ClearFormulaReferenceHighlights();");
+    }
+
+    [Fact]
     public void WorkbookUiStateController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
