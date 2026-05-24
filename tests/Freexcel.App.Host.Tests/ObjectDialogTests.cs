@@ -152,7 +152,9 @@ public sealed class ObjectDialogTests
     {
         var objectSource = ReadObjectDialogSources();
         var formatPictureSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
-        var namedRangeSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+        var namedRangeSource =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NameDefinitionDialog.cs"));
         var shapeGradientSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
 
         foreach (var source in new[] { objectSource, formatPictureSource, namedRangeSource, shapeGradientSource })
