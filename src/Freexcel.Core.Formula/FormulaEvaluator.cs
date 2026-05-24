@@ -1037,6 +1037,7 @@ public sealed class FormulaEvaluator
              or "FREQUENCY"
              or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
              or "PMT" or "PV" or "FV" or "NPER" or "RATE" or "IPMT" or "PPMT"
+             or "CUMIPMT" or "CUMPRINC"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
              or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
              or "FIND" or "SEARCH"
