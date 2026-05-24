@@ -43,7 +43,8 @@ public class Win32c {
 }
 "@
 
-$outDir = "E:\Users\quinn\Documents\Claude\Freexcel\tools\screenshots"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$outDir = Join-Path $PSScriptRoot "screenshots"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Get-ChildItem $outDir -Filter "*.png" | Remove-Item -Force
 
@@ -52,7 +53,7 @@ $dpi   = [Win32c]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
-$exe = "E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.App.Host\bin\Release\net10.0-windows10.0.19041.0\Freexcel.App.Host.exe"
+$exe = Join-Path $repoRoot "src\Freexcel.App.Host\bin\Release\net10.0-windows10.0.19041.0\Freexcel.App.Host.exe"
 $proc = Start-Process -FilePath $exe -PassThru
 Write-Host "Launched PID $($proc.Id)"
 
