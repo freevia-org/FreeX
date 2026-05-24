@@ -40,6 +40,9 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMinorTickStyle, ChartAxisTickStyle.None);
         chart.XAxisLabelFontSize = Math.Clamp(chart.XAxisLabelFontSize, 6, 72);
         chart.XAxisLabelAngle = Math.Clamp(chart.XAxisLabelAngle, -90, 90);
+        chart.XAxisLabelSkip = Math.Max(0, chart.XAxisLabelSkip);
+        chart.XAxisTickMarkSkip = Math.Max(0, chart.XAxisTickMarkSkip);
+        chart.XAxisLabelOffset = Math.Max(0, chart.XAxisLabelOffset);
         chart.XAxisLineThickness = Math.Clamp(chart.XAxisLineThickness, 0.5, 10);
         chart.YAxisMajorUnit = ClampPositiveAxisUnit(chart.YAxisMajorUnit);
         chart.YAxisMinorUnit = ClampPositiveAxisUnit(chart.YAxisMinorUnit);
