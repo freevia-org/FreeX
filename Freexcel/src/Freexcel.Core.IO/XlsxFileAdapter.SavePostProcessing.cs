@@ -5,7 +5,7 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private static void ApplyPackagePostProcessing(Workbook workbook, MemoryStream packageStream)
+    private static void ApplyPackagePostProcessing(Workbook workbook, Stream packageStream)
     {
         if (workbook.IsStructureProtected)
         {

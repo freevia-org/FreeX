@@ -86,7 +86,7 @@ public sealed class ScenarioManagerDialogTests
     public void DialogSource_ReturnsChangingCellsAndCommentFields()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
-        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+        var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ScenarioCommands.cs"));
 
         source.Should().Contain("public string? ChangingCellsText");
         source.Should().Contain("public string? CommentText");

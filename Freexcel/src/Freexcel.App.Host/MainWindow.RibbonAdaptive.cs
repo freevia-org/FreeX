@@ -115,11 +115,12 @@ public partial class MainWindow
     private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
         var veryNarrow = availableWidth <= 700;
+        var narrow = availableWidth <= 900;
         foreach (var button in collapsedButtons)
         {
-            button.Width = veryNarrow ? 56 : 64;
-            button.Margin = veryNarrow ? new Thickness(0) : new Thickness(1, 0, 3, 0);
-            button.Padding = veryNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
+            button.Width = narrow ? 56 : 64;
+            button.Margin = narrow ? new Thickness(0) : new Thickness(1, 0, 3, 0);
+            button.Padding = narrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
 
             var textBlocks = button.Content is StackPanel panel
                 ? panel.Children.OfType<TextBlock>()
@@ -130,12 +131,12 @@ public partial class MainWindow
                 if (textBlock.Tag?.ToString() == "RibbonLabel")
                 {
                     textBlock.Visibility = veryNarrow ? Visibility.Collapsed : Visibility.Visible;
-                    textBlock.FontSize = veryNarrow ? 9 : 10;
-                    textBlock.MaxWidth = veryNarrow ? 54 : 60;
+                    textBlock.FontSize = narrow ? 9 : 10;
+                    textBlock.MaxWidth = narrow ? 54 : 60;
                 }
                 else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
                 {
-                    textBlock.FontSize = veryNarrow ? 18 : 22;
+                    textBlock.FontSize = narrow ? 18 : 22;
                 }
             }
         }
