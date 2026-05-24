@@ -13107,6 +13107,10 @@ public partial class FileAdapterSmokeTests
             CacheId = 1,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
+            DataOnRows = false,
+            FirstHeaderRow = 0,
+            FirstDataRow = 2,
+            FirstDataColumn = 2,
             CompactRowLabelIndent = 4,
             ShowFieldHeaders = false,
             ShowExpandCollapseButtons = false,
@@ -13155,8 +13159,13 @@ public partial class FileAdapterSmokeTests
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.ToString().Should().Contain("pivotTableDefinition");
             var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             pivotXml.ToString().Should().Contain("rowFields");
             pivotXml.ToString().Should().Contain("dataFields");
+            pivotXml.Root!.Attribute("dataOnRows")!.Value.Should().Be("0");
+            pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstHeaderRow")!.Value.Should().Be("0");
+            pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstDataRow")!.Value.Should().Be("2");
+            pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstDataCol")!.Value.Should().Be("2");
             pivotXml.Root!.Attribute("itemPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("fieldPrintTitles")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("showDrill")!.Value.Should().Be("0");
@@ -13195,6 +13204,10 @@ public partial class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        loadedPivot.DataOnRows.Should().BeFalse();
+        loadedPivot.FirstHeaderRow.Should().Be(0);
+        loadedPivot.FirstDataRow.Should().Be(2);
+        loadedPivot.FirstDataColumn.Should().Be(2);
         loadedPivot.CompactRowLabelIndent.Should().Be(4);
         loadedPivot.ShowExpandCollapseButtons.Should().BeFalse();
         loadedPivot.ShowFieldHeaders.Should().BeFalse();
