@@ -116,10 +116,16 @@ public sealed class SparklineDialog : Window
 
     private void RequestRangeSelection(SparklineRangeSelectionTarget target, TextBox textBox)
     {
+        FocusRangeSelectionInput(textBox);
+        RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
+        _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(textBox);
+    }
+
+    private static void FocusRangeSelectionInput(TextBox textBox)
+    {
         textBox.Focus();
         textBox.SelectAll();
         Keyboard.Focus(textBox);
-        RangeSelectionRequest = CreateRangeSelectionRequest(target, textBox.Text);
-        _requestRangeSelection?.Invoke(RangeSelectionRequest);
     }
 }

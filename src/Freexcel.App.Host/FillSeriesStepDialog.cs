@@ -72,6 +72,20 @@ public sealed class FillSeriesStepDialog : Window
         Keyboard.Focus(_columnsButton);
     }
 
+    private void FocusInvalidStepInput()
+    {
+        _stepBox.Focus();
+        _stepBox.SelectAll();
+        Keyboard.Focus(_stepBox);
+    }
+
+    private void FocusInvalidStopInput()
+    {
+        _stopBox.Focus();
+        _stopBox.SelectAll();
+        Keyboard.Focus(_stopBox);
+    }
+
     public static bool TryCreateResult(string? input, out FillSeriesStepDialogResult result, out string? error)
     {
         result = new FillSeriesStepDialogResult(1);
@@ -103,6 +117,35 @@ public sealed class FillSeriesStepDialog : Window
         return new FillSeriesStepDialogResult(step, seriesIn, type, dateUnit, stopValue);
     }
 
+    public static bool TryCreateResult(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText,
+        out FillSeriesStepDialogResult result,
+        out string? error)
+    {
+        result = new FillSeriesStepDialogResult(1, seriesIn, type, dateUnit);
+        if (!TryCreateResult(stepText, out var stepResult, out error))
+            return false;
+
+        double? stopValue = null;
+        if (!string.IsNullOrWhiteSpace(stopText))
+        {
+            if (!TryParseOptionalFiniteDouble(stopText, out var parsedStop))
+            {
+                error = "Enter a numeric stop value or leave it blank.";
+                return false;
+            }
+
+            stopValue = parsedStop;
+        }
+
+        result = new FillSeriesStepDialogResult(stepResult.Step, seriesIn, type, dateUnit, stopValue);
+        return true;
+    }
+
     private UIElement CreateSeriesContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
@@ -120,14 +163,29 @@ public sealed class FillSeriesStepDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_stepBox.Text, out var result, out _))
+        if (!TryCreateResult(
+                _rowsButton.IsChecked == true ? FillSeriesDirection.Rows : FillSeriesDirection.Columns,
+                SelectedSeriesType(),
+                SelectedDateUnit(),
+                _stepBox.Text,
+                _stopBox.Text,
+                out var result,
+                out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Enter a numeric step value.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            if (string.Equals(error, "Enter a numeric stop value or leave it blank.", StringComparison.Ordinal))
+                FocusInvalidStopInput();
+            else
+                FocusInvalidStepInput();
             return;
-        Result = CreateResult(
-            _rowsButton.IsChecked == true ? FillSeriesDirection.Rows : FillSeriesDirection.Columns,
-            SelectedSeriesType(),
-            SelectedDateUnit(),
-            _stepBox.Text,
-            _stopBox.Text);
+        }
+
+        Result = result;
         DialogResult = true;
     }
 

@@ -23,4 +23,13 @@ internal static class XlsxXmlAttributeReader
 
         return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool? ReadNullableBoolAttribute(XElement? element, string name)
+    {
+        var value = element?.Attribute(name)?.Value;
+        if (value is null)
+            return null;
+
+        return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
 }

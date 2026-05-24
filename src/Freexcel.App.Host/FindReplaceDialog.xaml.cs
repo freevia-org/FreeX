@@ -140,14 +140,17 @@ public sealed partial class FindReplaceDialog : Window
         var search = SearchText;
         if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
-        var count = FindReplaceService.ReplaceAll(
+        var result = FindReplaceService.TryReplaceAll(
             _getWorkbook(), _commandBus, search, ReplaceBox.Text,
             CreateFindOptions(),
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true,
             replacementFormat: _replaceFormatDiff);
 
-        StatusLabel.Text = count == 0 ? "No matches found." : $"Replaced {count} cell(s).";
+        if (ShowReplaceFailureWarning(result.Failure))
+            return;
+
+        StatusLabel.Text = result.ReplacedCount == 0 ? "No matches found." : $"Replaced {result.ReplacedCount} cell(s).";
         _results = [];
         _currentIndex = -1;
         UpdateResultsGrid();
@@ -164,18 +167,21 @@ public sealed partial class FindReplaceDialog : Window
         if (_results.Count == 0 || _currentIndex < 0)
             return;
 
-        var result = _results[_currentIndex];
-        var replaced = FindReplaceDialogPlanner.ReplaceSingleMatch(
+        var match = _results[_currentIndex];
+        var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
             _getWorkbook(),
             _commandBus,
-            result,
+            match,
             search,
             ReplaceBox.Text,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true,
             replacementFormat: _replaceFormatDiff);
 
-        if (!replaced)
+        if (ShowReplaceFailureWarning(result.Failure))
+            return;
+
+        if (!result.Replaced)
         {
             StatusLabel.Text = "No replaceable match found.";
             return;
@@ -185,6 +191,21 @@ public sealed partial class FindReplaceDialog : Window
         _results = [];
         _currentIndex = -1;
         UpdateResultsGrid();
+    }
+
+    private bool ShowReplaceFailureWarning(CommandOutcome? failure)
+    {
+        if (failure is null)
+            return false;
+
+        MessageBox.Show(
+            this,
+            failure.ErrorMessage ?? "The replacement could not be completed.",
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        FocusSearchBox();
+        return true;
     }
 
     private string SearchText => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox.Text : FindBox.Text;

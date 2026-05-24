@@ -21,6 +21,7 @@ public sealed partial class NativeJsonAdapter
         Language = chart.Language,
         ColorMapOverride = chart.ColorMapOverride,
         ExternalData = chart.ExternalData,
+        UserShapes = chart.UserShapes,
         PlotAreaLayout = chart.PlotAreaLayout,
         LegendLayout = chart.LegendLayout,
         RoundedCorners = chart.RoundedCorners,

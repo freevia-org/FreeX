@@ -268,6 +268,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             SideWallFormat = CloneSurfaceFormat(chart.SideWallFormat),
             BackWallFormat = CloneSurfaceFormat(chart.BackWallFormat),
             PrintSettings = ClonePrintSettings(chart.PrintSettings),
+            UserShapes = CloneUserShapes(chart.UserShapes),
             BarGapWidth = chart.BarGapWidth,
             BarOverlap = chart.BarOverlap,
             VaryColorsByPoint = chart.VaryColorsByPoint,
@@ -450,6 +451,17 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                         FirstHeader = printSettings.HeaderFooter.FirstHeader,
                         FirstFooter = printSettings.HeaderFooter.FirstFooter
                     }
+            };
+
+    private static ChartUserShapesModel? CloneUserShapes(ChartUserShapesModel? userShapes) =>
+        userShapes is null
+            ? null
+            : new ChartUserShapesModel
+            {
+                RelationshipId = userShapes.RelationshipId,
+                RelationshipType = userShapes.RelationshipType,
+                Target = userShapes.Target,
+                TargetMode = userShapes.TargetMode
             };
 }
 

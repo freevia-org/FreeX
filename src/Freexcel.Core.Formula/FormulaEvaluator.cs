@@ -920,13 +920,13 @@ public sealed class FormulaEvaluator
                 width = (int)Math.Truncate(dw);
             }
         }
+        if (height < 0 || width < 0) return ErrorValue.Value;
         if (height == 0 || width == 0) return ErrorValue.Ref;
 
         long startRow = (long)baseRow + rowsOff;
         long startCol = (long)baseCol + colsOff;
-        // Allow negative height/width: range extends upward/leftward from base
-        long endRow = startRow + (height > 0 ? height - 1 : height + 1);
-        long endCol = startCol + (width  > 0 ? width  - 1 : width  + 1);
+        long endRow = startRow + height - 1;
+        long endCol = startCol + width - 1;
         long r0Final = Math.Min(startRow, endRow);
         long r1Final = Math.Max(startRow, endRow);
         long c0Final = Math.Min(startCol, endCol);
@@ -1036,13 +1036,23 @@ public sealed class FormulaEvaluator
              or "T.TEST" or "F.TEST" or "CHISQ.TEST"
              or "FREQUENCY"
              or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
+             or "PMT" or "PV" or "FV" or "NPER" or "RATE" or "IPMT" or "PPMT"
+             or "CUMIPMT" or "CUMPRINC"
+             or "EFFECT" or "NOMINAL" or "RRI" or "PDURATION"
+             or "SLN" or "SYD" or "DB" or "DDB" or "VDB" or "AMORDEGRC" or "AMORLINC"
+             or "DOLLARDE" or "DOLLARFR"
+             or "DISC" or "INTRATE" or "RECEIVED"
+             or "ACCRINT" or "ODDFPRICE" or "ODDFYIELD" or "ODDLPRICE" or "ODDLYIELD"
+             or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"
+             or "COUPDAYBS" or "COUPDAYS" or "COUPDAYSNC" or "COUPNCD" or "COUPNUM" or "COUPPCD"
+             or "PRICE" or "YIELD" or "PRICEDISC" or "PRICEMAT" or "YIELDDISC" or "YIELDMAT" or "DURATION" or "MDURATION"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
              or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
              or "FIND" or "SEARCH"
              or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN"
              or "TEXT" or "VALUE"
              or "SUBSTITUTE" or "REPT" or "CONCATENATE"
-             or "FIXED" or "DOLLAR" or "T" or "ENCODEURL" or "BAHTTEXT"
+             or "FIXED" or "DOLLAR" or "T" or "HYPERLINK" or "ENCODEURL" or "FILTERXML" or "BAHTTEXT"
              or "ASC" or "DBCS"
              or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
              or "ABS" or "SQRT" or "INT" or "SIGN"
@@ -1052,10 +1062,12 @@ public sealed class FormulaEvaluator
              or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
              or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
              or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
+             or "DATE" or "TIME"
              or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
              or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH"
              or "DATEVALUE" or "TIMEVALUE"
              or "DAYS" or "DAYS360" or "YEARFRAC"
+             or "SQRTPI" or "SERIESSUM"
              or "N" or "ERROR.TYPE"
              or "COMBIN" or "PERMUT"
              or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT"
@@ -1067,7 +1079,12 @@ public sealed class FormulaEvaluator
              or "GAMMA" or "GAMMALN" or "GAMMALN.PRECISE" or "GAMMA.DIST" or "GAMMA.INV"
              or "LOGNORM.DIST" or "LOGNORM.INV"
              or "BETA.DIST" or "BETA.INV"
-             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST";
+             or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST"
+             or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T"
+             or "F.DIST" or "F.DIST.RT" or "F.INV" or "F.INV.RT"
+             or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT"
+             or "BINOM.DIST" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST"
+             or "CONFIDENCE" or "CONFIDENCE.NORM" or "CONFIDENCE.T";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";

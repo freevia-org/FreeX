@@ -43,6 +43,15 @@ public class FunctionLibraryTests
             range.At(row + 1, 1).Should().Be(expected[row]);
     }
 
+    private static void AssertApproxColumn(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            ((NumberValue)range.At(row + 1, 1)).Value.Should().BeApproximately(expected[row], 1e-10);
+    }
+
     private static BoolValue True() => new(true);
 
     private static BoolValue False() => new(false);
@@ -2865,6 +2874,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void XlookupAndXmatch_RangeLookupValue_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")), (3, 1, new TextValue("C")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)), (3, 2, new NumberValue(3)),
+            (1, 4, new TextValue("B")), (2, 4, new TextValue("C")));
+
+        AssertColumn(_eval.Evaluate("=XMATCH(D1:D2,A1:A3)", sheet), new NumberValue(2), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=XLOOKUP(D1:D2,A1:A3,B1:B3)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
     public void Xlookup_And_Xmatch_TreatScalarLookupArraysAsSingleItemArrays()
     {
         _eval.Evaluate("=XMATCH(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
@@ -4286,6 +4307,29 @@ public class FunctionLibraryTests
     [Fact] public void Pmt_FutureValueError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
+    [Fact]
+    public void CoreFinancialFunctions_RangeRateArgument_SpillElementwise()
+    {
+        var rates = MakeSheet((1, 1, new NumberValue(0.05 / 12)), (2, 1, new NumberValue(0.06 / 12)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=PMT(A1:A2,60,10000)", rates),
+            ((NumberValue)_eval.Evaluate("=PMT(A1,60,10000)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=PMT(A2,60,10000)", rates)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=PV(A1:A2,60,188.71)", rates),
+            ((NumberValue)_eval.Evaluate("=PV(A1,60,188.71)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=PV(A2,60,188.71)", rates)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=FV(A1:A2,12,-100)", rates),
+            ((NumberValue)_eval.Evaluate("=FV(A1,12,-100)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=FV(A2,12,-100)", rates)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=NPER(A1:A2,-188.71,10000)", rates),
+            ((NumberValue)_eval.Evaluate("=NPER(A1,-188.71,10000)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=NPER(A2,-188.71,10000)", rates)).Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
@@ -4842,6 +4886,19 @@ public class FunctionLibraryTests
     {
         _eval.Evaluate("=HYPERLINK(NA(),\"Example\")", MakeSheet()).Should().Be(ErrorValue.NA);
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hyperlink_RangeArgument_SpillsDisplayTextElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("https://example.com/a")),
+            (2, 1, new TextValue("https://example.com/b")),
+            (1, 2, new TextValue("A")),
+            (2, 2, new TextValue("B")));
+
+        AssertTextColumn(_eval.Evaluate("=HYPERLINK(A1:A2)", sheet), "https://example.com/a", "https://example.com/b");
+        AssertTextColumn(_eval.Evaluate("=HYPERLINK(\"https://example.com\",B1:B2)", sheet), "A", "B");
     }
 
     [Fact]
@@ -6924,6 +6981,26 @@ public class FunctionLibraryTests
     }
 
     // ── NUMBERVALUE edge cases ───────────────────────────────────────────────
+
+    [Fact]
+    public void Filterxml_RangeXmlArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")));
+
+        AssertTextColumn(_eval.Evaluate("=FILTERXML(A1:A2,\"/root/item\")", sheet), "A", "B");
+    }
+
+    [Fact]
+    public void Filterxml_RangeXPathArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("/root/item[1]")),
+            (2, 1, new TextValue("/root/item[2]")));
+
+        AssertTextColumn(_eval.Evaluate("=FILTERXML(\"<root><item>A</item><item>B</item></root>\",A1:A2)", sheet), "A", "B");
+    }
 
     [Fact]
     public void Numbervalue_DefaultSeparators_ParsesPlainNumber() =>

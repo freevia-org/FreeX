@@ -223,9 +223,27 @@ public sealed class ChartAxisFormatDialog : Window
 
     private void Accept()
     {
+        if (!TryReadNullableDouble(_minimumBox, out var minimum))
+        {
+            ShowInvalidInputWarning("Enter a numeric minimum value or leave it blank.", _minimumBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_majorGridColorBox, out var majorGridColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _majorGridColorBox);
+            return;
+        }
+
+        if (!TryReadPositiveDouble(_gridlineThicknessBox, out var gridlineThickness))
+        {
+            ShowInvalidInputWarning("Enter a positive gridline width.", _gridlineThicknessBox);
+            return;
+        }
+
         Result = CreateResult(
             _useXAxis,
-            ChartDialogHelpers.ParseNullableDouble(_minimumBox.Text),
+            minimum,
             ChartDialogHelpers.ParseNullableDouble(_maximumBox.Text),
             ChartDialogHelpers.ParseNullableDouble(_majorUnitBox.Text),
             ChartDialogHelpers.ParseNullableDouble(_minorUnitBox.Text),
@@ -233,9 +251,9 @@ public sealed class ChartAxisFormatDialog : Window
             ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
             _majorGridBox.IsChecked == true,
             _minorGridBox.IsChecked == true,
-            ChartDialogHelpers.ParseColor(_majorGridColorBox.Text),
+            majorGridColor,
             ChartDialogHelpers.ParseColor(_minorGridColorBox.Text),
-            ChartDialogHelpers.ParseDouble(_gridlineThicknessBox.Text, 1),
+            gridlineThickness,
             ChartDialogHelpers.Selected(_majorTickBox, ChartAxisTickStyle.Outside),
             ChartDialogHelpers.Selected(_minorTickBox, ChartAxisTickStyle.None),
             _labelsBox.IsChecked == true,
@@ -245,5 +263,51 @@ public sealed class ChartAxisFormatDialog : Window
             ChartDialogHelpers.ParseColor(_lineColorBox.Text),
             ChartDialogHelpers.ParseDouble(_lineThicknessBox.Text, 1));
         DialogResult = true;
+    }
+
+    private static bool TryReadNullableDouble(TextBox textBox, out double? value)
+    {
+        value = null;
+        var text = textBox.Text.Trim();
+        if (string.IsNullOrEmpty(text) || text.Equals("auto", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            || !double.IsFinite(parsed))
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
+    }
+
+    private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
+        ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
+
+    private static bool TryReadPositiveDouble(TextBox textBox, out double value)
+    {
+        value = 0;
+        return double.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && double.IsFinite(value)
+            && value > 0;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
     }
 }

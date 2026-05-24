@@ -170,6 +170,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDestinationPicker_RefocusesDestinationAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Delimiters.cs"));
+        var handlerSource = source[source.IndexOf("private DockPanel CreateReferenceEditor", StringComparison.Ordinal)..];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
         var dialogSource = ReadTextToColumnsDialogSources();
@@ -775,6 +788,21 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
@@ -970,6 +998,20 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialogInvalidAddReference_RefocusesReferenceWithKeyboardFocus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var addHandlerSource = source[
+            source.IndexOf("private void AddReferenceButton_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void DeleteReferenceButton_Click", StringComparison.Ordinal)];
+
+        addHandlerSource.Should().Contain("FocusReferenceInput();");
+        source.Should().Contain("_referenceBox.Focus();");
+        source.Should().Contain("_referenceBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_referenceBox);");
+    }
+
+    [Fact]
     public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
@@ -978,6 +1020,21 @@ public sealed class DataToolDialogTests
                 ConsolidateRangeSelectionTarget.Reference,
                 "A1:B3",
                 CollapseDialog: true));
+    }
+
+    [Fact]
+    public void ConsolidateRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Theory]
@@ -1231,6 +1288,21 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialogRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
@@ -1363,6 +1435,21 @@ public sealed class DataToolDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void CreateTableDialogRangePicker_RefocusesRangeBoxAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeBox();");
+        source.Should().Contain("private void FocusRangeBox()");
+        source.Should().Contain("_rangeBox.Focus();");
+        source.Should().Contain("_rangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_rangeBox);");
     }
 
     [Fact]

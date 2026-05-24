@@ -164,6 +164,15 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Offset_NegativeHeightOrWidth_ReturnsValueError()
+    {
+        var (wb, sheet) = MakeWb((1, 1, new NumberValue(42)));
+
+        _eval.Evaluate("=OFFSET(A1,0,0,-1,1)", sheet, wb).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=OFFSET(A1,0,0,1,-1)", sheet, wb).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Offset_IsVolatile()
     {
         BuiltInFunctions.IsVolatile("OFFSET").Should().BeTrue();

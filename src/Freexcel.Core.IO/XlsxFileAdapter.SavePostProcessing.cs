@@ -23,6 +23,33 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         XlsxWorkbookMetadataWriter.SaveWorkbookProperties(packageStream, workbook);
 
+        packageStream.Position = 0;
+        XlsxWorkbookMetadataWriter.SaveWorkbookViewProperties(packageStream, workbook);
+
+        if (workbook.FileVersion is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileVersion(packageStream, workbook);
+        }
+
+        if (workbook.FunctionGroups is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFunctionGroups(packageStream, workbook);
+        }
+
+        if (workbook.FileSharing is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
+        }
+
+        if (workbook.FileRecoveryProperties.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
+        }
+
         if (workbook.IsStructureProtected)
         {
             packageStream.Position = 0;
@@ -54,6 +81,12 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorksheetPhoneticPropertyMapper.Save(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.AutoFilter is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
@@ -197,6 +230,36 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        if (workbook.FileVersion is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileVersion(packageStream, workbook);
+        }
+
+        if (workbook.FunctionGroups is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFunctionGroups(packageStream, workbook);
+        }
+
+        if (workbook.FileSharing is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
+        }
+
+        if (workbook.FileRecoveryProperties.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.AutoFilter is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
 
         if (workbook.Sheets.Any(XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes))
         {

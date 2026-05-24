@@ -464,4 +464,33 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(sheetId);
         return DrawingTargetResolver.GetTargetDrawingObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
     }
+
+    private void OnObjectMoved(Guid id, Freexcel.App.UI.ObjectKind kind, Core.Model.CellAddress newAnchor)
+    {
+        var anchor = new Core.Model.CellAddress(_currentSheetId, newAnchor.Row, newAnchor.Col);
+        IWorkbookCommand cmd = kind switch
+        {
+            Freexcel.App.UI.ObjectKind.Picture  => new RepositionPictureCommand(_currentSheetId, id, anchor),
+            Freexcel.App.UI.ObjectKind.Shape    => new RepositionShapeCommand(_currentSheetId, id, anchor),
+            Freexcel.App.UI.ObjectKind.TextBox  => new RepositionTextBoxCommand(_currentSheetId, id, anchor),
+            _ => null!
+        };
+        if (cmd is null) return;
+        TryExecuteCommand(cmd, "Move Object");
+        UpdateViewport();
+    }
+
+    private void OnObjectResized(Guid id, Freexcel.App.UI.ObjectKind kind, double width, double height)
+    {
+        IWorkbookCommand cmd = kind switch
+        {
+            Freexcel.App.UI.ObjectKind.Picture  => new ResizePictureCommand(_currentSheetId, id, width, height),
+            Freexcel.App.UI.ObjectKind.Shape    => new ResizeDrawingShapeCommand(_currentSheetId, id, width, height),
+            Freexcel.App.UI.ObjectKind.TextBox  => new ResizeTextBoxCommand(_currentSheetId, id, width, height),
+            _ => null!
+        };
+        if (cmd is null) return;
+        TryExecuteCommand(cmd, "Resize Object");
+        UpdateViewport();
+    }
 }

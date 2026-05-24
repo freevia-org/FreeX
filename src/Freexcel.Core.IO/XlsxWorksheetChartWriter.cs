@@ -150,25 +150,44 @@ internal static class XlsxWorksheetChartWriter
         ChartModel chart,
         XNamespace packageRelNs)
     {
-        if (chart.ExternalData is not { } externalData ||
-            string.IsNullOrWhiteSpace(externalData.RelationshipId) ||
-            string.IsNullOrWhiteSpace(externalData.RelationshipType) ||
-            string.IsNullOrWhiteSpace(externalData.Target))
+        var relationships = new List<XElement>();
+        if (chart.ExternalData is { } externalData &&
+            !string.IsNullOrWhiteSpace(externalData.RelationshipId) &&
+            !string.IsNullOrWhiteSpace(externalData.RelationshipType) &&
+            !string.IsNullOrWhiteSpace(externalData.Target))
         {
-            return;
-        }
-
-        var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
-        XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, new XDocument(new XElement(
-            packageRelNs + "Relationships",
-            new XElement(
+            relationships.Add(new XElement(
                 packageRelNs + "Relationship",
                 new XAttribute("Id", externalData.RelationshipId),
                 new XAttribute("Type", externalData.RelationshipType),
                 new XAttribute("Target", externalData.Target),
                 string.IsNullOrWhiteSpace(externalData.TargetMode)
                     ? null
-                    : new XAttribute("TargetMode", externalData.TargetMode)))));
+                    : new XAttribute("TargetMode", externalData.TargetMode)));
+        }
+
+        if (chart.UserShapes is { } userShapes &&
+            !string.IsNullOrWhiteSpace(userShapes.RelationshipId) &&
+            !string.IsNullOrWhiteSpace(userShapes.RelationshipType) &&
+            !string.IsNullOrWhiteSpace(userShapes.Target))
+        {
+            relationships.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", userShapes.RelationshipId),
+                new XAttribute("Type", userShapes.RelationshipType),
+                new XAttribute("Target", userShapes.Target),
+                string.IsNullOrWhiteSpace(userShapes.TargetMode)
+                    ? null
+                    : new XAttribute("TargetMode", userShapes.TargetMode)));
+        }
+
+        if (relationships.Count == 0)
+        {
+            return;
+        }
+
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
+        XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, new XDocument(new XElement(packageRelNs + "Relationships", relationships)));
     }
 
     private static XElement ToChartAnchor(
