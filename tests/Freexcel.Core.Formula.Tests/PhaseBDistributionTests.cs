@@ -50,6 +50,40 @@ public class PhaseBDistributionTests
 
     // ── NORM.DIST ────────────────────────────────────────────────────────────
 
+    private ScalarValue Eval(string formula, Sheet sheet)
+    {
+        return _eval.Evaluate("=" + formula, sheet);
+    }
+
+    private static Sheet MakeSheet(params (int row, int col, double val)[] cells)
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        foreach (var (r, c, v) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)r, (uint)c), new NumberValue(v));
+        return sheet;
+    }
+
+    private static void AssertColumnApproximately(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            ((NumberValue)range.Cells[row, 0]).Value.Should().BeApproximately(expected[row], 1e-6);
+    }
+
+    private static double NormSCdfForTest(double z)
+        => 0.5 * (1.0 + ErfForTest(z / Math.Sqrt(2.0)));
+
+    private static double ErfForTest(double x)
+    {
+        double sign = Math.Sign(x);
+        x = Math.Abs(x);
+        double t = 1.0 / (1.0 + 0.3275911 * x);
+        double y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.Exp(-x * x);
+        return sign * y;
+    }
+
     [Fact]
     public void NormDist_StandardNormal_CumulativeAtZero_Returns0Point5()
         => Calc("NORM.DIST(0,0,1,TRUE)").Should().BeApproximately(0.5, 1e-9);
@@ -119,6 +153,35 @@ public class PhaseBDistributionTests
         => CalcError("STANDARDIZE(5,4,0)").Should().Be("#NUM!");
 
     // ── T.DIST ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void NormalDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet((1, 1, 0.0), (2, 1, 1.0));
+
+        AssertColumnApproximately(Eval("NORM.S.DIST(A1:A2,TRUE)", sheet), 0.5, 0.8413447460685429);
+        AssertColumnApproximately(Eval("NORM.DIST(A1:A2,0,1,TRUE)", sheet), 0.5, 0.8413447460685429);
+        AssertColumnApproximately(Eval("STANDARDIZE(A1:A2,0,1)", sheet), 0.0, 1.0);
+
+        var probabilities = MakeSheet((1, 1, 0.5), (2, 1, 0.8413447460685429));
+        AssertColumnApproximately(Eval("NORM.S.INV(A1:A2)", probabilities), 0.0, 1.0);
+        AssertColumnApproximately(Eval("NORM.INV(A1:A2,0,1)", probabilities), 0.0, 1.0);
+    }
+
+    [Fact]
+    public void GammaAndLognormalFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 1.0), (2, 1, 2.0));
+
+        AssertColumnApproximately(Eval("GAMMA(A1:A2)", xValues), 1.0, 1.0);
+        AssertColumnApproximately(Eval("GAMMALN(A1:A2)", xValues), 0.0, 0.0);
+        AssertColumnApproximately(Eval("GAMMA.DIST(A1:A2,1,1,TRUE)", xValues), 1.0 - Math.Exp(-1.0), 1.0 - Math.Exp(-2.0));
+        AssertColumnApproximately(Eval("LOGNORM.DIST(A1:A2,0,1,TRUE)", xValues), 0.5, NormSCdfForTest(Math.Log(2.0)));
+
+        var probabilities = MakeSheet((1, 1, 0.5), (2, 1, 1.0 - Math.Exp(-2.0)));
+        AssertColumnApproximately(Eval("GAMMA.INV(A1:A2,1,1)", probabilities), Math.Log(2.0), 2.0);
+        AssertColumnApproximately(Eval("LOGNORM.INV(A1:A2,0,1)", MakeSheet((1, 1, 0.5), (2, 1, 0.8413447460685429))), 1.0, Math.E);
+    }
 
     [Fact]
     public void TDist_CumulativeAt0_Returns0Point5()

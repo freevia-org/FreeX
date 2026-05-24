@@ -375,6 +375,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
             ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
             SeriesFormats = chart.SeriesFormats.ToList(),
+            SeriesDataLabelFormats = chart.SeriesDataLabelFormats.ToList(),
             PointDataLabelFormats = chart.PointDataLabelFormats.ToList(),
             UseComboLineForSecondarySeries = chart.UseComboLineForSecondarySeries,
             Left = chart.Left,

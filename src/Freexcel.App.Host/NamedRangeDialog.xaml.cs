@@ -129,6 +129,7 @@ public sealed partial class NamedRangeDialog : Window
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         RefersToBox.Focus();
         RefersToBox.SelectAll();
+        Keyboard.Focus(RefersToBox);
     }
 
     private void NewButton_Click(object sender, RoutedEventArgs e)

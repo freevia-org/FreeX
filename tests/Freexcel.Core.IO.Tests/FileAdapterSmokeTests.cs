@@ -8478,6 +8478,102 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartSeriesDataLabelDefaultsPackagePart()
+    {
+        var workbook = new Workbook("ChartSeriesDataLabelDefaultsPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1200));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2400));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(3600));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:dLbls>
+                        <c:dLblPos val="inEnd"/>
+                        <c:numFmt formatCode="0.0%" sourceLinked="0"/>
+                        <c:showLegendKey val="1"/>
+                        <c:showVal val="0"/>
+                        <c:showCatName val="1"/>
+                        <c:separator val="; "/>
+                        <c:spPr>
+                          <a:solidFill><a:srgbClr val="FFF2CC"/></a:solidFill>
+                          <a:ln w="19050"><a:solidFill><a:srgbClr val="7F7F7F"/></a:solidFill></a:ln>
+                        </c:spPr>
+                        <c:txPr>
+                          <a:bodyPr/>
+                          <a:p><a:pPr><a:defRPr sz="1200"><a:solidFill><a:srgbClr val="1F4E79"/></a:solidFill></a:defRPr></a:pPr></a:p>
+                        </c:txPr>
+                      </c:dLbls>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        var seriesDefaults = loadedChart.SeriesDataLabelFormats.Should().ContainSingle().Subject;
+        seriesDefaults.SeriesIndex.Should().Be(0);
+        seriesDefaults.Position.Should().Be(ChartDataLabelPosition.InsideEnd);
+        seriesDefaults.NumberFormatCode.Should().Be("0.0%");
+        seriesDefaults.NumberFormatSourceLinked.Should().BeFalse();
+        seriesDefaults.ShowLegendKey.Should().BeTrue();
+        seriesDefaults.ShowValue.Should().BeFalse();
+        seriesDefaults.ShowCategoryName.Should().BeTrue();
+        seriesDefaults.SeparatorText.Should().Be("; ");
+        seriesDefaults.FillColor.Should().Be(new CellColor(255, 242, 204));
+        seriesDefaults.BorderColor.Should().Be(new CellColor(127, 127, 127));
+        seriesDefaults.BorderThickness.Should().Be(1.5);
+        seriesDefaults.TextColor.Should().Be(new CellColor(31, 78, 121));
+        seriesDefaults.FontSize.Should().Be(12);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var savedSeriesLabels = chartXml.Descendants(chartNs + "ser").Single().Element(chartNs + "dLbls")!;
+        savedSeriesLabels.Elements(chartNs + "dLbl").Should().BeEmpty();
+        savedSeriesLabels.Element(chartNs + "dLblPos")!.Attribute("val")!.Value.Should().Be("inEnd");
+        savedSeriesLabels.Element(chartNs + "numFmt")!.Attribute("formatCode")!.Value.Should().Be("0.0%");
+        savedSeriesLabels.Element(chartNs + "numFmt")!.Attribute("sourceLinked")!.Value.Should().Be("0");
+        savedSeriesLabels.Element(chartNs + "showLegendKey")!.Attribute("val")!.Value.Should().Be("1");
+        savedSeriesLabels.Element(chartNs + "showVal")!.Attribute("val")!.Value.Should().Be("0");
+        savedSeriesLabels.Element(chartNs + "showCatName")!.Attribute("val")!.Value.Should().Be("1");
+        savedSeriesLabels.Element(chartNs + "separator")!.Attribute("val")!.Value.Should().Be("; ");
+        savedSeriesLabels.Element(chartNs + "spPr")!.Descendants(drawingNs + "srgbClr")
+            .Select(element => element.Attribute("val")!.Value)
+            .Should().Contain(["FFF2CC", "7F7F7F"]);
+        savedSeriesLabels.Element(chartNs + "txPr")!.Descendants(drawingNs + "defRPr")
+            .Should().ContainSingle().Which.Attribute("sz")!.Value.Should().Be("1200");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartPointDataLabelPackagePart()
     {
         var workbook = new Workbook("ChartPointDataLabelPackageSave");
