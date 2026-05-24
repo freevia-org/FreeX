@@ -434,6 +434,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialogOpenedFromKeyboard_FocusesDataRangeBox()
+    {
+        var source = ReadClassSource("SparklineDialog.cs", "public sealed class SparklineDialog", "private void RequestRangeSelection");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_dataRangeBox.Focus();");
+        source.Should().Contain("_dataRangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_dataRangeBox);");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
