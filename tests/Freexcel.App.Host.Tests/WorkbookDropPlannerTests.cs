@@ -65,6 +65,28 @@ public sealed class WorkbookDropPlannerTests
         selected.Should().Be(@"C:\Temp\MacroBook.XLSM");
     }
 
+    [Fact]
+    public void SelectOpenableFile_SkipsSupportedExtensionDirectories()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsx");
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var selected = WorkbookDropPlanner.SelectOpenableFile(
+                [
+                    tempDirectory,
+                    @"C:\Temp\Book.xlsb"
+                ],
+                [new XlsxFileAdapter(), new LegacyXlsFileAdapter()]);
+
+            selected.Should().Be(@"C:\Temp\Book.xlsb");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory);
+        }
+    }
+
     private sealed class FakeAdapter(string extension, string formatName) : IFileAdapter
     {
         public string Extension => extension;
