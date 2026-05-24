@@ -184,6 +184,18 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void FormatPictureWithoutPicture_ReturnsFocusToActiveSection()
+    {
+        var source = ReadHeaderFooterDialogSource();
+
+        source.Should().Contain("FocusActiveTextBox();");
+        source.Should().Contain("private void FocusActiveTextBox()");
+        source.Should().Contain("var target = _activeTextBox ?? HeaderCenterBox;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void HeaderFooterDialogsOpenedFromKeyboard_FocusInitialTextFields()
     {
         var source = ReadHeaderFooterDialogSource();

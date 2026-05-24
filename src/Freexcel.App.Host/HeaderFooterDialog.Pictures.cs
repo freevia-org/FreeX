@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using Freexcel.Core.Model;
 using Microsoft.Win32;
@@ -41,6 +42,7 @@ public partial class HeaderFooterDialog
         if (picture is null)
         {
             MessageBox.Show(this, "Insert a header or footer picture before formatting it.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            FocusActiveTextBox();
             return;
         }
 
@@ -100,6 +102,13 @@ public partial class HeaderFooterDialog
         PictureTargetStatusText.Text = hasPicture
             ? $"Target: {ActiveBoxLabel(target)} has a picture."
             : $"Target: {ActiveBoxLabel(target)} has no picture.";
+    }
+
+    private void FocusActiveTextBox()
+    {
+        var target = _activeTextBox ?? HeaderCenterBox;
+        target.Focus();
+        Keyboard.Focus(target);
     }
 
     private static string ActiveBoxLabel(TextBox target)
