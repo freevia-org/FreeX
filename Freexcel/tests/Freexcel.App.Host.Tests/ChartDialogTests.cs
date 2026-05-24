@@ -641,6 +641,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTrendlineOptionsDialogOpenedFromKeyboard_FocusesShowTrendlineChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTrendlineOptionsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
     public void ChartErrorBarsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartErrorBarsDialog.CreateResult(
