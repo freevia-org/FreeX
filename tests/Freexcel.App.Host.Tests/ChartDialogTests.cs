@@ -331,7 +331,7 @@ public sealed class ChartDialogTests
     public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
     {
         var source = ReadChartDialogSource();
-        var dialogSource = source[source.IndexOf("public sealed class SelectDataSourceDialog", StringComparison.Ordinal)..];
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -855,7 +855,8 @@ public sealed class ChartDialogTests
         string.Join(Environment.NewLine, new[]
         {
             "ChartDialogs.cs",
-            "SelectDataSourceDialog.cs"
+            "SelectDataSourceDialog.cs",
+            "SelectDataSourceDialog.Planning.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static string ReadChartTypeDialogSource() =>
