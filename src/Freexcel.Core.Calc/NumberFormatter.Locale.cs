@@ -202,7 +202,14 @@ public static partial class NumberFormatter
         if (!LocaleFormatCatalog.TryGetValue(normalized, out var separators))
             return TryCreateCultureInfoLocaleFormats(normalized, out numberFormat, out dateTimeFormat);
 
-        numberFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
+        var hasCultureFormats = TryCreateCultureInfoLocaleFormats(
+            normalized,
+            out var cultureNumberFormat,
+            out var cultureDateTimeFormat);
+
+        numberFormat = hasCultureFormats
+            ? (NumberFormatInfo)cultureNumberFormat.Clone()
+            : (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
         numberFormat.NumberDecimalSeparator = separators.DecimalSeparator;
         numberFormat.NumberGroupSeparator = separators.GroupSeparator;
         numberFormat.PercentDecimalSeparator = separators.DecimalSeparator;
@@ -212,9 +219,26 @@ public static partial class NumberFormatter
             numberFormat.NumberGroupSizes = groupSizes;
             numberFormat.PercentGroupSizes = groupSizes;
         }
-        dateTimeFormat = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
+        dateTimeFormat = hasCultureFormats
+            ? (DateTimeFormatInfo)cultureDateTimeFormat.Clone()
+            : (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
+        UseGregorianCalendarWhenAvailable(dateTimeFormat);
         dateTimeFormat.DateSeparator = separators.DateSeparator;
         return true;
+    }
+
+    private static void UseGregorianCalendarWhenAvailable(DateTimeFormatInfo dateTimeFormat)
+    {
+        if (dateTimeFormat.Calendar is GregorianCalendar)
+            return;
+
+        try
+        {
+            dateTimeFormat.Calendar = new GregorianCalendar();
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+        }
     }
 
     private static bool TryCreateCultureInfoLocaleFormats(
