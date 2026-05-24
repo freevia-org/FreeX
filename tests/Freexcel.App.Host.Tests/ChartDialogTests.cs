@@ -328,6 +328,19 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_rangeBox.Focus();");
+        dialogSource.Should().Contain("_rangeBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_ExposesExcelStylePickerSeriesAndAxisControls()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
