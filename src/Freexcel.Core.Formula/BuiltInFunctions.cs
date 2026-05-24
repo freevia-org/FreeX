@@ -1295,7 +1295,8 @@ public static partial class BuiltInFunctions
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        return TextResult("$" + FormatRoundedNumber(n, dec, useCommas: true));
+        var formatted = "$" + FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
+        return TextResult(n < 0 ? "(" + formatted + ")" : formatted);
     }
 
     private static string FormatRoundedNumber(double value, int decimals, bool useCommas)

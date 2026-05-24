@@ -4498,6 +4498,13 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("$1,234.50"));
 
     [Fact]
+    public void Dollar_NegativeNumber_UsesAccountingParentheses()
+    {
+        _eval.Evaluate("=DOLLAR(-1234.5,2)", MakeSheet())
+            .Should().Be(new TextValue("($1,234.50)"));
+    }
+
+    [Fact]
     public void Dollar_NegativeDecimals_RoundsLeftOfDecimal()
     {
         var sheet = MakeSheet();
@@ -6186,6 +6193,12 @@ public class FunctionLibraryTests
     [Fact]
     public void Unichar_BasicAscii_ReturnsLetter() =>
         _eval.Evaluate("=UNICHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
+
+    [Fact]
+    public void Unichar_TruncatesFractionalCodePoint()
+    {
+        _eval.Evaluate("=UNICHAR(65.9)", MakeSheet()).Should().Be(new TextValue("A"));
+    }
 
     [Fact]
     public void Unichar_Zero_ReturnsValueError() =>
