@@ -1924,6 +1924,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
     }
 
+    [Fact]
+    public void Rounding_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1.25)),
+            (2, 1, new NumberValue(-1.25)));
+
+        AssertColumn(_eval.Evaluate("=ROUND(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDUP(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDDOWN(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
+        AssertColumn(_eval.Evaluate("=TRUNC(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
+    }
+
     // ── CEILING ───────────────────────────────────────────────────────────────
 
     [Fact]

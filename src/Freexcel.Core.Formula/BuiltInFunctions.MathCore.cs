@@ -10,10 +10,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err0) return err0;
         if (args[1] is ErrorValue err1) return err1;
-        var number = ToNumber(args[0]);
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => RoundScalar(value, digits));
+        return RoundScalar(args[0], digits);
+    }
+
+    private static ScalarValue RoundScalar(ScalarValue value, int digits)
+    {
+        var number = ToNumber(value);
         if (!double.IsFinite(number)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(number);
         if (digits >= 0)
@@ -257,10 +263,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var n = ToNumber(args[0]);
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => RounddownScalar(value, digits));
+        return RounddownScalar(args[0], digits);
+    }
+
+    private static ScalarValue RounddownScalar(ScalarValue value, int digits)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
@@ -272,10 +284,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var n = ToNumber(args[0]);
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => RoundupScalar(value, digits));
+        return RoundupScalar(args[0], digits);
+    }
+
+    private static ScalarValue RoundupScalar(ScalarValue value, int digits)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
@@ -286,7 +304,6 @@ public static partial class BuiltInFunctions
     private static ScalarValue Trunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
         int digits = 0;
         if (args.Count > 1)
         {
@@ -295,6 +312,13 @@ public static partial class BuiltInFunctions
             if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
             digits = (int)Math.Truncate(rawDigits);
         }
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TruncScalar(value, digits));
+        return TruncScalar(args[0], digits);
+    }
+
+    private static ScalarValue TruncScalar(ScalarValue value, int digits)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);

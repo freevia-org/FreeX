@@ -1047,7 +1047,8 @@ public sealed class FormulaEvaluator
              or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
              or "ABS" or "SQRT" or "INT" or "SIGN"
              or "SIN" or "COS" or "TAN" or "DEGREES" or "RADIANS"
-             or "ASIN" or "ACOS" or "ATAN" or "LN" or "EXP" or "FACT";
+             or "ASIN" or "ACOS" or "ATAN" or "LN" or "EXP" or "FACT"
+             or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
