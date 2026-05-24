@@ -46,6 +46,25 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void GetViewport_AccountingFormatUsesColumnWidthForFillSpacing()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ColumnWidths[1] = 14;
+        var style = new CellStyle { NumberFormat = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)" };
+        var styleId = workbook.RegisterStyle(style);
+        var cell = Cell.FromValue(new NumberValue(1234.5));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        vp.Cells.Single(c => c.Row == 1 && c.Col == 1).DisplayText
+            .Should().Be("$     1,234.50");
+    }
+
+    [Fact]
     public void GetViewport_CommentOnlyCell_PopulatesDisplayCellWithCommentIndicator()
     {
         var workbook = new Workbook("test");
