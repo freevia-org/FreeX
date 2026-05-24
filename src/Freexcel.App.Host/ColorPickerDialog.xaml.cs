@@ -134,12 +134,21 @@ public partial class ColorPickerDialog : Window
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+            FocusInvalidCustomColorInput();
             return;
         }
 
         SelectedColor = color;
         SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         DialogResult = true;
+    }
+
+    private void FocusInvalidCustomColorInput()
+    {
+        ColorTabs.SelectedItem = CustomTab;
+        CustomColorTextBox.Focus();
+        CustomColorTextBox.SelectAll();
+        Keyboard.Focus(CustomColorTextBox);
     }
 
     private void NoColorButton_Click(object sender, RoutedEventArgs e)
