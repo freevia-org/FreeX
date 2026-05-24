@@ -951,6 +951,33 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForObjectContentControls()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateObjectContentControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("12345");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControls()
     {
         StaTestRunner.Run(() =>
@@ -1348,6 +1375,28 @@ public class ExportPlannerTests
         page.Children.Add(new Label
         {
             Content = "Label PDF Text",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateObjectContentControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new Label
+        {
+            Content = 12345,
             Margin = new System.Windows.Thickness(12),
             Padding = new System.Windows.Thickness(0)
         });

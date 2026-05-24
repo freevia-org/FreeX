@@ -73,8 +73,8 @@ internal static class PdfTextOverlayExtractor
                 textBox.FontStyle == FontStyles.Italic || textBox.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBox.Foreground)));
         }
-        else if (element is ContentControl { Content: string contentText } contentControl &&
-                 !string.IsNullOrWhiteSpace(contentText))
+        else if (element is ContentControl contentControl &&
+                 ExtractContentText(contentControl.Content) is { Length: > 0 } contentText)
         {
             overlays.Add(new PdfTextOverlay(
                 contentText,
@@ -152,6 +152,15 @@ internal static class PdfTextOverlayExtractor
             AppendInlineText(inline, parts);
 
         return string.Concat(parts);
+    }
+
+    private static string ExtractContentText(object? content)
+    {
+        if (content is null or UIElement)
+            return "";
+
+        var text = content.ToString();
+        return string.IsNullOrWhiteSpace(text) ? "" : text;
     }
 
     private static string ExtractItemsText(ItemsControl itemsControl)
