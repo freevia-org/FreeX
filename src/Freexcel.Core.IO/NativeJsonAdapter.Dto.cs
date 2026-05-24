@@ -11,6 +11,7 @@ public sealed partial class NativeJsonAdapter
         public int? MinimumReaderVersion { get; set; }
         public string Name { get; set; } = "";
         public WorkbookThemeDto? Theme { get; set; }
+        public bool Uses1904DateSystem { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }

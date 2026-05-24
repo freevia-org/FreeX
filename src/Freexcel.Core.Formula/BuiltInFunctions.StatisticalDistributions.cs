@@ -876,9 +876,15 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        int x = (int)Math.Truncate(ToNumber(args[0]));
         double lambda = ToNumber(args[1]);
         bool cum = ToBool(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => PoissonDistScalar(value, lambda, cum));
+        return PoissonDistScalar(args[0], lambda, cum);
+    }
+
+    private static ScalarValue PoissonDistScalar(ScalarValue xValue, double lambda, bool cum)
+    {
+        int x = (int)Math.Truncate(ToNumber(xValue));
         if (x < 0 || lambda < 0) return ErrorValue.Num;
         if (!cum)
         {
@@ -923,8 +929,15 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double x = ToNumber(args[0]), lambda = ToNumber(args[1]);
+        double lambda = ToNumber(args[1]);
         bool cum = ToBool(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ExponDistScalar(value, lambda, cum));
+        return ExponDistScalar(args[0], lambda, cum);
+    }
+
+    private static ScalarValue ExponDistScalar(ScalarValue xValue, double lambda, bool cum)
+    {
+        double x = ToNumber(xValue);
         if (x < 0 || lambda <= 0) return ErrorValue.Num;
         return cum
             ? NumberResult(1.0 - Math.Exp(-lambda * x))
@@ -937,8 +950,15 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double x = ToNumber(args[0]), alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
+        double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
         bool cum = ToBool(args[3]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeibullDistScalar(value, alpha, beta, cum));
+        return WeibullDistScalar(args[0], alpha, beta, cum);
+    }
+
+    private static ScalarValue WeibullDistScalar(ScalarValue xValue, double alpha, double beta, bool cum)
+    {
+        double x = ToNumber(xValue);
         if (x < 0 || alpha <= 0 || beta <= 0) return ErrorValue.Num;
         if (cum) return NumberResult(1.0 - Math.Exp(-Math.Pow(x / beta, alpha)));
         return NumberResult((alpha / beta) * Math.Pow(x / beta, alpha - 1) * Math.Exp(-Math.Pow(x / beta, alpha)));
@@ -1018,11 +1038,17 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double x = ToNumber(args[0]);
         double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
         bool cum = ToBool(args[3]);
         double A = args.Count >= 5 && args[4] is not BlankValue ? ToNumber(args[4]) : 0.0;
         double B = args.Count >= 6 && args[5] is not BlankValue ? ToNumber(args[5]) : 1.0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BetaDistScalar(value, alpha, beta, cum, A, B));
+        return BetaDistScalar(args[0], alpha, beta, cum, A, B);
+    }
+
+    private static ScalarValue BetaDistScalar(ScalarValue xValue, double alpha, double beta, bool cum, double A, double B)
+    {
+        double x = ToNumber(xValue);
         if (alpha <= 0 || beta <= 0 || A >= B) return ErrorValue.Num;
         if (x < A || x > B) return ErrorValue.Num;
         double t = (x - A) / (B - A);
@@ -1037,10 +1063,16 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double prob = ToNumber(args[0]);
         double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
         double A = args.Count >= 4 && args[3] is not BlankValue ? ToNumber(args[3]) : 0.0;
         double B = args.Count >= 5 && args[4] is not BlankValue ? ToNumber(args[4]) : 1.0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BetaInvScalar(value, alpha, beta, A, B));
+        return BetaInvScalar(args[0], alpha, beta, A, B);
+    }
+
+    private static ScalarValue BetaInvScalar(ScalarValue probabilityValue, double alpha, double beta, double A, double B)
+    {
+        double prob = ToNumber(probabilityValue);
         if (prob < 0 || prob > 1 || alpha <= 0 || beta <= 0 || A >= B) return ErrorValue.Num;
         return NumberResult(BetaInv(prob, alpha, beta) * (B - A) + A);
     }
