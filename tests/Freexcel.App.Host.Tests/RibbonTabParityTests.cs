@@ -7,6 +7,28 @@ namespace Freexcel.App.Host.Tests;
 public sealed class RibbonTabParityTests
 {
     [Fact]
+    public void HomeTab_UsesExcelLikeGroupOrderAndFontColorPlacement()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var homeTab = ExtractTabXaml(xaml, "Home", "Insert");
+        var fontGroup = ExtractGroupXaml(homeTab, "Font");
+
+        ExtractGroupLabels(homeTab).Should().Equal(
+            "Clipboard",
+            "Font",
+            "Alignment",
+            "Number",
+            "Styles",
+            "Cells",
+            "Editing");
+
+        ExtractTooltipTitles(fontGroup).Should().ContainInOrder(
+            "Borders",
+            "Fill Color",
+            "Font Color");
+    }
+
+    [Fact]
     public void InsertTab_UsesExcelLikeGroupOrderAndCommandPlacement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -54,6 +76,26 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Rotate Object\"");
+    }
+
+    [Fact]
+    public void FormulasTab_UsesExcelLikeDefinedNamesCommandOrder()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var formulasTab = ExtractTabXaml(xaml, "Formulas", "Data");
+        var definedNamesGroup = ExtractGroupXaml(formulasTab, "Defined Names");
+
+        ExtractGroupLabels(formulasTab).Should().Equal(
+            "Function Library",
+            "Defined Names",
+            "Formula Auditing",
+            "Calculation");
+
+        ExtractTooltipTitles(definedNamesGroup).Should().ContainInOrder(
+            "Name Manager",
+            "Define Name",
+            "Use in Formula",
+            "Create from Selection");
     }
 
     [Fact]
@@ -112,6 +154,47 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonTooltip.Title=\"Macros\"");
     }
 
+    [Fact]
+    public void PivotTableAnalyzeTab_UsesExcelLikeContextualGroupOrder()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var analyzeTab = ExtractTabXaml(xaml, "PivotTable Analyze", "Design");
+
+        ExtractGroupLabels(analyzeTab).Should().Equal(
+            "PivotTable",
+            "Active Field",
+            "Group",
+            "Filter",
+            "Data",
+            "Actions",
+            "Calculations",
+            "Tools",
+            "Show");
+
+        ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonTooltip.Title=\"Group Field\"");
+        ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
+        ExtractGroupXaml(analyzeTab, "Data").Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
+        ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonTooltip.Title=\"Calculated Field\"");
+        ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonTooltip.Title=\"PivotChart\"");
+        ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonTooltip.Title=\"Field List\"");
+    }
+
+    [Fact]
+    public void PivotTableDesignTab_SeparatesStyleGalleryFromStyleOptions()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var designTab = ExtractTabXaml(xaml, "Design", "Help");
+
+        ExtractGroupLabels(designTab).Should().Equal(
+            "Layout",
+            "PivotTable Style Options",
+            "PivotTable Styles");
+
+        ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonTooltip.Title=\"Report Layout\"");
+        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonTooltip.Title=\"Banded Rows\"");
+        ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonTooltip.Title=\"PivotTable Styles\"");
+    }
+
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)
     {
         var start = FindTabStart(xaml, header, 0);
@@ -125,10 +208,12 @@ public sealed class RibbonTabParityTests
 
     private static int FindTabStart(string xaml, string header, int startIndex)
     {
-        var headerIndex = xaml.IndexOf($"Header=\"{header}\"", startIndex, StringComparison.Ordinal);
-        return headerIndex < 0
-            ? -1
-            : xaml.LastIndexOf("<TabItem", headerIndex, StringComparison.Ordinal);
+        var match = Regex.Match(
+            xaml[startIndex..],
+            $"<TabItem\\b[^>]*Header=\"{Regex.Escape(header)}\"",
+            RegexOptions.CultureInvariant);
+
+        return match.Success ? startIndex + match.Index : -1;
     }
 
     private static IReadOnlyList<string> ExtractGroupLabels(string tabXaml) =>
@@ -148,4 +233,9 @@ public sealed class RibbonTabParityTests
         start.Should().BeGreaterThanOrEqualTo(0);
         return nextStart < 0 ? tabXaml[start..] : tabXaml[start..nextStart];
     }
+
+    private static IReadOnlyList<string> ExtractTooltipTitles(string xaml) =>
+        Regex.Matches(xaml, "local:RibbonTooltip.Title=\"(?<title>[^\"]+)\"")
+            .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
+            .ToList();
 }

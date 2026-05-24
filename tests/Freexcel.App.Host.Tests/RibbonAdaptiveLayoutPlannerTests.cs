@@ -121,10 +121,31 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Collapsed);
     }
 
+    [Fact]
+    public void ApplyBreakpointOverrides_KeepsInsertTablesVisibleAtNormalNarrowWidths()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            ["Tables", "Illustrations", "Add-ins", "Charts", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 10).ToArray());
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.SmallWithLabels,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
+
     [Theory]
-    [InlineData(1120, new[] { "Get & Transform", "Sort & Filter", "Data Tools", "What-If Analysis", "Outline", "Named Ranges" }, 2)]
-    [InlineData(1120, new[] { "Workbook Views", "Show", "Freeze Panes", "Zoom", "Window" }, 2)]
-    [InlineData(1120, new[] { "Themes", "Page Setup", "Sheet Options" }, 1)]
+    [InlineData(1120, new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" }, 2)]
+    [InlineData(1120, new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" }, 2)]
+    [InlineData(1120, new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" }, 1)]
     [InlineData(1120, new[] { "Proofing", "Accessibility", "Comments", "Protect" }, 2)]
     [InlineData(1120, new[] { "Draw", "Arrange", "Format" }, 1)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(

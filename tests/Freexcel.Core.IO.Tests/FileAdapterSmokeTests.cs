@@ -5964,6 +5964,10 @@ public partial class FileAdapterSmokeTests
             Top = 90,
             Width = 260,
             Height = 160,
+            ShowSeriesLines = true,
+            SeriesLineColor = new CellColor(91, 155, 213),
+            SeriesLineThickness = 1.5,
+            SeriesLineDashStyle = ChartLineDashStyle.Dot,
             SeriesFormats =
             [
                 new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)),
@@ -5995,6 +5999,10 @@ public partial class FileAdapterSmokeTests
         loadedChart.Top.Should().BeApproximately(90, 0.01);
         loadedChart.Width.Should().BeApproximately(260, 0.01);
         loadedChart.Height.Should().BeApproximately(160, 0.01);
+        loadedChart.ShowSeriesLines.Should().BeTrue();
+        loadedChart.SeriesLineColor.Should().Be(new CellColor(91, 155, 213));
+        loadedChart.SeriesLineThickness.Should().Be(1.5);
+        loadedChart.SeriesLineDashStyle.Should().Be(ChartLineDashStyle.Dot);
         loadedChart.SeriesFormats.Should().Contain(
             new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)));
         loadedChart.SeriesFormats.Should().Contain(
@@ -8335,7 +8343,11 @@ public partial class FileAdapterSmokeTests
                 new CellAddress(sheet.Id, 4, 2)),
             VaryColorsByPoint = true,
             BarOverlap = -20,
-            BarGapWidth = 75
+            BarGapWidth = 75,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, InvertIfNegative: true)
+            ]
         });
 
         var saved = new MemoryStream();
@@ -8350,6 +8362,8 @@ public partial class FileAdapterSmokeTests
         barChart.Element(chartNs + "varyColors")!.Attribute("val")!.Value.Should().Be("1");
         barChart.Element(chartNs + "overlap")!.Attribute("val")!.Value.Should().Be("-20");
         barChart.Element(chartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("75");
+        barChart.Descendants(chartNs + "ser").Single()
+            .Element(chartNs + "invertIfNegative")!.Attribute("val")!.Value.Should().Be("1");
     }
 
     [Fact]

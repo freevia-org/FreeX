@@ -21,8 +21,8 @@ public sealed partial class ViewportService : IViewportService
         var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
         var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth);
 
-        // Pre-compute CF aggregates (average/min/max) once per frame rather than per cell.
-        var cfCache = PrecomputeCfAggregates(sheet);
+        // Pre-compute CF rule order and aggregates once per frame rather than per cell.
+        var cfContext = BuildConditionalFormatContext(sheet);
 
         // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
         // Calculate Column Metrics — iterate until we've filled the available width
@@ -38,10 +38,10 @@ public sealed partial class ViewportService : IViewportService
 
                     // Evaluate conditional formats and merge any triggered CF style on top
                     var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
-                    var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfCache);
+                    var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfContext);
                     if (cfStyle != null)
                         style = MergeStyles(style, cfStyle);
-                    var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfCache);
+                    var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfContext);
                     var displayText = cfIcon?.ShowValue == false
                         ? ""
                         : GetDisplayText(sheet, cell, style);
@@ -65,10 +65,10 @@ public sealed partial class ViewportService : IViewportService
                     if (styleOnlyId.HasValue)
                     {
                         var style = workbook.GetStyle(styleOnlyId.Value);
-                        var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfCache);
+                        var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfContext);
                         if (cfStyle != null)
                             style = MergeStyles(style, cfStyle);
-                        var cfIcon = EvaluateConditionalIcon(sheet, addr, BlankValue.Instance, cfCache);
+                        var cfIcon = EvaluateConditionalIcon(sheet, addr, BlankValue.Instance, cfContext);
 
                         cells.Add(new DisplayCell(
                             rowMetric.Row, colMetric.Col,
@@ -121,7 +121,7 @@ public sealed partial class ViewportService : IViewportService
                 sheet.SplitColumn,
                 splitTopRows,
                 splitLeftColumns,
-                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfCache),
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext),
                 topRightColumns,
                 bottomLeftRows)
             : null;
@@ -398,7 +398,7 @@ public sealed partial class ViewportService : IViewportService
         IReadOnlyList<RowMetric> bottomLeftRows,
         IReadOnlyList<ColMetric> topRightColumns,
         bool includeFormulas,
-        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
+        CfEvaluationContext cfContext)
     {
         var cells = new List<DisplayCell>();
         var seen = new HashSet<(uint Row, uint Col)>();
@@ -406,15 +406,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfCache);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfContext);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfCache);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfContext);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfCache);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfContext);
         }
 
         return cells;
@@ -429,7 +429,7 @@ public sealed partial class ViewportService : IViewportService
         uint row,
         uint col,
         bool includeFormulas,
-        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
+        CfEvaluationContext cfContext)
     {
         if (!seen.Add((row, col)))
             return;
@@ -443,10 +443,10 @@ public sealed partial class ViewportService : IViewportService
 
             var style = workbook.GetStyle(styleOnlyId.Value);
             var addr = new CellAddress(sheetId, row, col);
-            var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfCache);
+            var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfContext);
             if (cfStyle != null)
                 style = MergeStyles(style, cfStyle);
-            var cfIcon = EvaluateConditionalIcon(sheet, addr, BlankValue.Instance, cfCache);
+            var cfIcon = EvaluateConditionalIcon(sheet, addr, BlankValue.Instance, cfContext);
 
             cells.Add(new DisplayCell(
                 row,
@@ -465,10 +465,10 @@ public sealed partial class ViewportService : IViewportService
         {
         var style = workbook.GetStyle(cell.StyleId);
         var addr = new CellAddress(sheetId, row, col);
-        var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfCache);
+        var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfContext);
         if (cfStyle != null)
             style = MergeStyles(style, cfStyle);
-        var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfCache);
+        var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfContext);
         var displayText = cfIcon?.ShowValue == false
             ? ""
             : GetDisplayText(sheet, cell, style);

@@ -1282,7 +1282,17 @@ internal static class XlsxCorpusFixtureFactory
                 ShowOutline = true,
                 ShowLegendKeys = true
             },
-            SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196), Smooth: true)]
+            SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196), Smooth: true, InvertIfNegative: true)]
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.StackedColumn,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "Stacked With Series Lines",
+            ShowSeriesLines = true,
+            SeriesLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5),
+            SeriesLineThickness = 1.5,
+            SeriesLineDashStyle = ChartLineDashStyle.Dot
         });
         sheet.Charts.Add(new ChartModel
         {
