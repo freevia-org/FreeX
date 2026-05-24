@@ -32,6 +32,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SaveFileVersion(packageStream, workbook);
         }
 
+        if (workbook.FunctionGroups is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFunctionGroups(packageStream, workbook);
+        }
+
         if (workbook.FileSharing is not null)
         {
             packageStream.Position = 0;
@@ -229,6 +235,12 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorkbookMetadataWriter.SaveFileVersion(packageStream, workbook);
+        }
+
+        if (workbook.FunctionGroups is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFunctionGroups(packageStream, workbook);
         }
 
         if (workbook.FileSharing is not null)

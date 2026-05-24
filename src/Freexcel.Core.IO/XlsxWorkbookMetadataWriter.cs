@@ -224,6 +224,58 @@ internal static class XlsxWorkbookMetadataWriter
         static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    public static void SaveFunctionGroups(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        root.Element(workbookNs + "functionGroups")?.Remove();
+        if (workbook.FunctionGroups is null)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        var functionGroups = new XElement(workbookNs + "functionGroups");
+        foreach (var attribute in workbook.FunctionGroups.NativeAttributes)
+        {
+            if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "builtInGroupCount")
+                functionGroups.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+        }
+
+        functionGroups.SetAttributeValue("builtInGroupCount", NullIfWhiteSpace(workbook.FunctionGroups.BuiltInGroupCount));
+        foreach (var group in workbook.FunctionGroups.Groups)
+        {
+            var element = new XElement(workbookNs + "functionGroup");
+            foreach (var attribute in group.NativeAttributes)
+            {
+                if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "name")
+                    element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            element.SetAttributeValue("name", NullIfWhiteSpace(group.Name));
+            functionGroups.Add(element);
+        }
+
+        var oleSize = root.Element(workbookNs + "oleSize");
+        if (oleSize is not null)
+            oleSize.AddBeforeSelf(functionGroups);
+        else
+            root.Add(functionGroups);
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+
+        static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);

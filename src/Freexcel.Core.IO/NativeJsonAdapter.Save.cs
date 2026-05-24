@@ -25,6 +25,7 @@ public sealed partial class NativeJsonAdapter
                 .Select(FromWorkbookFileRecoveryProperties)
                 .OfType<WorkbookFileRecoveryPropertiesDto>()
                 .ToList(),
+            FunctionGroups = FromWorkbookFunctionGroups(workbook.FunctionGroups),
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
@@ -333,4 +334,48 @@ public sealed partial class NativeJsonAdapter
             NativeAttributes = nativeAttributes
         };
     }
+
+    private static WorkbookFunctionGroupsDto? FromWorkbookFunctionGroups(WorkbookFunctionGroupsModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var builtInGroupCount = string.IsNullOrWhiteSpace(model.BuiltInGroupCount) ? null : model.BuiltInGroupCount;
+        var groups = model.Groups
+            .Select(FromWorkbookFunctionGroup)
+            .OfType<WorkbookFunctionGroupDto>()
+            .ToList();
+        if (builtInGroupCount is null && nativeAttributes.Count == 0 && groups.Count == 0)
+            return null;
+
+        return new WorkbookFunctionGroupsDto
+        {
+            BuiltInGroupCount = builtInGroupCount,
+            NativeAttributes = nativeAttributes,
+            Groups = groups
+        };
+    }
+
+    private static WorkbookFunctionGroupDto? FromWorkbookFunctionGroup(WorkbookFunctionGroupModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var name = string.IsNullOrWhiteSpace(model.Name) ? null : model.Name;
+        if (name is null && nativeAttributes.Count == 0)
+            return null;
+
+        return new WorkbookFunctionGroupDto
+        {
+            Name = name,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static Dictionary<string, string> CleanNativeAttributesForSave(Dictionary<string, string>? attributes) =>
+        (attributes ?? new Dictionary<string, string>())
+        .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
+        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 }
