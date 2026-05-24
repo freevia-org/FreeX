@@ -18,6 +18,7 @@ public sealed class XlsxFileAdapterFormatTests
             .ReplaceLineEndings("\n");
         var worksheetCellMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
         var pivotReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
+        var tableReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxStructuredTableReferencePreserver.cs"));
         var styleOnlyStripperSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
         var sheetXmlLayoutSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
 
@@ -37,6 +38,7 @@ public sealed class XlsxFileAdapterFormatTests
         worksheetCellMetadataSource.Should().Contain("private static bool MergeWorksheetCellNativeMetadata");
         pivotReferencePreserverSource.Should().Contain("GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context)");
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
+        tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
         styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex.Value)");
         sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
