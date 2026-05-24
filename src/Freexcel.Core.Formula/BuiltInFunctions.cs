@@ -1253,7 +1253,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
 
-        var display = args.Count > 1 ? ToText(args[1]) : ToText(args[0]);
+        var display = args.Count > 1 && args[1] is not BlankValue ? ToText(args[1]) : ToText(args[0]);
         return TextResult(display);
     }
 

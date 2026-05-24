@@ -4413,6 +4413,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Hyperlink_OmittedFriendlyNameSlot_ReturnsLinkLocation()
+    {
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\",)", MakeSheet())
+            .Should().Be(new TextValue("https://example.com"));
+    }
+
+    [Fact]
     public void Hyperlink_PropagatesLinkAndFriendlyNameErrors()
     {
         _eval.Evaluate("=HYPERLINK(NA(),\"Example\")", MakeSheet()).Should().Be(ErrorValue.NA);
