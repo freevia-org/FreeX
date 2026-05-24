@@ -212,6 +212,13 @@ public sealed partial class NativeJsonAdapter
             .Where(HasSeriesFormatting)
             .OrderBy(format => format.SeriesIndex)
             .ToList();
+        chart.SeriesDataLabelFormats = chart.SeriesDataLabelFormats
+            .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
+            .GroupBy(format => format.SeriesIndex)
+            .Select(group => ClampSeriesDataLabelFormat(group.Last()))
+            .Where(HasSeriesDataLabelFormatting)
+            .OrderBy(format => format.SeriesIndex)
+            .ToList();
         chart.PointDataLabelFormats = chart.PointDataLabelFormats
             .Where(format => format.SeriesIndex >= 0
                 && format.SeriesIndex < seriesCount
@@ -354,6 +361,18 @@ public sealed partial class NativeJsonAdapter
             Position = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.Position)
         };
 
+    private static ChartSeriesDataLabelFormat ClampSeriesDataLabelFormat(ChartSeriesDataLabelFormat format) =>
+        format with
+        {
+            BorderThickness = format.BorderThickness is { } borderThickness
+                ? Math.Clamp(borderThickness, 0, 10)
+                : null,
+            FontSize = format.FontSize is { } fontSize
+                ? Math.Clamp(fontSize, 6, 72)
+                : null,
+            Position = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.Position)
+        };
+
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
         format.FillColor is not null
         || format.BorderColor is not null
@@ -364,6 +383,26 @@ public sealed partial class NativeJsonAdapter
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
         || format.IsDeleted is not null
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
+
+    private static bool HasSeriesDataLabelFormatting(ChartSeriesDataLabelFormat format) =>
+        format.FillColor is not null
+        || format.BorderColor is not null
+        || format.BorderThickness is not null
+        || format.TextColor is not null
+        || format.FontSize is not null
+        || format.FillThemeColor is not null
+        || format.BorderThemeColor is not null
+        || format.TextThemeColor is not null
         || format.Position is not null
         || format.ShowValue is not null
         || format.ShowCategoryName is not null
