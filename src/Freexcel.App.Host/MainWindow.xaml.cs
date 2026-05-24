@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        RibbonMenuIconSeeder.Register();
         RegisterKeyboardCommandShortcuts();
 
         _currentSheetId = _workbook.Sheets[0].Id;
