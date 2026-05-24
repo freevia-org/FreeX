@@ -341,10 +341,34 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialogOpenedFromKeyboard_FocusesAddressBox()
+    {
+        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_targetBox.Focus();");
+        source.Should().Contain("_targetBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_targetBox);");
+    }
+
+    [Fact]
     public void TextEntryDialog_CreateResult_TrimsNullToEmptyText()
     {
         TextEntryDialog.CreateResult(null).Text.Should().Be("");
         TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
+    }
+
+    [Fact]
+    public void TextEntryDialogOpenedFromKeyboard_FocusesTextBox()
+    {
+        var source = ReadClassSource("ObjectDialogs.cs", "public class TextEntryDialog", "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_textBox.Focus();");
+        source.Should().Contain("_textBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_textBox);");
     }
 
     private static string ReadObjectDialogSources() =>
