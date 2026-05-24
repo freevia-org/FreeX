@@ -14,26 +14,26 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
     public static void Save(Stream packageStream, Workbook workbook)
     {
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        Save(archive, workbook, XlsxWorkbookWorksheetPathMap.TryCreate(archive));
+    }
+
+    public static void Save(Stream packageStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        Save(archive, workbook, worksheetPathMap);
+    }
+
+    private static void Save(ZipArchive archive, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
+        if (workbookEntry is null || worksheetPathMap is null)
             return;
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var workbookRels = XlsxRelationshipReader.LoadTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheet in workbook.Sheets.Where(HasNonDefaultDimensions))
         {
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
             var worksheetEntry = archive.GetEntry(worksheetPath);
