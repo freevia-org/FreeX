@@ -333,17 +333,38 @@ public sealed class PivotFieldGroupingDialog : Window
 
     private void Accept()
     {
+        var grouping = _groupingBox.SelectedItem is PivotFieldGrouping selectedGrouping
+            ? selectedGrouping
+            : PivotFieldGrouping.None;
+        var groupInterval = 0d;
+        if (_ungroupBox.IsChecked != true
+            && grouping == PivotFieldGrouping.NumberRange
+            && !TryParsePositiveInterval(_intervalBox.Text, out groupInterval))
+        {
+            ShowInvalidInputWarning("Enter a positive grouping interval.", _intervalBox);
+            return;
+        }
+
         var selectedField = _fieldBox.SelectedItem as PivotSourceFieldOption
             ?? _fields.FirstOrDefault(field => string.Equals(field.Name, _fieldBox.Text, StringComparison.OrdinalIgnoreCase));
         Result = CreateResult(
             selectedField?.Name ?? _fieldBox.Text,
             selectedField?.Index ?? 0,
-            _groupingBox.SelectedItem is PivotFieldGrouping grouping ? grouping : PivotFieldGrouping.None,
+            grouping,
             _startBox.Text,
             _endBox.Text,
-            _intervalBox.Text,
+            grouping == PivotFieldGrouping.NumberRange ? FormatDouble(groupInterval) : _intervalBox.Text,
             _ungroupBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -362,6 +383,20 @@ public sealed class PivotFieldGroupingDialog : Window
         double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+
+    private static bool TryParsePositiveInterval(string? value, out double interval)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out interval)
+            || !double.IsFinite(interval)
+            || interval <= 0)
+        {
+            interval = 0;
+            return false;
+        }
+
+        return true;
+    }
 
     private static string FormatDouble(double? value) =>
         value?.ToString("G", CultureInfo.InvariantCulture) ?? "";
