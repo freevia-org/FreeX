@@ -396,6 +396,9 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("sync scrolling") ||
         name.Contains("reset position") ||
         name.Contains("help online") ||
+        name.Contains("contact support") ||
+        name.Contains("training") ||
+        name.Contains("what's new") ||
         name.Contains("about") ||
         name.Contains("feedback");
 
