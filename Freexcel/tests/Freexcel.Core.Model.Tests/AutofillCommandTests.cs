@@ -167,6 +167,48 @@ public class AutofillCommandTests
         sheet.GetValue(2, 1).Should().Be(new NumberValue(99));
     }
 
+    [Fact]
+    public void Autofill_RejectsLockedTargetsOnProtectedSheet()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(source, new TextValue("source"));
+        sheet.SetCell(target, new TextValue("target"));
+        sheet.IsProtected = true;
+
+        var outcome = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target)).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetValue(target).Should().Be(new TextValue("target"));
+    }
+
+    [Fact]
+    public void Autofill_AllowsUnlockedTargetsOnProtectedSheet()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var unlockedStyle = workbook.RegisterStyle(new CellStyle { Locked = false });
+        sheet.SetCell(source, new TextValue("source"));
+        var targetCell = Cell.FromValue(new TextValue("target"));
+        targetCell.StyleId = unlockedStyle;
+        sheet.SetCell(target, targetCell);
+        sheet.IsProtected = true;
+
+        var outcome = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target)).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(target).Should().Be(new TextValue("source"));
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
