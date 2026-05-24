@@ -79,6 +79,20 @@ public sealed class WorkbookThemeDialogXamlTests
     }
 
     [Fact]
+    public void DialogInvalidThemeColor_FocusesInvalidColorBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
+
+        source.Should().Contain("TryReadThemeColor(Dark1ColorBox, out var dark1)");
+        source.Should().Contain("private bool TryReadThemeColor(TextBox colorBox, out CellColor color)");
+        source.Should().Contain("FocusInvalidColorInput(colorBox);");
+        source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
+        source.Should().Contain("colorBox.Focus();");
+        source.Should().Contain("colorBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(colorBox);");
+    }
+
+    [Fact]
     public void Dialog_ExposesKeyboardAccessKeysForThemeFieldsColorsAndButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
