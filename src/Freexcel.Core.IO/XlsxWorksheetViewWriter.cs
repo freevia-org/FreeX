@@ -24,40 +24,29 @@ internal static class XlsxWorksheetViewWriter
     public static void Save(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        Save(archive, workbook, XlsxWorkbookWorksheetPathMap.TryCreate(archive));
+    }
+
+    public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        Save(archive, workbook, worksheetPathMap);
+    }
+
+    private static void Save(ZipArchive archive, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
+    {
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
         var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
+        if (workbookEntry is null || relsEntry is null || worksheetPathMap is null)
             return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var viewSheets = workbook.Sheets
             .Where(HasPersistableViewState)
             .ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        foreach (var (name, worksheetPath) in worksheetPathMap.SheetPathsByName)
         {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
-                continue;
             if (!viewSheets.TryGetValue(name, out var sheet))
-                continue;
-            if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
 
             UpdateSheetView(archive, worksheetPath, sheet);
