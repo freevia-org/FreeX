@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -27,6 +28,14 @@ public sealed class ZoomDialog : Window
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
         Content = CreateZoomContent(currentZoomPercent);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _customZoomButton.Focus();
+        _zoomBox.SelectAll();
+        Keyboard.Focus(_zoomBox);
     }
 
     public static bool TryCreateResult(string? input, out ZoomDialogResult result, out string? error)
