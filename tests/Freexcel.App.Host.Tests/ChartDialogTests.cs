@@ -206,6 +206,21 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTitlesDialogOpenedFromKeyboard_FocusesChartTitleBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_chartTitleBox.Focus();");
+        dialogSource.Should().Contain("_chartTitleBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_chartTitleBox);");
+    }
+
+    [Fact]
     public void ChartStyleDialog_ExposesAutomaticAndCommonStyleOptions()
     {
         var options = ChartStyleDialog.GetStyleOptions();

@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -50,6 +51,7 @@ public sealed class ChartTitlesDialog : Window
             DialogResult = true;
         }));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartTitlesDialogResult CreateResult(string? chartTitle, string? xAxisTitle, string? yAxisTitle) =>
@@ -63,6 +65,13 @@ public sealed class ChartTitlesDialog : Window
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _chartTitleBox.Focus();
+        _chartTitleBox.SelectAll();
+        Keyboard.Focus(_chartTitleBox);
     }
 }
 
