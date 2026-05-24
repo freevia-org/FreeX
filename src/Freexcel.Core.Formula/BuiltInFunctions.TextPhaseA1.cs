@@ -40,8 +40,8 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
         var text = ToText(args[0]).Trim();
-        var decSep = args.Count > 1 && args[1] is not BlankValue ? ToText(args[1]) : ".";
-        var grpSep = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]) : ",";
+        var decSep = args.Count > 1 ? ToText(args[1]) : ".";
+        var grpSep = args.Count > 2 ? ToText(args[2]) : ",";
 
         // Validate separators per Excel spec
         if (decSep.Length != 1) return ErrorValue.Value;
