@@ -909,6 +909,33 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_ReadsLineSeriesSmoothFormatting()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:lineChart>
+                    <c:ser>
+                      <c:smooth val="1"/>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:lineChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, Smooth: true));
+    }
+
+    [Fact]
     public void TryReadSupportedChart_ClearsUnsupportedPercentageDataLabels()
     {
         var sheetId = new SheetId(Guid.NewGuid());
