@@ -970,6 +970,20 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialogInvalidAddReference_RefocusesReferenceWithKeyboardFocus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var addHandlerSource = source[
+            source.IndexOf("private void AddReferenceButton_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void DeleteReferenceButton_Click", StringComparison.Ordinal)];
+
+        addHandlerSource.Should().Contain("FocusReferenceInput();");
+        source.Should().Contain("_referenceBox.Focus();");
+        source.Should().Contain("_referenceBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_referenceBox);");
+    }
+
+    [Fact]
     public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
