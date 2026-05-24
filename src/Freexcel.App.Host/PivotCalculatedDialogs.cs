@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 using Freexcel.Core.Model;
 
@@ -35,6 +36,7 @@ public sealed class PivotCalculatedFieldDialog : Window
         _fieldList.ItemsSource = _fields;
         if (_fields.Count > 0)
             _fieldList.SelectedIndex = 0;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotCalculatedFieldDialogResult CreateResult(string name, string formula) =>
@@ -72,6 +74,13 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         Result = CreateResult(_nameBox.Text, _formulaBox.Text);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 
     private void InsertSelectedField()
@@ -151,6 +160,7 @@ public sealed class PivotCalculatedItemDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotCalculatedItemDialogResult CreateResult(
@@ -211,6 +221,13 @@ public sealed class PivotCalculatedItemDialog : Window
             _nameBox.Text,
             _formulaBox.Text);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 
     private void RefreshItemList()
