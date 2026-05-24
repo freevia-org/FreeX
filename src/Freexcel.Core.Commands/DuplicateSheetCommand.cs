@@ -178,6 +178,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             LegendBorderThemeColor = chart.LegendBorderThemeColor,
             LegendBorderThickness = chart.LegendBorderThickness,
             LegendFontSize = chart.LegendFontSize,
+            LegendEntries = chart.LegendEntries.ToList(),
             DoughnutHoleSize = chart.DoughnutHoleSize,
             FirstSliceAngle = chart.FirstSliceAngle,
             ExplodedSliceIndex = chart.ExplodedSliceIndex,

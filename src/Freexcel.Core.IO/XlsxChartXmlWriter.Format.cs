@@ -162,6 +162,11 @@ internal static partial class XlsxChartXmlWriter
         return new XElement(chartNs + "legend",
             new XElement(chartNs + "legendPos",
                 new XAttribute("val", ToXlsxLegendPosition(chart.LegendPosition))),
+            chart.LegendEntries
+                .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
+                .Select(entry => new XElement(chartNs + "legendEntry",
+                    new XElement(chartNs + "idx", new XAttribute("val", entry.Index)),
+                    new XElement(chartNs + "delete", new XAttribute("val", entry.IsDeleted == true ? "1" : "0")))),
             ToManualLayoutXml(chart.LegendLayout, chartNs),
             new XElement(chartNs + "overlay",
                 new XAttribute("val", chart.LegendOverlay ? "1" : "0")),
