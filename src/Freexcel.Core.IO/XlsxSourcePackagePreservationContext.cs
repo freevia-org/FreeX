@@ -5,6 +5,8 @@ namespace Freexcel.Core.IO;
 
 internal sealed class XlsxSourcePackagePreservationContext
 {
+    private readonly Dictionary<string, XDocument> _sourceWorksheetXmlByPath = new(StringComparer.OrdinalIgnoreCase);
+
     private XlsxSourcePackagePreservationContext(
         XDocument sourceWorkbookXml,
         XDocument targetWorkbookXml,
@@ -31,6 +33,20 @@ internal sealed class XlsxSourcePackagePreservationContext
     public IReadOnlyDictionary<string, string> TargetWorkbookRels { get; }
     public IReadOnlyDictionary<string, string> SourceSheets { get; }
     public IReadOnlyDictionary<string, string> TargetSheets { get; }
+
+    public XDocument? GetSourceWorksheetXml(ZipArchive sourceArchive, string worksheetPath)
+    {
+        if (_sourceWorksheetXmlByPath.TryGetValue(worksheetPath, out var worksheetXml))
+            return worksheetXml;
+
+        var worksheetEntry = sourceArchive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return null;
+
+        worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+        _sourceWorksheetXmlByPath[worksheetPath] = worksheetXml;
+        return worksheetXml;
+    }
 
     public static XlsxSourcePackagePreservationContext? TryCreate(ZipArchive sourceArchive, ZipArchive targetArchive)
     {

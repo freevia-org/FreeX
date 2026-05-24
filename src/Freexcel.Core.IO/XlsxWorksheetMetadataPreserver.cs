@@ -357,7 +357,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
             context.WorkbookNs,
             context.RelNs,
             context.SourceSheets,
-            context.TargetSheets);
+            context.TargetSheets,
+            context);
     }
 
     private static void PreserveWorksheetMetadata(
@@ -368,19 +369,28 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace workbookNs,
         XNamespace relNs,
         IReadOnlyDictionary<string, string> sourceSheets,
-        IReadOnlyDictionary<string, string> targetSheets)
+        IReadOnlyDictionary<string, string> targetSheets,
+        XlsxSourcePackagePreservationContext? context = null)
     {
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
             if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+            var sourceWorksheetXml = context?.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            if (sourceWorksheetXml is null)
+            {
+                var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+                if (sourceWorksheetEntry is null)
+                    continue;
+
+                sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
+            }
+
+            if (targetWorksheetEntry is null)
                 continue;
 
-            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             var sourceBlocks = retainedChildNames
                 .Select(name => sourceWorksheetXml.Root?.Element(name))
                 .Where(element => element is not null)

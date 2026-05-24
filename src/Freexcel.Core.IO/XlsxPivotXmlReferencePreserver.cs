@@ -154,12 +154,11 @@ internal static class XlsxPivotXmlReferencePreserver
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            if (sourceWorksheetXml is null || targetWorksheetEntry is null)
                 continue;
 
-            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             var sourcePivotDefinitions = sourceWorksheetXml.Root?
                 .Elements(context.WorkbookNs + "pivotTableDefinition")
                 .ToList() ?? [];

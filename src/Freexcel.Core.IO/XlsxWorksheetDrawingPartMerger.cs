@@ -80,7 +80,7 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
-            var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);
+            var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs, context);
             var targetDrawingPath = GetWorksheetDrawingPath(targetArchive, targetWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);
             if (!string.IsNullOrWhiteSpace(sourceDrawingPath))
                 sourceDrawingPaths[sheetName] = sourceDrawingPath;
@@ -100,13 +100,18 @@ internal static class XlsxWorksheetDrawingPartMerger
         string worksheetPath,
         XNamespace worksheetNs,
         XNamespace relNs,
-        XNamespace packageRelNs)
+        XNamespace packageRelNs,
+        XlsxSourcePackagePreservationContext? sourceContext = null)
     {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return null;
+        var worksheetXml = sourceContext?.GetSourceWorksheetXml(archive, worksheetPath);
+        if (worksheetXml is null)
+        {
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                return null;
 
-        var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+        }
         var drawingRelId = worksheetXml.Root?
             .Element(worksheetNs + "drawing")?
             .Attribute(relNs + "id")?
