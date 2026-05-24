@@ -152,6 +152,8 @@ public sealed class WatchWindowDialog : Window
 
 public sealed class AddWatchDialog : Window
 {
+    private readonly TextBox _rangeBox = new();
+
     public AddWatchDialog(string selectedRangeText)
     {
         Title = "Add Watch";
@@ -178,18 +180,18 @@ public sealed class AddWatchDialog : Window
 
         var body = new StackPanel();
         root.Children.Add(body);
-        body.Children.Add(new TextBlock
+        _rangeBox.Text = selectedRangeText;
+        _rangeBox.IsReadOnly = true;
+        _rangeBox.Margin = new Thickness(0, 0, 0, 8);
+        body.Children.Add(new Label
         {
-            Text = "Selected range:",
+            Content = "Selected _range:",
+            Target = _rangeBox,
+            Padding = new Thickness(0),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4)
         });
-        body.Children.Add(new TextBox
-        {
-            Text = selectedRangeText,
-            IsReadOnly = true,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
+        body.Children.Add(_rangeBox);
         body.Children.Add(new TextBlock
         {
             Text = "The selected cells will be added to the Watch Window.",
@@ -198,5 +200,13 @@ public sealed class AddWatchDialog : Window
         });
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rangeBox.Focus();
+        _rangeBox.SelectAll();
+        Keyboard.Focus(_rangeBox);
     }
 }
