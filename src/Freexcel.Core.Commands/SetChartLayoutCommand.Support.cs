@@ -165,7 +165,12 @@ public sealed partial class SetChartLayoutCommand
                 : null,
             DashStyle = ValidNullableEnumOrNull(format.DashStyle),
             MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null,
-            Smooth = supportsSmooth ? format.Smooth : null
+            Smooth = supportsSmooth ? format.Smooth : null,
+            MarkerBorderColor = supportsMarkers ? format.MarkerBorderColor : null,
+            MarkerBorderThemeColor = supportsMarkers ? format.MarkerBorderThemeColor : null,
+            MarkerBorderThickness = supportsMarkers && format.MarkerBorderThickness is { } markerBorderThickness
+                ? ClampFinite(markerBorderThickness, 0, 10)
+                : null
         };
     }
 
@@ -178,7 +183,10 @@ public sealed partial class SetChartLayoutCommand
         || format.MarkerSize is not null
         || format.FillThemeColor is not null
         || format.StrokeThemeColor is not null
-        || format.Smooth is not null;
+        || format.Smooth is not null
+        || format.MarkerBorderColor is not null
+        || format.MarkerBorderThemeColor is not null
+        || format.MarkerBorderThickness is not null;
 
     private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
         where TEnum : struct, Enum =>

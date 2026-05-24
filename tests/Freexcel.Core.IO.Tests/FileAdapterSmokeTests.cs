@@ -6247,7 +6247,9 @@ public partial class FileAdapterSmokeTests
                     FillColor: new CellColor(255, 192, 0),
                     StrokeColor: new CellColor(68, 114, 196),
                     MarkerStyle: ChartMarkerStyle.Circle,
-                    MarkerSize: 8)
+                    MarkerSize: 8,
+                    MarkerBorderColor: new CellColor(84, 130, 53),
+                    MarkerBorderThickness: 1.5)
             ],
             DataRange = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
@@ -6267,7 +6269,9 @@ public partial class FileAdapterSmokeTests
                 FillColor: new CellColor(255, 192, 0),
                 StrokeColor: new CellColor(68, 114, 196),
                 MarkerStyle: ChartMarkerStyle.Circle,
-                MarkerSize: 8));
+                MarkerSize: 8,
+                MarkerBorderColor: new CellColor(84, 130, 53),
+                MarkerBorderThickness: 1.5));
     }
 
     [Fact]
