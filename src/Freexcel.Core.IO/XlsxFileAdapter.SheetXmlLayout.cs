@@ -34,6 +34,8 @@ public sealed partial class XlsxFileAdapter
         uint? ActiveCol,
         bool? UsePrinterDefaults,
         int? PrintCopies,
+        bool? FitToPage,
+        bool? AutoPageBreaks,
         WorksheetBackgroundImage? BackgroundImage,
         XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
@@ -241,6 +243,9 @@ public sealed partial class XlsxFileAdapter
             .FirstOrDefault();
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
+        var pageSetUpPr = worksheetXml.Root?
+            .Element(worksheetNs + "sheetPr")?
+            .Element(worksheetNs + "pageSetUpPr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
@@ -296,6 +301,8 @@ public sealed partial class XlsxFileAdapter
             activeCell?.Col,
             ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
+            ParseOptionalBool(pageSetUpPr?.Attribute("fitToPage")?.Value),
+            ParseOptionalBool(pageSetUpPr?.Attribute("autoPageBreaks")?.Value),
             background,
             headerFooterPictures,
             rowOutlineLevels,
