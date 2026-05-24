@@ -1009,6 +1009,21 @@ public sealed class DataToolDialogTests
                 CollapseDialog: true));
     }
 
+    [Fact]
+    public void ConsolidateRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
     [Theory]
     [InlineData("Select reference range", ConsolidateRangeSelectionTarget.Reference, "A1:B3")]
     [InlineData("Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell, "G10")]
