@@ -3031,7 +3031,7 @@
                                                 local:RibbonTooltip.Title="Banded Rows"
                                                 local:RibbonTooltip.KeyTip="R"
                                                 local:RibbonTooltip.Description="Toggle banded row formatting for the selected PivotTable."/>
-                                        <Button Content="Banded Cols" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBandedColumnsBtn_Click"
+                                        <Button Content="Banded Columns" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBandedColumnsBtn_Click"
                                                 local:RibbonTooltip.Title="Banded Columns"
                                                 local:RibbonTooltip.KeyTip="C"
                                                 local:RibbonTooltip.Description="Toggle banded column formatting for the selected PivotTable."/>
