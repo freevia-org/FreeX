@@ -1225,6 +1225,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialogInvalidRange_RefocusesAndSelectsRangeBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("FocusRangeBox();");
+        source.Should().Contain("private void FocusRangeBox()");
+        source.Should().Contain("_rangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
     public void CreateTableDialog_ParsesRangeHeadersAndStyle()
     {
         var sheetId = SheetId.New();
