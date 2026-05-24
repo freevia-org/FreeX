@@ -291,9 +291,21 @@ public sealed class FormatCellsDialogXamlTests
                 });
 
                 categories.SelectedItem = "Special";
-                types.Items.Cast<string>().Should().Contain("000-00-0000");
-                FormatCellsDialog.ResolveNumberFormat("000-00-0000", 0)
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "Zip Code",
+                    "Zip Code + 4",
+                    "Social Security Number",
+                    "Phone Number"
+                });
+                FormatCellsDialog.ResolveNumberFormat("Zip Code", 0)
+                    .Should().Be("00000");
+                FormatCellsDialog.ResolveNumberFormat("Zip Code + 4", 0)
+                    .Should().Be("00000-0000");
+                FormatCellsDialog.ResolveNumberFormat("Social Security Number", 0)
                     .Should().Be("000-00-0000");
+                FormatCellsDialog.ResolveNumberFormat("Phone Number", 0)
+                    .Should().Be("[<=9999999]###-####;(###) ###-####");
             }
             finally
             {

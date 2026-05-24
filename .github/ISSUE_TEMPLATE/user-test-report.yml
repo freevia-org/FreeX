@@ -1,0 +1,65 @@
+name: Freexcel user test report
+description: Report a problem found while testing a Freexcel release build.
+title: "[User test]: "
+labels:
+  - user-testing
+  - needs-triage
+body:
+  - type: input
+    id: build
+    attributes:
+      label: App version/build
+      description: Paste the full file name or build label, for example freexcel-0-5-phase-5-20260524-123456-abcdef12-win-x64-singlefile.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical - crash, data loss, or cannot open/save
+        - High - major workflow blocked
+        - Medium - feature broken or confusing
+        - Low - polish or minor issue
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Tell us exactly what you did before the problem appeared.
+      placeholder: |
+        1. Opened...
+        2. Clicked...
+        3. Saw...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What did you expect Freexcel to do?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional diagnostics and crash reports
+      description: Freexcel writes local tester diagnostics to %LOCALAPPDATA%\Freexcel\Diagnostics. If there was a crash, attach the relevant file from CrashReports. Please remove any private information before uploading.
+      placeholder: Attach events.jsonl, logs, screenshots, or CrashReports/*.json when useful.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, .NET Desktop Runtime version if known, display scaling, and anything unusual about the test machine.
+    validations:
+      required: false

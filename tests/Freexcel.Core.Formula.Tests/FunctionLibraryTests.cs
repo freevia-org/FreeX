@@ -4676,6 +4676,26 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sequence_BlankLeadingArguments_UseExcelDefaults()
+    {
+        var cols = _eval.Evaluate("=SEQUENCE(,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        cols.RowCount.Should().Be(1);
+        cols.ColCount.Should().Be(2);
+        cols.Cells[0, 0].Should().Be(new NumberValue(1));
+        cols.Cells[0, 1].Should().Be(new NumberValue(2));
+
+        var start = _eval.Evaluate("=SEQUENCE(,,5)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        start.RowCount.Should().Be(1);
+        start.ColCount.Should().Be(1);
+        start.Cells[0, 0].Should().Be(new NumberValue(5));
+
+        var step = _eval.Evaluate("=SEQUENCE(,,,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        step.RowCount.Should().Be(1);
+        step.ColCount.Should().Be(1);
+        step.Cells[0, 0].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Sequence_WithStartAndStep_CountsByTwos()
     {
         var result = _eval.Evaluate("=SEQUENCE(4,1,0,2)", MakeSheet());
@@ -4800,6 +4820,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_BlankIfEmptyArgument_ReturnsCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=FILTER(A1:A1,B1:B1,)", sheet).Should().Be(new ErrorValue("#CALC!"));
+    }
+
+    [Fact]
     public void Iferror_CatchesFilterNoMatchesCalcError()
     {
         var sheet = MakeSheet(
@@ -4859,6 +4889,22 @@ public class FunctionLibraryTests
         var rv = (RangeValue)result;
         rv.RowCount.Should().Be(1);
         rv.Cells[0, 0].Should().Be(new TextValue("keep"));
+    }
+
+    [Fact]
+    public void Filter_BlankIncludeCell_IsFalse()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("included")),
+            (2, 1, new TextValue("blank")),
+            (3, 1, new TextValue("excluded")),
+            (1, 2, new BoolValue(true)),
+            (3, 2, new BoolValue(false)));
+
+        var result = _eval.Evaluate("=FILTER(A1:A3,B1:B3,\"empty\")", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new TextValue("included"));
     }
 
     [Fact]
@@ -6275,6 +6321,20 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบหกสตางค์"));
         _eval.Evaluate("=BAHTTEXT(-21.5)", MakeSheet())
             .Should().Be(new TextValue("ลบยี่สิบเอ็ดบาทห้าสิบสตางค์"));
+    }
+
+    [Fact]
+    public void Bahttext_RoundsHalfAwayFromZeroAtSatangBoundary()
+    {
+        _eval.Evaluate("=BAHTTEXT(1.005)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งบาทหนึ่งสตางค์"));
+    }
+
+    [Fact]
+    public void Bahttext_OmitsZeroBahtForSatangOnlyAmounts()
+    {
+        _eval.Evaluate("=BAHTTEXT(0.005)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งสตางค์"));
     }
 
     [Fact]

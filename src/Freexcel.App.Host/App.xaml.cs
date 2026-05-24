@@ -35,11 +35,15 @@ public partial class App : Application
         var serviceCollection = new ServiceCollection();
         ConfigureServices(serviceCollection);
         Services = serviceCollection.BuildServiceProvider();
+        var diagnostics = Services.GetRequiredService<IAppDiagnostics>();
+        RegisterCrashHandlers(diagnostics);
+        diagnostics.RecordEvent("app_start");
 
         // Show main window
         var mainWindow = Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
 
+        diagnostics.RecordEvent("app_ready");
         Log.Information("Freexcel ready");
     }
 
@@ -51,6 +55,12 @@ public partial class App : Application
             builder.ClearProviders();
             builder.AddSerilog();
         });
+
+        // Local tester diagnostics. No network upload; files stay under LocalAppData.
+        services.AddSingleton(AppDiagnosticsOptions.CreateDefault());
+        services.AddSingleton(AppDiagnosticsMetadata.Create(AppInfo.VersionText));
+        services.AddSingleton<AppDiagnosticsFileStore>();
+        services.AddSingleton<IAppDiagnostics, AppDiagnostics>();
 
         // Core services
         services.AddSingleton<DependencyGraph>();
@@ -88,8 +98,31 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
     }
 
+    private static void RegisterCrashHandlers(IAppDiagnostics diagnostics)
+    {
+        Current.DispatcherUnhandledException += (_, args) =>
+        {
+            diagnostics.RecordCrash(args.Exception, "dispatcher");
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception exception)
+                diagnostics.RecordCrash(exception, "appdomain");
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            diagnostics.RecordCrash(args.Exception, "task");
+        };
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        Services.GetService<IAppDiagnostics>()?.RecordEvent("app_exit", new Dictionary<string, string?>
+        {
+            ["status"] = e.ApplicationExitCode.ToString()
+        });
         Log.Information("Freexcel shutting down");
         Log.CloseAndFlush();
         Services.Dispose();

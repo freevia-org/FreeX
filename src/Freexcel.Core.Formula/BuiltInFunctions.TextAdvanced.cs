@@ -82,7 +82,7 @@ public static partial class BuiltInFunctions
         var value = ToNumber(args[0]);
         if (!double.IsFinite(value)) return ErrorValue.Value;
 
-        var rounded = Math.Round(Math.Abs(value), 2, MidpointRounding.AwayFromZero);
+        var rounded = Math.Round(Math.Abs(value) + 1e-12, 2, MidpointRounding.AwayFromZero);
         if (rounded > long.MaxValue) return ErrorValue.Num;
 
         long baht = (long)Math.Floor(rounded);
@@ -95,8 +95,11 @@ public static partial class BuiltInFunctions
 
         var result = new StringBuilder();
         if (value < 0) result.Append("ลบ");
-        result.Append(ThaiNumberToText(baht));
-        result.Append("บาท");
+        if (baht > 0 || satang == 0)
+        {
+            result.Append(ThaiNumberToText(baht));
+            result.Append("บาท");
+        }
         result.Append(satang == 0 ? "ถ้วน" : ThaiNumberToText(satang) + "สตางค์");
         return TextResult(result.ToString());
     }

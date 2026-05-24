@@ -28,6 +28,10 @@ internal static class XlsxChartAxisReader
             var yAxis = FindAxisById(valueAxes, axisIds.Skip(1).FirstOrDefault()) ?? valueAxes.Skip(1).FirstOrDefault();
             chart.XAxisTitle = ReadAxisTitle(xAxis);
             chart.YAxisTitle = ReadAxisTitle(yAxis);
+            chart.HideXAxis = ReadBool(xAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+            chart.HideYAxis = ReadBool(yAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+            chart.XAxisPosition = FromXlsxAxisPosition(xAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
+            chart.YAxisPosition = FromXlsxAxisPosition(yAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
             ApplyAxisTitleFormatting(xAxis, chart);
             ApplyAxisTitleFormatting(yAxis, chart);
             ApplyValueAxisProperties(xAxis, chart, useXAxis: true);
@@ -40,11 +44,15 @@ internal static class XlsxChartAxisReader
         var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
+        chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+        chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
         ApplyAxisTitleFormatting(categoryAxis, chart);
         ApplyCategoryAxisProperties(categoryAxis, chart);
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
+        chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+        chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
         ApplyAxisTitleFormatting(valueAxis, chart);
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: false);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
@@ -183,6 +191,7 @@ internal static class XlsxChartAxisReader
         var majorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
         var minorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
         var logScale = scaling?.Element(ChartNs + "logBase") is not null;
+        var logBase = ReadDouble(scaling?.Element(ChartNs + "logBase")?.Attribute("val")?.Value);
         var reverseOrder = IsReverseOrientation(scaling);
         var numberFormat = FromXlsxNumberFormatCode(axisElement.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
         var majorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines"));
@@ -199,6 +208,11 @@ internal static class XlsxChartAxisReader
                 .Element(ChartNs + "builtInUnit")?
                 .Attribute("val")?
                 .Value);
+        var customDisplayUnit = ReadDouble(
+            axisElement.Element(ChartNs + "dispUnits")?
+                .Element(ChartNs + "custUnit")?
+                .Attribute("val")?
+                .Value);
 
         if (useXAxis)
         {
@@ -207,6 +221,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisMajorUnit = majorUnit;
             chart.XAxisMinorUnit = minorUnit;
             chart.XAxisLogScale = logScale;
+            chart.XAxisLogBase = logBase;
             chart.XAxisReverseOrder = reverseOrder;
             chart.XAxisNumberFormat = numberFormat;
             ApplyXAxisGridlineProperties(chart, majorGridline, minorGridline);
@@ -219,6 +234,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisCrossesAt = crossing.CrossesAt;
             chart.XAxisCrossBetween = crossing.CrossBetween;
             chart.XAxisDisplayUnit = displayUnit;
+            chart.XAxisCustomDisplayUnit = customDisplayUnit;
             return;
         }
 
@@ -227,6 +243,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisMajorUnit = majorUnit;
         chart.YAxisMinorUnit = minorUnit;
         chart.YAxisLogScale = logScale;
+        chart.YAxisLogBase = logBase;
         chart.YAxisReverseOrder = reverseOrder;
         chart.YAxisNumberFormat = numberFormat;
         ApplyYAxisGridlineProperties(chart, majorGridline, minorGridline);
@@ -239,6 +256,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisCrossesAt = crossing.CrossesAt;
         chart.YAxisCrossBetween = crossing.CrossBetween;
         chart.YAxisDisplayUnit = displayUnit;
+        chart.YAxisCustomDisplayUnit = customDisplayUnit;
     }
 
     private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart)
@@ -389,6 +407,16 @@ internal static class XlsxChartAxisReader
             "low" => ChartAxisTickLabelPosition.Low,
             "high" => ChartAxisTickLabelPosition.High,
             _ => ChartAxisTickLabelPosition.NextTo
+        };
+
+    private static ChartAxisPosition FromXlsxAxisPosition(string? value, ChartAxisPosition fallback) =>
+        value switch
+        {
+            "b" => ChartAxisPosition.Bottom,
+            "t" => ChartAxisPosition.Top,
+            "l" => ChartAxisPosition.Left,
+            "r" => ChartAxisPosition.Right,
+            _ => fallback
         };
 
     private static ChartAxisCrosses FromXlsxAxisCrosses(string? value) =>

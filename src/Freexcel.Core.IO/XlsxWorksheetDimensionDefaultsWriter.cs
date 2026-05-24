@@ -45,23 +45,26 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
             if (root is null)
                 continue;
 
+            var changed = false;
             var sheetFormat = root.Element(workbookNs + "sheetFormatPr");
             if (sheetFormat is null)
             {
                 sheetFormat = new XElement(workbookNs + "sheetFormatPr");
                 root.AddFirst(sheetFormat);
+                changed = true;
             }
 
             if (IsNonDefaultColumnWidth(sheet.DefaultColumnWidth))
-                sheetFormat.SetAttributeValue("defaultColWidth", FormatDouble(sheet.DefaultColumnWidth));
+                changed |= SetAttributeIfDifferent(sheetFormat, "defaultColWidth", FormatDouble(sheet.DefaultColumnWidth));
 
             if (IsNonDefaultRowHeight(sheet.DefaultRowHeight))
             {
-                sheetFormat.SetAttributeValue("defaultRowHeight", FormatDouble(sheet.DefaultRowHeight * (72.0 / 96.0)));
-                sheetFormat.SetAttributeValue("customHeight", "1");
+                changed |= SetAttributeIfDifferent(sheetFormat, "defaultRowHeight", FormatDouble(sheet.DefaultRowHeight * (72.0 / 96.0)));
+                changed |= SetAttributeIfDifferent(sheetFormat, "customHeight", "1");
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
     }
 
@@ -73,4 +76,13 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
 
     private static string FormatDouble(double value) =>
         value.ToString("0.########", CultureInfo.InvariantCulture);
+
+    private static bool SetAttributeIfDifferent(XElement element, XName name, string value)
+    {
+        if (string.Equals(element.Attribute(name)?.Value, value, StringComparison.Ordinal))
+            return false;
+
+        element.SetAttributeValue(name, value);
+        return true;
+    }
 }

@@ -305,11 +305,13 @@ public partial class PageSetupDialog : Window
             return;
         }
 
-        if (!PageLayoutInputParser.TryParseRepeatRows(RowsRepeatBox.Text, out var repeatRows) ||
-            !PageLayoutInputParser.TryParseRepeatColumns(ColumnsRepeatBox.Text, out var repeatColumns))
+        var validRepeatRows = PageLayoutInputParser.TryParseRepeatRows(RowsRepeatBox.Text, out var repeatRows);
+        var validRepeatColumns = PageLayoutInputParser.TryParseRepeatColumns(ColumnsRepeatBox.Text, out var repeatColumns);
+        if (!validRepeatRows || !validRepeatColumns)
         {
             MessageBox.Show(this, "Enter print titles as rows like 1:2 and columns like A:C, or leave blank.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidPrintTitles();
             return;
         }
 
@@ -368,6 +370,17 @@ public partial class PageSetupDialog : Window
         PrintAreaBox.Focus();
         PrintAreaBox.SelectAll();
         Keyboard.Focus(PrintAreaBox);
+    }
+
+    private void FocusInvalidPrintTitles()
+    {
+        var target = PageLayoutInputParser.TryParseRepeatRows(RowsRepeatBox.Text, out _)
+            ? ColumnsRepeatBox
+            : RowsRepeatBox;
+        PageSetupTabs.SelectedItem = SheetTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
