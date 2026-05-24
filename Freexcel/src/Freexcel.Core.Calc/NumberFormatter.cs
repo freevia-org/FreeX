@@ -12,7 +12,16 @@ public static partial class NumberFormatter
     public static string Format(ScalarValue value, string formatString)
         => FormatWithColor(value, formatString).Text;
 
+    public static string Format(ScalarValue value, string formatString, int targetWidthCharacters)
+        => FormatWithColor(value, formatString, targetWidthCharacters).Text;
+
     public static FormatResult FormatWithColor(ScalarValue value, string formatString)
+        => FormatWithColor(value, formatString, null);
+
+    public static FormatResult FormatWithColor(ScalarValue value, string formatString, int targetWidthCharacters)
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters);
+
+    private static FormatResult FormatWithColor(ScalarValue value, string formatString, int? targetWidthCharacters)
     {
         if (string.IsNullOrEmpty(formatString) || formatString == "General")
             return new FormatResult(FormatGeneral(value));
@@ -32,7 +41,7 @@ public static partial class NumberFormatter
 
         return value switch
         {
-            NumberValue n   => FormatNumber(n.Value, sections),
+            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters),
             DateTimeValue d => FormatDateTimeWithColor(d.Value, sections),
             TextValue t     => FormatTextWithColor(t.Value, sections),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
@@ -74,7 +83,7 @@ public static partial class NumberFormatter
 
     // ── Number formatting ─────────────────────────────────────────────────────
 
-    private static FormatResult FormatNumber(double value, string[] sections)
+    private static FormatResult FormatNumber(double value, string[] sections, int? targetWidthCharacters)
     {
         var parsedSections = sections.Select(ParseSection).ToArray();
         bool hasConditions = parsedSections.Any(section => section.Condition is not null);
@@ -103,7 +112,62 @@ public static partial class NumberFormatter
         string text = section.Format == ""
             ? ""
             : ApplyNumericFormat(displayValue, section.Format);
+        text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
         return new FormatResult(text, section.ColorHex);
+    }
+
+    private static string ApplyAccountingTargetWidth(string text, string format, int? targetWidthCharacters)
+    {
+        if (targetWidthCharacters is not > 0 ||
+            text.Length >= targetWidthCharacters.Value ||
+            !HasAccountingLayoutDirective(format))
+        {
+            return text;
+        }
+
+        int fillIndex = FindAccountingFillInsertionIndex(text);
+        if (fillIndex < 0)
+            return text.PadLeft(targetWidthCharacters.Value);
+
+        return text.Insert(fillIndex, new string(' ', targetWidthCharacters.Value - text.Length));
+    }
+
+    private static bool HasAccountingLayoutDirective(string format)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && (c == '_' || c == '*'))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static int FindAccountingFillInsertionIndex(string text)
+    {
+        int firstValueChar = -1;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (char.IsDigit(text[i]) || text[i] is '(' or '-' or '+')
+            {
+                firstValueChar = i;
+                break;
+            }
+        }
+
+        if (firstValueChar <= 0)
+            return -1;
+
+        int existingGap = text.LastIndexOf(' ', firstValueChar - 1, firstValueChar);
+        return existingGap >= 0 ? existingGap + 1 : firstValueChar;
     }
 
     private static string ApplyNumericFormat(double value, string format)
@@ -111,12 +175,12 @@ public static partial class NumberFormatter
         if (string.IsNullOrEmpty(format) || format == "General")
             return FormatNumberGeneral(value);
 
-        if (TryResolveSpecialDateTimeLocaleToken(format, out var specialDateTimeFormat))
+        if (TryResolveSpecialDateTimeLocaleToken(format, out var specialDateTimeToken))
         {
             try
             {
                 var dt = DateTime.FromOADate(value);
-                return FormatDateTimeValue(dt, specialDateTimeFormat, CultureInfo.InvariantCulture.DateTimeFormat);
+                return FormatSpecialDateTimeLocaleValue(dt, specialDateTimeToken);
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
