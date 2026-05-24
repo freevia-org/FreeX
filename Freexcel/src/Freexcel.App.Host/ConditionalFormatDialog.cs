@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 
@@ -313,6 +314,7 @@ public partial class ConditionalFormatDialog : Window
         inner.Children.Add(btnRow);
         Content = BuildExcelRuleShell(ruleType, inner);
         UpdateColorScaleMidpointState();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     /// <summary>Creates an edit dialog pre-populated with <paramref name="existingRule"/>.</summary>
@@ -403,6 +405,25 @@ public partial class ConditionalFormatDialog : Window
         {
             SelectColor(fc);
         }
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        Control target =
+            _formulaBox is { IsVisible: true } formulaBox ? formulaBox :
+            _value1Box.IsVisible ? _value1Box :
+            _topBottomRankBox.IsVisible ? _topBottomRankBox :
+            _dataBarMinTypeBox.IsVisible ? _dataBarMinTypeBox :
+            _colorScaleMinTypeBox.IsVisible ? _colorScaleMinTypeBox :
+            _iconSetStyleBox.IsVisible ? _iconSetStyleBox :
+            _dateOccurringPeriodBox.IsVisible ? _dateOccurringPeriodBox :
+            _duplicateValuesKindBox.IsVisible ? _duplicateValuesKindBox :
+            _colorBox;
+
+        target.Focus();
+        if (target is TextBox textBox)
+            textBox.SelectAll();
+        Keyboard.Focus(target);
     }
 
     private void SelectColor(CellColor color)
