@@ -107,6 +107,18 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void InsertFunctionDialogOpenedFromKeyboard_FocusesSearchBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => { RefreshList(); FocusInitialKeyboardTarget(); };");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_searchBox.Focus();");
+        source.Should().Contain("_searchBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_searchBox);");
+    }
+
+    [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
