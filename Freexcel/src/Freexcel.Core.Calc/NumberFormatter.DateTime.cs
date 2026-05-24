@@ -5,6 +5,12 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
+    private enum SpecialDateTimeLocaleToken
+    {
+        LongTime,
+        LongDate
+    }
+
     private static FormatResult FormatDateTimeWithColor(double oaDate, string[] sections)
     {
         var parsed = SelectDateTimeSection(oaDate, sections);
@@ -32,11 +38,11 @@ public static partial class NumberFormatter
     private static string FormatDateTime(double oaDate, string format)
     {
         var (_, cleanFmt) = NumberFormatColorMapper.ExtractColor(format);
-        if (TryResolveSpecialDateTimeLocaleToken(cleanFmt, out var specialDateTimeFormat))
+        if (TryResolveSpecialDateTimeLocaleToken(cleanFmt, out var specialDateTimeToken))
         {
             try
             {
-                return FormatDateTimeValue(DateTime.FromOADate(oaDate), specialDateTimeFormat, CultureInfo.InvariantCulture.DateTimeFormat);
+                return FormatSpecialDateTimeLocaleValue(DateTime.FromOADate(oaDate), specialDateTimeToken);
             }
             catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
         }
@@ -115,18 +121,29 @@ public static partial class NumberFormatter
         return result.ToString();
     }
 
-    private static bool TryResolveSpecialDateTimeLocaleToken(string format, out string excelFormat)
+    private static string FormatSpecialDateTimeLocaleValue(
+        DateTime dateTime,
+        SpecialDateTimeLocaleToken token)
+    {
+        var dateTimeFormat = CultureInfo.CurrentCulture.DateTimeFormat;
+        var netFormat = token == SpecialDateTimeLocaleToken.LongDate
+            ? dateTimeFormat.LongDatePattern
+            : dateTimeFormat.LongTimePattern;
+        return dateTime.ToString(netFormat, dateTimeFormat);
+    }
+
+    private static bool TryResolveSpecialDateTimeLocaleToken(string format, out SpecialDateTimeLocaleToken token)
     {
         var match = Regex.Match(format, @"^\s*\[\$-F(?<kind>400|800)\]\s*$", RegexOptions.IgnoreCase);
         if (!match.Success)
         {
-            excelFormat = "";
+            token = SpecialDateTimeLocaleToken.LongDate;
             return false;
         }
 
-        excelFormat = string.Equals(match.Groups["kind"].Value, "800", StringComparison.OrdinalIgnoreCase)
-            ? "dddd, mmmm d, yyyy"
-            : "h:mm:ss AM/PM";
+        token = string.Equals(match.Groups["kind"].Value, "800", StringComparison.OrdinalIgnoreCase)
+            ? SpecialDateTimeLocaleToken.LongDate
+            : SpecialDateTimeLocaleToken.LongTime;
         return true;
     }
 
