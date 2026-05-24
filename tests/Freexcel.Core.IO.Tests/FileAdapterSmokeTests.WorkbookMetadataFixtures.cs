@@ -291,6 +291,7 @@ public partial class FileAdapterSmokeTests
                 workbookNs + "fileRecoveryPr",
                 new XAttribute("autoRecover", "1"),
                 new XAttribute("crashSave", "1"),
+                new XAttribute("customRecoveryFlag", "keep"),
                 new XAttribute("repairLoad", "0")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }

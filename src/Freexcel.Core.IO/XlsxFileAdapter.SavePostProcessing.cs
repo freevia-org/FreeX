@@ -32,6 +32,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
         }
 
+        if (workbook.FileRecoveryProperties.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
+        }
+
         if (workbook.IsStructureProtected)
         {
             packageStream.Position = 0;
@@ -217,6 +223,12 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
+        }
+
+        if (workbook.FileRecoveryProperties.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.AutoFilter is not null))
