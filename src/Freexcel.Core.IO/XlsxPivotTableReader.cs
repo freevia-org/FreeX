@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -60,13 +61,11 @@ internal static partial class XlsxPivotTableReader
             if (worksheetEntry is null)
                 continue;
 
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var pivotRelIds = worksheetXml.Root?
-                .Elements(workbookNs + "pivotTableDefinition")
-                .Select(e => e.Attribute(relNs + "id")?.Value)
-                .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Select(id => id!)
-                .ToList() ?? [];
+            var pivotRelIds = ReadWorksheetRelationshipIds(
+                worksheetEntry,
+                "pivotTableDefinition",
+                "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                relNs.NamespaceName);
             if (pivotRelIds.Count == 0)
                 continue;
 
@@ -103,6 +102,39 @@ internal static partial class XlsxPivotTableReader
         string sourcePart,
         XNamespace packageRelNs) =>
         XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
+
+    private static List<string> ReadWorksheetRelationshipIds(
+        ZipArchiveEntry worksheetEntry,
+        string localName,
+        string namespaceName,
+        string relationshipNamespaceName)
+    {
+        var result = new List<string>();
+        using var stream = worksheetEntry.Open();
+        using var reader = XmlReader.Create(stream, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true,
+            IgnoreWhitespace = true,
+        });
+
+        while (reader.Read())
+        {
+            if (reader.NodeType != XmlNodeType.Element ||
+                !string.Equals(reader.LocalName, localName, StringComparison.Ordinal) ||
+                !string.Equals(reader.NamespaceURI, namespaceName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var relId = reader.GetAttribute("id", relationshipNamespaceName);
+            if (!string.IsNullOrWhiteSpace(relId))
+                result.Add(relId);
+        }
+
+        return result;
+    }
 
     private static bool TryReadPivotTable(
         XDocument pivotXml,
