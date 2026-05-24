@@ -799,7 +799,8 @@ public sealed class ConditionalFormatDialogTests
         string.Join(Environment.NewLine, new[]
         {
             "ConditionalFormatDialog.cs",
-            "ConditionalFormatDialog.ColorEditors.cs"
+            "ConditionalFormatDialog.ColorEditors.cs",
+            "ConditionalFormatDialog.IconSets.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)
