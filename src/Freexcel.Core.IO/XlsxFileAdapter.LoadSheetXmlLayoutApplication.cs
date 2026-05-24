@@ -70,6 +70,7 @@ public sealed partial class XlsxFileAdapter
                 chart.Name = chartPart.Name;
                 XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                 ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
+                ApplyChartUserShapesRelationshipMetadata(chart, chartPart);
                 sheet.Charts.Add(chart);
             }
         }

@@ -21,6 +21,7 @@ public sealed partial class NativeJsonAdapter
         public string? Language { get; set; }
         public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
         public ChartExternalDataModel? ExternalData { get; set; }
+        public ChartUserShapesModel? UserShapes { get; set; }
         public ChartManualLayoutModel? PlotAreaLayout { get; set; }
         public ChartManualLayoutModel? LegendLayout { get; set; }
         public bool RoundedCorners { get; set; }

@@ -8255,6 +8255,72 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesEmbeddedChartUserShapesRelationshipPackagePart()
+    {
+        var workbook = new Workbook("ChartUserShapesRelationshipPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1200));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2400));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(3600));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+              <c:userShapes r:id="rIdUserShapes1"/>
+            </c:chartSpace>
+            """);
+        AddChartUserShapesRelationship(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.UserShapes.Should().BeEquivalentTo(new ChartUserShapesModel
+        {
+            RelationshipId = "rIdUserShapes1",
+            RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartUserShapes",
+            Target = "../drawings/userShapes1.xml"
+        });
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        archive.GetEntry("xl/drawings/userShapes1.xml").Should().NotBeNull();
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        chartXml.Root!.Element(chartNs + "userShapes")!.Attribute(relNs + "id")!.Value.Should().Be("rIdUserShapes1");
+        var chartRelsXml = LoadPackageXml(archive.GetEntry("xl/charts/_rels/chart1.xml.rels")!);
+        var relationship = chartRelsXml.Root!.Elements(packageRelNs + "Relationship").Should().ContainSingle().Subject;
+        relationship.Attribute("Id")!.Value.Should().Be("rIdUserShapes1");
+        relationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartUserShapes");
+        relationship.Attribute("Target")!.Value.Should().Be("../drawings/userShapes1.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartDataLabelPackagePart()
     {
         var workbook = new Workbook("ChartDataLabelPackageSave");
@@ -19175,6 +19241,41 @@ public partial class FileAdapterSmokeTests
                         new XAttribute("Target", "../charts/chart1.xml"))));
             ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
             ReplacePackageXml(archive, "xl/charts/chart1.xml", XDocument.Parse(chartXml ?? MinimalColumnChartXml));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddChartUserShapesRelationship(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/userShapes1.xml", "application/vnd.openxmlformats-officedocument.drawingml.chartshapes+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            ReplacePackageXml(archive, "xl/charts/_rels/chart1.xml.rels", new XDocument(new XElement(
+                packageRelNs + "Relationships",
+                new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", "rIdUserShapes1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartUserShapes"),
+                    new XAttribute("Target", "../drawings/userShapes1.xml")))));
+
+            ReplacePackageXml(archive, "xl/drawings/userShapes1.xml", new XDocument(new XElement(
+                spreadsheetDrawingNs + "wsDr",
+                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XElement(
+                    spreadsheetDrawingNs + "absoluteAnchor",
+                    new XElement(spreadsheetDrawingNs + "pos", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                    new XElement(spreadsheetDrawingNs + "ext", new XAttribute("cx", "952500"), new XAttribute("cy", "381000")),
+                    new XElement(spreadsheetDrawingNs + "clientData")))));
         }
 
         packageStream.Position = 0;

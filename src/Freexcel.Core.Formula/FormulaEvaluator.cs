@@ -1070,7 +1070,8 @@ public sealed class FormulaEvaluator
              or "EXPON.DIST" or "WEIBULL.DIST" or "POISSON.DIST"
              or "T.DIST" or "T.DIST.RT" or "T.DIST.2T" or "T.INV" or "T.INV.2T"
              or "F.DIST" or "F.DIST.RT" or "F.INV" or "F.INV.RT"
-             or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT";
+             or "CHISQ.DIST" or "CHISQ.DIST.RT" or "CHISQ.INV" or "CHISQ.INV.RT"
+             or "BINOM.DIST" or "BINOM.INV" or "NEGBINOM.DIST" or "HYPERGEOM.DIST";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
