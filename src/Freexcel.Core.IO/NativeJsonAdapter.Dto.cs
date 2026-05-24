@@ -168,6 +168,8 @@ public sealed partial class NativeJsonAdapter
         public WorksheetPrintErrorValue? PrintErrorValue { get; set; }
         public WorksheetPrintComments? PrintComments { get; set; }
         public ScaleToFitDto? ScaleToFit { get; set; }
+        public bool? FitToPage { get; set; }
+        public bool? AutoPageBreaks { get; set; }
         public List<uint> RowPageBreaks { get; set; } = [];
         public List<uint> ColumnPageBreaks { get; set; } = [];
         public List<string> MergedRegions { get; set; } = [];

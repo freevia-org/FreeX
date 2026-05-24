@@ -195,6 +195,12 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
 
+        if (workbook.Sheets.Any(XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPageSetupMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (numberFormatIdMap.Any(pair => pair.Key != pair.Value))
         {
             packageStream.Position = 0;
