@@ -128,6 +128,12 @@ public sealed class ChartSeriesFormatDialog : Window
             return;
         }
 
+        if (!TryReadOptionalColor(_strokeBox, out var strokeColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _strokeBox);
+            return;
+        }
+
         if (!TryReadNullablePositiveDouble(_strokeThicknessBox, out var strokeThickness))
         {
             ShowInvalidInputWarning("Enter a positive line width or leave it blank.", _strokeThicknessBox);
@@ -143,7 +149,7 @@ public sealed class ChartSeriesFormatDialog : Window
         Result = CreateResult(
             _seriesBox.SelectedIndex < 0 ? 0 : _seriesBox.SelectedIndex,
             fillColor,
-            ChartDialogHelpers.ParseColor(_strokeBox.Text),
+            strokeColor,
             strokeThickness,
             _dashBox.SelectedItem is ChartLineDashStyle dash ? dash : null,
             _markerBox.SelectedItem is ChartMarkerStyle marker ? marker : null,
