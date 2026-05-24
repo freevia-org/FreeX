@@ -109,6 +109,14 @@ public sealed class ColumnWidthDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
         Content = ObjectSizeDialog.CreateSingleInputContent("Column _width:", _widthBox, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _widthBox.Focus();
+        _widthBox.SelectAll();
+        Keyboard.Focus(_widthBox);
     }
 
     public static bool TryCreateResult(string? input, out ColumnWidthDialogResult result, out string? error)
