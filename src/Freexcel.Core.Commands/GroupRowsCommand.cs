@@ -26,7 +26,8 @@ public sealed class GroupRowsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } p) return p;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousLevels = [];
         _previouslyHiddenByGroup = [];
@@ -81,6 +82,9 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
+            return protectedOutcome;
+
         _newly = [];
         foreach (var (row, lvl) in sheet.RowOutlineLevels)
         {
@@ -120,6 +124,9 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
+            return protectedOutcome;
+
         _removed = [];
         foreach (var row in sheet.GroupHiddenRows.ToList())
         {

@@ -37,7 +37,6 @@ internal static class XlsxChartSeriesFormatReader
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
-
         if (fillColor is null &&
             fillThemeColor is null &&
             strokeColor is null &&
@@ -81,6 +80,7 @@ internal static class XlsxChartSeriesFormatReader
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
+        var smooth = XlsxChartScalarReader.ReadOptionalBool(series.Element(ChartNs + "smooth")?.Attribute("val")?.Value);
 
         var marker = series.Element(ChartNs + "marker");
         var markerStyle = marker?.Element(ChartNs + "symbol") is { } symbolElement
@@ -99,6 +99,21 @@ internal static class XlsxChartSeriesFormatReader
         else if (markerFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(markerFill, DrawingNs, out var markerColor))
             fillColor = markerColor;
 
+        var markerLine = marker?
+            .Element(ChartNs + "spPr")?
+            .Element(DrawingNs + "ln");
+        CellColor? markerBorderColor = null;
+        WorkbookThemeColorReference? markerBorderThemeColor = null;
+        var markerLineFill = markerLine?.Element(DrawingNs + "solidFill");
+        if (markerLineFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(markerLineFill, DrawingNs, out var markerBorderTheme))
+            markerBorderThemeColor = markerBorderTheme;
+        else if (markerLineFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(markerLineFill, DrawingNs, out var markerBorder))
+            markerBorderColor = markerBorder;
+
+        double? markerBorderThickness = null;
+        if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
+            markerBorderThickness = Math.Clamp(markerLineEmus / 12700.0, 0, 10);
+
         if (strokeColor is null &&
             strokeThemeColor is null &&
             strokeThickness is null &&
@@ -106,7 +121,11 @@ internal static class XlsxChartSeriesFormatReader
             fillColor is null &&
             fillThemeColor is null &&
             markerStyle is null &&
-            markerSize is null)
+            markerSize is null &&
+            markerBorderColor is null &&
+            markerBorderThemeColor is null &&
+            markerBorderThickness is null &&
+            smooth is null)
         {
             return false;
         }
@@ -120,7 +139,11 @@ internal static class XlsxChartSeriesFormatReader
             MarkerStyle: markerStyle,
             MarkerSize: markerSize,
             FillThemeColor: fillThemeColor,
-            StrokeThemeColor: strokeThemeColor);
+            StrokeThemeColor: strokeThemeColor,
+            Smooth: smooth,
+            MarkerBorderColor: markerBorderColor,
+            MarkerBorderThemeColor: markerBorderThemeColor,
+            MarkerBorderThickness: markerBorderThickness);
         return true;
     }
 

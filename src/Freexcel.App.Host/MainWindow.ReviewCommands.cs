@@ -301,15 +301,39 @@ public partial class MainWindow
     }
     private void AllowEditRangesBtn_Click(object sender, RoutedEventArgs e)
     {
-        var defaultRange = SheetGrid.SelectedRange?.ToString() ?? "A1:A1";
-        var dialog = new AllowEditRangeDialog(_currentSheetId, defaultRange) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
-
-        if (!TryExecuteCommand(new AllowEditRangeCommand(_currentSheetId, dialog.Range), "Allow Edit Ranges"))
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
             return;
 
-        MessageBox.Show($"{dialog.Range} can now be edited while this sheet is protected.",
-            "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
+        var defaultRange = SheetGrid.SelectedRange?.ToString() ?? "A1:A1";
+        var dialog = new AllowEditRangeDialog(_currentSheetId, defaultRange, sheet.AllowEditRanges) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        IWorkbookCommand? command = null;
+        string? successMessage = null;
+        switch (dialog.Result)
+        {
+            case { Action: AllowEditRangeDialogAction.Add, Range: { } range }:
+                command = new AllowEditRangeCommand(_currentSheetId, range);
+                successMessage = $"{range} can now be edited while this sheet is protected.";
+                break;
+            case { Action: AllowEditRangeDialogAction.Remove, Range: { } range }:
+                command = new RemoveAllowEditRangeCommand(_currentSheetId, range);
+                successMessage = $"{range} is no longer unlocked while this sheet is protected.";
+                break;
+            case { Action: AllowEditRangeDialogAction.Clear }:
+                command = new ClearAllowEditRangesCommand(_currentSheetId);
+                successMessage = "All allow-edit ranges were removed from this sheet.";
+                break;
+        }
+
+        if (command is null || successMessage is null)
+            return;
+
+        if (!TryExecuteCommand(command, "Allow Edit Ranges"))
+            return;
+
+        MessageBox.Show(successMessage, "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
     }
     private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();
 
@@ -318,12 +342,12 @@ public partial class MainWindow
         var plan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
         if (plan.Kind == ShareWorkbookPlanKind.SaveAsBeforeShare)
         {
-            if (!SaveWorkbookWithDialog())
+            if (!await SaveWorkbookWithDialogAsync())
                 return;
         }
         else if (FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target))
         {
-            if (!SaveWorkbookToTarget(target!))
+            if (!await SaveWorkbookToTargetAsync(target!))
                 return;
         }
 

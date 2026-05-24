@@ -105,6 +105,12 @@ public sealed partial class NativeJsonAdapter
         chart.DropLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DropLineDashStyle, ChartLineDashStyle.Solid);
         chart.HighLowLineThickness = Math.Clamp(chart.HighLowLineThickness, 0.5, 10);
         chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
+        chart.UpDownBarGapWidth = ClampNullableInt(chart.UpDownBarGapWidth, 0, 500);
+        chart.UpBarBorderThickness = ClampNullableDouble(chart.UpBarBorderThickness, 0, 10);
+        chart.DownBarBorderThickness = ClampNullableDouble(chart.DownBarBorderThickness, 0, 10);
+        SanitizeChartSurfaceFormat(chart.FloorFormat);
+        SanitizeChartSurfaceFormat(chart.SideWallFormat);
+        SanitizeChartSurfaceFormat(chart.BackWallFormat);
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;
@@ -172,6 +178,19 @@ public sealed partial class NativeJsonAdapter
     private static int? ClampNullableInt(int? value, int min, int max) =>
         value is { } intValue ? Math.Clamp(intValue, min, max) : null;
 
+    private static double? ClampNullableDouble(double? value, double min, double max) =>
+        value is { } doubleValue && double.IsFinite(doubleValue)
+            ? Math.Clamp(doubleValue, min, max)
+            : null;
+
+    private static void SanitizeChartSurfaceFormat(ChartSurfaceFormatModel? format)
+    {
+        if (format is null)
+            return;
+
+        format.BorderThickness = ClampNullableDouble(format.BorderThickness, 0, 10);
+    }
+
     private static double NormalizeChartAngle(double value)
     {
         var normalized = value % 360;
@@ -229,6 +248,7 @@ public sealed partial class NativeJsonAdapter
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {
         var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
+        var supportsSmooth = chartType is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
         return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
@@ -238,7 +258,13 @@ public sealed partial class NativeJsonAdapter
                 ? Math.Clamp(markerSize, 1, 30)
                 : null,
             DashStyle = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.DashStyle),
-            MarkerStyle = supportsMarkers ? NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.MarkerStyle) : null
+            MarkerStyle = supportsMarkers ? NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.MarkerStyle) : null,
+            Smooth = supportsSmooth ? format.Smooth : null,
+            MarkerBorderColor = supportsMarkers ? format.MarkerBorderColor : null,
+            MarkerBorderThemeColor = supportsMarkers ? format.MarkerBorderThemeColor : null,
+            MarkerBorderThickness = supportsMarkers && format.MarkerBorderThickness is { } markerBorderThickness
+                ? Math.Clamp(markerBorderThickness, 0, 10)
+                : null
         };
     }
 
@@ -250,7 +276,11 @@ public sealed partial class NativeJsonAdapter
         || format.MarkerStyle is not null
         || format.MarkerSize is not null
         || format.FillThemeColor is not null
-        || format.StrokeThemeColor is not null;
+        || format.StrokeThemeColor is not null
+        || format.Smooth is not null
+        || format.MarkerBorderColor is not null
+        || format.MarkerBorderThemeColor is not null
+        || format.MarkerBorderThickness is not null;
 
     private static ChartPointDataLabelFormat ClampPointDataLabelFormat(ChartPointDataLabelFormat format) =>
         format with

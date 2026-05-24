@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -72,6 +73,7 @@ public sealed class SparklineDialog : Window
         stack.Children.Add(_kindBox);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static SparklineDialogResult CreateResult(string dataRangeText, string locationText, SparklineKindChoice kind) =>
@@ -93,6 +95,13 @@ public sealed class SparklineDialog : Window
 
     public static string GetKindLabel(SparklineKindChoice kind) =>
         kind == SparklineKindChoice.WinLoss ? "Win/Loss" : kind.ToString();
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _dataRangeBox.Focus();
+        _dataRangeBox.SelectAll();
+        Keyboard.Focus(_dataRangeBox);
+    }
 
     private static StackPanel CreateRangePickerRow(TextBox textBox, Button pickerButton)
     {

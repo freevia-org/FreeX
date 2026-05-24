@@ -25,6 +25,17 @@ public sealed class FormulaDialogAccessKeyTests
     }
 
     [Fact]
+    public void CreateNamesFromSelectionDialogOpenedFromKeyboard_FocusesTopRowChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateNamesFromSelectionDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_topRow.Focus();");
+        source.Should().Contain("Keyboard.Focus(_topRow);");
+    }
+
+    [Fact]
     public void EvaluateFormulaDialog_ExposesKeyboardAccessKeysForActions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
@@ -41,5 +52,16 @@ public sealed class FormulaDialogAccessKeyTests
             source.Should().Contain(expected);
 
         source.Should().NotContain("Content = \"_Previous\"");
+    }
+
+    [Fact]
+    public void EvaluateFormulaDialogOpenedFromKeyboard_FocusesEvaluateButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nextButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_nextButton);");
     }
 }

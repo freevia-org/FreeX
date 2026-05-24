@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -22,6 +23,7 @@ public sealed partial class CustomViewsDialog : Window
         ViewsList.ItemsSource = _items;
         RefreshList();
         UpdateButtons();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private void RefreshList()
@@ -104,6 +106,12 @@ public sealed partial class CustomViewsDialog : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void FocusInitialKeyboardTarget()
+    {
+        ViewsList.Focus();
+        Keyboard.Focus(ViewsList);
+    }
+
     private void SelectView(string name)
     {
         for (var i = 0; i < _items.Count; i++)
@@ -181,7 +189,7 @@ public sealed class CustomViewNameDialog : Window
         grid.Children.Add(buttons);
         Content = grid;
 
-        Loaded += (_, _) => _nameBox.SelectAll();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static CustomViewNameDialogResult CreateResult(
@@ -203,5 +211,12 @@ public sealed class CustomViewNameDialog : Window
             return;
 
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 }

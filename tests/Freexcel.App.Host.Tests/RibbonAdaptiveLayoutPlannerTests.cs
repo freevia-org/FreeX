@@ -107,18 +107,18 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
-    public void ApplyBreakpointOverrides_AppliesFormulasFunctionLibraryBreakpoint()
+    public void ApplyBreakpointOverrides_KeepsFormulasFunctionLibraryExpandedAtNormalWideWidths()
     {
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
-            1500,
+            1120,
             ["Function Library", "Defined Names", "Formula Auditing", "Calculation"],
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 4).ToArray());
 
         states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
-            RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Full);
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Fact]

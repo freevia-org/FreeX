@@ -145,6 +145,15 @@ public sealed class Chart3DViewModel
     public int? Perspective { get; set; }
 }
 
+public sealed class ChartSurfaceFormatModel
+{
+    public CellColor? FillColor { get; set; }
+    public WorkbookThemeColorReference? FillThemeColor { get; set; }
+    public CellColor? BorderColor { get; set; }
+    public WorkbookThemeColorReference? BorderThemeColor { get; set; }
+    public double? BorderThickness { get; set; }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -154,7 +163,11 @@ public sealed record ChartSeriesFormat(
     ChartMarkerStyle? MarkerStyle = null,
     double? MarkerSize = null,
     WorkbookThemeColorReference? FillThemeColor = null,
-    WorkbookThemeColorReference? StrokeThemeColor = null)
+    WorkbookThemeColorReference? StrokeThemeColor = null,
+    bool? Smooth = null,
+    CellColor? MarkerBorderColor = null,
+    WorkbookThemeColorReference? MarkerBorderThemeColor = null,
+    double? MarkerBorderThickness = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;
@@ -218,6 +231,9 @@ public sealed class ChartModel
     public ChartPrintSettingsModel? PrintSettings { get; set; }
     public ChartDataTableModel? DataTable { get; set; }
     public Chart3DViewModel? ThreeDView { get; set; }
+    public ChartSurfaceFormatModel? FloorFormat { get; set; }
+    public ChartSurfaceFormatModel? SideWallFormat { get; set; }
+    public ChartSurfaceFormatModel? BackWallFormat { get; set; }
     public int? BarGapWidth { get; set; }
     public int? BarOverlap { get; set; }
     public bool? VaryColorsByPoint { get; set; }
@@ -345,6 +361,17 @@ public sealed class ChartModel
     public double HighLowLineThickness { get; set; } = 1;
     public ChartLineDashStyle HighLowLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowUpDownBars { get; set; }
+    public int? UpDownBarGapWidth { get; set; }
+    public CellColor? UpBarFillColor { get; set; }
+    public WorkbookThemeColorReference? UpBarFillThemeColor { get; set; }
+    public CellColor? UpBarBorderColor { get; set; }
+    public WorkbookThemeColorReference? UpBarBorderThemeColor { get; set; }
+    public double? UpBarBorderThickness { get; set; }
+    public CellColor? DownBarFillColor { get; set; }
+    public WorkbookThemeColorReference? DownBarFillThemeColor { get; set; }
+    public CellColor? DownBarBorderColor { get; set; }
+    public WorkbookThemeColorReference? DownBarBorderThemeColor { get; set; }
+    public double? DownBarBorderThickness { get; set; }
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];

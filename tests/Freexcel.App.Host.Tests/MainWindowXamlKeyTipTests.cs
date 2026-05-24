@@ -54,10 +54,12 @@ public sealed class MainWindowXamlKeyTipTests
     public void RibbonKeyboardFocus_IsNotHijackedByWorksheetNavigation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
 
         const string callSite = "if (TryHandleFocusedRibbonKeyboardNavigation(e))";
 
         source.Should().Contain(callSite);
+        keyboardFocusSource.Should().Contain("private bool TryHandleFocusedRibbonKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
         var callIndex = source.IndexOf(callSite, StringComparison.Ordinal);
         var gridNavigationIndex = source.IndexOf("if (SheetGrid.SelectedRange == null) return;", callIndex, StringComparison.Ordinal);
 
@@ -71,6 +73,7 @@ public sealed class MainWindowXamlKeyTipTests
     public void F6ShellFocusCycle_IsHandledBeforeTextBoxPreviewKeyFiltering()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
         var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
 
         const string previewHandler = "private void MainWindow_PreviewKeyDown";
@@ -87,18 +90,18 @@ public sealed class MainWindowXamlKeyTipTests
         textBoxFilterIndex.Should().BeGreaterThanOrEqualTo(0);
         f6Index.Should().BeLessThan(textBoxFilterIndex);
         commandSource.Should().Contain("KeyboardCommandShortcut.CycleShellFocus");
-        selectionSource.Should().Contain("FocusShellRegion(");
+        keyboardFocusSource.Should().Contain("FocusShellRegion(");
     }
 
     [Fact]
     public void F6ShellFocusCycle_ContinuesWhenRegionRejectsFocus()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
 
-        selectionSource.Should().Contain("if (FocusShellRegion(current))");
-        selectionSource.Should().Contain("return FormulaBar.Focus();");
-        selectionSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
-        selectionSource.Should().Contain("return FocusStatusBar();");
+        keyboardFocusSource.Should().Contain("if (FocusShellRegion(current))");
+        keyboardFocusSource.Should().Contain("return FormulaBar.Focus();");
+        keyboardFocusSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
+        keyboardFocusSource.Should().Contain("return FocusStatusBar();");
     }
 
     [Fact]
@@ -510,7 +513,7 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void AllowEditRangesTooltip_DisclosesAddRangePromptWorkflow()
+    public void AllowEditRangesTooltip_DisclosesRangeManagerWorkflow()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
@@ -521,8 +524,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "AllowEditRangesBtn_Click");
 
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Add");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("range");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("manager");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("delete");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clear");
+        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("ranges");
         allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("permissions");
     }
 
