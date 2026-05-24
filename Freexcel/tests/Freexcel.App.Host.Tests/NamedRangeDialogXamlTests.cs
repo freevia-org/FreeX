@@ -146,6 +146,26 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().NotContain("IsEnabled = false");
         source.Should().Contain("GetScopeOptions");
         source.Should().Contain("NamedRangeMetadata");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
+    }
+
+    [Fact]
+    public void NameManagerDialogOpenedFromKeyboard_FocusesNamesListOrNewButton()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+
+        xaml.Should().Contain("x:Name=\"NewButton\"");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("NamesList.Items.Count > 0");
+        source.Should().Contain("NamesList.Focus();");
+        source.Should().Contain("Keyboard.Focus(NamesList);");
+        source.Should().Contain("NewButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(NewButton);");
     }
 
     [Fact]

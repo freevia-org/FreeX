@@ -59,6 +59,17 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupDialogOpenedFromKeyboard_FocusesOrientationBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("OrientationBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(OrientationBox);");
+    }
+
+    [Fact]
     public void PageTab_UsesExcelLikeScalingChoices()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
