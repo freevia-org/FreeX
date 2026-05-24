@@ -6606,6 +6606,12 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ERROR.TYPE(NA())", MakeSheet()).Should().Be(new NumberValue(7));
 
     [Fact]
+    public void ErrorType_GettingDataLiteral_Returns8()
+    {
+        _eval.Evaluate("=ERROR.TYPE(#GETTING_DATA)", MakeSheet()).Should().Be(new NumberValue(8));
+    }
+
+    [Fact]
     public void ErrorType_NotAnError_ReturnsNa() =>
         _eval.Evaluate("=ERROR.TYPE(1)", MakeSheet()).Should().Be(ErrorValue.NA);
 
