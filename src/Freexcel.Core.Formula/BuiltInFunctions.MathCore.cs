@@ -435,8 +435,15 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double x = ToNumber(args[0]);
-        double y = ToNumber(args[1]);
+        if (args[1] is RangeValue yRange) return MapUnaryTextRange(yRange, value => Atan2Scalar(args[0], value));
+        if (args[0] is RangeValue xRange) return MapUnaryTextRange(xRange, value => Atan2Scalar(value, args[1]));
+        return Atan2Scalar(args[0], args[1]);
+    }
+
+    private static ScalarValue Atan2Scalar(ScalarValue xValue, ScalarValue yValue)
+    {
+        double x = ToNumber(xValue);
+        double y = ToNumber(yValue);
         if (!double.IsFinite(x) || !double.IsFinite(y)) return ErrorValue.Num;
         if (x == 0 && y == 0) return ErrorValue.DivByZero;
         return new NumberValue(Math.Atan2(y, x));
@@ -596,7 +603,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double dn = ToNumber(args[0]); double dk = ToNumber(args[1]);
+        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, value => CombinScalar(args[0], value));
+        if (args[0] is RangeValue nRange) return MapUnaryTextRange(nRange, value => CombinScalar(value, args[1]));
+        return CombinScalar(args[0], args[1]);
+    }
+
+    private static ScalarValue CombinScalar(ScalarValue numberValue, ScalarValue chosenValue)
+    {
+        double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dn > 1029 || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
         int n = (int)dn; int k = (int)dk;
@@ -612,7 +626,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double dn = ToNumber(args[0]); double dk = ToNumber(args[1]);
+        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, value => PermutScalar(args[0], value));
+        if (args[0] is RangeValue nRange) return MapUnaryTextRange(nRange, value => PermutScalar(value, args[1]));
+        return PermutScalar(args[0], args[1]);
+    }
+
+    private static ScalarValue PermutScalar(ScalarValue numberValue, ScalarValue chosenValue)
+    {
+        double dn = ToNumber(numberValue); double dk = ToNumber(chosenValue);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
         int n = (int)dn; int k = (int)dk;
