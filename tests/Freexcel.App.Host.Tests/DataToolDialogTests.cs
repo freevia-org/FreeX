@@ -1138,6 +1138,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialogInvalidInput_RefocusesInvalidCellEntry()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("FocusInvalidInput(error);");
+        source.Should().Contain("private void FocusInvalidInput(string? error)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
