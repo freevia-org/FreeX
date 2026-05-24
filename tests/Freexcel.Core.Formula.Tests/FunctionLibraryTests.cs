@@ -4892,6 +4892,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_BlankIncludeCell_IsFalse()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("included")),
+            (2, 1, new TextValue("blank")),
+            (3, 1, new TextValue("excluded")),
+            (1, 2, new BoolValue(true)),
+            (3, 2, new BoolValue(false)));
+
+        var result = _eval.Evaluate("=FILTER(A1:A3,B1:B3,\"empty\")", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new TextValue("included"));
+    }
+
+    [Fact]
     public void Filter_TextIncludeCell_ReturnsValueError()
     {
         var sheet = MakeSheet(
