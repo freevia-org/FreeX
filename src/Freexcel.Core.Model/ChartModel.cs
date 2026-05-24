@@ -49,6 +49,8 @@ public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
+public enum ChartAxisTickLabelPosition { NextTo, Low, High }
+
 public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
 
 public enum ChartAxisCrossBetween { Between, MidCategory }
@@ -56,6 +58,19 @@ public enum ChartAxisCrossBetween { Between, MidCategory }
 public enum ChartAxisLabelAlignment { Center, Left, Right }
 
 public enum ChartDateAxisUnit { Days, Months, Years }
+
+public enum ChartAxisDisplayUnit
+{
+    Hundreds,
+    Thousands,
+    TenThousands,
+    HundredThousands,
+    Millions,
+    TenMillions,
+    HundredMillions,
+    Billions,
+    Trillions
+}
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
@@ -296,6 +311,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
     public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowXAxisLabels { get; set; } = true;
+    public ChartAxisTickLabelPosition XAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
     public CellColor? XAxisLabelTextColor { get; set; }
     public WorkbookThemeColorReference? XAxisLabelTextThemeColor { get; set; }
     public double XAxisLabelFontSize { get; set; } = 11;
@@ -313,6 +329,7 @@ public sealed class ChartModel
     public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
     public double? XAxisCrossesAt { get; set; }
     public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
+    public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
     public double? YAxisMinimum { get; set; }
     public double? YAxisMaximum { get; set; }
     public double? YAxisMajorUnit { get; set; }
@@ -327,6 +344,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
     public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowYAxisLabels { get; set; } = true;
+    public ChartAxisTickLabelPosition YAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
     public CellColor? YAxisLabelTextColor { get; set; }
     public WorkbookThemeColorReference? YAxisLabelTextThemeColor { get; set; }
     public double YAxisLabelFontSize { get; set; } = 11;
@@ -336,6 +354,7 @@ public sealed class ChartModel
     public ChartAxisCrosses YAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
     public double? YAxisCrossesAt { get; set; }
     public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
+    public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
     public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;

@@ -188,9 +188,16 @@ internal static class XlsxChartAxisReader
         var minorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines"));
         var majorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         var minorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
-        var showLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
+        var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
+        var showLabels = tickLabelPositionValue != "none";
+        var tickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
         var axisLine = ReadAxisLine(axisElement.Element(ChartNs + "spPr"));
         var crossing = ReadAxisCrossing(axisElement);
+        var displayUnit = FromXlsxAxisDisplayUnit(
+            axisElement.Element(ChartNs + "dispUnits")?
+                .Element(ChartNs + "builtInUnit")?
+                .Attribute("val")?
+                .Value);
 
         if (useXAxis)
         {
@@ -204,10 +211,12 @@ internal static class XlsxChartAxisReader
             chart.XAxisMajorTickStyle = majorTickStyle;
             chart.XAxisMinorTickStyle = minorTickStyle;
             chart.ShowXAxisLabels = showLabels;
+            chart.XAxisTickLabelPosition = tickLabelPosition;
             ApplyXAxisLineProperties(chart, axisLine);
             chart.XAxisCrosses = crossing.Crosses;
             chart.XAxisCrossesAt = crossing.CrossesAt;
             chart.XAxisCrossBetween = crossing.CrossBetween;
+            chart.XAxisDisplayUnit = displayUnit;
             return;
         }
 
@@ -221,10 +230,12 @@ internal static class XlsxChartAxisReader
         chart.YAxisMajorTickStyle = majorTickStyle;
         chart.YAxisMinorTickStyle = minorTickStyle;
         chart.ShowYAxisLabels = showLabels;
+        chart.YAxisTickLabelPosition = tickLabelPosition;
         ApplyYAxisLineProperties(chart, axisLine);
         chart.YAxisCrosses = crossing.Crosses;
         chart.YAxisCrossesAt = crossing.CrossesAt;
         chart.YAxisCrossBetween = crossing.CrossBetween;
+        chart.YAxisDisplayUnit = displayUnit;
     }
 
     private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart)
@@ -238,7 +249,9 @@ internal static class XlsxChartAxisReader
             ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
         chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
-        chart.ShowXAxisLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
+        var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
+        chart.ShowXAxisLabels = tickLabelPositionValue != "none";
+        chart.XAxisTickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
         chart.XAxisLabelSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickLblSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
@@ -366,6 +379,14 @@ internal static class XlsxChartAxisReader
             _ => fallback
         };
 
+    private static ChartAxisTickLabelPosition FromXlsxTickLabelPosition(string? value) =>
+        value switch
+        {
+            "low" => ChartAxisTickLabelPosition.Low,
+            "high" => ChartAxisTickLabelPosition.High,
+            _ => ChartAxisTickLabelPosition.NextTo
+        };
+
     private static ChartAxisCrosses FromXlsxAxisCrosses(string? value) =>
         value switch
         {
@@ -396,6 +417,21 @@ internal static class XlsxChartAxisReader
             "days" => ChartDateAxisUnit.Days,
             "months" => ChartDateAxisUnit.Months,
             "years" => ChartDateAxisUnit.Years,
+            _ => null
+        };
+
+    private static ChartAxisDisplayUnit? FromXlsxAxisDisplayUnit(string? value) =>
+        value switch
+        {
+            "hundreds" => ChartAxisDisplayUnit.Hundreds,
+            "thousands" => ChartAxisDisplayUnit.Thousands,
+            "tenThousands" => ChartAxisDisplayUnit.TenThousands,
+            "hundredThousands" => ChartAxisDisplayUnit.HundredThousands,
+            "millions" => ChartAxisDisplayUnit.Millions,
+            "tenMillions" => ChartAxisDisplayUnit.TenMillions,
+            "hundredMillions" => ChartAxisDisplayUnit.HundredMillions,
+            "billions" => ChartAxisDisplayUnit.Billions,
+            "trillions" => ChartAxisDisplayUnit.Trillions,
             _ => null
         };
 

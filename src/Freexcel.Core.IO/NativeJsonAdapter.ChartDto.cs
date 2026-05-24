@@ -83,6 +83,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
         public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowXAxisLabels { get; set; } = true;
+        public ChartAxisTickLabelPosition XAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
         public CellColor? XAxisLabelTextColor { get; set; }
         public ThemeColorReferenceDto? XAxisLabelTextThemeColor { get; set; }
         public double XAxisLabelFontSize { get; set; } = 11;
@@ -100,6 +101,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
         public double? XAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
+        public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
         public double? YAxisMinimum { get; set; }
         public double? YAxisMaximum { get; set; }
         public double? YAxisMajorUnit { get; set; }
@@ -114,6 +116,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
         public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowYAxisLabels { get; set; } = true;
+        public ChartAxisTickLabelPosition YAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
         public CellColor? YAxisLabelTextColor { get; set; }
         public ThemeColorReferenceDto? YAxisLabelTextThemeColor { get; set; }
         public double YAxisLabelFontSize { get; set; } = 11;
@@ -123,6 +126,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisCrosses YAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
         public double? YAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
+        public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
         public ChartDataTableModel? DataTable { get; set; }
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }

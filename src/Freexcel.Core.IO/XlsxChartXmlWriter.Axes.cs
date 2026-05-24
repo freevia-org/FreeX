@@ -32,6 +32,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisLineColor,
                 chart.XAxisLineThickness,
                 chart.ShowXAxisLabels,
+                chart.XAxisTickLabelPosition,
                 chart.XAxisLabelTextColor,
                 chart.XAxisLabelFontSize,
                 chart.XAxisLabelAngle,
@@ -42,6 +43,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisCrosses,
                 chart.XAxisCrossesAt,
                 chart.XAxisCrossBetween,
+                chart.XAxisDisplayUnit,
                 chartNs,
                 drawingNs);
             yield return ToValueAxisXml(
@@ -65,6 +67,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
+                chart.YAxisTickLabelPosition,
                 chart.YAxisLabelTextColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
@@ -75,6 +78,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCrosses,
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
+                chart.YAxisDisplayUnit,
                 chartNs,
                 drawingNs);
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
@@ -101,6 +105,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisLineColor,
                     chart.YAxisLineThickness,
                     chart.ShowYAxisLabels,
+                    chart.YAxisTickLabelPosition,
                     chart.YAxisLabelTextColor,
                     chart.YAxisLabelFontSize,
                     chart.YAxisLabelAngle,
@@ -111,6 +116,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisCrosses,
                     chart.YAxisCrossesAt,
                     chart.YAxisCrossBetween,
+                    chart.YAxisDisplayUnit,
                     chartNs,
                     drawingNs);
             }
@@ -139,6 +145,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLineColor,
             chart.YAxisLineThickness,
             chart.ShowYAxisLabels,
+            chart.YAxisTickLabelPosition,
             chart.YAxisLabelTextColor,
             chart.YAxisLabelFontSize,
             chart.YAxisLabelAngle,
@@ -149,6 +156,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisCrosses,
             chart.YAxisCrossesAt,
             chart.YAxisCrossBetween,
+            chart.YAxisDisplayUnit,
             chartNs,
             drawingNs);
 
@@ -176,6 +184,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
+                chart.YAxisTickLabelPosition,
                 chart.YAxisLabelTextColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
@@ -186,6 +195,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCrosses,
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
+                chart.YAxisDisplayUnit,
                 chartNs,
                 drawingNs);
         }
@@ -206,7 +216,7 @@ internal static partial class XlsxChartXmlWriter
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
-            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
             ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
             ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
@@ -241,6 +251,7 @@ internal static partial class XlsxChartXmlWriter
         CellColor? lineColor,
         double lineThickness,
         bool showLabels,
+        ChartAxisTickLabelPosition tickLabelPosition,
         CellColor? labelTextColor,
         double labelFontSize,
         double labelAngle,
@@ -251,6 +262,7 @@ internal static partial class XlsxChartXmlWriter
         ChartAxisCrosses crosses,
         double? crossesAt,
         ChartAxisCrossBetween? crossBetween,
+        ChartAxisDisplayUnit? displayUnit,
         XNamespace chartNs,
         XNamespace drawingNs) =>
         new(chartNs + "valAx",
@@ -272,7 +284,8 @@ internal static partial class XlsxChartXmlWriter
             ToAxisUnitXml("minorUnit", minorUnit, chartNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
-            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels, tickLabelPosition))),
+            ToAxisDisplayUnitXml(displayUnit, chartNs),
             ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
@@ -337,8 +350,18 @@ internal static partial class XlsxChartXmlWriter
             _ => "out"
         };
 
-    private static string ToXlsxTickLabelPosition(bool showLabels) =>
-        showLabels ? "nextTo" : "none";
+    private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
+    {
+        if (!showLabels)
+            return "none";
+
+        return position switch
+        {
+            ChartAxisTickLabelPosition.Low => "low",
+            ChartAxisTickLabelPosition.High => "high",
+            _ => "nextTo"
+        };
+    }
 
     private static XElement ToAxisCrossesXml(ChartAxisCrosses crosses, double? crossesAt, XNamespace chartNs)
     {
@@ -421,6 +444,27 @@ internal static partial class XlsxChartXmlWriter
             ChartDateAxisUnit.Days => "days",
             ChartDateAxisUnit.Years => "years",
             _ => "months"
+        };
+
+    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, XNamespace chartNs) =>
+        unit is null
+            ? null
+            : new XElement(chartNs + "dispUnits",
+                new XElement(chartNs + "builtInUnit", new XAttribute("val", ToXlsxAxisDisplayUnit(unit.Value))));
+
+    private static string ToXlsxAxisDisplayUnit(ChartAxisDisplayUnit unit) =>
+        unit switch
+        {
+            ChartAxisDisplayUnit.Hundreds => "hundreds",
+            ChartAxisDisplayUnit.Thousands => "thousands",
+            ChartAxisDisplayUnit.TenThousands => "tenThousands",
+            ChartAxisDisplayUnit.HundredThousands => "hundredThousands",
+            ChartAxisDisplayUnit.Millions => "millions",
+            ChartAxisDisplayUnit.TenMillions => "tenMillions",
+            ChartAxisDisplayUnit.HundredMillions => "hundredMillions",
+            ChartAxisDisplayUnit.Billions => "billions",
+            ChartAxisDisplayUnit.Trillions => "trillions",
+            _ => "thousands"
         };
 
     private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format) =>

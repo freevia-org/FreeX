@@ -10,11 +10,19 @@ public sealed class XlsxFileAdapterFormatTests
     public void LoadPath_AvoidsFullPackageToArrayCopies()
     {
         var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.cs"));
+        var saveSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var diagnosticsSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetDiagnosticsMapper.cs"));
         var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
+        saveSource.Should().NotContain("GetUsedCells()");
+        savePostProcessingSource.Should().NotContain("GetUsedCells()");
+        diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
+        sanitizerSource.Should().Contain("RequiresSanitization(sourcePackage)");
+        sanitizerSource.Should().Contain("return sourcePackage;");
     }
 
     [Fact]

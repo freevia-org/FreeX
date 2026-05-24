@@ -289,9 +289,14 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("font")) return new(RibbonCommandIconKind.Font);
         if (name.Contains("alignment")) return new(RibbonCommandIconKind.Align);
         if (name.Contains("number")) return new(RibbonCommandIconKind.Number);
+        if (name.Contains("accessibility")) return new(RibbonCommandIconKind.Accessibility, RibbonCommandIconAccent.Warning);
+        if (name.Contains("proofing")) return new(RibbonCommandIconKind.Spelling);
         if (name.Contains("style")) return new(RibbonCommandIconKind.Theme);
         if (name.Contains("cell")) return new(RibbonCommandIconKind.Table);
         if (name.Contains("editing")) return new(RibbonCommandIconKind.Search);
+        if (name == "draw") return new(RibbonCommandIconKind.Rectangle);
+        if (name == "format") return new(RibbonCommandIconKind.Table);
+        if (name.Contains("arrange")) return new(RibbonCommandIconKind.BringForward);
         if (name.Contains("table")) return new(RibbonCommandIconKind.Table);
         if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn);
         if (name.Contains("illustration")) return new(RibbonCommandIconKind.Picture);
@@ -302,6 +307,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("text")) return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("symbol")) return new(RibbonCommandIconKind.Symbol);
         if (name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
+        if (name.Contains("scale to fit")) return new(RibbonCommandIconKind.Scale);
+        if (name.Contains("sheet options")) return new(RibbonCommandIconKind.Grid);
         if (name.Contains("theme")) return new(RibbonCommandIconKind.Theme);
         if (name.Contains("function") || name.Contains("formula")) return new(RibbonCommandIconKind.Function);
         if (name.Contains("defined name")) return new(RibbonCommandIconKind.Label);
@@ -312,12 +319,21 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("data")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("outline")) return new(RibbonCommandIconKind.Group);
         if (name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
+        if (name.Contains("note")) return new(RibbonCommandIconKind.Comment);
         if (name.Contains("protect")) return new(RibbonCommandIconKind.Protect);
+        if (name.Contains("forecast")) return new(RibbonCommandIconKind.ChartLine);
         if (name.Contains("view")) return new(RibbonCommandIconKind.Grid);
+        if (name.Contains("window")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("zoom")) return new(RibbonCommandIconKind.Zoom);
         if (name.Contains("macro")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("convert")) return new(RibbonCommandIconKind.Math);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help);
+        if (name.Contains("active field")) return new(RibbonCommandIconKind.List);
+        if (name == "group") return new(RibbonCommandIconKind.Group);
+        if (name.Contains("action")) return new(RibbonCommandIconKind.Target);
+        if (name.Contains("tool")) return new(RibbonCommandIconKind.ChartColumn);
+        if (name == "show") return new(RibbonCommandIconKind.View);
+        if (name == "layout") return new(RibbonCommandIconKind.Page);
 
         return new(RibbonCommandIconKind.Generic);
     }
