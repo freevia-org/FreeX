@@ -400,6 +400,16 @@ public class PhaseBDistributionTests
     // ── CONFIDENCE.T ─────────────────────────────────────────────────────────
 
     [Fact]
+    public void ConfidenceFunctions_RangeAlphaArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet((1, 1, 0.05), (2, 1, 0.10));
+
+        AssertColumnApproximately(Eval("CONFIDENCE.NORM(A1:A2,2.5,50)", sheet), Calc("CONFIDENCE.NORM(0.05,2.5,50)"), Calc("CONFIDENCE.NORM(0.10,2.5,50)"));
+        AssertColumnApproximately(Eval("CONFIDENCE(A1:A2,2.5,50)", sheet), Calc("CONFIDENCE(0.05,2.5,50)"), Calc("CONFIDENCE(0.10,2.5,50)"));
+        AssertColumnApproximately(Eval("CONFIDENCE.T(A1:A2,2.5,10)", sheet), Calc("CONFIDENCE.T(0.05,2.5,10)"), Calc("CONFIDENCE.T(0.10,2.5,10)"));
+    }
+
+    [Fact]
     public void ConfidenceT_BasicCase()
     {
         // CONFIDENCE.T(0.05,2.5,10): t(9,0.975)*2.5/sqrt(10)
