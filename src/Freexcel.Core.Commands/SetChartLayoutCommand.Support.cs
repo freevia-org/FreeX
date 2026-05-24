@@ -156,7 +156,13 @@ public sealed partial class SetChartLayoutCommand
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
         || format.IsDeleted is not null
-        || format.Position is not null;
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null;
 
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {
