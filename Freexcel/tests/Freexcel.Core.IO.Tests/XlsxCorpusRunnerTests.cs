@@ -1156,9 +1156,12 @@ public class XlsxCorpusRunnerTests
                 chart.HighLowLineThemeColor,
                 chart.HighLowLineThickness,
                 chart.HighLowLineDashStyle),
-            chart.ShowUpDownBars,
+            CaptureChartUpDownBarsSummary(chart),
             CaptureChartDataTableSummary(chart.DataTable),
             CaptureChart3DViewSummary(chart.ThreeDView),
+            CaptureChartSurfaceFormatSummary(chart.FloorFormat),
+            CaptureChartSurfaceFormatSummary(chart.SideWallFormat),
+            CaptureChartSurfaceFormatSummary(chart.BackWallFormat),
             new ChartRangeSummary(
                 chart.DataRange.Start.Row,
                 chart.DataRange.Start.Col,
@@ -1248,6 +1251,36 @@ public class XlsxCorpusRunnerTests
             themeColor,
             thickness,
             dashStyle);
+
+    private static ChartUpDownBarsSummary CaptureChartUpDownBarsSummary(ChartModel chart) =>
+        new(
+            chart.ShowUpDownBars,
+            chart.UpDownBarGapWidth,
+            CaptureChartBarShapeSummary(
+                chart.UpBarFillColor,
+                chart.UpBarFillThemeColor,
+                chart.UpBarBorderColor,
+                chart.UpBarBorderThemeColor,
+                chart.UpBarBorderThickness),
+            CaptureChartBarShapeSummary(
+                chart.DownBarFillColor,
+                chart.DownBarFillThemeColor,
+                chart.DownBarBorderColor,
+                chart.DownBarBorderThemeColor,
+                chart.DownBarBorderThickness));
+
+    private static ChartBarShapeSummary CaptureChartBarShapeSummary(
+        CellColor? fillColor,
+        WorkbookThemeColorReference? fillThemeColor,
+        CellColor? borderColor,
+        WorkbookThemeColorReference? borderThemeColor,
+        double? borderThickness) =>
+        new(
+            fillColor is null ? "" : ToColorSummary(fillColor.Value),
+            fillThemeColor,
+            borderColor is null ? "" : ToColorSummary(borderColor.Value),
+            borderThemeColor,
+            borderThickness);
 
     private static ChartVisualSummary CaptureChartVisualSummary(ChartModel chart) =>
         new(
@@ -1362,6 +1395,16 @@ public class XlsxCorpusRunnerTests
                 view.DepthPercent,
                 view.RightAngleAxes,
                 view.Perspective);
+
+    private static ChartSurfaceFormatSummary? CaptureChartSurfaceFormatSummary(ChartSurfaceFormatModel? format) =>
+        format is null
+            ? null
+            : new ChartSurfaceFormatSummary(
+                format.FillColor is null ? "" : ToColorSummary(format.FillColor.Value),
+                format.FillThemeColor,
+                format.BorderColor is null ? "" : ToColorSummary(format.BorderColor.Value),
+                format.BorderThemeColor,
+                format.BorderThickness);
 
     private static PivotCacheSummary CapturePivotCacheSummary(PivotCacheModel cache) =>
         new(
@@ -2283,9 +2326,12 @@ public class XlsxCorpusRunnerTests
         ChartGuideLineSummary DropLines,
         StockChartSubtype StockSubtype,
         ChartGuideLineSummary HighLowLines,
-        bool ShowUpDownBars,
+        ChartUpDownBarsSummary UpDownBars,
         ChartDataTableSummary? DataTable,
         Chart3DViewSummary? ThreeDView,
+        ChartSurfaceFormatSummary? FloorFormat,
+        ChartSurfaceFormatSummary? SideWallFormat,
+        ChartSurfaceFormatSummary? BackWallFormat,
         ChartRangeSummary DataRange);
 
     private sealed record ChartVisualSummary(
@@ -2363,6 +2409,19 @@ public class XlsxCorpusRunnerTests
         double Thickness,
         ChartLineDashStyle DashStyle);
 
+    private sealed record ChartUpDownBarsSummary(
+        bool Show,
+        int? GapWidth,
+        ChartBarShapeSummary UpBars,
+        ChartBarShapeSummary DownBars);
+
+    private sealed record ChartBarShapeSummary(
+        string FillColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        string BorderColor,
+        WorkbookThemeColorReference? BorderThemeColor,
+        double? BorderThickness);
+
     private sealed record ChartColorMapSummary(
         bool UseMasterColorMapping,
         IReadOnlyList<ChartColorMapEntrySummary> OverrideMappings);
@@ -2400,6 +2459,13 @@ public class XlsxCorpusRunnerTests
         int? DepthPercent,
         bool? RightAngleAxes,
         int? Perspective);
+
+    private sealed record ChartSurfaceFormatSummary(
+        string FillColor,
+        WorkbookThemeColorReference? FillThemeColor,
+        string BorderColor,
+        WorkbookThemeColorReference? BorderThemeColor,
+        double? BorderThickness);
 
     private sealed record ChartProtectionSummary(
         bool? ChartObject,

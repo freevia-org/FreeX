@@ -78,7 +78,34 @@ internal static class XlsxChartTrendlineErrorBarReader
                 () => chart.HighLowLineThemeColor = null);
         }
 
-        chart.ShowUpDownBars |= plotChart.Element(ChartNs + "upDownBars") is not null;
+        if (plotChart.Element(ChartNs + "upDownBars") is { } upDownBars)
+        {
+            chart.ShowUpDownBars = true;
+            if (int.TryParse(upDownBars.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value, out var gapWidth))
+                chart.UpDownBarGapWidth = Math.Clamp(gapWidth, 0, 500);
+            ApplyBarShapeProperties(
+                upDownBars.Element(ChartNs + "upBars")?.Element(ChartNs + "spPr"),
+                color => chart.UpBarFillColor = color,
+                theme => chart.UpBarFillThemeColor = theme,
+                color => chart.UpBarBorderColor = color,
+                theme => chart.UpBarBorderThemeColor = theme,
+                thickness => chart.UpBarBorderThickness = thickness,
+                () => chart.UpBarFillColor = null,
+                () => chart.UpBarFillThemeColor = null,
+                () => chart.UpBarBorderColor = null,
+                () => chart.UpBarBorderThemeColor = null);
+            ApplyBarShapeProperties(
+                upDownBars.Element(ChartNs + "downBars")?.Element(ChartNs + "spPr"),
+                color => chart.DownBarFillColor = color,
+                theme => chart.DownBarFillThemeColor = theme,
+                color => chart.DownBarBorderColor = color,
+                theme => chart.DownBarBorderThemeColor = theme,
+                thickness => chart.DownBarBorderThickness = thickness,
+                () => chart.DownBarFillColor = null,
+                () => chart.DownBarFillThemeColor = null,
+                () => chart.DownBarBorderColor = null,
+                () => chart.DownBarBorderThemeColor = null);
+        }
     }
 
     public static ChartLineDashStyle FromXlsxPresetDash(string? value) =>
@@ -159,6 +186,58 @@ internal static class XlsxChartTrendlineErrorBarReader
         {
             setColor(color);
             clearThemeColor();
+        }
+    }
+
+    private static void ApplyBarShapeProperties(
+        XElement? shapeProperties,
+        Action<CellColor> setFillColor,
+        Action<WorkbookThemeColorReference> setFillThemeColor,
+        Action<CellColor> setBorderColor,
+        Action<WorkbookThemeColorReference> setBorderThemeColor,
+        Action<double> setBorderThickness,
+        Action clearFillColor,
+        Action clearFillThemeColor,
+        Action clearBorderColor,
+        Action clearBorderThemeColor)
+    {
+        if (shapeProperties is null)
+            return;
+
+        if (shapeProperties.Element(DrawingNs + "solidFill") is { } fill)
+        {
+            if (XlsxDrawingColorReader.TryReadThemeColorReference(fill, DrawingNs, out var fillThemeColor))
+            {
+                setFillThemeColor(fillThemeColor);
+                clearFillColor();
+            }
+            else if (XlsxDrawingColorReader.TryReadConcreteColor(fill, DrawingNs, out var fillColor))
+            {
+                setFillColor(fillColor);
+                clearFillThemeColor();
+            }
+        }
+
+        var line = shapeProperties.Element(DrawingNs + "ln");
+        if (line is null)
+            return;
+
+        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            setBorderThickness(Math.Clamp(emus / 12700.0, 0, 10));
+
+        var lineFill = line.Element(DrawingNs + "solidFill");
+        if (lineFill is null)
+            return;
+
+        if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var borderThemeColor))
+        {
+            setBorderThemeColor(borderThemeColor);
+            clearBorderColor();
+        }
+        else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var borderColor))
+        {
+            setBorderColor(borderColor);
+            clearBorderThemeColor();
         }
     }
 
