@@ -42,6 +42,10 @@ public sealed partial class XlsxFileAdapter
         XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
+        bool? OutlineSummaryBelow,
+        bool? OutlineSummaryRight,
+        bool? ShowOutlineSymbols,
+        bool? ApplyOutlineStyles,
         HashSet<uint> GroupHiddenRows,
         HashSet<uint> GroupHiddenCols,
         Dictionary<uint, double> RowHeights,
@@ -248,6 +252,9 @@ public sealed partial class XlsxFileAdapter
         var pageSetUpPr = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Element(worksheetNs + "pageSetUpPr");
+        var outlinePr = worksheetXml.Root?
+            .Element(worksheetNs + "sheetPr")?
+            .Element(worksheetNs + "outlinePr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
@@ -311,6 +318,10 @@ public sealed partial class XlsxFileAdapter
             headerFooterPictures,
             rowOutlineLevels,
             colOutlineLevels,
+            ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value),
+            ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value),
+            ParseOptionalBool(outlinePr?.Attribute("showOutlineSymbols")?.Value),
+            ParseOptionalBool(outlinePr?.Attribute("applyStyles")?.Value),
             groupHiddenRows,
             groupHiddenCols,
             rowHeights,

@@ -282,6 +282,18 @@ public sealed partial class Sheet
     /// <summary>Outline level (1–8) per column. 0 = no grouping.</summary>
     public Dictionary<uint, int> ColOutlineLevels { get; } = [];
 
+    /// <summary>Whether row outline summary rows appear below detail rows. Null means Excel default.</summary>
+    public bool? OutlineSummaryBelow { get; set; }
+
+    /// <summary>Whether column outline summary columns appear to the right of detail columns. Null means Excel default.</summary>
+    public bool? OutlineSummaryRight { get; set; }
+
+    /// <summary>Whether outline symbols are displayed for grouped rows and columns. Null means Excel default.</summary>
+    public bool? ShowOutlineSymbols { get; set; }
+
+    /// <summary>Whether outline styles should be applied automatically. Null means Excel default.</summary>
+    public bool? ApplyOutlineStyles { get; set; }
+
     /// <summary>Rows currently collapsed by a group expand/collapse operation.</summary>
     public HashSet<uint> GroupHiddenRows { get; } = [];
 

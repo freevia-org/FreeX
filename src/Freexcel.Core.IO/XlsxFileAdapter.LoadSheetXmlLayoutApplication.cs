@@ -57,6 +57,10 @@ public sealed partial class XlsxFileAdapter
             sheet.RowOutlineLevels[rowNum] = level;
         foreach (var (colNum, level) in layout.ColOutlineLevels)
             sheet.ColOutlineLevels[colNum] = level;
+        sheet.OutlineSummaryBelow = layout.OutlineSummaryBelow;
+        sheet.OutlineSummaryRight = layout.OutlineSummaryRight;
+        sheet.ShowOutlineSymbols = layout.ShowOutlineSymbols;
+        sheet.ApplyOutlineStyles = layout.ApplyOutlineStyles;
         sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
         sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
         foreach (var chartPart in layout.ChartParts)

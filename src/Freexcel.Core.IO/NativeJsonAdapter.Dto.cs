@@ -112,6 +112,10 @@ public sealed partial class NativeJsonAdapter
         public List<uint> HiddenCols { get; set; } = [];
         public List<UIntIntDto> RowOutlineLevels { get; set; } = [];
         public List<UIntIntDto> ColOutlineLevels { get; set; } = [];
+        public bool? OutlineSummaryBelow { get; set; }
+        public bool? OutlineSummaryRight { get; set; }
+        public bool? ShowOutlineSymbols { get; set; }
+        public bool? ApplyOutlineStyles { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;

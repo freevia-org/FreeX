@@ -12271,6 +12271,65 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetOutlineProperties()
+    {
+        var workbook = new Workbook("WorksheetOutlineProperties");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Outline"));
+        sheet.RowOutlineLevels[3] = 1;
+        sheet.ColOutlineLevels[2] = 1;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        using (var sourceArchive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var sourceWorksheetXml = LoadPackageXml(sourceArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace sourceWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetPr = sourceWorksheetXml.Root!.Element(sourceWorksheetNs + "sheetPr");
+            if (sheetPr is null)
+            {
+                sheetPr = new XElement(sourceWorksheetNs + "sheetPr");
+                sourceWorksheetXml.Root!.AddFirst(sheetPr);
+            }
+
+            sheetPr.Element(sourceWorksheetNs + "outlinePr")?.Remove();
+            sheetPr.Add(new XElement(
+                sourceWorksheetNs + "outlinePr",
+                new XAttribute("summaryBelow", "0"),
+                new XAttribute("summaryRight", "0"),
+                new XAttribute("showOutlineSymbols", "0"),
+                new XAttribute("applyStyles", "1")));
+            ReplacePackageXml(sourceArchive, "xl/worksheets/sheet1.xml", sourceWorksheetXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.OutlineSummaryBelow.Should().BeFalse();
+        loadedSheet.OutlineSummaryRight.Should().BeFalse();
+        loadedSheet.ShowOutlineSymbols.Should().BeFalse();
+        loadedSheet.ApplyOutlineStyles.Should().BeTrue();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var outlinePr = worksheetXml.Root!
+            .Element(worksheetNs + "sheetPr")!
+            .Element(worksheetNs + "outlinePr");
+        outlinePr.Should().NotBeNull();
+        outlinePr!.Attribute("summaryBelow")!.Value.Should().Be("0");
+        outlinePr.Attribute("summaryRight")!.Value.Should().Be("0");
+        outlinePr.Attribute("showOutlineSymbols")!.Value.Should().Be("0");
+        outlinePr.Attribute("applyStyles")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAsymmetricPrintQualityDpi()
     {
         var workbook = new Workbook("WorksheetAsymmetricPrintQualityDpi");
