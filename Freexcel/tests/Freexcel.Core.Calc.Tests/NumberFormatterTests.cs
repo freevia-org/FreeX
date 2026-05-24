@@ -76,6 +76,20 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("0;-0;", 0, "")]
+    [InlineData("0;;0", -5, "")]
+    [InlineData("0;;", -5, "")]
+    public void CustomNumberSubset_EmptyPositionalSectionsSuppressDisplay(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[>100]0.0;[<=100]0.00", 125, "125.0")]
     [InlineData("[>100]0.0;[<=100]0.00", 25, "25.00")]
     [InlineData("[<0]0.0;[=0]\"zero\";0.00", 0, "zero")]
@@ -635,6 +649,14 @@ public class NumberFormatterTests
         var result = NumberFormatter.Format(new TextValue(value), format);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_EmptyTextSectionSuppressesTextDisplay()
+    {
+        var result = NumberFormatter.Format(new TextValue("hello"), "0;0;0;");
+
+        Assert.Equal("", result);
     }
 
     [Theory]

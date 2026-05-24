@@ -154,6 +154,7 @@ public sealed partial class SetChartLayoutCommand
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {
         var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
+        var supportsSmooth = chartType is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
         return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
@@ -163,7 +164,8 @@ public sealed partial class SetChartLayoutCommand
                 ? ClampFinite(markerSize, 1, 30)
                 : null,
             DashStyle = ValidNullableEnumOrNull(format.DashStyle),
-            MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null
+            MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null,
+            Smooth = supportsSmooth ? format.Smooth : null
         };
     }
 
@@ -175,7 +177,8 @@ public sealed partial class SetChartLayoutCommand
         || format.MarkerStyle is not null
         || format.MarkerSize is not null
         || format.FillThemeColor is not null
-        || format.StrokeThemeColor is not null;
+        || format.StrokeThemeColor is not null
+        || format.Smooth is not null;
 
     private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
         where TEnum : struct, Enum =>
@@ -311,6 +314,17 @@ public sealed partial class SetChartLayoutCommand
         chart.HighLowLineThemeColor = snapshot.HighLowLineThemeColor;
         chart.HighLowLineThickness = snapshot.HighLowLineThickness ?? 1;
         chart.HighLowLineDashStyle = snapshot.HighLowLineDashStyle ?? ChartLineDashStyle.Solid;
+        chart.UpDownBarGapWidth = snapshot.UpDownBarGapWidth;
+        chart.UpBarFillColor = snapshot.UpBarFillColor;
+        chart.UpBarFillThemeColor = snapshot.UpBarFillThemeColor;
+        chart.UpBarBorderColor = snapshot.UpBarBorderColor;
+        chart.UpBarBorderThemeColor = snapshot.UpBarBorderThemeColor;
+        chart.UpBarBorderThickness = snapshot.UpBarBorderThickness;
+        chart.DownBarFillColor = snapshot.DownBarFillColor;
+        chart.DownBarFillThemeColor = snapshot.DownBarFillThemeColor;
+        chart.DownBarBorderColor = snapshot.DownBarBorderColor;
+        chart.DownBarBorderThemeColor = snapshot.DownBarBorderThemeColor;
+        chart.DownBarBorderThickness = snapshot.DownBarBorderThickness;
         chart.ShowSecondaryAxis = snapshot.ShowSecondaryAxis ?? false;
         chart.SecondaryAxisSeriesIndexes = snapshot.SecondaryAxisSeriesIndexes?.ToList() ?? [];
         chart.ComboLineSeriesIndexes = snapshot.ComboLineSeriesIndexes?.ToList() ?? [];

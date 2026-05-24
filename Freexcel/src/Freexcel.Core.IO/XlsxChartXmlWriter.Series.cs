@@ -42,6 +42,9 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
+                    ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
+                    : null,
                 ToCategoryRangeXml(categoryRange, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
@@ -56,6 +59,11 @@ internal static partial class XlsxChartXmlWriter
             : new XElement(chartNs + "cat",
                 new XElement(chartNs + "strRef",
                     new XElement(chartNs + "f", categoryRange)));
+
+    private static XElement? ToSeriesSmoothXml(ChartModel chart, int seriesIndex, XNamespace chartNs) =>
+        GetSeriesFormat(chart, seriesIndex)?.Smooth is { } smooth
+            ? new XElement(chartNs + "smooth", new XAttribute("val", smooth ? "1" : "0"))
+            : null;
 
     private static IEnumerable<XElement> BuildScatterChartSeries(
         ChartModel chart,
@@ -88,6 +96,7 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToSeriesSmoothXml(chart, seriesIndex, chartNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", xValueRange))),

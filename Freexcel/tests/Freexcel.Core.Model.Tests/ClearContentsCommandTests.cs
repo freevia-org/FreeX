@@ -48,6 +48,43 @@ public sealed class ClearContentsCommandTests
         sheet.GetCell(address)!.Value.Should().Be(new TextValue("old"));
     }
 
+    [Fact]
+    public void ClearContents_RejectsLockedCellsOnProtectedSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, Cell.FromValue(new TextValue("keep")));
+        sheet.IsProtected = true;
+
+        var outcome = new ClearContentsCommand(sheet.Id, new GridRange(address, address))
+            .Apply(new SimpleCommandContext(workbook));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("keep"));
+    }
+
+    [Fact]
+    public void ClearContents_AllowsUnlockedCellsOnProtectedSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var unlockedStyle = workbook.RegisterStyle(new CellStyle { Locked = false });
+        var cell = Cell.FromValue(new TextValue("clear me"));
+        cell.StyleId = unlockedStyle;
+        sheet.SetCell(address, cell);
+        sheet.IsProtected = true;
+
+        var outcome = new ClearContentsCommand(sheet.Id, new GridRange(address, address))
+            .Apply(new SimpleCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(address)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(address)!.StyleId.Should().Be(unlockedStyle);
+    }
+
     private sealed class SimpleCommandContext(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook => workbook;

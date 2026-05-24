@@ -98,6 +98,18 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesFirstSortLevel()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_levelsGrid.SelectedIndex = 0;");
+        source.Should().Contain("_levelsGrid.Focus();");
+        source.Should().Contain("Keyboard.Focus(_levelsGrid);");
+    }
+
+    [Fact]
     public void BuildOrderChoices_UsesExcelColorSortLabelsForColorSorts()
     {
         SortDialog.BuildOrderChoices("Cell Values").Should().Equal(
@@ -335,6 +347,18 @@ public sealed class SortDialogTests
         optionsSource.Should().Contain("Result = new SortDialogOptions");
         optionsSource.Should().NotContain("IsEnabled = false");
         optionsSource.Should().NotContain("Unsupported Excel options");
+    }
+
+    [Fact]
+    public void SortOptionsDialogOpenedFromKeyboard_FocusesCaseSensitiveChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
+
+        optionsSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        optionsSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        optionsSource.Should().Contain("_caseSensitiveBox.Focus();");
+        optionsSource.Should().Contain("Keyboard.Focus(_caseSensitiveBox);");
     }
 
     [Fact]

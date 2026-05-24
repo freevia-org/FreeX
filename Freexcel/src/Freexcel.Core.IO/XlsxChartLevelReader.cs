@@ -28,6 +28,9 @@ internal static class XlsxChartLevelReader
         var plotArea = chartElement?.Element(ChartNs + "plotArea");
         chart.PlotAreaLayout = XlsxChartMetadataReader.ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
         chart.ThreeDView = Read3DView(chartElement?.Element(ChartNs + "view3D"));
+        chart.FloorFormat = XlsxChartFormattingReader.ReadSurfaceFormat(chartElement?.Element(ChartNs + "floor"));
+        chart.SideWallFormat = XlsxChartFormattingReader.ReadSurfaceFormat(chartElement?.Element(ChartNs + "sideWall"));
+        chart.BackWallFormat = XlsxChartFormattingReader.ReadSurfaceFormat(chartElement?.Element(ChartNs + "backWall"));
         chart.DataTable = ReadChartDataTable(plotArea?.Element(ChartNs + "dTable"));
         XlsxChartFormattingReader.ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
         XlsxChartAxisReader.ApplyAxisMetadata(plotArea, chart);

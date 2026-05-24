@@ -30,6 +30,9 @@ public sealed partial class NativeJsonAdapter
         public ChartProtectionModel? Protection { get; set; }
         public ChartPrintSettingsModel? PrintSettings { get; set; }
         public Chart3DViewModel? ThreeDView { get; set; }
+        public ChartSurfaceFormatDto? FloorFormat { get; set; }
+        public ChartSurfaceFormatDto? SideWallFormat { get; set; }
+        public ChartSurfaceFormatDto? BackWallFormat { get; set; }
         public bool ShowPivotChartFieldButtons { get; set; } = true;
         public bool ShowPivotChartReportFilterButtons { get; set; } = true;
         public bool ShowPivotChartAxisFieldButtons { get; set; } = true;
@@ -162,6 +165,17 @@ public sealed partial class NativeJsonAdapter
         public double HighLowLineThickness { get; set; } = 1;
         public ChartLineDashStyle HighLowLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
         public bool ShowUpDownBars { get; set; }
+        public int? UpDownBarGapWidth { get; set; }
+        public CellColor? UpBarFillColor { get; set; }
+        public ThemeColorReferenceDto? UpBarFillThemeColor { get; set; }
+        public CellColor? UpBarBorderColor { get; set; }
+        public ThemeColorReferenceDto? UpBarBorderThemeColor { get; set; }
+        public double? UpBarBorderThickness { get; set; }
+        public CellColor? DownBarFillColor { get; set; }
+        public ThemeColorReferenceDto? DownBarFillThemeColor { get; set; }
+        public CellColor? DownBarBorderColor { get; set; }
+        public ThemeColorReferenceDto? DownBarBorderThemeColor { get; set; }
+        public double? DownBarBorderThickness { get; set; }
         public bool ShowSecondaryAxis { get; set; }
         public List<int>? SecondaryAxisSeriesIndexes { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }
@@ -172,5 +186,14 @@ public sealed partial class NativeJsonAdapter
         public double Top { get; set; } = 50;
         public double Width { get; set; } = 400;
         public double Height { get; set; } = 300;
+    }
+
+    private sealed class ChartSurfaceFormatDto
+    {
+        public CellColor? FillColor { get; set; }
+        public ThemeColorReferenceDto? FillThemeColor { get; set; }
+        public CellColor? BorderColor { get; set; }
+        public ThemeColorReferenceDto? BorderThemeColor { get; set; }
+        public double? BorderThickness { get; set; }
     }
 }
