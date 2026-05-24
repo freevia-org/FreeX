@@ -14594,6 +14594,8 @@ public partial class FileAdapterSmokeTests
                 </c:pivotFmts>
                 """,
             ChartStyleId = 42,
+            ChartDefaultTextColor = new CellColor(25, 35, 45),
+            ChartDefaultFontSize = 13,
             Uses1904DateSystem = true,
             Language = "en-US",
             ColorMapOverride = new ChartColorMapOverrideModel
@@ -14737,6 +14739,13 @@ public partial class FileAdapterSmokeTests
             XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             chartXml.Root!.Element(chartNs + "date1904")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "lang")!.Attribute("val")!.Value.Should().Be("en-US");
+            var defaultTextProperties = chartXml.Root.Element(chartNs + "txPr")!
+                .Descendants(drawingNs + "defRPr")
+                .Should().ContainSingle().Subject;
+            defaultTextProperties.Attribute("sz")!.Value.Should().Be("1300");
+            defaultTextProperties.Element(drawingNs + "solidFill")!
+                .Element(drawingNs + "srgbClr")!
+                .Attribute("val")!.Value.Should().Be("19232D");
             var colorMap = chartXml.Root.Element(chartNs + "clrMapOvr")!
                 .Element(drawingNs + "overrideClrMapping")!;
             colorMap.Attribute("bg1")!.Value.Should().Be("lt1");
@@ -14871,6 +14880,8 @@ public partial class FileAdapterSmokeTests
         loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
         loadedChart.ThreeDView.Should().BeEquivalentTo(chart.ThreeDView);
         loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
+        loadedChart.ChartDefaultTextColor.Should().Be(new CellColor(25, 35, 45));
+        loadedChart.ChartDefaultFontSize.Should().Be(13);
         loadedChart.RoundedCorners.Should().BeTrue();
         loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
         loadedChart.ShowDataLabelsOverMaximum.Should().BeTrue();

@@ -324,6 +324,9 @@ public sealed class ChartModel
     public bool HideYAxis { get; set; }
     public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
     public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
+    public CellColor? ChartDefaultTextColor { get; set; }
+    public WorkbookThemeColorReference? ChartDefaultTextThemeColor { get; set; }
+    public double ChartDefaultFontSize { get; set; } = 11;
     public CellColor? ChartTitleTextColor { get; set; }
     public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
     public double ChartTitleFontSize { get; set; } = 16;
