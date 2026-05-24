@@ -228,7 +228,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args[1] is RangeValue xpathRange) return MapUnaryTextRange(xpathRange, value => FilterXmlScalar(args[0], value));
+        if (args[0] is RangeValue xmlRange) return MapUnaryTextRange(xmlRange, value => FilterXmlScalar(value, args[1]));
+        return FilterXmlScalar(args[0], args[1]);
+    }
 
+    private static ScalarValue FilterXmlScalar(ScalarValue xmlValue, ScalarValue xpathValue)
+    {
         try
         {
             var settings = new XmlReaderSettings
@@ -237,11 +243,11 @@ public static partial class BuiltInFunctions
                 XmlResolver = null
             };
 
-            using var stringReader = new StringReader(ToText(args[0]));
+            using var stringReader = new StringReader(ToText(xmlValue));
             using var xmlReader = XmlReader.Create(stringReader, settings);
             var document = new XPathDocument(xmlReader);
             var navigator = document.CreateNavigator();
-            var xpath = ToText(args[1]);
+            var xpath = ToText(xpathValue);
             var result = navigator.Evaluate(xpath);
 
             return result switch
