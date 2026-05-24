@@ -440,6 +440,8 @@ public sealed class ChartModel
     public bool ErrorBarEndCaps { get; set; } = true;
     public CellColor? ErrorBarColor { get; set; }
     public WorkbookThemeColorReference? ErrorBarThemeColor { get; set; }
+    public string? ErrorBarPlusRangeCacheXml { get; set; }
+    public string? ErrorBarMinusRangeCacheXml { get; set; }
     public double ErrorBarThickness { get; set; } = 1;
     public ChartLineDashStyle ErrorBarDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowDropLines { get; set; }
