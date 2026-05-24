@@ -661,11 +661,17 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var text  = ToText(args[0]);
         var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
+        if (args[0] is RangeValue range) return MapTextSliceRange(range, count, fromRight: false);
+        return LeftScalar(args[0], count);
+    }
+
+    private static ScalarValue LeftScalar(ScalarValue value, int count)
+    {
+        var text = ToText(value);
         count = Math.Min(count, text.Length);
         if (ContainsSurrogatePair(text))
             return TextResult(text[..AdvanceTextElements(text, 0, count)]);
@@ -676,16 +682,37 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var text  = ToText(args[0]);
         var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
+        if (args[0] is RangeValue range) return MapTextSliceRange(range, count, fromRight: true);
+        return RightScalar(args[0], count);
+    }
+
+    private static ScalarValue RightScalar(ScalarValue value, int count)
+    {
+        var text = ToText(value);
         count = Math.Min(count, text.Length);
         int start = ContainsSurrogatePair(text)
             ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
             : text.Length - count;
         return TextResult(text[start..]);
+    }
+
+    private static RangeValue MapTextSliceRange(RangeValue range, int count, bool fromRight)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e
+                    ? e
+                    : fromRight ? RightScalar(value, count) : LeftScalar(value, count);
+            }
+
+        return new RangeValue(cells);
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>

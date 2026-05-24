@@ -886,6 +886,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LeftAndRight_RangeTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var left = _eval.Evaluate("=LEFT(A1:A2,2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        left.Cells[0, 0].Should().Be(new TextValue("Ap"));
+        left.Cells[1, 0].Should().Be(new TextValue("Ba"));
+
+        var right = _eval.Evaluate("=RIGHT(A1:A2,3)", sheet).Should().BeOfType<RangeValue>().Subject;
+        right.Cells[0, 0].Should().Be(new TextValue("ple"));
+        right.Cells[1, 0].Should().Be(new TextValue("ana"));
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
