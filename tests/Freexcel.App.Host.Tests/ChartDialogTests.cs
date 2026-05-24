@@ -692,6 +692,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartErrorBarsDialogOpenedFromKeyboard_FocusesShowErrorBarsChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
     public void ChartAxisFormatDialogResult_BuildsAxisSpecificLayoutOptions()
     {
         var yAxis = ChartAxisFormatDialog.CreateResult(
