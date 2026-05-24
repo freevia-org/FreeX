@@ -47,6 +47,7 @@ public partial class GridView
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
 
         var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
             var cell = layout.Cell;
@@ -111,7 +112,7 @@ public partial class GridView
                         typeface,
                         size,
                         textBrush,
-                        VisualTreeHelper.GetDpi(this).PixelsPerDip).Width,
+                        pixelsPerDip).Width,
                     ToDisplayFontSize(6));
             }
 
@@ -122,7 +123,7 @@ public partial class GridView
                 typeface,
                 fontSize,
                 textBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             if (BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
@@ -163,6 +164,7 @@ public partial class GridView
 
         var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
 
         // Pass 1: backgrounds
@@ -317,7 +319,7 @@ public partial class GridView
                         typeface,
                         size,
                         textBrush,
-                        VisualTreeHelper.GetDpi(this).PixelsPerDip).Width,
+                        pixelsPerDip).Width,
                     ToDisplayFontSize(6));
             }
 
@@ -326,7 +328,7 @@ public partial class GridView
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 typeface, fontSize, textBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             if (BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
