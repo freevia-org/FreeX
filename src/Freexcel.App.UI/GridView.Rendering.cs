@@ -51,6 +51,7 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
+        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
             var cell = layout.Cell;
@@ -95,7 +96,7 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var typeface = CreateCellTypeface(style);
+            var typeface = CreateCellTypeface(style, typefaceCache);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
@@ -170,6 +171,7 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
         var borderPenCache = new Dictionary<CellBorder, Pen>();
+        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
 
 
         // Pass 1: backgrounds
@@ -300,7 +302,7 @@ public partial class GridView
                 }
             }
 
-            var typeface = CreateCellTypeface(style);
+            var typeface = CreateCellTypeface(style, typefaceCache);
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
