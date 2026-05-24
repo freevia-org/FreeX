@@ -286,6 +286,8 @@ public sealed class ChartModel
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
+    public ChartManualLayoutModel? TitleLayout { get; set; }
+    public bool TitleOverlay { get; set; }
     public string? XAxisTitle { get; set; }
     public string? YAxisTitle { get; set; }
     public bool HideXAxis { get; set; }
@@ -440,6 +442,8 @@ public sealed class ChartModel
     public bool ErrorBarEndCaps { get; set; } = true;
     public CellColor? ErrorBarColor { get; set; }
     public WorkbookThemeColorReference? ErrorBarThemeColor { get; set; }
+    public string? ErrorBarPlusRangeCacheXml { get; set; }
+    public string? ErrorBarMinusRangeCacheXml { get; set; }
     public double ErrorBarThickness { get; set; } = 1;
     public ChartLineDashStyle ErrorBarDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowDropLines { get; set; }

@@ -53,32 +53,6 @@ public static partial class NumberFormatter
 
     // ── General format ────────────────────────────────────────────────────────
 
-    private static string FormatGeneral(ScalarValue value) => value switch
-    {
-        NumberValue n   => FormatNumberGeneral(n.Value),
-        DateTimeValue d => FormatGeneralDateTime(d.Value),
-        TextValue t     => t.Value,
-        BoolValue b     => b.Value ? "TRUE" : "FALSE",
-        ErrorValue e    => e.Code,
-        BlankValue      => "",
-        _               => ""
-    };
-
-    private static string FormatGeneralDateTime(double value)
-    {
-        try { return DateTime.FromOADate(value).ToString("d", CultureInfo.InvariantCulture); }
-        catch { return FormatNumberGeneral(value); }
-    }
-
-    private static string FormatNumberGeneral(double value)
-    {
-        if (double.IsNaN(value) || double.IsInfinity(value))
-            return value.ToString(CultureInfo.InvariantCulture);
-        if (value == Math.Truncate(value) && Math.Abs(value) < 1e15)
-            return ((long)value).ToString(CultureInfo.InvariantCulture);
-        return value.ToString("G10", CultureInfo.InvariantCulture);
-    }
-
     // ── Section splitting ─────────────────────────────────────────────────────
 
     // ── Number formatting ─────────────────────────────────────────────────────
@@ -125,6 +99,18 @@ public static partial class NumberFormatter
             return text;
         }
 
+        if (TryGetFillDirective(format, out var fillChar, out var fillAfterNumber))
+        {
+            var fill = new string(fillChar, targetWidthCharacters.Value - text.Length);
+            if (fillAfterNumber)
+                return text + fill;
+
+            int directiveFillIndex = FindAccountingFillInsertionIndex(text);
+            return directiveFillIndex < 0
+                ? text.PadLeft(targetWidthCharacters.Value, fillChar)
+                : text.Insert(directiveFillIndex, fill);
+        }
+
         int fillIndex = FindAccountingFillInsertionIndex(text);
         if (fillIndex < 0)
             return text.PadLeft(targetWidthCharacters.Value);
@@ -146,6 +132,42 @@ public static partial class NumberFormatter
 
             if (!inQuote && (c == '_' || c == '*'))
                 return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetFillDirective(string format, out char fillChar, out bool fillAfterNumber)
+    {
+        fillChar = ' ';
+        fillAfterNumber = false;
+        bool inQuote = false;
+        int firstNumericPlaceholder = -1;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && firstNumericPlaceholder < 0 && IsNumericPlaceholder(c))
+                firstNumericPlaceholder = i;
+
+            if (!inQuote && c == '*' && i + 1 < format.Length)
+            {
+                fillChar = format[i + 1];
+                fillAfterNumber = firstNumericPlaceholder >= 0;
+                return true;
+            }
         }
 
         return false;
@@ -492,51 +514,5 @@ public static partial class NumberFormatter
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 
-    private static FormatResult FormatTextWithColor(string text, string[] sections)
-    {
-        if (sections.Length <= 3)
-        {
-            var firstSection = ParseSection(sections[0]);
-            return firstSection.Format.Contains('@', StringComparison.Ordinal)
-                ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
-                : new FormatResult(text);
-        }
-
-        var parsed = ParseSection(sections[3]);
-        if (parsed.Format == "")
-            return new FormatResult("", parsed.ColorHex);
-
-        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);
-    }
-
-    private static string ApplyTextSection(string section, string text)
-    {
-        // `@` is the text placeholder; surrounding quotes and escaped characters are literals.
-        // Spacing/fill directives affect layout in Excel, not the displayed text payload.
-        var result = new System.Text.StringBuilder();
-        bool inQuote = false;
-        for (int i = 0; i < section.Length; i++)
-        {
-            char c = section[i];
-            if (c == '"') { inQuote = !inQuote; continue; }
-            if (inQuote) { result.Append(c); continue; }
-
-            if (c == '\\' && i + 1 < section.Length)
-            {
-                result.Append(section[++i]);
-                continue;
-            }
-
-            if (c is '_' or '*' && i + 1 < section.Length)
-            {
-                i++;
-                continue;
-            }
-
-            if (c == '@') result.Append(text);
-            else result.Append(c);
-        }
-        return result.ToString();
-    }
 }
 

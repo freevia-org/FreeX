@@ -1297,20 +1297,59 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        var rangeIndex = -1;
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue e) return e;
+            if (args[i] is RangeValue)
+            {
+                if (rangeIndex >= 0) return ErrorValue.Value;
+                rangeIndex = i;
+            }
+        }
+
+        if (rangeIndex >= 0)
+            return MapConcatenateRange((RangeValue)args[rangeIndex], args, rangeIndex);
+
         var sb = new System.Text.StringBuilder();
         foreach (var a in args)
         {
-            if (a is ErrorValue e) return e;
             sb.Append(ToText(a));
         }
         return TextResult(sb.ToString());
     }
 
+    private static RangeValue MapConcatenateRange(RangeValue range, IReadOnlyList<ScalarValue> args, int rangeIndex)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is ErrorValue e)
+                {
+                    cells[r, c] = e;
+                    continue;
+                }
+
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < args.Count; i++)
+                    sb.Append(i == rangeIndex ? ToText(value) : ToText(args[i]));
+                cells[r, c] = TextResult(sb.ToString());
+            }
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return args[0] is TextValue t ? TextResult(t.Value) : new TextValue("");
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, TScalar);
+        return TScalar(args[0]);
     }
+
+    private static ScalarValue TScalar(ScalarValue value) =>
+        value is TextValue t ? TextResult(t.Value) : new TextValue("");
 
     private static ScalarValue Hyperlink(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -1326,7 +1365,6 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        double n = ToNumber(args[0]);
         int dec = 2;
         if (args.Count > 1 && args[1] is not BlankValue)
         {
@@ -1335,6 +1373,13 @@ public static partial class BuiltInFunctions
             dec = (int)rawDec;
         }
         bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FixedScalar(value, dec, noCommas));
+        return FixedScalar(args[0], dec, noCommas);
+    }
+
+    private static ScalarValue FixedScalar(ScalarValue value, int dec, bool noCommas)
+    {
+        double n = ToNumber(value);
         return TextResult(FormatRoundedNumber(n, dec, useCommas: !noCommas));
     }
 
@@ -1357,7 +1402,6 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        double n = ToNumber(args[0]);
         int dec = 2;
         if (args.Count > 1 && args[1] is BlankValue)
         {
@@ -1369,6 +1413,13 @@ public static partial class BuiltInFunctions
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DollarScalar(value, dec));
+        return DollarScalar(args[0], dec);
+    }
+
+    private static ScalarValue DollarScalar(ScalarValue value, int dec)
+    {
+        double n = ToNumber(value);
         var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
         var formatted = "$" + numberText;
         return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);

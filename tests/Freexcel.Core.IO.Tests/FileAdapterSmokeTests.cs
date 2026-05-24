@@ -9651,6 +9651,69 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesChartCustomErrorBarReferenceCaches()
+    {
+        var workbook = new Workbook("ChartCustomErrorBarCachesPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                      <c:errBars>
+                        <c:errDir val="y"/>
+                        <c:errBarType val="both"/>
+                        <c:errValType val="cust"/>
+                        <c:plus><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f><c:numCache><c:ptCount val="1"/><c:pt idx="0"><c:v>1.1</c:v></c:pt></c:numCache></c:numRef></c:plus>
+                        <c:minus><c:numRef><c:f>Sheet1!$D$2:$D$4</c:f><c:numCache><c:ptCount val="1"/><c:pt idx="0"><c:v>0.9</c:v></c:pt></c:numCache></c:numRef></c:minus>
+                      </c:errBars>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ErrorBarPlusRangeCacheXml.Should().Contain("<c:v>1.1</c:v>");
+        loadedChart.ErrorBarMinusRangeCacheXml.Should().Contain("<c:v>0.9</c:v>");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var errorBars = chartXml.Descendants(chartNs + "errBars").Should().ContainSingle().Subject;
+        errorBars.Element(chartNs + "plus")!.Descendants(chartNs + "numCache").Single()
+            .Descendants(chartNs + "v").Single().Value.Should().Be("1.1");
+        errorBars.Element(chartNs + "minus")!.Descendants(chartNs + "numCache").Single()
+            .Descendants(chartNs + "v").Single().Value.Should().Be("0.9");
+    }
+
+    [Fact]
     public void XlsxAdapter_SaveLoadedWorkbook_PreservesChartErrorBarAxisDirection()
     {
         var workbook = new Workbook("ChartErrorBarAxisDirectionPackagePreserve");
@@ -14048,6 +14111,7 @@ public partial class FileAdapterSmokeTests
         {
             Type = ChartType.Column,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            Title = "Pivot Sales",
             IsPivotChart = true,
             PivotTableName = "PivotTable1",
             PivotFormatsXml = """
@@ -14079,6 +14143,16 @@ public partial class FileAdapterSmokeTests
                 TargetMode = "External",
                 AutoUpdate = true
             },
+            TitleLayout = new ChartManualLayoutModel
+            {
+                XMode = "edge",
+                YMode = "edge",
+                X = 0.12,
+                Y = 0.04,
+                Width = 0.45,
+                Height = 0.1
+            },
+            TitleOverlay = true,
             PlotAreaLayout = new ChartManualLayoutModel
             {
                 LayoutTarget = "outer",
@@ -14196,6 +14270,18 @@ public partial class FileAdapterSmokeTests
             externalRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/package");
             externalRelationship.Attribute("Target")!.Value.Should().Be("linked-pivot-source.xlsx");
             externalRelationship.Attribute("TargetMode")!.Value.Should().Be("External");
+            var title = chartXml.Root.Element(chartNs + "chart")!
+                .Element(chartNs + "title")!;
+            title.Element(chartNs + "overlay")!.Attribute("val")!.Value.Should().Be("1");
+            var titleManualLayout = title
+                .Element(chartNs + "layout")!
+                .Element(chartNs + "manualLayout")!;
+            titleManualLayout.Element(chartNs + "xMode")!.Attribute("val")!.Value.Should().Be("edge");
+            titleManualLayout.Element(chartNs + "yMode")!.Attribute("val")!.Value.Should().Be("edge");
+            titleManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.12");
+            titleManualLayout.Element(chartNs + "y")!.Attribute("val")!.Value.Should().Be("0.04");
+            titleManualLayout.Element(chartNs + "w")!.Attribute("val")!.Value.Should().Be("0.45");
+            titleManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.1");
             var plotAreaManualLayout = chartXml.Root.Element(chartNs + "chart")!
                 .Element(chartNs + "plotArea")!
                 .Element(chartNs + "layout")!
@@ -14279,6 +14365,8 @@ public partial class FileAdapterSmokeTests
         loadedChart.Language.Should().Be("en-US");
         loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
         loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
+        loadedChart.TitleLayout.Should().BeEquivalentTo(chart.TitleLayout);
+        loadedChart.TitleOverlay.Should().BeTrue();
         loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
         loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
         loadedChart.ThreeDView.Should().BeEquivalentTo(chart.ThreeDView);

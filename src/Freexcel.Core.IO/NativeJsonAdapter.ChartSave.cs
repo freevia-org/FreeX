@@ -41,6 +41,8 @@ public sealed partial class NativeJsonAdapter
         FirstRowIsHeader = chart.FirstRowIsHeader,
         FirstColIsCategories = chart.FirstColIsCategories,
         Title = chart.Title,
+        TitleLayout = chart.TitleLayout,
+        TitleOverlay = chart.TitleOverlay,
         XAxisTitle = chart.XAxisTitle,
         YAxisTitle = chart.YAxisTitle,
         HideXAxis = chart.HideXAxis,

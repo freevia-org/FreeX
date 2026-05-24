@@ -1113,6 +1113,18 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SUBSTITUTE(\"aababc\",\"ab\",\"X\",2)", sheet).Should().Be(new TextValue("aabXc"));
     }
 
+    [Fact]
+    public void SubstituteReptAndConcatenate_RangeTextArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"X\")", sheet), "XXbXbc", "bXnXnX");
+        AssertTextColumn(_eval.Evaluate("=REPT(A1:A2,2)", sheet), "aababcaababc", "bananabanana");
+        AssertTextColumn(_eval.Evaluate("=CONCATENATE(A1:A2,\"!\")", sheet), "aababc!", "banana!");
+    }
+
     // ── FIND ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -4603,6 +4615,22 @@ public class FunctionLibraryTests
     [Fact] public void Fixed_TwoDecimals_ReturnsFormatted() =>
         _eval.Evaluate("=FIXED(1234.567,2,TRUE)", MakeSheet())
             .Should().Be(new TextValue("1234.57"));
+
+    [Fact]
+    public void FixedDollarTAndEncodeUrl_RangeArgument_SpillElementwise()
+    {
+        var numbers = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.3)));
+        AssertTextColumn(_eval.Evaluate("=DOLLAR(A1:A2,1)", numbers), "$1,234.6", "($12.3)");
+        AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,1,TRUE)", numbers), "1234.6", "-12.3");
+
+        var mixed = MakeSheet(
+            (1, 1, new TextValue("a b")),
+            (2, 1, new NumberValue(42)));
+        AssertTextColumn(_eval.Evaluate("=T(A1:A2)", mixed), "a b", "");
+        AssertTextColumn(_eval.Evaluate("=ENCODEURL(A1:A2)", mixed), "a%20b", "42");
+    }
 
     [Fact]
     public void Fixed_NegativeDecimals_RoundsLeftOfDecimal()
