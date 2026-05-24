@@ -1928,6 +1928,7 @@ public sealed class MainWindowXamlKeyTipTests
             {
                 "MainWindow.PivotCommands.cs",
                 "MainWindow.PivotChartCommands.cs",
+                "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
