@@ -297,7 +297,7 @@ public sealed class PivotWorkflowDialogTests
     public void InsertSlicerDialogOpenedFromKeyboard_FocusesFieldBox()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotSlicerTimelineDialogs.cs",
             "public sealed class InsertSlicerDialog",
             "public sealed record InsertTimelineDialogResult");
 
@@ -330,9 +330,9 @@ public sealed class PivotWorkflowDialogTests
     public void InsertTimelineDialogOpenedFromKeyboard_FocusesFieldBox()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotSlicerTimelineDialogs.cs",
             "public sealed class InsertTimelineDialog",
-            "public sealed record PivotChartTypeDialogResult");
+            "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -1123,6 +1123,7 @@ public sealed class PivotWorkflowDialogTests
             new[]
             {
                 "PivotWorkflowDialogs.cs",
+                "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",
                 "PivotTableOptionsDialog.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
