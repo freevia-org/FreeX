@@ -51,6 +51,8 @@ public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
 public enum ChartAxisTickLabelPosition { NextTo, Low, High }
 
+public enum ChartAxisPosition { Bottom, Top, Left, Right }
+
 public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
 
 public enum ChartAxisCrossBetween { Between, MidCategory }
@@ -273,6 +275,8 @@ public sealed class ChartModel
     public string? YAxisTitle { get; set; }
     public bool HideXAxis { get; set; }
     public bool HideYAxis { get; set; }
+    public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
+    public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
     public CellColor? ChartTitleTextColor { get; set; }
     public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
     public double ChartTitleFontSize { get; set; } = 16;

@@ -30,6 +30,8 @@ internal static class XlsxChartAxisReader
             chart.YAxisTitle = ReadAxisTitle(yAxis);
             chart.HideXAxis = ReadBool(xAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             chart.HideYAxis = ReadBool(yAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+            chart.XAxisPosition = FromXlsxAxisPosition(xAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
+            chart.YAxisPosition = FromXlsxAxisPosition(yAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
             ApplyAxisTitleFormatting(xAxis, chart);
             ApplyAxisTitleFormatting(yAxis, chart);
             ApplyValueAxisProperties(xAxis, chart, useXAxis: true);
@@ -43,12 +45,14 @@ internal static class XlsxChartAxisReader
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
         chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+        chart.XAxisPosition = FromXlsxAxisPosition(categoryAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Bottom);
         ApplyAxisTitleFormatting(categoryAxis, chart);
         ApplyCategoryAxisProperties(categoryAxis, chart);
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
         chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+        chart.YAxisPosition = FromXlsxAxisPosition(valueAxis?.Element(ChartNs + "axPos")?.Attribute("val")?.Value, ChartAxisPosition.Left);
         ApplyAxisTitleFormatting(valueAxis, chart);
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: false);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
@@ -393,6 +397,16 @@ internal static class XlsxChartAxisReader
             "low" => ChartAxisTickLabelPosition.Low,
             "high" => ChartAxisTickLabelPosition.High,
             _ => ChartAxisTickLabelPosition.NextTo
+        };
+
+    private static ChartAxisPosition FromXlsxAxisPosition(string? value, ChartAxisPosition fallback) =>
+        value switch
+        {
+            "b" => ChartAxisPosition.Bottom,
+            "t" => ChartAxisPosition.Top,
+            "l" => ChartAxisPosition.Left,
+            "r" => ChartAxisPosition.Right,
+            _ => fallback
         };
 
     private static ChartAxisCrosses FromXlsxAxisCrosses(string? value) =>
