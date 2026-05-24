@@ -281,6 +281,7 @@ public sealed class ChartModel
     public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public bool ShowXAxisMajorGridlines { get; set; }
     public bool ShowXAxisMinorGridlines { get; set; }
+    public bool XAxisIsDateAxis { get; set; }
     public CellColor? XAxisMajorGridlineColor { get; set; }
     public CellColor? XAxisMinorGridlineColor { get; set; }
     public double XAxisGridlineThickness { get; set; } = 1;
@@ -291,6 +292,9 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? XAxisLabelTextThemeColor { get; set; }
     public double XAxisLabelFontSize { get; set; } = 11;
     public double XAxisLabelAngle { get; set; }
+    public int XAxisLabelSkip { get; set; }
+    public int XAxisTickMarkSkip { get; set; }
+    public int XAxisLabelOffset { get; set; }
     public CellColor? XAxisLineColor { get; set; }
     public double XAxisLineThickness { get; set; } = 1;
     public double? YAxisMinimum { get; set; }

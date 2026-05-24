@@ -263,6 +263,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void GoalSeekStatusDialogOpenedFromKeyboard_FocusesDefaultButton()
+    {
+        var source = ReadClassSource("StatusDialogs.cs", "public sealed class GoalSeekStatusDialog", "public sealed class WorkbookStatisticsDialog");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("StatusDialogKeyboardFocus.FocusDefaultButton(this);");
+    }
+
+    [Fact]
     public void GoalSeekStatusDialog_ReceivesRequestedTargetValueFromWorkflow()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
@@ -300,6 +310,19 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void WorkbookStatisticsDialogOpenedFromKeyboard_FocusesOkButton()
+    {
+        var source = ReadClassSource("StatusDialogs.cs", "public sealed class WorkbookStatisticsDialog", "public sealed class AccessibilityCheckerDialog");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("StatusDialogKeyboardFocus.FocusDefaultButton(this);");
+        source.Should().Contain("private static Button? FindDefaultButton");
+        source.Should().Contain("button.Focus();");
+        source.Should().Contain("Keyboard.Focus(button);");
+    }
+
+    [Fact]
     public void AccessibilityCheckerDialog_CreateMessage_ReportsCleanAndIssueStates()
     {
         AccessibilityCheckerDialog.CreateMessage([])
@@ -314,6 +337,17 @@ public sealed class RemainingDialogTests
                 "A1:D8",
                 "Chart is missing a title.")
         ]).Should().Contain("Sheet1!A1:D8: Chart is missing a title.");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialogOpenedFromKeyboard_FocusesIssueText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_messageBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_messageBox);");
     }
 
     [Fact]

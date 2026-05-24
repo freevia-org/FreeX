@@ -1327,6 +1327,7 @@ public class XlsxCorpusRunnerTests
                 chart.XAxisNumberFormat,
                 chart.ShowXAxisMajorGridlines,
                 chart.ShowXAxisMinorGridlines,
+                chart.XAxisIsDateAxis,
                 chart.XAxisMajorGridlineColor is null ? "" : ToColorSummary(chart.XAxisMajorGridlineColor.Value),
                 chart.XAxisMinorGridlineColor is null ? "" : ToColorSummary(chart.XAxisMinorGridlineColor.Value),
                 chart.XAxisGridlineThickness,
@@ -1337,6 +1338,9 @@ public class XlsxCorpusRunnerTests
                 chart.XAxisLabelTextThemeColor,
                 chart.XAxisLabelFontSize,
                 chart.XAxisLabelAngle,
+                chart.XAxisLabelSkip,
+                chart.XAxisTickMarkSkip,
+                chart.XAxisLabelOffset,
                 chart.XAxisLineColor is null ? "" : ToColorSummary(chart.XAxisLineColor.Value),
                 chart.XAxisLineThickness)
             : new ChartAxisSummary(
@@ -1348,6 +1352,7 @@ public class XlsxCorpusRunnerTests
                 chart.YAxisNumberFormat,
                 chart.ShowYAxisMajorGridlines,
                 chart.ShowYAxisMinorGridlines,
+                false,
                 chart.YAxisMajorGridlineColor is null ? "" : ToColorSummary(chart.YAxisMajorGridlineColor.Value),
                 chart.YAxisMinorGridlineColor is null ? "" : ToColorSummary(chart.YAxisMinorGridlineColor.Value),
                 chart.YAxisGridlineThickness,
@@ -1358,6 +1363,9 @@ public class XlsxCorpusRunnerTests
                 chart.YAxisLabelTextThemeColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
+                0,
+                0,
+                0,
                 chart.YAxisLineColor is null ? "" : ToColorSummary(chart.YAxisLineColor.Value),
                 chart.YAxisLineThickness);
 
@@ -2406,6 +2414,7 @@ public class XlsxCorpusRunnerTests
         ChartDataLabelNumberFormat NumberFormat,
         bool ShowMajorGridlines,
         bool ShowMinorGridlines,
+        bool IsDateAxis,
         string MajorGridlineColor,
         string MinorGridlineColor,
         double GridlineThickness,
@@ -2416,6 +2425,9 @@ public class XlsxCorpusRunnerTests
         WorkbookThemeColorReference? LabelTextThemeColor,
         double LabelFontSize,
         double LabelAngle,
+        int LabelSkip,
+        int TickMarkSkip,
+        int LabelOffset,
         string LineColor,
         double LineThickness);
 

@@ -37,7 +37,8 @@ internal static class XlsxChartAxisReader
             return;
         }
 
-        var categoryAxis = plotArea.Element(ChartNs + "catAx");
+        var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
+        chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
         ApplyAxisTitleFormatting(categoryAxis, chart);
         ApplyCategoryAxisProperties(categoryAxis, chart);
@@ -231,6 +232,9 @@ internal static class XlsxChartAxisReader
         chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
         chart.ShowXAxisLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
+        chart.XAxisLabelSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickLblSkip")?.Attribute("val")?.Value) ?? 0);
+        chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
+        chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
     }
 
@@ -336,4 +340,7 @@ internal static class XlsxChartAxisReader
 
     private static double? ReadDouble(string? value) =>
         XlsxChartScalarReader.ReadOptionalDouble(value);
+
+    private static int? ReadInt(string? value) =>
+        int.TryParse(value, out var result) ? result : null;
 }

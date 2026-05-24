@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -78,6 +79,7 @@ public sealed class PasswordProtectionDialog : Window
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private void AddSheetPermissionChecklist(Panel root)
@@ -128,6 +130,12 @@ public sealed class PasswordProtectionDialog : Window
             .ToList();
         DialogResult = true;
     }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _passwordBox.Focus();
+        Keyboard.Focus(_passwordBox);
+    }
 }
 
 public sealed class ConfirmPasswordDialog : Window
@@ -156,6 +164,7 @@ public sealed class ConfirmPasswordDialog : Window
         root.Children.Add(_confirmationBox);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private void Accept()
@@ -167,6 +176,12 @@ public sealed class ConfirmPasswordDialog : Window
         }
 
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _confirmationBox.Focus();
+        Keyboard.Focus(_confirmationBox);
     }
 }
 
@@ -267,6 +282,7 @@ public sealed class AllowEditRangeDialog : Window
 
         Content = root;
         UpdateRangeButtons();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private void RangePicker_Click(object sender, RoutedEventArgs e)
@@ -324,5 +340,12 @@ public sealed class AllowEditRangeDialog : Window
         var hasRanges = _existingRangesBox.Items.Count > 0;
         _deleteRangeButton.IsEnabled = hasRanges && _existingRangesBox.SelectedItem is not null;
         _clearRangesButton.IsEnabled = hasRanges;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rangeBox.Focus();
+        _rangeBox.SelectAll();
+        Keyboard.Focus(_rangeBox);
     }
 }

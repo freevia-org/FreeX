@@ -180,7 +180,7 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
-        new(chartNs + "catAx",
+        new(chartNs + (chart.XAxisIsDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", "minMax"))),
@@ -192,6 +192,9 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels))),
+            ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
+            ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
+            ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
@@ -341,6 +344,11 @@ internal static partial class XlsxChartXmlWriter
     private static XElement? ToAxisUnitXml(string elementName, double? value, XNamespace chartNs) =>
         value is { } numeric && double.IsFinite(numeric)
             ? new XElement(chartNs + elementName, new XAttribute("val", Math.Max(numeric, double.Epsilon).ToString(CultureInfo.InvariantCulture)))
+            : null;
+
+    private static XElement? ToUnsignedAxisValueXml(string elementName, int value, XNamespace chartNs) =>
+        value > 0
+            ? new XElement(chartNs + elementName, new XAttribute("val", value.ToString(CultureInfo.InvariantCulture)))
             : null;
 
     private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format) =>
