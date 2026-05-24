@@ -56,6 +56,18 @@ public sealed class RemainingDialogTests
         result.Should().Be(new ColumnWidthDialogResult(8.5));
     }
 
+    [Fact]
+    public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public enum PageBreakDialogAction");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_widthBox.Focus();");
+        source.Should().Contain("_widthBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_widthBox);");
+    }
+
     [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
