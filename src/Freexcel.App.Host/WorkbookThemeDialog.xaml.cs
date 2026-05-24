@@ -156,34 +156,64 @@ public partial class WorkbookThemeDialog : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        try
+        if (!TryReadThemeColor(Dark1ColorBox, out var dark1) ||
+            !TryReadThemeColor(Light1ColorBox, out var light1) ||
+            !TryReadThemeColor(Dark2ColorBox, out var dark2) ||
+            !TryReadThemeColor(Light2ColorBox, out var light2) ||
+            !TryReadThemeColor(Accent1ColorBox, out var accent1) ||
+            !TryReadThemeColor(Accent2ColorBox, out var accent2) ||
+            !TryReadThemeColor(Accent3ColorBox, out var accent3) ||
+            !TryReadThemeColor(Accent4ColorBox, out var accent4) ||
+            !TryReadThemeColor(Accent5ColorBox, out var accent5) ||
+            !TryReadThemeColor(Accent6ColorBox, out var accent6) ||
+            !TryReadThemeColor(HyperlinkColorBox, out var hyperlink) ||
+            !TryReadThemeColor(FollowedHyperlinkColorBox, out var followedHyperlink))
         {
-            ResultTheme = WorkbookThemeWorkflow.CreateCustomTheme(
-                    _initialTheme,
-                    ThemeNameBox.Text,
-                    HeadingFontBox.Text,
-                    BodyFontBox.Text,
-                    EffectsBox.Text)
-                .WithColor(WorkbookThemeColorSlot.Dark1, WorkbookThemeDialogColorCodec.ParseColor(Dark1ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Light1, WorkbookThemeDialogColorCodec.ParseColor(Light1ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Dark2, WorkbookThemeDialogColorCodec.ParseColor(Dark2ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Light2, WorkbookThemeDialogColorCodec.ParseColor(Light2ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Accent1, WorkbookThemeDialogColorCodec.ParseColor(Accent1ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Accent2, WorkbookThemeDialogColorCodec.ParseColor(Accent2ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Accent3, WorkbookThemeDialogColorCodec.ParseColor(Accent3ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Accent4, WorkbookThemeDialogColorCodec.ParseColor(Accent4ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Accent5, WorkbookThemeDialogColorCodec.ParseColor(Accent5ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Accent6, WorkbookThemeDialogColorCodec.ParseColor(Accent6ColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.Hyperlink, WorkbookThemeDialogColorCodec.ParseColor(HyperlinkColorBox.Text))
-                .WithColor(WorkbookThemeColorSlot.FollowedHyperlink, WorkbookThemeDialogColorCodec.ParseColor(FollowedHyperlinkColorBox.Text));
-        }
-        catch (FormatException ex)
-        {
-            MessageBox.Show(ex.Message, "Customize Theme", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
+        ResultTheme = WorkbookThemeWorkflow.CreateCustomTheme(
+                _initialTheme,
+                ThemeNameBox.Text,
+                HeadingFontBox.Text,
+                BodyFontBox.Text,
+                EffectsBox.Text)
+            .WithColor(WorkbookThemeColorSlot.Dark1, dark1)
+            .WithColor(WorkbookThemeColorSlot.Light1, light1)
+            .WithColor(WorkbookThemeColorSlot.Dark2, dark2)
+            .WithColor(WorkbookThemeColorSlot.Light2, light2)
+            .WithColor(WorkbookThemeColorSlot.Accent1, accent1)
+            .WithColor(WorkbookThemeColorSlot.Accent2, accent2)
+            .WithColor(WorkbookThemeColorSlot.Accent3, accent3)
+            .WithColor(WorkbookThemeColorSlot.Accent4, accent4)
+            .WithColor(WorkbookThemeColorSlot.Accent5, accent5)
+            .WithColor(WorkbookThemeColorSlot.Accent6, accent6)
+            .WithColor(WorkbookThemeColorSlot.Hyperlink, hyperlink)
+            .WithColor(WorkbookThemeColorSlot.FollowedHyperlink, followedHyperlink);
         DialogResult = true;
+    }
+
+    private bool TryReadThemeColor(TextBox colorBox, out CellColor color)
+    {
+        try
+        {
+            color = WorkbookThemeDialogColorCodec.ParseColor(colorBox.Text);
+            return true;
+        }
+        catch (FormatException ex)
+        {
+            color = default;
+            MessageBox.Show(this, ex.Message, "Customize Theme", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidColorInput(colorBox);
+            return false;
+        }
+    }
+
+    private static void FocusInvalidColorInput(TextBox colorBox)
+    {
+        colorBox.Focus();
+        colorBox.SelectAll();
+        Keyboard.Focus(colorBox);
     }
 
     private void FocusInitialKeyboardTarget()
