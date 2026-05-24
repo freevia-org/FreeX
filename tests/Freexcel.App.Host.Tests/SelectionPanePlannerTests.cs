@@ -157,6 +157,18 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialogOpenedFromKeyboard_FocusesSearchBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_searchBox.Focus();");
+        source.Should().Contain("_searchBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_searchBox);");
+    }
+
+    [Fact]
     public void SelectionPaneDialog_AllowsInlineRenameInObjectList()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
