@@ -57,15 +57,20 @@ public static class PivotUiPlanner
 
     public static PivotTableModel? FindPivotTableForSelection(Sheet sheet, GridRange? selectedRange)
     {
-        if (selectedRange is { } range)
-        {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                pivot.TargetRange.Contains(range.Start) || pivot.TargetRange.Overlaps(range));
-            if (pivotTable is not null)
-                return pivotTable;
-        }
+        var pivotTable = FindPivotTableContainingSelection(sheet, selectedRange);
+        if (pivotTable is not null)
+            return pivotTable;
 
         return sheet.PivotTables.FirstOrDefault();
+    }
+
+    public static PivotTableModel? FindPivotTableContainingSelection(Sheet sheet, GridRange? selectedRange)
+    {
+        if (selectedRange is not { } range)
+            return null;
+
+        return sheet.PivotTables.FirstOrDefault(pivot =>
+            pivot.TargetRange.Contains(range.Start) || pivot.TargetRange.Overlaps(range));
     }
 
     public static int ChooseDefaultDataField(Sheet sheet, GridRange sourceRange)
