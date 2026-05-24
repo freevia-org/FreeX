@@ -248,8 +248,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var findText   = ToText(args[0]);
-        var withinText = ToText(args[1]);
+        var findText = ToText(args[0]);
         int startNum = 1;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
@@ -258,6 +257,25 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
+        if (args[1] is RangeValue range) return MapFindRange(findText, range, startNum);
+        return FindText(findText, ToText(args[1]), startNum);
+    }
+
+    private static RangeValue MapFindRange(string findText, RangeValue range, int startNum)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : FindText(findText, ToText(value), startNum);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue FindText(string findText, string withinText, int startNum)
+    {
         bool hasSurrogatePair = ContainsSurrogatePair(withinText);
         int startIdx = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(withinText, startNum)
@@ -279,8 +297,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var findText   = ToText(args[0]);
-        var withinText = ToText(args[1]);
+        var findText = ToText(args[0]);
         int startNum = 1;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
@@ -289,6 +306,25 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
+        if (args[1] is RangeValue range) return MapSearchRange(findText, range, startNum);
+        return SearchText(findText, ToText(args[1]), startNum);
+    }
+
+    private static RangeValue MapSearchRange(string findText, RangeValue range, int startNum)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : SearchText(findText, ToText(value), startNum);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue SearchText(string findText, string withinText, int startNum)
+    {
         bool hasSurrogatePair = ContainsSurrogatePair(withinText);
         int startIdx = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(withinText, startNum)
