@@ -13,6 +13,7 @@ internal static partial class XlsxChartXmlWriter
         {
             yield return ToValueAxisXml(
                 chart.XAxisTitle,
+                chart.XAxisTitleLayout,
                 CategoryAxisId,
                 ValueAxisId,
                 ToXlsxAxisPosition(chart.XAxisPosition, "b"),
@@ -54,6 +55,7 @@ internal static partial class XlsxChartXmlWriter
                 drawingNs);
             yield return ToValueAxisXml(
                 chart.YAxisTitle,
+                chart.YAxisTitleLayout,
                 ValueAxisId,
                 CategoryAxisId,
                 ToXlsxAxisPosition(chart.YAxisPosition, "l"),
@@ -97,6 +99,7 @@ internal static partial class XlsxChartXmlWriter
             if (chart.Type == ChartType.Scatter && scatterSecondaryIndexes.Count > 0)
             {
                 yield return ToValueAxisXml(
+                    null,
                     null,
                     SecondaryValueAxisId,
                     CategoryAxisId,
@@ -144,6 +147,7 @@ internal static partial class XlsxChartXmlWriter
         yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
         yield return ToValueAxisXml(
             chart.YAxisTitle,
+            chart.YAxisTitleLayout,
             ValueAxisId,
             CategoryAxisId,
             ToXlsxAxisPosition(chart.YAxisPosition, "l"),
@@ -188,6 +192,7 @@ internal static partial class XlsxChartXmlWriter
         if (secondaryIndexes.Count > 0)
         {
             yield return ToValueAxisXml(
+                null,
                 null,
                 SecondaryValueAxisId,
                 CategoryAxisId,
@@ -241,7 +246,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxAxisPosition(chart.XAxisPosition, "b"))),
-            ToAxisTitleXml(chart.XAxisTitle, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
+            ToAxisTitleXml(chart.XAxisTitle, chart.XAxisTitleLayout, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
@@ -262,6 +267,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement ToValueAxisXml(
         string? title,
+        ChartManualLayoutModel? titleLayout,
         int axisId,
         int crossAxisId,
         string axisPosition,
@@ -310,7 +316,7 @@ internal static partial class XlsxChartXmlWriter
                 ToAxisBoundXml("min", minimum, chartNs)),
             new XElement(chartNs + "delete", new XAttribute("val", hidden ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
-            ToAxisTitleXml(title, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
+            ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
