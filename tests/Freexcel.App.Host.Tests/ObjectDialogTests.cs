@@ -215,6 +215,20 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ShapeGradientDialogInvalidColor_ShowsOwnedWarningAndRefocusesFirstInvalidColor()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("Enter an RGB color as R,G,B.");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidColorInput(_startColorBox);");
+        source.Should().Contain("FocusInvalidColorInput(_endColorBox);");
+        source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();

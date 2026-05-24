@@ -57,9 +57,27 @@ public sealed class ShapeGradientDialog : Window
 
     private void Accept()
     {
-        if (!DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor) ||
-            !DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
+        if (!DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor))
         {
+            MessageBox.Show(
+                this,
+                "Enter an RGB color as R,G,B.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidColorInput(_startColorBox);
+            return;
+        }
+
+        if (!DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
+        {
+            MessageBox.Show(
+                this,
+                "Enter an RGB color as R,G,B.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidColorInput(_endColorBox);
             return;
         }
 
@@ -72,6 +90,13 @@ public sealed class ShapeGradientDialog : Window
         _startColorBox.Focus();
         _startColorBox.SelectAll();
         Keyboard.Focus(_startColorBox);
+    }
+
+    private static void FocusInvalidColorInput(TextBox colorBox)
+    {
+        colorBox.Focus();
+        colorBox.SelectAll();
+        Keyboard.Focus(colorBox);
     }
 
     private StackPanel CreateContent()
