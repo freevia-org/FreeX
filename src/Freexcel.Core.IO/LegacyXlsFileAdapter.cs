@@ -11,7 +11,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
         new(".xls", "Excel 97-2003 Workbook", CanOpen: true, CanSave: false),
-        new(".xlsb", "Excel Binary Workbook", CanOpen: true, CanSave: false)
+        new(".xlsb", "Excel Binary Workbook", CanOpen: true, CanSave: false),
+        new(".xlt", "Excel 97-2003 Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
     ];
 
     public Workbook Load(Stream stream)
