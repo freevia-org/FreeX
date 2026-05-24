@@ -260,6 +260,7 @@ public sealed class PrintPreviewDialog : Window
         root.Children.Add(toolbar);
         root.Children.Add(viewer);
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);
     }
 
     public static string CreateTitle(string workbookName) =>
@@ -340,5 +341,11 @@ public sealed class PrintPreviewDialog : Window
         viewer.GoToPage(pageNumber);
         pageNumberBox.Text = pageNumber.ToString(CultureInfo.InvariantCulture);
         pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
+    }
+
+    private static void FocusInitialKeyboardTarget(Button printButton)
+    {
+        printButton.Focus();
+        Keyboard.Focus(printButton);
     }
 }

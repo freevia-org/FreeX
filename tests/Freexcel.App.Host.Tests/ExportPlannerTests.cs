@@ -911,6 +911,17 @@ public class ExportPlannerTests
         source.Should().Contain("PrintDocument(document.DocumentPaginator");
     }
 
+    [Fact]
+    public void PrintPreviewDialogOpenedFromKeyboard_FocusesPrintButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);");
+        source.Should().Contain("private static void FocusInitialKeyboardTarget(Button printButton)");
+        source.Should().Contain("printButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(printButton);");
+    }
+
     [Theory]
     [InlineData(null, 1)]
     [InlineData("", 1)]
