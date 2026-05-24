@@ -14688,7 +14688,15 @@ public partial class FileAdapterSmokeTests
             MissingCaption = "(missing)",
             ErrorCaption = "(error)"
         };
-        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(
+            0,
+            ShowAll: true,
+            IncludeNewItemsInFilter: true,
+            MultipleItemSelectionAllowed: false,
+            DragToRow: true,
+            DragToColumn: false,
+            DragToPage: true,
+            DragToData: false));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
         sheet.PivotTables.Add(pivot);
 
@@ -14746,6 +14754,16 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("grandTotalCaption")!.Value.Should().Be("Overall Total");
             pivotXml.Root!.Attribute("missingCaption")!.Value.Should().Be("(missing)");
             pivotXml.Root!.Attribute("errorCaption")!.Value.Should().Be("(error)");
+            var firstPivotField = pivotXml.Root!.Element(workbookNs + "pivotFields")!
+                .Elements(workbookNs + "pivotField")
+                .First();
+            firstPivotField.Attribute("showAll")!.Value.Should().Be("1");
+            firstPivotField.Attribute("includeNewItemsInFilter")!.Value.Should().Be("1");
+            firstPivotField.Attribute("multipleItemSelectionAllowed")!.Value.Should().Be("0");
+            firstPivotField.Attribute("dragToRow")!.Value.Should().Be("1");
+            firstPivotField.Attribute("dragToCol")!.Value.Should().Be("0");
+            firstPivotField.Attribute("dragToPage")!.Value.Should().Be("1");
+            firstPivotField.Attribute("dragToData")!.Value.Should().Be("0");
         }
 
         saved.Position = 0;
@@ -14754,6 +14772,14 @@ public partial class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        var loadedRowField = loadedPivot.RowFields.Should().ContainSingle().Subject;
+        loadedRowField.ShowAll.Should().BeTrue();
+        loadedRowField.IncludeNewItemsInFilter.Should().BeTrue();
+        loadedRowField.MultipleItemSelectionAllowed.Should().BeFalse();
+        loadedRowField.DragToRow.Should().BeTrue();
+        loadedRowField.DragToColumn.Should().BeFalse();
+        loadedRowField.DragToPage.Should().BeTrue();
+        loadedRowField.DragToData.Should().BeFalse();
         loadedPivot.CreatedVersion.Should().Be(6);
         loadedPivot.UpdatedVersion.Should().Be(7);
         loadedPivot.MinRefreshableVersion.Should().Be(5);
