@@ -45,6 +45,8 @@ public sealed partial class XlsxFileAdapter
         sheet.CodeName = layout.CodeName;
         sheet.UsePrinterDefaults = layout.UsePrinterDefaults;
         sheet.PrintCopies = layout.PrintCopies;
+        sheet.FitToPage = layout.FitToPage;
+        sheet.AutoPageBreaks = layout.AutoPageBreaks;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;

@@ -3747,7 +3747,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -12985,7 +12986,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.FitToPage.Should().BeTrue();
+        loadedSheet.AutoPageBreaks.Should().BeFalse();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -13000,6 +13004,7 @@ public partial class FileAdapterSmokeTests
         sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
         sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
+        sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("fitToPage")!.Value.Should().Be("1");
         sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freexcel:test"))
             .Select(element => element.Attribute("id")?.Value)
             .Should()
@@ -17715,6 +17720,7 @@ public partial class FileAdapterSmokeTests
             {
                 sheetPr.Add(new XElement(
                     worksheetNs + "pageSetUpPr",
+                    new XAttribute("fitToPage", "1"),
                     new XAttribute("autoPageBreaks", "0")));
             }
 

@@ -86,8 +86,8 @@ internal static class PdfTextOverlayExtractor
                 contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
                 ResolveColor(contentControl.Foreground)));
         }
-        else if (element is HeaderedContentControl { Header: string headerText } headeredContentControl &&
-                 !string.IsNullOrWhiteSpace(headerText))
+        else if (element is HeaderedContentControl headeredContentControl &&
+                 ExtractContentText(headeredContentControl.Header) is { Length: > 0 } headerText)
         {
             overlays.Add(new PdfTextOverlay(
                 headerText,

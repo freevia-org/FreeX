@@ -158,6 +158,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 sheet.ScaleToFit = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(
                     new WorksheetScaleToFit(scaleToFit.ScalePercent, scaleToFit.FitToPagesWide, scaleToFit.FitToPagesTall),
                     WorksheetScaleToFit.Default);
+            sheet.FitToPage = sDto.FitToPage;
+            sheet.AutoPageBreaks = sDto.AutoPageBreaks;
             foreach (var rowBreak in sDto.RowPageBreaks ?? [])
                 if (rowBreak is >= 2 and <= CellAddress.MaxRow)
                     sheet.RowPageBreaks.Add(rowBreak);
