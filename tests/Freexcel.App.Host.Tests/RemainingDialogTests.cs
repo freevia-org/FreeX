@@ -171,6 +171,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialog_InvalidCustomInput_ShowsParserErrorAndRefocusesEntry()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("TryCreateResult(input, out var result, out var error)");
+        source.Should().Contain("MessageBox.Show(this, error");
+        source.Should().Contain("_customZoomButton.IsChecked = true");
+        source.Should().Contain("_zoomBox.Focus();");
+        source.Should().Contain("_zoomBox.SelectAll();");
+    }
+
+    [Fact]
     public void ZoomDialog_CreateFitSelectionResult_RequestsFitSelectionWithoutChangingPercent()
     {
         ZoomDialog.CreateFitSelectionResult(125)
