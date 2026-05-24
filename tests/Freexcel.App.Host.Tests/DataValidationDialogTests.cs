@@ -478,6 +478,22 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void RangePickerButtons_RefocusFormulaInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private static void SelectComboItemByTag", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
+        handlerSource.Should().Contain("FocusRangeSelectionInput(textBox);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox textBox)");
+        source.Should().Contain("textBox.Focus();");
+        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(textBox);");
+    }
+
+    [Fact]
     public void DataValidationRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         DataValidationDialog.CreateRangeSelectionRequest(
