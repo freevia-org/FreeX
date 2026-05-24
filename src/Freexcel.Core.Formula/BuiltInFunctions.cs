@@ -1507,8 +1507,14 @@ public static partial class BuiltInFunctions
 
 
 
-    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] switch
+    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NScalar);
+        return NScalar(args[0]);
+    }
+
+    private static ScalarValue NScalar(ScalarValue value) =>
+        value switch
         {
             NumberValue nv   => nv,
             DateTimeValue dt => new NumberValue(dt.Value),

@@ -35,7 +35,22 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ErrorTypeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is not ErrorValue ev) return ErrorValue.NA;
+        if (args[0] is RangeValue range) return ErrorTypeRange(range);
+        return ErrorTypeScalar(args[0]);
+    }
+
+    private static RangeValue ErrorTypeRange(RangeValue range)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = ErrorTypeScalar(range.Cells[r, c]);
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue ErrorTypeScalar(ScalarValue value)
+    {
+        if (value is not ErrorValue ev) return ErrorValue.NA;
         return ev.Code switch
         {
             "#NULL!"  => new NumberValue(1),
