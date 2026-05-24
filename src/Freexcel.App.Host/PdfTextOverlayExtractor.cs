@@ -73,6 +73,19 @@ internal static class PdfTextOverlayExtractor
                 textBox.FontStyle == FontStyles.Italic || textBox.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBox.Foreground)));
         }
+        else if (element is ContentControl { Content: string contentText } contentControl &&
+                 !string.IsNullOrWhiteSpace(contentText))
+        {
+            overlays.Add(new PdfTextOverlay(
+                contentText,
+                x + contentControl.Padding.Left,
+                y + contentControl.Padding.Top,
+                contentControl.FontSize,
+                contentControl.FontFamily.Source,
+                contentControl.FontWeight >= FontWeights.SemiBold,
+                contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
+                ResolveColor(contentControl.Foreground)));
+        }
 
         if (element is Panel panel)
         {
