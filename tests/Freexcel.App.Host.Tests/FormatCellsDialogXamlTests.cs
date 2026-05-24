@@ -665,6 +665,16 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_RejectsInvalidFontSizeWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive font size.\", DlgFontSizeBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, ComboBox target)");
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFontFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>

@@ -210,6 +210,12 @@ public partial class FormatCellsDialog : Window
         string? numFmt = ResolveSelectedNumberFormat();
 
         double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);
+        if (fontSize is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
+            ShowInvalidInputWarning("Enter a positive font size.", DlgFontSizeBox);
+            return;
+        }
 
         CellHAlign? hAlign = null;
         if (DlgHAlignBox.SelectedItem is string ha && Enum.TryParse(ha, out CellHAlign h)) hAlign = h;
@@ -278,6 +284,19 @@ public partial class FormatCellsDialog : Window
             MessageBoxImage.Warning);
         target.Focus();
         target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, ComboBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
         Keyboard.Focus(target);
         return true;
     }
