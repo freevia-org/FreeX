@@ -259,8 +259,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("side by side") || name.Contains("synchronous") || name.Contains("sync scrolling") || name.Contains("reset window") || name.Contains("reset position") || name.Contains("switch window")) return new(RibbonCommandIconKind.History);
         if (name.Contains("macro")) return new(RibbonCommandIconKind.GetData);
 
-        if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help);
-        if (name.Contains("training")) return new(RibbonCommandIconKind.Book);
+        if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
+        if (name.Contains("training")) return new(RibbonCommandIconKind.Book, RibbonCommandIconAccent.Help);
         if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
         if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);

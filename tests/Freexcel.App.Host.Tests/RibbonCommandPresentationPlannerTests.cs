@@ -90,6 +90,9 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Error Checking", RibbonCommandIconAccent.Warning)]
     [InlineData("Protect Workbook", RibbonCommandIconAccent.Protect)]
     [InlineData("Send Feedback", RibbonCommandIconAccent.Help)]
+    [InlineData("Contact Support", RibbonCommandIconAccent.Help)]
+    [InlineData("Show Training", RibbonCommandIconAccent.Help)]
+    [InlineData("What's New", RibbonCommandIconAccent.Help)]
     public void GetIcon_AssignsExcelLikeAccentFamilies(string commandName, RibbonCommandIconAccent expectedAccent)
     {
         RibbonCommandPresentationPlanner.GetIcon(commandName).Accent.Should().Be(expectedAccent);
