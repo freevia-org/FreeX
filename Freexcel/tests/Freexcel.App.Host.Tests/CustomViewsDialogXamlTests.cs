@@ -57,6 +57,20 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesViewsList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
+            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("ViewsList.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(ViewsList);");
+    }
+
+    [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
@@ -75,6 +89,19 @@ public sealed class CustomViewsDialogXamlTests
         CustomViewNameDialog.CreateResult("  Quarter Close  ", includePrintSettings: false, includeHiddenRowsColumnsAndFilterSettings: true)
             .Should()
             .Be(new CustomViewNameDialogResult("Quarter Close", IncludePrintSettings: false, IncludeHiddenRowsColumnsAndFilterSettings: true));
+    }
+
+    [Fact]
+    public void CustomViewNameDialogOpenedFromKeyboard_FocusesNameBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_nameBox.Focus();");
+        dialogSource.Should().Contain("_nameBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_nameBox);");
     }
 
     [Fact]
