@@ -301,6 +301,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter print area as a cell range like A1:C10, or leave it blank.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidPrintArea();
             return;
         }
 
@@ -359,6 +360,14 @@ public partial class PageSetupDialog : Window
         RequestedAction = requestedAction;
         DialogResult = true;
         Close();
+    }
+
+    private void FocusInvalidPrintArea()
+    {
+        PageSetupTabs.SelectedItem = SheetTab;
+        PrintAreaBox.Focus();
+        PrintAreaBox.SelectAll();
+        Keyboard.Focus(PrintAreaBox);
     }
 
     private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
