@@ -19,12 +19,13 @@ public sealed class ClearContentsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
-            return protectedOutcome;
+        var cells = _range.AllCells().ToList();
+        if (cells.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
+            return new CommandOutcome(false, "The sheet is protected.");
 
         _snapshot = [];
         var affected = new List<CellAddress>();
-        foreach (var address in _range.AllCells())
+        foreach (var address in cells)
         {
             var oldCell = sheet.GetCell(address)?.Clone();
             _snapshot.Add((address, oldCell));
