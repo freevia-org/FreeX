@@ -1086,6 +1086,33 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForItemsControlObjectItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateObjectItemsControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("24680");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForGlyphs()
     {
         StaTestRunner.Run(() =>
@@ -1518,6 +1545,29 @@ public class ExportPlannerTests
             BorderThickness = new System.Windows.Thickness(0)
         };
         items.Items.Add("Item PDF Text");
+        page.Children.Add(items);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateObjectItemsControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var items = new ListBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0)
+        };
+        items.Items.Add(24680);
         page.Children.Add(items);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);

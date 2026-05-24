@@ -168,7 +168,8 @@ internal static class PdfTextOverlayExtractor
         var parts = new List<string>();
         foreach (var item in itemsControl.Items)
         {
-            if (item is string text && !string.IsNullOrWhiteSpace(text))
+            var text = ExtractContentText(item);
+            if (!string.IsNullOrWhiteSpace(text))
                 parts.Add(text);
         }
 
