@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" shape-rendering="crispEdges">
-<rect width="32" height="32" fill="none"/>
-<rect x="12" y="14" width="8" height="1" fill="#242424"/>
-<rect x="10" y="19" width="12" height="1" fill="#242424"/>
-<rect x="7" y="24" width="18" height="1" fill="#242424"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <path class="f s" d="M8 4 H20.8 L25.6 8.8 V27.2 H8 Z M20.8 4 V8.8 H25.6" stroke-width="1.6"/>
 </svg>

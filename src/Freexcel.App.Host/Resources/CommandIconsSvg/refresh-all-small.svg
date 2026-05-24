@@ -1,10 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  
-  <ellipse cx="10" cy="5" rx="6" ry="2.2" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 5 V15 C4 18 16 18 16 15 V5" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 10 L16 10" stroke-width="0.8" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 14 L16 14" stroke-width="0.8" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M14 7 A5 5 0 1 0 15 13" stroke-width="1" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M13 5 L16 7" stroke-width="0.9" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <polygon points="13.17 6.92 16 7 14.84 4.42" fill="#107c41"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <ellipse class="f s" cx="10" cy="5" rx="6" ry="2.2" stroke-width="1"/>
+  <path class="f s" d="M4 5 V15 C4 18 16 18 16 15 V5" stroke-width="1"/>
+  <path class="s" d="M4 10 L16 10" stroke-width="1"/>
+  <path class="s" d="M4 14 L16 14" stroke-width="1"/>
+  <path d="M14 7 A5 5 0 1 0 15 13" fill="none" stroke="#5b9bd5" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path class="r" d="M13 5 L16 7" stroke-width="1"/>
+  <polygon class="g" points="13.17 6.92 16 7 14.84 4.42"/>
 </svg>
