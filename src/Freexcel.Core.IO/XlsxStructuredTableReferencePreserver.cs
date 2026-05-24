@@ -6,6 +6,8 @@ namespace Freexcel.Core.IO;
 
 internal static class XlsxStructuredTableReferencePreserver
 {
+    private const string TableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -118,8 +120,15 @@ internal static class XlsxStructuredTableReferencePreserver
             return;
         }
 
+        var tableWorksheetPaths = GetWorksheetPathsWithTableRelationships(sourceArchive, context);
+        if (tableWorksheetPaths.Count == 0)
+            return;
+
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
+            if (!tableWorksheetPaths.Contains(sourceWorksheetPath))
+                continue;
+
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
@@ -161,7 +170,7 @@ internal static class XlsxStructuredTableReferencePreserver
                     context.PackageRelNs,
                     targetWorksheetPath,
                     tablePath,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table");
+                    TableRelationshipType);
                 preservedTableParts.Add(new XElement(context.WorkbookNs + "tablePart", new XAttribute(context.RelNs + "id", targetRelId)));
             }
 
@@ -182,5 +191,25 @@ internal static class XlsxStructuredTableReferencePreserver
                 preservedTableParts));
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static HashSet<string> GetWorksheetPathsWithTableRelationships(
+        ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext context)
+    {
+        var worksheetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceWorksheetPath in context.SourceSheets.Values)
+        {
+            var relationshipsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath));
+            if (relationshipsEntry is null)
+                continue;
+
+            using var relationshipsStream = relationshipsEntry.Open();
+            using var reader = new StreamReader(relationshipsStream);
+            if (reader.ReadToEnd().Contains(TableRelationshipType, StringComparison.OrdinalIgnoreCase))
+                worksheetPaths.Add(sourceWorksheetPath);
+        }
+
+        return worksheetPaths;
     }
 }
