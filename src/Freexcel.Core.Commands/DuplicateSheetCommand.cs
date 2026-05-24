@@ -194,6 +194,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             XAxisTickMarkSkip = chart.XAxisTickMarkSkip,
             XAxisLabelOffset = chart.XAxisLabelOffset,
             XAxisNoMultiLevelLabels = chart.XAxisNoMultiLevelLabels,
+            XAxisLabelAlignment = chart.XAxisLabelAlignment,
             XAxisLineColor = chart.XAxisLineColor,
             XAxisLineThickness = chart.XAxisLineThickness,
             XAxisCrosses = chart.XAxisCrosses,
