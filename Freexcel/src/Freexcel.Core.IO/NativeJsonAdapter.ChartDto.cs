@@ -76,6 +76,7 @@ public sealed partial class NativeJsonAdapter
         public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowXAxisMajorGridlines { get; set; }
         public bool ShowXAxisMinorGridlines { get; set; }
+        public bool XAxisIsDateAxis { get; set; }
         public CellColor? XAxisMajorGridlineColor { get; set; }
         public CellColor? XAxisMinorGridlineColor { get; set; }
         public double XAxisGridlineThickness { get; set; } = 1;

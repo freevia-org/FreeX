@@ -34,6 +34,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
         chart.ShowXAxisMajorGridlines = false;
         chart.ShowXAxisMinorGridlines = false;
+        chart.XAxisIsDateAxis = false;
         chart.XAxisMajorGridlineColor = null;
         chart.XAxisMinorGridlineColor = null;
         chart.XAxisGridlineThickness = 1;
@@ -249,6 +250,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisNumberFormat = snapshot.XAxisNumberFormat ?? ChartDataLabelNumberFormat.General;
         chart.ShowXAxisMajorGridlines = snapshot.ShowXAxisMajorGridlines ?? false;
         chart.ShowXAxisMinorGridlines = snapshot.ShowXAxisMinorGridlines ?? false;
+        chart.XAxisIsDateAxis = snapshot.XAxisIsDateAxis ?? false;
         chart.XAxisMajorGridlineColor = snapshot.XAxisMajorGridlineColor;
         chart.XAxisMinorGridlineColor = snapshot.XAxisMinorGridlineColor;
         chart.XAxisGridlineThickness = snapshot.XAxisGridlineThickness ?? 1;

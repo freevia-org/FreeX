@@ -180,7 +180,7 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
-        new(chartNs + "catAx",
+        new(chartNs + (chart.XAxisIsDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", "minMax"))),
