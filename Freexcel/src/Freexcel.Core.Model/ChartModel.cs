@@ -318,6 +318,9 @@ public sealed class ChartModel
     public bool ShowLegend { get; set; } = true;
     public bool ShowDataLabels { get; set; }
     public ChartDataLabelPosition DataLabelPosition { get; set; } = ChartDataLabelPosition.BestFit;
+    public bool ShowDataLabelValue { get; set; } = true;
+    public bool ShowDataLabelLegendKey { get; set; }
+    public bool ShowDataLabelBubbleSize { get; set; }
     public bool ShowDataLabelCategoryName { get; set; }
     public bool ShowDataLabelSeriesName { get; set; }
     public bool ShowDataLabelPercentage { get; set; }
