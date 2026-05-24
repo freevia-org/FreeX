@@ -1,5 +1,6 @@
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
+using System.Globalization;
 using Xunit;
 
 namespace Freexcel.Core.Calc.Tests;
@@ -29,6 +30,23 @@ public class NumberFormatterTests
         const string format = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
 
         var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(1234.5, 14, "$     1,234.50")]
+    [InlineData(-1234.5, 14, "$   (1,234.50)")]
+    [InlineData(0, 14, "$            -")]
+    [InlineData(123456789, 8, "$ 123,456,789.00")]
+    public void AccountingSubset_ExpandsFillSpaceToRequestedCharacterWidth(
+        double value,
+        int targetWidthCharacters,
+        string expected)
+    {
+        const string format = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
+
+        var result = NumberFormatter.Format(new NumberValue(value), format, targetWidthCharacters);
 
         Assert.Equal(expected, result);
     }
@@ -460,6 +478,28 @@ public class NumberFormatterTests
         var result = NumberFormatter.Format(new NumberValue(45292), format);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_FormatsSpecialExcelDateTimeLocaleTokensUsingCurrentCulture()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo("de-DE");
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+            var value = new DateTimeValue(new DateTime(2024, 1, 1, 13, 14, 15).ToOADate());
+
+            Assert.Equal("Montag, 1. Januar 2024", NumberFormatter.Format(value, "[$-F800]"));
+            Assert.Equal("13:14:15", NumberFormatter.Format(value, "[$-F400]"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 
     [Theory]
