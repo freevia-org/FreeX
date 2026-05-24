@@ -321,6 +321,18 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void FormatPictureDialogOpenedFromKeyboard_FocusesHeightBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_heightBox.Focus();");
+        source.Should().Contain("_heightBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_heightBox);");
+    }
+
+    [Fact]
     public void FormatPictureDialog_ResetActionsRestoreInitialFieldText()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
