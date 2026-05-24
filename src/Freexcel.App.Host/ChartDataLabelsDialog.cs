@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -70,6 +71,7 @@ public sealed class ChartDataLabelsDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartDataLabelsDialogResult FromChart(ChartModel chart) => CreateResult(
@@ -171,5 +173,11 @@ public sealed class ChartDataLabelsDialog : Window
             ChartDialogHelpers.ParseDouble(_fontSizeBox.Text, 11),
             ChartDialogHelpers.ParseDouble(_angleBox.Text, 0));
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _showBox.Focus();
+        Keyboard.Focus(_showBox);
     }
 }
