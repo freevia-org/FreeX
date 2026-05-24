@@ -11252,6 +11252,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.ShowSheetTabs.Should().BeFalse();
+        loaded.SheetTabRatio.Should().Be(700);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11288,6 +11290,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.ShowSheetTabs.Should().BeFalse();
+        loaded.SheetTabRatio.Should().Be(700);
+        loaded.FirstVisibleSheetIndex.Should().Be(0);
+        loaded.ActiveSheetIndex.Should().Be(0);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();

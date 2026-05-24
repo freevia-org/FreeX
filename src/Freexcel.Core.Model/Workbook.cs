@@ -65,6 +65,18 @@ public sealed class Workbook
     /// <summary>Whether workbook date serials use Excel's 1904 date system.</summary>
     public bool Uses1904DateSystem { get; set; }
 
+    /// <summary>Whether the workbook sheet-tab strip is visible in Excel.</summary>
+    public bool? ShowSheetTabs { get; set; }
+
+    /// <summary>Excel workbook-view sheet tab ratio. Null means Excel/default.</summary>
+    public int? SheetTabRatio { get; set; }
+
+    /// <summary>Zero-based index of the first sheet visible in the sheet-tab strip.</summary>
+    public int? FirstVisibleSheetIndex { get; set; }
+
+    /// <summary>Zero-based index of the active sheet recorded in the workbook view.</summary>
+    public int? ActiveSheetIndex { get; set; }
+
     /// <summary>Whether Excel should fully recalculate the workbook when it is opened.</summary>
     public bool FullCalculationOnLoad { get; set; }
 
