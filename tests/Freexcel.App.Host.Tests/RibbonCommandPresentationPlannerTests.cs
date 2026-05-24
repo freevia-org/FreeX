@@ -112,6 +112,17 @@ public sealed class RibbonCommandPresentationPlannerTests
         icon.Kind.Should().Be(expectedKind);
     }
 
+    [Theory]
+    [InlineData("Charts", RibbonCommandIconAccent.Chart)]
+    [InlineData("Get & Transform Data", RibbonCommandIconAccent.Data)]
+    [InlineData("Themes", RibbonCommandIconAccent.Theme)]
+    [InlineData("Protect", RibbonCommandIconAccent.Protect)]
+    [InlineData("Help", RibbonCommandIconAccent.Help)]
+    public void GetGroupIcon_AssignsExcelLikeAccentFamilies(string groupName, RibbonCommandIconAccent expectedAccent)
+    {
+        RibbonCommandPresentationPlanner.GetGroupIcon(groupName).Accent.Should().Be(expectedAccent);
+    }
+
     [Fact]
     public void MainRibbonGroupLabels_MapToSemanticIcons()
     {
