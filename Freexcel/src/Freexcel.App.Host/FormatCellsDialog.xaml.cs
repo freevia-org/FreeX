@@ -437,13 +437,13 @@ public partial class FormatCellsDialog : Window
     }
 
     private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgFontColorBox, allowNoColor: false);
+        PickColorInto(DlgFontColorBox, allowNoColor: false, "Font Color");
 
     private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgFillColorBox, allowNoColor: true);
+        PickColorInto(DlgFillColorBox, allowNoColor: true, "Fill Color");
 
     private void DlgFillPatternColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgFillPatternColorBox, allowNoColor: true);
+        PickColorInto(DlgFillPatternColorBox, allowNoColor: true, "Pattern Color");
 
     private void DlgFillSwatchButton_Click(object sender, RoutedEventArgs e)
     {
@@ -460,10 +460,10 @@ public partial class FormatCellsDialog : Window
             DlgFillPatternColorBox.Text = colorText;
     }
 
-    private void PickColorInto(TextBox target, bool allowNoColor)
+    private void PickColorInto(TextBox target, bool allowNoColor, string title)
     {
         var initial = TryParseColor(target.Text);
-        var dialog = new ColorPickerDialog(initial, allowNoColor) { Owner = this };
+        var dialog = new ColorPickerDialog(initial, allowNoColor) { Owner = this, Title = title };
         if (dialog.ShowDialog() != true)
             return;
 
