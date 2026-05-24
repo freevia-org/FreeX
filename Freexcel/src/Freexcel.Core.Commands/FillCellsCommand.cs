@@ -37,12 +37,11 @@ public sealed class FillCellsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         var targets = GetTargetAddresses().ToList();
         if (targets.Count == 0)
             return new CommandOutcome(false, "The fill range must include at least one target cell.");
+        if (targets.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
+            return new CommandOutcome(false, "The sheet is protected.");
 
         _snapshot = [];
         foreach (var target in targets)
