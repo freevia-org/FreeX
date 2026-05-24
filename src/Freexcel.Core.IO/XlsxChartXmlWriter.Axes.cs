@@ -39,6 +39,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.AxisTitleTextThemeColor,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
+                chart.XAxisCrosses,
+                chart.XAxisCrossesAt,
+                chart.XAxisCrossBetween,
                 chartNs,
                 drawingNs);
             yield return ToValueAxisXml(
@@ -69,6 +72,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.AxisTitleTextThemeColor,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
+                chart.YAxisCrosses,
+                chart.YAxisCrossesAt,
+                chart.YAxisCrossBetween,
                 chartNs,
                 drawingNs);
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
@@ -102,6 +108,9 @@ internal static partial class XlsxChartXmlWriter
                     chart.AxisTitleTextThemeColor,
                     chart.AxisTitleTextColor,
                     chart.AxisTitleFontSize,
+                    chart.YAxisCrosses,
+                    chart.YAxisCrossesAt,
+                    chart.YAxisCrossBetween,
                     chartNs,
                     drawingNs);
             }
@@ -137,6 +146,9 @@ internal static partial class XlsxChartXmlWriter
             chart.AxisTitleTextThemeColor,
             chart.AxisTitleTextColor,
             chart.AxisTitleFontSize,
+            chart.YAxisCrosses,
+            chart.YAxisCrossesAt,
+            chart.YAxisCrossBetween,
             chartNs,
             drawingNs);
 
@@ -171,6 +183,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.AxisTitleTextThemeColor,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
+                chart.YAxisCrosses,
+                chart.YAxisCrossesAt,
+                chart.YAxisCrossBetween,
                 chartNs,
                 drawingNs);
         }
@@ -228,6 +243,9 @@ internal static partial class XlsxChartXmlWriter
         WorkbookThemeColorReference? axisTitleTextThemeColor,
         CellColor? axisTitleTextColor,
         double axisTitleFontSize,
+        ChartAxisCrosses crosses,
+        double? crossesAt,
+        ChartAxisCrossBetween? crossBetween,
         XNamespace chartNs,
         XNamespace drawingNs) =>
         new(chartNs + "valAx",
@@ -253,7 +271,8 @@ internal static partial class XlsxChartXmlWriter
             ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
-            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
+            ToAxisCrossesXml(crosses, crossesAt, chartNs),
+            ToAxisCrossBetweenXml(crossBetween, chartNs));
 
     private static XElement ToSeriesAxisXml(XNamespace chartNs) =>
         new(chartNs + "serAx",
@@ -315,6 +334,30 @@ internal static partial class XlsxChartXmlWriter
 
     private static string ToXlsxTickLabelPosition(bool showLabels) =>
         showLabels ? "nextTo" : "none";
+
+    private static XElement ToAxisCrossesXml(ChartAxisCrosses crosses, double? crossesAt, XNamespace chartNs)
+    {
+        if (crosses == ChartAxisCrosses.Custom && crossesAt is { } numeric && double.IsFinite(numeric))
+            return new XElement(chartNs + "crossesAt", new XAttribute("val", numeric.ToString(CultureInfo.InvariantCulture)));
+
+        return new XElement(chartNs + "crosses", new XAttribute("val", ToXlsxAxisCrosses(crosses)));
+    }
+
+    private static XElement? ToAxisCrossBetweenXml(ChartAxisCrossBetween? crossBetween, XNamespace chartNs) =>
+        crossBetween is null
+            ? null
+            : new XElement(chartNs + "crossBetween", new XAttribute("val", ToXlsxAxisCrossBetween(crossBetween.Value)));
+
+    private static string ToXlsxAxisCrosses(ChartAxisCrosses crosses) =>
+        crosses switch
+        {
+            ChartAxisCrosses.Minimum => "min",
+            ChartAxisCrosses.Maximum => "max",
+            _ => "autoZero"
+        };
+
+    private static string ToXlsxAxisCrossBetween(ChartAxisCrossBetween crossBetween) =>
+        crossBetween == ChartAxisCrossBetween.MidCategory ? "midCat" : "between";
 
     private static XElement? ToAxisLabelTextProperties(
         WorkbookThemeColorReference? textThemeColor,
