@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -57,6 +58,7 @@ public sealed class FunctionArgumentsDialog : Window
         UpdatePreview();
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static IReadOnlyList<FunctionArgumentSpec> GetArgumentSpecs(string functionName)
@@ -125,6 +127,17 @@ public sealed class FunctionArgumentsDialog : Window
     {
         ResultFormula = CreateFormula(_functionName, _argumentBoxes.Select(box => box.Text));
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        var firstArgument = _argumentBoxes.FirstOrDefault();
+        if (firstArgument is null)
+            return;
+
+        firstArgument.Focus();
+        firstArgument.SelectAll();
+        Keyboard.Focus(firstArgument);
     }
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<FunctionArgumentSpec>> KnownArguments =
