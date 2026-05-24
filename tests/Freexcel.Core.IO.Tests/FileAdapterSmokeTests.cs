@@ -14640,6 +14640,18 @@ public partial class FileAdapterSmokeTests
                     VerticalDpi = 600,
                     BlackAndWhite = true,
                     Draft = false
+                },
+                HeaderFooter = new ChartHeaderFooterModel
+                {
+                    DifferentOddEven = true,
+                    DifferentFirst = true,
+                    AlignWithMargins = false,
+                    OddHeader = "&CSales chart",
+                    OddFooter = "&P of &N",
+                    EvenHeader = "&LConfidential",
+                    EvenFooter = "&RPrepared",
+                    FirstHeader = "&CFirst page",
+                    FirstFooter = "&D"
                 }
             },
             RoundedCorners = true,
@@ -14760,6 +14772,16 @@ public partial class FileAdapterSmokeTests
             pageSetup.Attribute("verticalDpi")!.Value.Should().Be("600");
             pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
             pageSetup.Attribute("draft")!.Value.Should().Be("0");
+            var headerFooter = printSettings.Element(chartNs + "headerFooter")!;
+            headerFooter.Attribute("differentOddEven")!.Value.Should().Be("1");
+            headerFooter.Attribute("differentFirst")!.Value.Should().Be("1");
+            headerFooter.Attribute("alignWithMargins")!.Value.Should().Be("0");
+            headerFooter.Element(chartNs + "oddHeader")!.Value.Should().Be("&CSales chart");
+            headerFooter.Element(chartNs + "oddFooter")!.Value.Should().Be("&P of &N");
+            headerFooter.Element(chartNs + "evenHeader")!.Value.Should().Be("&LConfidential");
+            headerFooter.Element(chartNs + "evenFooter")!.Value.Should().Be("&RPrepared");
+            headerFooter.Element(chartNs + "firstHeader")!.Value.Should().Be("&CFirst page");
+            headerFooter.Element(chartNs + "firstFooter")!.Value.Should().Be("&D");
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
             var pivotFormats = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "pivotFmts")!;
             pivotFormats.Element(chartNs + "pivotFmt")!.Element(chartNs + "idx")!.Attribute("val")!.Value.Should().Be("0");
