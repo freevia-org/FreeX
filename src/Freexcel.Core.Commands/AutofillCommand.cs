@@ -26,8 +26,9 @@ public sealed class AutofillCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
-            return protectedOutcome;
+        var targets = _fillRange.AllCells().ToList();
+        if (targets.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
+            return new CommandOutcome(false, "The sheet is protected.");
 
         var sourceAddr = _sourceRange.End;
         var sourceCell = sheet.GetCell(sourceAddr);
@@ -35,7 +36,7 @@ public sealed class AutofillCommand : IWorkbookCommand
 
         _snapshot = [];
 
-        foreach (var addr in _fillRange.AllCells())
+        foreach (var addr in targets)
         {
             _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
 
