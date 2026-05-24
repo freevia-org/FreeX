@@ -91,6 +91,42 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static WorkbookViewProperties LoadWorkbookViewProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookViewProperties.Empty;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var primaryView = workbookXml.Root?
+                .Element(workbookNs + "bookViews")?
+                .Elements(workbookNs + "workbookView")
+                .FirstOrDefault(view =>
+                    XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
+                    XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0);
+            primaryView ??= workbookXml.Root?
+                .Element(workbookNs + "bookViews")?
+                .Element(workbookNs + "workbookView");
+
+            if (primaryView is null)
+                return WorkbookViewProperties.Empty;
+
+            return new WorkbookViewProperties(
+                XlsxXmlAttributeReader.ReadNullableBoolAttribute(primaryView, "showSheetTabs"),
+                XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "tabRatio"),
+                XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "firstSheet"),
+                XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "activeTab"));
+        }
+        catch
+        {
+            return WorkbookViewProperties.Empty;
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try
@@ -184,6 +220,15 @@ internal sealed record WorkbookCalculationProperties(
     double? MaxChange)
 {
     public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
+}
+
+internal sealed record WorkbookViewProperties(
+    bool? ShowSheetTabs,
+    int? SheetTabRatio,
+    int? FirstVisibleSheetIndex,
+    int? ActiveSheetIndex)
+{
+    public static WorkbookViewProperties Empty { get; } = new(null, null, null, null);
 }
 
 internal sealed record XlsxWorkbookCustomView(

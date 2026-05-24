@@ -308,7 +308,14 @@ internal static class XlsxWorkbookMetadataPreserver
                 : null;
             if (targetView is not null)
             {
-                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                XName[] modeledPrimaryViewAttributes =
+                [
+                    "showSheetTabs",
+                    "tabRatio",
+                    "firstSheet",
+                    "activeTab"
+                ];
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView, modeledPrimaryViewAttributes))
                     changed = true;
                 mergedTargetViewKeys.Add(sourceViewKey);
                 continue;
