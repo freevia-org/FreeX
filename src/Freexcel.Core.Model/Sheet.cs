@@ -21,6 +21,8 @@ public sealed record HyperlinkMetadata(
     string ScreenTip = "",
     string Bookmark = "");
 
+public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -77,6 +79,9 @@ public sealed partial class Sheet
 
     /// <summary>Optional worksheet print area. Null means print the used range.</summary>
     public GridRange? PrintArea { get; set; }
+
+    /// <summary>Worksheet-level Excel AutoFilter metadata loaded from XLSX.</summary>
+    public WorksheetAutoFilterModel? AutoFilter { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
