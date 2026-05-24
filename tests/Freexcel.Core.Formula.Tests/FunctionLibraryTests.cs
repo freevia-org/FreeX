@@ -855,6 +855,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Len_RangeArgument_SpillsElementwiseLengths()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=LEN(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.Cells[0, 0].Should().Be(new NumberValue(5));
+        result.Cells[1, 0].Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
     public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
     {
         var sheet = MakeSheet();

@@ -634,7 +634,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range)
+        {
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (int r = 0; r < range.RowCount; r++)
+                for (int c = 0; c < range.ColCount; c++)
+                {
+                    var value = range.Cells[r, c];
+                    if (value is ErrorValue e) return e;
+                    cells[r, c] = LenScalar(value);
+                }
+
+            return new RangeValue(cells);
+        }
+
+        return LenScalar(args[0]);
+    }
+
+    private static ScalarValue LenScalar(ScalarValue value)
+    {
+        var text = ToText(value);
         return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
     }
 
