@@ -12,8 +12,13 @@ public sealed class LegacyXlsFileAdapterTests
     {
         var adapter = new LegacyXlsFileAdapter();
 
-        adapter.Formats.Should().ContainSingle(format =>
+        adapter.Formats.Should().Contain(format =>
             format.Extension == ".xls" &&
+            format.CanOpen &&
+            !format.CanSave);
+        adapter.Formats.Should().Contain(format =>
+            format.Extension == ".xlsb" &&
+            format.FormatName == "Excel Binary Workbook" &&
             format.CanOpen &&
             !format.CanSave);
     }
