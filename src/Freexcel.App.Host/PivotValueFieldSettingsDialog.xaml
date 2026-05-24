@@ -44,7 +44,7 @@
                          AutomationProperties.Name="Custom name"/>
             </Grid>
 
-            <TabControl Grid.Row="1">
+            <TabControl x:Name="ValueFieldTabs" Grid.Row="1">
                 <TabItem Header="_Summarize Values By">
                     <StackPanel Margin="10">
                         <Label Content="_Summarize value field by:"
@@ -56,7 +56,7 @@
                                   AutomationProperties.Name="Summarize value field by"/>
                     </StackPanel>
                 </TabItem>
-                <TabItem Header="Show Values _As">
+                <TabItem x:Name="ShowValuesAsTab" Header="Show Values _As">
                     <StackPanel Margin="10">
                         <Label Content="Show values _as:"
                                Target="{Binding ElementName=ShowValuesAsBox}"
@@ -90,7 +90,7 @@
                         </StackPanel>
                     </StackPanel>
                 </TabItem>
-                <TabItem Header="_Number Format">
+                <TabItem x:Name="NumberFormatTab" Header="_Number Format">
                     <StackPanel Margin="10">
                         <Label Content="_Number format:"
                                Target="{Binding ElementName=NumberFormatPresetBox}"
