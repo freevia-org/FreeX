@@ -223,6 +223,12 @@ public partial class FormatCellsDialog : Window
         if (DlgVAlignBox.SelectedItem is string va && Enum.TryParse(va, out CellVAlign v)) vAlign = v;
 
         int? indentLevel = FormatCellsInputParser.TryParseIndentLevel(DlgIndentLevelBox.Text);
+        if (indentLevel is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
+            ShowInvalidInputWarning("Enter an indent level from 0 to 15.", DlgIndentLevelBox);
+            return;
+        }
 
         int? textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(DlgTextRotationBox.Text);
         if (textRotation is null)

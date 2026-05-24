@@ -675,6 +675,15 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_RejectsInvalidIndentWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter an indent level from 0 to 15.\", DlgIndentLevelBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFontFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
