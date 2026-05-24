@@ -47,6 +47,15 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
+    [InlineData("=DEC2BIN(10.9)", "1010")]
+    [InlineData("=DEC2HEX(31.9,4.9)", "001F")]
+    [InlineData("=BIN2HEX(\"101\",4.9)", "0005")]
+    public void BaseConversionFunctions_TruncateFractionalNumberAndPlaces(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
+    [Theory]
     [InlineData("=BIN2DEC(\"102\")")]
     [InlineData("=BIN2DEC(\"10101010101\")")]
     [InlineData("=DEC2BIN(512)")]
@@ -71,6 +80,14 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=BITRSHIFT(16,2)", 4)]
     [InlineData("=BITRSHIFT(4,-2)", 16)]
     public void BitFunctions_ReturnExcelIntegerResults(string formula, double expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=BITLSHIFT(1,2.9)", 4)]
+    [InlineData("=BITRSHIFT(8,1.9)", 4)]
+    public void BitShiftFunctions_TruncateFractionalShiftAmount(string formula, double expected)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
     }
