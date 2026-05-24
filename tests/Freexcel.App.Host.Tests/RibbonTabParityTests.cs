@@ -189,6 +189,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var viewTab = ExtractTabXaml(xaml, "View", "PivotTable Analyze");
+        var windowGroup = ExtractGroupXaml(viewTab, "Window");
 
         ExtractGroupLabels(viewTab).Should().Equal(
             "Workbook Views",
@@ -197,8 +198,15 @@ public sealed class RibbonTabParityTests
             "Window",
             "Macros");
 
-        ExtractGroupXaml(viewTab, "Window").Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
-        ExtractGroupXaml(viewTab, "Window").Should().Contain("local:RibbonTooltip.Title=\"Split\"");
+        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
+        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Split\"");
+        ExtractTooltipTitles(windowGroup).Should().ContainInOrder(
+            "New Window",
+            "Arrange All",
+            "View Side by Side",
+            "Synchronous Scrolling",
+            "Reset Window Position",
+            "Switch Windows");
         ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonTooltip.Title=\"Macros\"");
     }
 
