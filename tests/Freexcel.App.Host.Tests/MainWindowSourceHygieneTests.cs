@@ -676,11 +676,17 @@ public sealed class MainWindowSourceHygieneTests
     public void PivotContextualTabs_UseStrictPivotSelectionInsteadOfWorkbookFallback()
     {
         var pivotSource = ReadPivotCommandSource();
+        var refreshFieldListStart = pivotSource.IndexOf("private void RefreshPivotFieldListPane()", StringComparison.Ordinal);
+        var setTabsStart = pivotSource.IndexOf("private void SetPivotContextualTabsVisible", StringComparison.Ordinal);
+        var refreshFieldListSource = pivotSource[refreshFieldListStart..setTabsStart];
 
         pivotSource.Should().Contain("SetPivotContextualTabsVisible(false);");
-        pivotSource.Split("FindPivotTableContainingSelection", StringSplitOptions.None)
-            .Should()
-            .HaveCountGreaterThan(2, "contextual tabs and the Field List entry point should require the selection to be inside a PivotTable");
+        refreshFieldListSource.Should().Contain(
+            "FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)",
+            "Excel only shows PivotTable contextual tabs and the field list when the selection is inside a PivotTable");
+        refreshFieldListSource.Should().NotContain(
+            "FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)",
+            "the workbook fallback would show contextual PivotTable tabs after selection leaves the PivotTable");
     }
 
     [Fact]
