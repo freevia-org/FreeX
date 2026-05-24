@@ -200,11 +200,16 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-
-        double n = ToNumber(args[0]);
-        if (!double.IsFinite(n)) return ErrorValue.Value;
         string from = ToText(args[1]);
         string to = ToText(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ConvertScalar(value, from, to));
+        return ConvertScalar(args[0], from, to);
+    }
+
+    private static ScalarValue ConvertScalar(ScalarValue numberValue, string from, string to)
+    {
+        double n = ToNumber(numberValue);
+        if (!double.IsFinite(n)) return ErrorValue.Value;
 
         if (!TryResolveUnit(from, out var fromCat, out var fromFactor)) return ErrorValue.NA;
         if (!TryResolveUnit(to, out var toCat, out var toFactor)) return ErrorValue.NA;
