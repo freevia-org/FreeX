@@ -175,8 +175,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue BahtText(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, BahtTextScalar);
+        return BahtTextScalar(args[0]);
+    }
 
-        var value = ToNumber(args[0]);
+    private static ScalarValue BahtTextScalar(ScalarValue input)
+    {
+        var value = ToNumber(input);
         if (!double.IsFinite(value)) return ErrorValue.Value;
 
         var rounded = Math.Round(Math.Abs(value) + 1e-12, 2, MidpointRounding.AwayFromZero);

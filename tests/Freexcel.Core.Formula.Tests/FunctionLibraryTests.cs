@@ -6544,6 +6544,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Bahttext_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.3)));
+
+        var result = _eval.Evaluate("=BAHTTEXT(A1:A2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(_eval.Evaluate("=BAHTTEXT(A1)", sheet));
+        range.At(2, 1).Should().Be(_eval.Evaluate("=BAHTTEXT(A2)", sheet));
+    }
+
+    [Fact]
     public void Bahttext_RoundsHalfAwayFromZeroAtSatangBoundary()
     {
         _eval.Evaluate("=BAHTTEXT(1.005)", MakeSheet())
