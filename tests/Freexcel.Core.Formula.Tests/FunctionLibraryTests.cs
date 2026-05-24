@@ -1864,6 +1864,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SQRT(A1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void UnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=ABS(A1:A2)", sheet), new NumberValue(4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SQRT(A1:A2)", sheet), ErrorValue.Num, new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=INT(A1:A2)", sheet), new NumberValue(-4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SIGN(A1:A2)", sheet), new NumberValue(-1), new NumberValue(1));
+    }
+
     // ── INT ───────────────────────────────────────────────────────────────────
 
     [Fact]
