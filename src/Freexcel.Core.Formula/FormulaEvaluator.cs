@@ -1042,6 +1042,7 @@ public sealed class FormulaEvaluator
              or "SLN" or "SYD" or "DB" or "DDB" or "VDB" or "AMORDEGRC" or "AMORLINC"
              or "DOLLARDE" or "DOLLARFR"
              or "DISC" or "INTRATE" or "RECEIVED"
+             or "ACCRINT" or "ODDFPRICE" or "ODDFYIELD" or "ODDLPRICE" or "ODDLYIELD"
              or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"
              or "COUPDAYBS" or "COUPDAYS" or "COUPDAYSNC" or "COUPNCD" or "COUPNUM" or "COUPPCD"
              or "PRICE" or "YIELD" or "PRICEDISC" or "PRICEMAT" or "YIELDDISC" or "YIELDMAT" or "DURATION" or "MDURATION"
