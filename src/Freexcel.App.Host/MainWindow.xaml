@@ -196,7 +196,7 @@
                 <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
                         AutomationProperties.Name="Maximize or Restore">
-                    <local:RibbonIcon Kind="WindowMaximize" IconSize="18"
+                    <local:RibbonIcon x:Name="MaxRestoreIcon" Kind="WindowMaximize" IconSize="18"
                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                 </Button>
                 <Button                         DockPanel.Dock="Right"

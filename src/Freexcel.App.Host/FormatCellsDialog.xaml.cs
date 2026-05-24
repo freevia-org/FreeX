@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
@@ -134,7 +135,24 @@ public partial class FormatCellsDialog : Window
         {
             Populate(_current);
             Tabs.SelectedIndex = (int)initialTab;
+            FocusInitialKeyboardTarget();
         };
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        Control target = Tabs.SelectedIndex switch
+        {
+            (int)FormatCellsDialogTab.Alignment => DlgHAlignBox,
+            (int)FormatCellsDialogTab.Font => DlgFontNameBox,
+            (int)FormatCellsDialogTab.Fill => DlgFillColorBox,
+            (int)FormatCellsDialogTab.Border => DlgBorderLineStyleBox,
+            (int)FormatCellsDialogTab.Protection => DlgLockedCheck,
+            _ => NumberCategoryList
+        };
+
+        target.Focus();
+        Keyboard.Focus(target);
     }
 
     private void Populate(CellStyle s)

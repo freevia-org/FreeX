@@ -167,15 +167,31 @@ public partial class MainWindow : Window
         };
         
         Loaded += MainWindow_Loaded;
+        Loaded += (_, _) => UpdateMaxRestoreButtonState();
         SizeChanged += MainWindow_SizeChanged;
         StateChanged += (_, _) =>
         {
             UpdateMaximizedContentInset();
-            if (MaxRestoreBtn != null)
-                MaxRestoreBtn.Content = WindowState == WindowState.Maximized ? "" : "";
+            UpdateMaxRestoreButtonState();
         };
 
         _logger.LogInformation("MainWindow initialized with Workbook {WorkbookId}", _workbook.Id);
+    }
+
+    private void UpdateMaxRestoreButtonState()
+    {
+        if (MaxRestoreIcon is null || MaxRestoreBtn is null)
+            return;
+
+        var isMaximized = WindowState == WindowState.Maximized;
+        MaxRestoreIcon.Kind = isMaximized
+            ? RibbonCommandIconKind.WindowRestore
+            : RibbonCommandIconKind.WindowMaximize;
+        if (!ReferenceEquals(MaxRestoreBtn.Content, MaxRestoreIcon))
+            MaxRestoreBtn.Content = MaxRestoreIcon;
+        System.Windows.Automation.AutomationProperties.SetName(
+            MaxRestoreBtn,
+            isMaximized ? "Restore Down" : "Maximize");
     }
 
     // ── Header / select-all helpers ───────────────────────────────────────────
