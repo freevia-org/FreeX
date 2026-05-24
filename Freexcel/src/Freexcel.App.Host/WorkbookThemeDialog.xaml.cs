@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 
@@ -18,6 +19,7 @@ public partial class WorkbookThemeDialog : Window
         PopulateOptions();
         WirePreviewRefresh();
         LoadTheme(theme);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public WorkbookTheme ResultTheme { get; private set; } = WorkbookTheme.Office;
@@ -182,6 +184,13 @@ public partial class WorkbookThemeDialog : Window
         }
 
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        ThemeNameBox.Focus();
+        ThemeNameBox.SelectAll();
+        Keyboard.Focus(ThemeNameBox);
     }
 
 }
