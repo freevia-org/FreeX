@@ -17,18 +17,57 @@ public static partial class BuiltInFunctions
         if (args.Count < 3) return ErrorValue.Value;
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var delimiter = ToText(args[0]);
+        var delimiters = FlattenTextjoinArgument(args[0]);
+        if (delimiters.Error is not null) return delimiters.Error;
         bool ignoreEmpty = ToBool(args[1]);
         var parts = new List<string>();
         for (int i = 2; i < args.Count; i++)
         {
             if (args[i] is ErrorValue e) return e;
-            var t = ToText(args[i]);
-            if (ignoreEmpty && t.Length == 0) continue;
-            parts.Add(t);
+            var values = FlattenTextjoinArgument(args[i]);
+            if (values.Error is not null) return values.Error;
+            foreach (var t in values.Text)
+            {
+                if (ignoreEmpty && t.Length == 0) continue;
+                parts.Add(t);
+            }
         }
-        var result = string.Join(delimiter, parts);
+        var result = JoinTextjoinParts(parts, delimiters.Text);
         return result.Length > 32767 ? ErrorValue.Value : new TextValue(result);
+    }
+
+    private static (List<string> Text, ErrorValue? Error) FlattenTextjoinArgument(ScalarValue value)
+    {
+        var text = new List<string>();
+        if (value is RangeValue range)
+        {
+            foreach (var cell in range.Flatten())
+            {
+                if (cell is ErrorValue e) return (text, e);
+                text.Add(ToText(cell));
+            }
+        }
+        else
+        {
+            text.Add(ToText(value));
+        }
+
+        return (text, null);
+    }
+
+    private static string JoinTextjoinParts(IReadOnlyList<string> parts, IReadOnlyList<string> delimiters)
+    {
+        if (parts.Count == 0) return "";
+        if (delimiters.Count == 0) return string.Concat(parts);
+
+        var result = new StringBuilder(parts[0]);
+        for (int i = 1; i < parts.Count; i++)
+        {
+            result.Append(delimiters[(i - 1) % delimiters.Count]);
+            result.Append(parts[i]);
+        }
+
+        return result.ToString();
     }
 
     private static ScalarValue Exact(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

@@ -1036,7 +1036,8 @@ public sealed class FormulaEvaluator
              or "T.TEST" or "F.TEST" or "CHISQ.TEST"
              or "FREQUENCY"
              or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
-             or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL";
+             or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
+             or "TEXTJOIN";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
