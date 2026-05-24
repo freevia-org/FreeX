@@ -28,6 +28,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         var workbook = new Workbook(dto.Name);
         if (dto.Theme is { } theme)
             workbook.Theme = ToWorkbookTheme(theme);
+        workbook.Uses1904DateSystem = dto.Uses1904DateSystem;
         workbook.IsStructureProtected = dto.IsStructureProtected;
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))

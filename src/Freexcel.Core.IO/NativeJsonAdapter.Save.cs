@@ -14,6 +14,7 @@ public sealed partial class NativeJsonAdapter
             MinimumReaderVersion = CurrentMinimumReaderVersion,
             Name = workbook.Name,
             Theme = FromWorkbookTheme(workbook.Theme),
+            Uses1904DateSystem = workbook.Uses1904DateSystem,
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),

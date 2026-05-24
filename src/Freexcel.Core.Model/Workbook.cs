@@ -62,6 +62,9 @@ public sealed class Workbook
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
 
+    /// <summary>Whether workbook date serials use Excel's 1904 date system.</summary>
+    public bool Uses1904DateSystem { get; set; }
+
     /// <summary>Whether Excel should fully recalculate the workbook when it is opened.</summary>
     public bool FullCalculationOnLoad { get; set; }
 
