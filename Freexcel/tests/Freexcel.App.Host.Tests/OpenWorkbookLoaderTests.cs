@@ -20,7 +20,8 @@ public sealed class OpenWorkbookLoaderTests
                 using var reader = new StreamReader(stream);
                 reader.ReadToEnd().Should().Be("payload");
                 var workbook = new Workbook("Loaded");
-                workbook.AddSheet("Sheet1");
+                var sheet = workbook.AddSheet("Sheet1");
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromFormula("1+1"));
                 return workbook;
             });
             var progressUpdates = new List<OpenProgressUpdate>();
@@ -45,6 +46,38 @@ public sealed class OpenWorkbookLoaderTests
             progressUpdates.Should().Contain(update => update.Detail.StartsWith("Loading file (reading)", StringComparison.Ordinal));
             progressUpdates.Should().Contain(update => update.Percent == 16);
             progressUpdates.Should().Contain(update => update.Percent == 98);
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_SkipsRecalculateStageWhenWorkbookHasNoFormulas()
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var adapter = new FakeAdapter(_ =>
+            {
+                var workbook = new Workbook("Loaded");
+                var sheet = workbook.AddSheet("Sheet1");
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("plain"));
+                return workbook;
+            });
+            var recalculateCalled = false;
+            var loader = new OpenWorkbookLoader(_ => recalculateCalled = true);
+
+            await loader.LoadAsync(
+                tempPath,
+                adapter,
+                ".fxjson",
+                new FileFormatDescriptor(".fxjson", "Fake"),
+                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+
+            recalculateCalled.Should().BeFalse();
         }
         finally
         {

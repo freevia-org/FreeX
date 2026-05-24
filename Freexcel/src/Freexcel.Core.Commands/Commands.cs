@@ -7,13 +7,15 @@ namespace Freexcel.Core.Commands;
 /// Command to edit the value or formula of one or more cells.
 /// Captures previous cell state for undo.
 /// </summary>
-public sealed class EditCellsCommand : IWorkbookCommand
+public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
 
     public string Label => _edits.Count == 1 ? "Edit Cell" : $"Edit {_edits.Count} Cells";
+
+    public IReadOnlyList<CellAddress> AffectedCells => _edits.Select(edit => edit.Address).ToArray();
 
     public EditCellsCommand(SheetId sheetId, IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
     {

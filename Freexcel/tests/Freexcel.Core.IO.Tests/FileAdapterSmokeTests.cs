@@ -1941,6 +1941,7 @@ public partial class FileAdapterSmokeTests
             CropTop = 0.2,
             CropRight = 0.15,
             CropBottom = 0.05,
+            Title = "Product photo title",
             AltText = "Product photo"
         });
 
@@ -1963,6 +1964,7 @@ public partial class FileAdapterSmokeTests
         picture.CropTop.Should().Be(0.2);
         picture.CropRight.Should().Be(0.15);
         picture.CropBottom.Should().Be(0.05);
+        picture.Title.Should().Be("Product photo title");
         picture.AltText.Should().Be("Product photo");
     }
 
@@ -1990,6 +1992,7 @@ public partial class FileAdapterSmokeTests
         picture.ContentType.Should().Be("image/png");
         picture.Width.Should().Be(120);
         picture.Height.Should().Be(80);
+        picture.Title.Should().Be("Native picture title");
         picture.AltText.Should().Be("Native picture");
     }
 
@@ -2206,6 +2209,7 @@ public partial class FileAdapterSmokeTests
             OutlineColor = new CellColor(70, 80, 90),
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            Title = "Review note title",
             AltText = "Review note callout"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
@@ -2222,6 +2226,7 @@ public partial class FileAdapterSmokeTests
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
             HasShadowEffect = true,
+            Title = "Approval marker title",
             AltText = "Approval marker"
         });
 
@@ -2243,6 +2248,7 @@ public partial class FileAdapterSmokeTests
         textBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
         textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
         textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+        textBox.Title.Should().Be("Review note title");
         textBox.AltText.Should().Be("Review note callout");
         var shape = loaded.GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
         shape.Anchor.Row.Should().Be(4);
@@ -2257,6 +2263,7 @@ public partial class FileAdapterSmokeTests
         shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5));
         shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5));
         shape.HasShadowEffect.Should().BeTrue();
+        shape.Title.Should().Be("Approval marker title");
         shape.AltText.Should().Be("Approval marker");
     }
 
@@ -2278,6 +2285,7 @@ public partial class FileAdapterSmokeTests
         textBox.Anchor.Row.Should().Be(2);
         textBox.Anchor.Col.Should().Be(2);
         textBox.Text.Should().Be("Native note");
+        textBox.Title.Should().Be("Native text box title");
         textBox.AltText.Should().Be("Native text box");
         textBox.Width.Should().BeApproximately(160, 0.1);
         textBox.Height.Should().BeApproximately(70, 0.1);
@@ -2288,6 +2296,7 @@ public partial class FileAdapterSmokeTests
         shape.Anchor.Row.Should().Be(5);
         shape.Anchor.Col.Should().Be(4);
         shape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.Title.Should().Be("Native ellipse title");
         shape.AltText.Should().Be("Native ellipse");
         shape.Width.Should().BeApproximately(120, 0.1);
         shape.Height.Should().BeApproximately(80, 0.1);
@@ -2311,6 +2320,7 @@ public partial class FileAdapterSmokeTests
             Height = 120,
             FillColor = new CellColor(240, 250, 255),
             OutlineColor = new CellColor(70, 80, 90),
+            Title = "Review note title",
             AltText = "Review note callout"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
@@ -2324,6 +2334,7 @@ public partial class FileAdapterSmokeTests
             OutlineColor = new CellColor(30, 40, 50),
             GradientFillEndColor = new CellColor(240, 245, 250),
             HasShadowEffect = true,
+            Title = "Approval marker title",
             AltText = "Approval marker"
         });
 
@@ -2341,6 +2352,9 @@ public partial class FileAdapterSmokeTests
             drawingXml.Descendants(xdr + "cNvPr").Select(e => e.Attribute("name")?.Value)
                 .Should()
                 .Contain(["Review Callout", "Approval Shape"]);
+            drawingXml.Descendants(xdr + "cNvPr").Select(e => e.Attribute("title")?.Value)
+                .Should()
+                .Contain(["Review note title", "Approval marker title"]);
             drawingXml.Descendants(a + "t").Select(e => e.Value).Should().Contain("Review note");
             drawingXml.Descendants(a + "prstGeom").Select(e => e.Attribute("prst")?.Value).Should().Contain("ellipse");
             drawingXml.Descendants(a + "gradFill").Should().ContainSingle();
@@ -2353,9 +2367,11 @@ public partial class FileAdapterSmokeTests
         var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
         loadedTextBox.Name.Should().Be("Review Callout");
         loadedTextBox.Text.Should().Be("Review note");
+        loadedTextBox.Title.Should().Be("Review note title");
         var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
         loadedShape.Name.Should().Be("Approval Shape");
         loadedShape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        loadedShape.Title.Should().Be("Approval marker title");
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
     }
@@ -16502,6 +16518,7 @@ public partial class FileAdapterSmokeTests
                                 new XElement(spreadsheetDrawingNs + "cNvPr",
                                     new XAttribute("id", "2"),
                                     new XAttribute("name", "Picture 1"),
+                                    new XAttribute("title", "Native picture title"),
                                     new XAttribute("descr", "Native picture")),
                                 new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                             new XElement(spreadsheetDrawingNs + "blipFill",
@@ -16590,6 +16607,7 @@ public partial class FileAdapterSmokeTests
                                 new XElement(spreadsheetDrawingNs + "cNvPr",
                                     new XAttribute("id", "2"),
                                     new XAttribute("name", "TextBox 1"),
+                                    new XAttribute("title", "Native text box title"),
                                     new XAttribute("descr", "Native text box")),
                                 new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
                             new XElement(spreadsheetDrawingNs + "spPr",
@@ -16614,6 +16632,7 @@ public partial class FileAdapterSmokeTests
                                 new XElement(spreadsheetDrawingNs + "cNvPr",
                                     new XAttribute("id", "3"),
                                     new XAttribute("name", "Ellipse 1"),
+                                    new XAttribute("title", "Native ellipse title"),
                                     new XAttribute("descr", "Native ellipse")),
                                 new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                             new XElement(spreadsheetDrawingNs + "spPr",
