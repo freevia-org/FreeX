@@ -60,6 +60,30 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Fact]
+    public void PivotFieldFilterDialogOpenedFromKeyboard_FocusesSearchBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("FilterSearchBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(FilterSearchBox);");
+    }
+
+    [Theory]
+    [InlineData("PivotLabelFilterDialog.xaml.cs", "LabelFilterKindBox")]
+    [InlineData("PivotValueFilterDialog.xaml.cs", "ValueFilterKindBox")]
+    public void PivotConditionDialogOpenedFromKeyboard_FocusesOperatorChoice(string sourceFile, string target)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", sourceFile));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain($"{target}.Focus();");
+        source.Should().Contain($"Keyboard.Focus({target});");
+    }
+
+    [Fact]
     public void PivotValueFieldSettingsDialog_ExposesAccessKeyedFieldsTabsAndButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
@@ -81,6 +105,18 @@ public sealed class PivotFilterDialogXamlTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .Contain(["_OK", "_Cancel"]);
+    }
+
+    [Fact]
+    public void PivotValueFieldSettingsDialogOpenedFromKeyboard_FocusesCustomName()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("CustomNameBox.Focus();");
+        source.Should().Contain("CustomNameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(CustomNameBox);");
     }
 
     [Fact]
