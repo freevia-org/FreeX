@@ -13,7 +13,11 @@ internal static partial class XlsxChartXmlWriter
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
                                 ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, chart.ChartTitleFontSize, drawingNs),
-                                new XElement(drawingNs + "t", chart.Title))))));
+                                new XElement(drawingNs + "t", chart.Title))))),
+            ToManualLayoutXml(chart.TitleLayout, chartNs),
+            chart.TitleOverlay
+                ? new XElement(chartNs + "overlay", new XAttribute("val", "1"))
+                : null);
 
     private static XElement? ToAxisTitleXml(
         string? title,
