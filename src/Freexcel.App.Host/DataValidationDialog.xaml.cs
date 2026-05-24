@@ -160,11 +160,7 @@ public partial class DataValidationDialog : Window
         {
             LastValidationError = criteriaError;
             MessageBox.Show(this, criteriaError, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            var target = RequiresSecondFormula(typeTag, opTag) && string.IsNullOrWhiteSpace(Formula2Box.Text)
-                ? Formula2Box
-                : Formula1Box;
-            target.Focus();
-            target.SelectAll();
+            FocusInvalidCriteriaInput(typeTag, opTag);
             return;
         }
 
@@ -222,6 +218,17 @@ public partial class DataValidationDialog : Window
 
         DialogResult = true;
         Close();
+    }
+
+    private void FocusInvalidCriteriaInput(string typeTag, string opTag)
+    {
+        ValidationTabs.SelectedItem = SettingsTab;
+        var target = RequiresSecondFormula(typeTag, opTag) && string.IsNullOrWhiteSpace(Formula2Box.Text)
+            ? Formula2Box
+            : Formula1Box;
+        target.Focus();
+        Keyboard.Focus(target);
+        target.SelectAll();
     }
 
     private bool IsClearAllState(string typeTag, string opTag, string alertTag) =>

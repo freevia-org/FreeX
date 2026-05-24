@@ -170,11 +170,44 @@ public sealed partial class ConsolidateDialog : Window
                 out var error))
         {
             MessageBox.Show(this, error ?? "Enter valid consolidation ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidFinalValidation(error);
             return;
         }
 
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInvalidFinalValidation(string? error)
+    {
+        if (string.Equals(error, "Enter a valid destination cell.", StringComparison.Ordinal))
+        {
+            FocusDestinationInput();
+            return;
+        }
+
+        FocusReferenceInput();
+    }
+
+    private void FocusReferenceInput()
+    {
+        if (_referencesList.Items.Count > 0)
+        {
+            _referencesList.Focus();
+            Keyboard.Focus(_referencesList);
+            return;
+        }
+
+        _referenceBox.Focus();
+        Keyboard.Focus(_referenceBox);
+        _referenceBox.SelectAll();
+    }
+
+    private void FocusDestinationInput()
+    {
+        _destinationBox.Focus();
+        Keyboard.Focus(_destinationBox);
+        _destinationBox.SelectAll();
     }
 
     private ConsolidateFunction SelectedFunction() =>
