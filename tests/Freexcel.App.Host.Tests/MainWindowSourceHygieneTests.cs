@@ -1974,6 +1974,7 @@ public sealed class MainWindowSourceHygieneTests
             new[]
             {
                 "MainWindow.PivotCommands.cs",
+                "MainWindow.PivotChartCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
