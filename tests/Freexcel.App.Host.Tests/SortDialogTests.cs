@@ -350,6 +350,18 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void SortOptionsDialogOpenedFromKeyboard_FocusesCaseSensitiveChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
+
+        optionsSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        optionsSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        optionsSource.Should().Contain("_caseSensitiveBox.Focus();");
+        optionsSource.Should().Contain("Keyboard.Focus(_caseSensitiveBox);");
+    }
+
+    [Fact]
     public void BuildRowChoices_LabelsRowsForLeftToRightSorting()
     {
         var sheetId = new SheetId(Guid.NewGuid());
