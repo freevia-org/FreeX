@@ -106,6 +106,8 @@ public sealed partial class SetChartLayoutCommand
             chart.ShowXAxisMajorGridlines = options.ShowXAxisMajorGridlines.Value;
         if (options.ShowXAxisMinorGridlines is not null)
             chart.ShowXAxisMinorGridlines = options.ShowXAxisMinorGridlines.Value;
+        if (options.XAxisIsDateAxis is not null)
+            chart.XAxisIsDateAxis = options.XAxisIsDateAxis.Value;
         if (options.XAxisMajorGridlineColor is not null)
             chart.XAxisMajorGridlineColor = options.XAxisMajorGridlineColor;
         if (options.XAxisMinorGridlineColor is not null)
@@ -132,6 +134,12 @@ public sealed partial class SetChartLayoutCommand
             chart.XAxisLabelFontSize = ClampFinite(options.XAxisLabelFontSize.Value, 6, 72);
         if (options.XAxisLabelAngle is not null)
             chart.XAxisLabelAngle = ClampFinite(options.XAxisLabelAngle.Value, -90, 90);
+        if (options.XAxisLabelSkip is not null)
+            chart.XAxisLabelSkip = Math.Max(0, options.XAxisLabelSkip.Value);
+        if (options.XAxisTickMarkSkip is not null)
+            chart.XAxisTickMarkSkip = Math.Max(0, options.XAxisTickMarkSkip.Value);
+        if (options.XAxisLabelOffset is not null)
+            chart.XAxisLabelOffset = Math.Max(0, options.XAxisLabelOffset.Value);
         if (options.XAxisLineColor is not null)
             chart.XAxisLineColor = options.XAxisLineColor;
         if (options.XAxisLineThickness is not null)

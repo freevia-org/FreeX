@@ -136,6 +136,22 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void ProtectionDialogsOpenedFromKeyboard_FocusInitialEntryFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_passwordBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_passwordBox);");
+        source.Should().Contain("_confirmationBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_confirmationBox);");
+        source.Should().Contain("_rangeBox.Focus();");
+        source.Should().Contain("_rangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
     public void AllowEditRangeDialog_ExposesExcelLikeRangeManagerActions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));

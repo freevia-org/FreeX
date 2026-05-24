@@ -34,6 +34,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
         chart.ShowXAxisMajorGridlines = false;
         chart.ShowXAxisMinorGridlines = false;
+        chart.XAxisIsDateAxis = false;
         chart.XAxisMajorGridlineColor = null;
         chart.XAxisMinorGridlineColor = null;
         chart.XAxisGridlineThickness = 1;
@@ -44,6 +45,9 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisLabelTextThemeColor = null;
         chart.XAxisLabelFontSize = 11;
         chart.XAxisLabelAngle = 0;
+        chart.XAxisLabelSkip = 0;
+        chart.XAxisTickMarkSkip = 0;
+        chart.XAxisLabelOffset = 0;
         chart.XAxisLineColor = null;
         chart.XAxisLineThickness = 1;
     }
@@ -246,6 +250,7 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisNumberFormat = snapshot.XAxisNumberFormat ?? ChartDataLabelNumberFormat.General;
         chart.ShowXAxisMajorGridlines = snapshot.ShowXAxisMajorGridlines ?? false;
         chart.ShowXAxisMinorGridlines = snapshot.ShowXAxisMinorGridlines ?? false;
+        chart.XAxisIsDateAxis = snapshot.XAxisIsDateAxis ?? false;
         chart.XAxisMajorGridlineColor = snapshot.XAxisMajorGridlineColor;
         chart.XAxisMinorGridlineColor = snapshot.XAxisMinorGridlineColor;
         chart.XAxisGridlineThickness = snapshot.XAxisGridlineThickness ?? 1;
@@ -256,6 +261,9 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisLabelTextThemeColor = snapshot.XAxisLabelTextThemeColor;
         chart.XAxisLabelFontSize = snapshot.XAxisLabelFontSize ?? 11;
         chart.XAxisLabelAngle = snapshot.XAxisLabelAngle ?? 0;
+        chart.XAxisLabelSkip = snapshot.XAxisLabelSkip ?? 0;
+        chart.XAxisTickMarkSkip = snapshot.XAxisTickMarkSkip ?? 0;
+        chart.XAxisLabelOffset = snapshot.XAxisLabelOffset ?? 0;
         chart.XAxisLineColor = snapshot.XAxisLineColor;
         chart.XAxisLineThickness = snapshot.XAxisLineThickness ?? 1;
         chart.YAxisMinimum = snapshot.YAxisMinimum;
