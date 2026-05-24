@@ -6,6 +6,9 @@ obj/
 # Logs
 logs/
 
+# Generated release artifacts
+artifacts/
+
 # User-specific files
 *.user
 *.suo
