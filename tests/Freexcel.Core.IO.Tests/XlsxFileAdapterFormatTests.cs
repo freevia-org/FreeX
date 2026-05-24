@@ -21,7 +21,7 @@ public sealed class XlsxFileAdapterFormatTests
         diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
-        sanitizerSource.Should().Contain("RequiresSanitization(sourcePackage)");
+        sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage)");
         sanitizerSource.Should().Contain("return sourcePackage;");
     }
 
