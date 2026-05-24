@@ -167,6 +167,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "errBars",
+            new XElement(chartNs + "errDir", new XAttribute("val", ToXlsxErrorBarAxisDirection(chart.ErrorBarAxisDirection))),
             new XElement(chartNs + "errBarType", new XAttribute("val", ToXlsxErrorBarDirection(chart.ErrorBarDirection))),
             new XElement(chartNs + "errValType", new XAttribute("val", ToXlsxErrorBarKind(chart.ErrorBarKind))),
             chart.ErrorBarEndCaps ? null : new XElement(chartNs + "noEndCap", new XAttribute("val", "1")),
@@ -218,6 +219,9 @@ internal static partial class XlsxChartXmlWriter
             ChartErrorBarKind.Custom => "cust",
             _ => "stdErr"
         };
+
+    private static string ToXlsxErrorBarAxisDirection(ChartErrorBarAxisDirection direction) =>
+        direction == ChartErrorBarAxisDirection.X ? "x" : "y";
 
     private static string ToXlsxErrorBarDirection(ChartErrorBarDirection direction) =>
         direction switch

@@ -193,6 +193,7 @@ public sealed partial class NativeJsonAdapter
         public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
         public bool ShowErrorBars { get; set; }
         public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
+        public ChartErrorBarAxisDirection ErrorBarAxisDirection { get; set; } = ChartErrorBarAxisDirection.Y;
         public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
         public double ErrorBarValue { get; set; } = 5;
         public string? ErrorBarPlusRangeFormula { get; set; }
