@@ -115,6 +115,24 @@ public sealed class StructuredTableCommandTests
     }
 
     [Fact]
+    public void CreateStructuredTableCommand_RejectsProtectedSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2));
+
+        var outcome = new CreateStructuredTableCommand(sheet.Id, range, "TableStyleMedium2").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.StructuredTables.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ApplyStructuredTableFiltersCommand_HidesRowsThatDoNotMatchTableFilterColumns()
     {
         var wb = new Workbook("test");
@@ -231,6 +249,36 @@ public sealed class StructuredTableCommandTests
         sheet.GetValue(5, 1).Should().Be(BlankValue.Instance);
         sheet.GetValue(5, 2).Should().Be(BlankValue.Instance);
         sheet.GetValue(5, 3).Should().Be(BlankValue.Instance);
+    }
+
+    [Fact]
+    public void RefreshStructuredTableTotalsCommand_RejectsProtectedSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTotalsTable(sheet);
+        var table = new StructuredTableModel
+        {
+            Id = 3,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3)),
+            TotalsRowShown = true,
+            Columns =
+            {
+                new StructuredTableColumnModel(1, "Region", TotalsRowLabel: "Total"),
+                new StructuredTableColumnModel(2, "Sales", TotalsRowFunction: "sum")
+            }
+        };
+        sheet.StructuredTables.Add(table);
+        sheet.IsProtected = true;
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new RefreshStructuredTableTotalsCommand(sheet.Id, table.Id).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetValue(5, 1).Should().Be(BlankValue.Instance);
     }
 
     [Fact]
