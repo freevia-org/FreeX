@@ -14,7 +14,7 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        double rawRows = ToNumber(args[0]);
+        double rawRows = args[0] is not BlankValue ? ToNumber(args[0]) : 1;
         double rawCols = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         double start = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
         double step  = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
