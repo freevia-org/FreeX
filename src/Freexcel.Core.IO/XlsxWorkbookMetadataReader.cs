@@ -177,6 +177,26 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static WorkbookFileVersionModel? LoadFileVersion(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var fileVersion = workbookXml.Root?.Element(workbookNs + "fileVersion");
+            return fileVersion is null ? null : ToFileVersion(fileVersion);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try
@@ -227,6 +247,31 @@ internal static class XlsxWorkbookMetadataReader
         {
             if (attribute.IsNamespaceDeclaration ||
                 attribute.Name.LocalName is "autoRecover" or "crashSave" or "dataExtractLoad" or "repairLoad")
+            {
+                continue;
+            }
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model;
+    }
+
+    private static WorkbookFileVersionModel ToFileVersion(XElement element)
+    {
+        var model = new WorkbookFileVersionModel
+        {
+            AppName = element.Attribute("appName")?.Value,
+            LastEdited = element.Attribute("lastEdited")?.Value,
+            LowestEdited = element.Attribute("lowestEdited")?.Value,
+            RupBuild = element.Attribute("rupBuild")?.Value,
+            CodeName = element.Attribute("codeName")?.Value
+        };
+
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                attribute.Name.LocalName is "appName" or "lastEdited" or "lowestEdited" or "rupBuild" or "codeName")
             {
                 continue;
             }
