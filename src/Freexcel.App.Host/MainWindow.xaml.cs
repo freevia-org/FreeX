@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        RibbonMenuIconSeeder.Register();
         RegisterKeyboardCommandShortcuts();
 
         _currentSheetId = _workbook.Sheets[0].Id;
@@ -149,7 +150,14 @@ public partial class MainWindow : Window
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         FormulaBar.TextChanged += (_, _) =>
         {
-            if (ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar) &&
+            var formulaBarHasFocus = ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar);
+            if (!formulaBarHasFocus && _inlineEditor?.IsVisible != true)
+            {
+                ClearFormulaReferenceHighlights();
+                return;
+            }
+
+            if (formulaBarHasFocus &&
                 FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(FormulaBar.Text))
             {
                 _formulaRangeEntryMode = true;

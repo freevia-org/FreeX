@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -29,7 +30,10 @@ internal static class PdfDocumentExporter
         PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
         ExportQuality quality = ExportQuality.Standard,
-        IReadOnlyList<PdfBookmark>? bookmarks = null)
+        IReadOnlyList<PdfBookmark>? bookmarks = null,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool includeSelectableText = false)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -39,7 +43,7 @@ internal static class PdfDocumentExporter
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
         var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
-        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks);
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode, includeSelectableText);
     }
 
     internal static double ResolveRasterDpi(ExportQuality quality) =>
@@ -54,7 +58,10 @@ internal static class PdfDocumentExporter
         int firstPageIndex,
         int lastPageIndexInclusive,
         double dpi = StandardDpi,
-        IReadOnlyList<PdfBookmark>? bookmarks = null)
+        IReadOnlyList<PdfBookmark>? bookmarks = null,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool includeSelectableText = false)
     {
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
@@ -64,9 +71,11 @@ internal static class PdfDocumentExporter
             Directory.CreateDirectory(directory);
 
         using var pdf = new PdfDocument();
+        if (includeSelectableText)
+            pdf.Options.CompressContentStreams = false;
         pdf.Info.Creator = "Freexcel";
         ApplyDefaultCatalogMetadata(pdf);
-        ApplyDefaultViewerPreferences(pdf);
+        ApplyDefaultViewerPreferences(pdf, initialView);
         ApplyProperties(pdf, properties);
 
         for (int i = firstPageIndex; i <= lastPageIndexInclusive; i++)
@@ -85,20 +94,23 @@ internal static class PdfDocumentExporter
             using var gfx = XGraphics.FromPdfPage(page);
             using var image = XImage.FromBitmapSource(bitmap);
             gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
+            if (includeSelectableText)
+                DrawTextOverlay(gfx, fixedPage);
         }
 
-        AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
+        var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
+        ApplyOpenMode(pdf, openMode, hasBookmarks);
         pdf.Save(path);
     }
 
-    private static void AddBookmarks(
+    private static bool AddBookmarks(
         PdfDocument pdf,
         IReadOnlyList<PdfBookmark>? bookmarks,
         int firstPageIndex,
         int lastPageIndexInclusive)
     {
         if (bookmarks is null || bookmarks.Count == 0)
-            return;
+            return false;
 
         foreach (var bookmark in bookmarks)
         {
@@ -118,9 +130,11 @@ internal static class PdfDocumentExporter
 
         if (pdf.Outlines.Count > 0)
         {
-            pdf.PageMode = PdfPageMode.UseOutlines;
             pdf.Internals.Catalog.Elements.SetName("/NonFullScreenPageMode", "/UseOutlines");
+            return true;
         }
+
+        return false;
     }
 
     private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
@@ -156,7 +170,7 @@ internal static class PdfDocumentExporter
         GetOrCreateViewerPreferences(pdf).Elements.SetBoolean(displayDocTitleKey, true);
     }
 
-    private static void ApplyDefaultViewerPreferences(PdfDocument pdf)
+    private static void ApplyDefaultViewerPreferences(PdfDocument pdf, PdfInitialView initialView)
     {
         const string printScalingKey = "/PrintScaling";
         const string noPrintScalingName = "/None";
@@ -164,12 +178,29 @@ internal static class PdfDocumentExporter
         const string centerWindowKey = "/CenterWindow";
         const string pickTrayByPdfSizeKey = "/PickTrayByPDFSize";
 
-        pdf.PageLayout = PdfPageLayout.SinglePage;
+        pdf.PageLayout = initialView switch
+        {
+            PdfInitialView.OneColumn => PdfPageLayout.OneColumn,
+            PdfInitialView.TwoColumnLeft => PdfPageLayout.TwoColumnLeft,
+            PdfInitialView.TwoColumnRight => PdfPageLayout.TwoColumnRight,
+            _ => PdfPageLayout.SinglePage
+        };
         var viewerPreferences = GetOrCreateViewerPreferences(pdf);
         viewerPreferences.Elements.SetName(printScalingKey, noPrintScalingName);
         viewerPreferences.Elements.SetBoolean(fitWindowKey, true);
         viewerPreferences.Elements.SetBoolean(centerWindowKey, true);
         viewerPreferences.Elements.SetBoolean(pickTrayByPdfSizeKey, true);
+    }
+
+    private static void ApplyOpenMode(PdfDocument pdf, PdfOpenMode openMode, bool hasBookmarks)
+    {
+        pdf.PageMode = openMode switch
+        {
+            PdfOpenMode.FullScreen => PdfPageMode.FullScreen,
+            PdfOpenMode.Outlines => PdfPageMode.UseOutlines,
+            _ when hasBookmarks => PdfPageMode.UseOutlines,
+            _ => PdfPageMode.UseNone
+        };
     }
 
     private static PdfDictionary GetOrCreateViewerPreferences(PdfDocument pdf)
@@ -221,5 +252,27 @@ internal static class PdfDocumentExporter
         target.Render(page);
         target.Freeze();
         return target;
+    }
+
+    private static void DrawTextOverlay(XGraphics gfx, FixedPage page)
+    {
+        foreach (var overlay in PdfTextOverlayExtractor.Extract(page))
+        {
+            var style = XFontStyleEx.Regular;
+            if (overlay.Bold && overlay.Italic)
+                style = XFontStyleEx.BoldItalic;
+            else if (overlay.Bold)
+                style = XFontStyleEx.Bold;
+            else if (overlay.Italic)
+                style = XFontStyleEx.Italic;
+
+            var font = new XFont(overlay.FontFamily, overlay.FontSize * 72.0 / StandardDpi, style);
+            var brush = new XSolidBrush(XColor.FromArgb(overlay.Color.A, overlay.Color.R, overlay.Color.G, overlay.Color.B));
+            gfx.DrawString(
+                overlay.Text,
+                font,
+                brush,
+                new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi));
+        }
     }
 }

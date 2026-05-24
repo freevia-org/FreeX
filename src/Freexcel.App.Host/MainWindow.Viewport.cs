@@ -72,7 +72,7 @@ public partial class MainWindow
 
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
-        int notches = e.Delta / 120;
+        int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {

@@ -131,6 +131,17 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialogOpenedFromKeyboard_FocusesAllowTypeSelector()
+    {
+        var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml.cs"));
+
+        codeBehind.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        codeBehind.Should().Contain("private void FocusInitialKeyboardTarget()");
+        codeBehind.Should().Contain("TypeCombo.Focus();");
+        codeBehind.Should().Contain("Keyboard.Focus(TypeCombo);");
+    }
+
+    [Fact]
     public void DataValidationDialog_UsesExcelLikeSectionLabelsAndListSourcePicker()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));

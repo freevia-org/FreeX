@@ -157,6 +157,20 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribePdfInitialViewAndOpenMode()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            InitialView: PdfInitialView.OneColumn,
+            OpenMode: PdfOpenMode.FullScreen);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; opens as one continuous column; opens full screen; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
@@ -629,6 +643,62 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_AppliesRequestedInitialViewAndOpenMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    initialView: PdfInitialView.OneColumn,
+                    openMode: PdfOpenMode.FullScreen);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadPageLayout(pdf).Should().Be("/OneColumn");
+                pdf.PageMode.Should().Be(PdfPageMode.FullScreen);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayWhenRequested()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Freexcel PDF 1");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
     {
         StaTestRunner.Run(() =>
@@ -953,6 +1023,7 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("CreatePdfBookmarks(options)");
+        printExport.Should().Contain("includeSelectableText: true");
         printExport.Should().Contain("options.EffectiveBookmarkMode");
         printExport.Should().Contain(": sheet.Name");
         printExport.Should().Contain("BuildPrintTitleBookmark(sheet)");

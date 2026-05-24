@@ -85,6 +85,28 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_FilterMenu_OffersExcelLikeErrorFilters()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var filterItems = document
+            .Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FilterBox")
+            .Descendants(presentation + "ComboBoxItem")
+            .Select(element => element.Attribute("Content")?.Value)
+            .ToArray();
+
+        filterItems.Should().ContainInOrder(
+            "All names",
+            "Names scoped to workbook",
+            "Names scoped to worksheet",
+            "Names with errors",
+            "Names without errors");
+    }
+
+    [Fact]
     public void Dialog_UsesExcelLikeRefersToSummaryInsteadOfInlineNameEditing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
@@ -138,6 +160,26 @@ public sealed class NamedRangeDialogXamlTests
             .Should().Equal(workbookName);
         NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.Worksheet)
             .Should().Equal(sheetName);
+    }
+
+    [Fact]
+    public void Planner_FiltersNamesWithAndWithoutFormulaErrors()
+    {
+        var validName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
+        var errorValueName = new NamedRangeViewModel("BadValue", "#REF!", "Sheet1!A1:A2", "Workbook", "");
+        var errorRefersToName = new NamedRangeViewModel("BadRef", "Sheet1!A1:A2", "#NAME?", "Workbook", "");
+
+        NamedRangeDialogPlanner.FilterItems(
+                [validName, errorValueName, errorRefersToName],
+                NamedRangeFilterOption.Errors)
+            .Should()
+            .Equal(errorValueName, errorRefersToName);
+
+        NamedRangeDialogPlanner.FilterItems(
+                [validName, errorValueName, errorRefersToName],
+                NamedRangeFilterOption.NoErrors)
+            .Should()
+            .Equal(validName);
     }
 
     [Fact]

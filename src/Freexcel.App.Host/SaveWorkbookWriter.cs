@@ -16,26 +16,49 @@ public sealed class SaveWorkbookWriter
         IProgress<SaveProgressUpdate> progress)
     {
         progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("serializing", TimeSpan.Zero), 1));
-        await RunStageAsync(
-            progress,
-            "writing",
-            1,
-            99,
-            TimeSpan.FromSeconds(30),
-            () =>
-            {
-                using var file = new FileStream(
-                    path,
-                    FileMode.Create,
-                    FileAccess.ReadWrite,
-                    FileShare.None,
-                    BufferSize,
-                    FileOptions.SequentialScan);
-                adapter.Save(workbook, file);
-                return true;
-            });
+        var directory = Path.GetDirectoryName(path);
+        var tempPath = Path.Combine(
+            string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory,
+            $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            await RunStageAsync(
+                progress,
+                "writing",
+                1,
+                99,
+                TimeSpan.FromSeconds(30),
+                () =>
+                {
+                    using var file = new FileStream(
+                        tempPath,
+                        FileMode.Create,
+                        FileAccess.ReadWrite,
+                        FileShare.None,
+                        BufferSize,
+                        FileOptions.Asynchronous | FileOptions.SequentialScan);
+                    adapter.Save(workbook, file);
+                    return true;
+                });
+
+            ReplaceTargetFile(tempPath, path);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
 
         progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("done", TimeSpan.Zero), 100));
+    }
+
+    private static void ReplaceTargetFile(string tempPath, string path)
+    {
+        if (File.Exists(path))
+            File.Replace(tempPath, path, null, ignoreMetadataErrors: true);
+        else
+            File.Move(tempPath, path);
     }
 
     private static async Task<T> RunStageAsync<T>(

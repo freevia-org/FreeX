@@ -45,6 +45,7 @@ public partial class MainWindow
                     contentType)))
             return;
 
+        SetActiveCell(range.Start);
         UpdateViewport();
     }
 

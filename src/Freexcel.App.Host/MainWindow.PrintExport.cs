@@ -79,7 +79,10 @@ public partial class MainWindow
                 properties,
                 options.PageRange,
                 options.Quality,
-                CreatePdfBookmarks(options));
+                CreatePdfBookmarks(options),
+                options.InitialView,
+                options.OpenMode,
+                includeSelectableText: true);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
