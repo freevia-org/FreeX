@@ -177,6 +177,46 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static WorkbookFileVersionModel? LoadFileVersion(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var fileVersion = workbookXml.Root?.Element(workbookNs + "fileVersion");
+            return fileVersion is null ? null : ToFileVersion(fileVersion);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static WorkbookFunctionGroupsModel? LoadFunctionGroups(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var functionGroups = workbookXml.Root?.Element(workbookNs + "functionGroups");
+            return functionGroups is null ? null : ToFunctionGroups(functionGroups, workbookNs);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try
@@ -230,6 +270,68 @@ internal static class XlsxWorkbookMetadataReader
             {
                 continue;
             }
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model;
+    }
+
+    private static WorkbookFileVersionModel ToFileVersion(XElement element)
+    {
+        var model = new WorkbookFileVersionModel
+        {
+            AppName = element.Attribute("appName")?.Value,
+            LastEdited = element.Attribute("lastEdited")?.Value,
+            LowestEdited = element.Attribute("lowestEdited")?.Value,
+            RupBuild = element.Attribute("rupBuild")?.Value,
+            CodeName = element.Attribute("codeName")?.Value
+        };
+
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                attribute.Name.LocalName is "appName" or "lastEdited" or "lowestEdited" or "rupBuild" or "codeName")
+            {
+                continue;
+            }
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model;
+    }
+
+    private static WorkbookFunctionGroupsModel ToFunctionGroups(XElement element, XNamespace workbookNs)
+    {
+        var model = new WorkbookFunctionGroupsModel
+        {
+            BuiltInGroupCount = element.Attribute("builtInGroupCount")?.Value,
+            Groups = element.Elements(workbookNs + "functionGroup")
+                .Select(ToFunctionGroup)
+                .ToList()
+        };
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName == "builtInGroupCount")
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model;
+    }
+
+    private static WorkbookFunctionGroupModel ToFunctionGroup(XElement element)
+    {
+        var model = new WorkbookFunctionGroupModel
+        {
+            Name = element.Attribute("name")?.Value
+        };
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName == "name")
+                continue;
 
             model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
         }

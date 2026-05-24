@@ -19,11 +19,13 @@ public sealed partial class NativeJsonAdapter
             SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.SheetTabRatio, 1000),
             FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, Math.Max(0, workbook.Sheets.Count - 1)),
             ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.ActiveSheetIndex, Math.Max(0, workbook.Sheets.Count - 1)),
+            FileVersion = FromWorkbookFileVersion(workbook.FileVersion),
             FileSharing = FromWorkbookFileSharing(workbook.FileSharing),
             FileRecoveryProperties = workbook.FileRecoveryProperties
                 .Select(FromWorkbookFileRecoveryProperties)
                 .OfType<WorkbookFileRecoveryPropertiesDto>()
                 .ToList(),
+            FunctionGroups = FromWorkbookFunctionGroups(workbook.FunctionGroups),
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
@@ -272,6 +274,40 @@ public sealed partial class NativeJsonAdapter
         };
     }
 
+    private static WorkbookFileVersionDto? FromWorkbookFileVersion(WorkbookFileVersionModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = (model.NativeAttributes ?? new Dictionary<string, string>())
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var appName = string.IsNullOrWhiteSpace(model.AppName) ? null : model.AppName;
+        var lastEdited = string.IsNullOrWhiteSpace(model.LastEdited) ? null : model.LastEdited;
+        var lowestEdited = string.IsNullOrWhiteSpace(model.LowestEdited) ? null : model.LowestEdited;
+        var rupBuild = string.IsNullOrWhiteSpace(model.RupBuild) ? null : model.RupBuild;
+        var codeName = string.IsNullOrWhiteSpace(model.CodeName) ? null : model.CodeName;
+        if (appName is null &&
+            lastEdited is null &&
+            lowestEdited is null &&
+            rupBuild is null &&
+            codeName is null &&
+            nativeAttributes.Count == 0)
+        {
+            return null;
+        }
+
+        return new WorkbookFileVersionDto
+        {
+            AppName = appName,
+            LastEdited = lastEdited,
+            LowestEdited = lowestEdited,
+            RupBuild = rupBuild,
+            CodeName = codeName,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
     private static WorkbookFileRecoveryPropertiesDto? FromWorkbookFileRecoveryProperties(WorkbookFileRecoveryPropertiesModel? model)
     {
         if (model is null)
@@ -298,4 +334,48 @@ public sealed partial class NativeJsonAdapter
             NativeAttributes = nativeAttributes
         };
     }
+
+    private static WorkbookFunctionGroupsDto? FromWorkbookFunctionGroups(WorkbookFunctionGroupsModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var builtInGroupCount = string.IsNullOrWhiteSpace(model.BuiltInGroupCount) ? null : model.BuiltInGroupCount;
+        var groups = model.Groups
+            .Select(FromWorkbookFunctionGroup)
+            .OfType<WorkbookFunctionGroupDto>()
+            .ToList();
+        if (builtInGroupCount is null && nativeAttributes.Count == 0 && groups.Count == 0)
+            return null;
+
+        return new WorkbookFunctionGroupsDto
+        {
+            BuiltInGroupCount = builtInGroupCount,
+            NativeAttributes = nativeAttributes,
+            Groups = groups
+        };
+    }
+
+    private static WorkbookFunctionGroupDto? FromWorkbookFunctionGroup(WorkbookFunctionGroupModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var name = string.IsNullOrWhiteSpace(model.Name) ? null : model.Name;
+        if (name is null && nativeAttributes.Count == 0)
+            return null;
+
+        return new WorkbookFunctionGroupDto
+        {
+            Name = name,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static Dictionary<string, string> CleanNativeAttributesForSave(Dictionary<string, string>? attributes) =>
+        (attributes ?? new Dictionary<string, string>())
+        .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
+        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 }

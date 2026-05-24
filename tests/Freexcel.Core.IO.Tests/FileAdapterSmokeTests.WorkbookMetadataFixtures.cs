@@ -255,7 +255,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("appName", "xl"),
                 new XAttribute("lastEdited", "7"),
                 new XAttribute("lowestEdited", "7"),
-                new XAttribute("rupBuild", "28129")));
+                new XAttribute("rupBuild", "28129"),
+                new XAttribute("customVersionFlag", "keep")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
@@ -333,9 +334,11 @@ public partial class FileAdapterSmokeTests
             workbookXml.Root!.Add(new XElement(
                 workbookNs + "functionGroups",
                 new XAttribute("builtInGroupCount", "16"),
+                new XAttribute("customFunctionGroupFlag", "keep"),
                 new XElement(
                     workbookNs + "functionGroup",
-                    new XAttribute("name", "FreexcelNativeFunctions"))));
+                    new XAttribute("name", "FreexcelNativeFunctions"),
+                    new XAttribute("customGroupFlag", "keep"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

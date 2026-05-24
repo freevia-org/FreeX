@@ -109,6 +109,63 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookFileVersion()
+    {
+        var workbook = new Workbook("FileVersionNativeJson")
+        {
+            FileVersion = new WorkbookFileVersionModel
+            {
+                AppName = "xl",
+                LastEdited = "7",
+                LowestEdited = "7",
+                RupBuild = "28129",
+                NativeAttributes = new Dictionary<string, string> { ["customVersionFlag"] = "keep" }
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.FileVersion.Should().BeEquivalentTo(workbook.FileVersion);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookFunctionGroups()
+    {
+        var workbook = new Workbook("FunctionGroupsNativeJson")
+        {
+            FunctionGroups = new WorkbookFunctionGroupsModel
+            {
+                BuiltInGroupCount = "16",
+                NativeAttributes = new Dictionary<string, string> { ["customFunctionGroupFlag"] = "keep" },
+                Groups =
+                [
+                    new WorkbookFunctionGroupModel
+                    {
+                        Name = "FreexcelNativeFunctions",
+                        NativeAttributes = new Dictionary<string, string> { ["customGroupFlag"] = "keep" }
+                    }
+                ]
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.FunctionGroups.Should().BeEquivalentTo(workbook.FunctionGroups);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -11483,6 +11540,14 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.FileVersion.Should().BeEquivalentTo(new WorkbookFileVersionModel
+        {
+            AppName = "xl",
+            LastEdited = "7",
+            LowestEdited = "7",
+            RupBuild = "28129",
+            NativeAttributes = new Dictionary<string, string> { ["customVersionFlag"] = "keep" }
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11496,6 +11561,7 @@ public partial class FileAdapterSmokeTests
         fileVersion.Should().NotBeNull();
         fileVersion!.Attribute("appName")!.Value.Should().Be("xl");
         fileVersion.Attribute("lastEdited")!.Value.Should().Be("7");
+        fileVersion.Attribute("customVersionFlag")!.Value.Should().Be("keep");
     }
 
     [Fact]
@@ -11669,6 +11735,19 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.FunctionGroups.Should().BeEquivalentTo(new WorkbookFunctionGroupsModel
+        {
+            BuiltInGroupCount = "16",
+            NativeAttributes = new Dictionary<string, string> { ["customFunctionGroupFlag"] = "keep" },
+            Groups =
+            [
+                new WorkbookFunctionGroupModel
+                {
+                    Name = "FreexcelNativeFunctions",
+                    NativeAttributes = new Dictionary<string, string> { ["customGroupFlag"] = "keep" }
+                }
+            ]
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11681,7 +11760,9 @@ public partial class FileAdapterSmokeTests
         var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
         functionGroups.Should().NotBeNull();
         functionGroups!.ToString().Should().Contain("builtInGroupCount=\"16\"");
+        functionGroups.ToString().Should().Contain("customFunctionGroupFlag=\"keep\"");
         functionGroups.ToString().Should().Contain("name=\"FreexcelNativeFunctions\"");
+        functionGroups.ToString().Should().Contain("customGroupFlag=\"keep\"");
     }
 
     [Fact]

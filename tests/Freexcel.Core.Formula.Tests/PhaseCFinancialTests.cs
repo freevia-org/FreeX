@@ -195,6 +195,27 @@ public class PhaseCFinancialTests
     // ── NOMINAL ───────────────────────────────────────────────────────────
 
     [Fact]
+    public void RateFinancialHelpers_RangeFirstArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("EFFECT(A1:A2,12)", (1, 1, 0.1), (2, 1, 0.2)),
+            Calc("EFFECT(0.1,12)"),
+            Calc("EFFECT(0.2,12)"));
+        AssertApproxColumn(
+            EvalWithData("NOMINAL(A1:A2,4)", (1, 1, 0.1), (2, 1, 0.2)),
+            Calc("NOMINAL(0.1,4)"),
+            Calc("NOMINAL(0.2,4)"));
+        AssertApproxColumn(
+            EvalWithData("RRI(A1:A2,100,200)", (1, 1, 10.0), (2, 1, 20.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(20,100,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(A1:A2,100,200)", (1, 1, 0.1), (2, 1, 0.2)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.2,100,200)"));
+    }
+
+    [Fact]
     public void Nominal_RoundTrip()
     {
         // NOMINAL(EFFECT(r, n), n) ≈ r
@@ -391,6 +412,19 @@ public class PhaseCFinancialTests
         // DOLLARDE(1.02, 32) = 1 + 2/32 = 1.0625
         double result = Calc("DOLLARDE(1.02,32)");
         result.Should().BeApproximately(1.0625, 0.0001);
+    }
+
+    [Fact]
+    public void DollarFractionHelpers_RangeFirstArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("DOLLARDE(A1:A2,32)", (1, 1, 1.02), (2, 1, 2.16)),
+            Calc("DOLLARDE(1.02,32)"),
+            Calc("DOLLARDE(2.16,32)"));
+        AssertApproxColumn(
+            EvalWithData("DOLLARFR(A1:A2,32)", (1, 1, 1.0625), (2, 1, 2.5)),
+            Calc("DOLLARFR(1.0625,32)"),
+            Calc("DOLLARFR(2.5,32)"));
     }
 
     [Fact]
