@@ -102,6 +102,10 @@ public sealed partial class NativeJsonAdapter
         chart.TrendlineType = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineType, ChartTrendlineType.Linear);
         chart.TrendlinePeriod = Math.Max(2, chart.TrendlinePeriod);
         chart.TrendlineOrder = Math.Clamp(chart.TrendlineOrder, 2, 6);
+        chart.TrendlineName = string.IsNullOrWhiteSpace(chart.TrendlineName) ? null : chart.TrendlineName;
+        chart.TrendlineForward = ClampNullableDouble(chart.TrendlineForward, 0, 1000);
+        chart.TrendlineBackward = ClampNullableDouble(chart.TrendlineBackward, 0, 1000);
+        chart.TrendlineIntercept = chart.TrendlineIntercept is { } intercept && double.IsFinite(intercept) ? intercept : null;
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
         chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
         chart.ErrorBarKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarKind, ChartErrorBarKind.StandardError);
@@ -132,9 +136,13 @@ public sealed partial class NativeJsonAdapter
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;
+            chart.TrendlineName = null;
             chart.TrendlineType = ChartTrendlineType.Linear;
             chart.TrendlinePeriod = 2;
             chart.TrendlineOrder = 2;
+            chart.TrendlineForward = null;
+            chart.TrendlineBackward = null;
+            chart.TrendlineIntercept = null;
             chart.ShowTrendlineEquation = false;
             chart.ShowTrendlineRSquared = false;
             chart.TrendlineColor = null;
