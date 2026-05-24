@@ -55,6 +55,8 @@ internal static class XlsxChartTrendlineErrorBarReader
         chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
         chart.ErrorBarPlusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "plus"));
         chart.ErrorBarMinusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "minus"));
+        chart.ErrorBarPlusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "plus"));
+        chart.ErrorBarMinusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "minus"));
 
         if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
@@ -313,4 +315,10 @@ internal static class XlsxChartTrendlineErrorBarReader
             .Descendants(ChartNs + "f")
             .Select(formula => formula.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static string? ReadErrorBarRangeCacheXml(XElement? element) =>
+        element?
+            .Element(ChartNs + "numRef")?
+            .Element(ChartNs + "numCache")?
+            .ToString(SaveOptions.DisableFormatting);
 }

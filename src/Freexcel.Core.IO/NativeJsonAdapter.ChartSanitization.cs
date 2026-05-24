@@ -118,6 +118,8 @@ public sealed partial class NativeJsonAdapter
         chart.ErrorBarValue = Math.Clamp(chart.ErrorBarValue, 0, 1000);
         chart.ErrorBarPlusRangeFormula = string.IsNullOrWhiteSpace(chart.ErrorBarPlusRangeFormula) ? null : chart.ErrorBarPlusRangeFormula;
         chart.ErrorBarMinusRangeFormula = string.IsNullOrWhiteSpace(chart.ErrorBarMinusRangeFormula) ? null : chart.ErrorBarMinusRangeFormula;
+        chart.ErrorBarPlusRangeCacheXml = string.IsNullOrWhiteSpace(chart.ErrorBarPlusRangeCacheXml) ? null : chart.ErrorBarPlusRangeCacheXml;
+        chart.ErrorBarMinusRangeCacheXml = string.IsNullOrWhiteSpace(chart.ErrorBarMinusRangeCacheXml) ? null : chart.ErrorBarMinusRangeCacheXml;
         chart.ErrorBarThickness = Math.Clamp(chart.ErrorBarThickness, 0.5, 10);
         chart.ErrorBarDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarDashStyle, ChartLineDashStyle.Solid);
         chart.DropLineThickness = Math.Clamp(chart.DropLineThickness, 0.5, 10);

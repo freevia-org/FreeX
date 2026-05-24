@@ -224,20 +224,36 @@ internal static partial class XlsxChartXmlWriter
                 ? new XElement(chartNs + "val", new XAttribute("val", Math.Clamp(chart.ErrorBarValue, 0, 1000).ToString(CultureInfo.InvariantCulture)))
                 : null,
             chart.ErrorBarKind == ChartErrorBarKind.Custom
-                ? ToErrorBarRangeXml("plus", chart.ErrorBarPlusRangeFormula, chartNs)
+                ? ToErrorBarRangeXml("plus", chart.ErrorBarPlusRangeFormula, chart.ErrorBarPlusRangeCacheXml, chartNs)
                 : null,
             chart.ErrorBarKind == ChartErrorBarKind.Custom
-                ? ToErrorBarRangeXml("minus", chart.ErrorBarMinusRangeFormula, chartNs)
+                ? ToErrorBarRangeXml("minus", chart.ErrorBarMinusRangeFormula, chart.ErrorBarMinusRangeCacheXml, chartNs)
                 : null,
             ToErrorBarShapeProperties(chart, chartNs, drawingNs));
     }
 
-    private static XElement? ToErrorBarRangeXml(string name, string? formula, XNamespace chartNs) =>
+    private static XElement? ToErrorBarRangeXml(string name, string? formula, string? cacheXml, XNamespace chartNs) =>
         string.IsNullOrWhiteSpace(formula)
             ? null
             : new XElement(chartNs + name,
                 new XElement(chartNs + "numRef",
-                    new XElement(chartNs + "f", formula)));
+                    new XElement(chartNs + "f", formula),
+                    TryParseChartXml(cacheXml)));
+
+    private static XElement? TryParseChartXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return null;
+
+        try
+        {
+            return XElement.Parse(xml);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return null;
+        }
+    }
 
     private static XElement? ToErrorBarShapeProperties(
         ChartModel chart,

@@ -50,6 +50,8 @@ public partial class GridView
         var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
+        var borderPenCache = new Dictionary<CellBorder, Pen>();
+        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
             var cell = layout.Cell;
@@ -67,10 +69,10 @@ public partial class GridView
 
             if (style is not null)
             {
-                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), brushCache);
-                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), brushCache);
-                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), brushCache);
-                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), brushCache);
+                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), brushCache, borderPenCache);
             }
 
             if (!ShouldDrawCellContent(cell, EditingCell))
@@ -94,7 +96,7 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var typeface = CreateCellTypeface(style);
+            var typeface = CreateCellTypeface(style, typefaceCache);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
@@ -168,6 +170,8 @@ public partial class GridView
         var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var brushCache = new Dictionary<CellColor, SolidColorBrush>();
+        var borderPenCache = new Dictionary<CellBorder, Pen>();
+        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
 
 
         // Pass 1: backgrounds
@@ -218,10 +222,10 @@ public partial class GridView
             double w = colMetric.Width;
             double h = rowMetric.Height;
 
-            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     brushCache);
-            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), brushCache);
-            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), brushCache);
-            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), brushCache);
+            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), brushCache, borderPenCache);
         }
 
         // Pass 2b: comment/note indicators
@@ -298,7 +302,7 @@ public partial class GridView
                 }
             }
 
-            var typeface = CreateCellTypeface(style);
+            var typeface = CreateCellTypeface(style, typefaceCache);
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
