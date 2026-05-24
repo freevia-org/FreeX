@@ -35,7 +35,7 @@ public sealed class OpenWorkbookLoaderTests
                 adapter,
                 ".fxjson",
                 new FileFormatDescriptor(".fxjson", "Fake"),
-                new Progress<OpenProgressUpdate>(progressUpdates.Add));
+                new ImmediateProgress<OpenProgressUpdate>(progressUpdates.Add));
 
             result.Workbook.Name.Should().Be("Loaded");
             result.DisplayName.Should().Be(Path.GetFileNameWithoutExtension(tempPath));
@@ -74,7 +74,7 @@ public sealed class OpenWorkbookLoaderTests
                 adapter,
                 ".xltx",
                 new FileFormatDescriptor(".xltx", "Excel Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
-                new Progress<OpenProgressUpdate>());
+                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
 
             result.OpenedAsTemplate.Should().BeTrue();
         }
@@ -122,7 +122,7 @@ public sealed class OpenWorkbookLoaderTests
                 adapter,
                 extension,
                 new FileFormatDescriptor(extension, "Excel Open XML", CanOpen: true, CanSave: canSave, opensAsTemplate),
-                new Progress<OpenProgressUpdate>());
+                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
 
             inspected.Should().BeTrue();
             result.FeatureReport.Should().BeSameAs(expectedReport);
@@ -161,7 +161,7 @@ public sealed class OpenWorkbookLoaderTests
                 adapter,
                 extension,
                 new FileFormatDescriptor(extension, "Text", CanOpen: true, CanSave: false),
-                new Progress<OpenProgressUpdate>());
+                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
 
             result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
         }
@@ -178,5 +178,10 @@ public sealed class OpenWorkbookLoaderTests
         public string FormatName => "Fake";
         public Workbook Load(Stream stream) => load(stream);
         public void Save(Workbook workbook, Stream stream) => throw new NotSupportedException();
+    }
+
+    private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

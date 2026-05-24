@@ -29,6 +29,8 @@ public partial class MainWindow
 
     private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);
 
+    private void RecommendedPivotTablesMenuItem_Click(object sender, RoutedEventArgs e) => PivotTableBtn_Click(sender, e);
+
     private void SparklineLineBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline("line");
     private void SparklineColumnBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline("column");
     private void SparklineWinLossBtn_Click(object sender, RoutedEventArgs e) => InsertSparkline("winloss");

@@ -105,6 +105,12 @@ public sealed partial class NativeJsonAdapter
         chart.DropLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DropLineDashStyle, ChartLineDashStyle.Solid);
         chart.HighLowLineThickness = Math.Clamp(chart.HighLowLineThickness, 0.5, 10);
         chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
+        chart.UpDownBarGapWidth = ClampNullableInt(chart.UpDownBarGapWidth, 0, 500);
+        chart.UpBarBorderThickness = ClampNullableDouble(chart.UpBarBorderThickness, 0, 10);
+        chart.DownBarBorderThickness = ClampNullableDouble(chart.DownBarBorderThickness, 0, 10);
+        SanitizeChartSurfaceFormat(chart.FloorFormat);
+        SanitizeChartSurfaceFormat(chart.SideWallFormat);
+        SanitizeChartSurfaceFormat(chart.BackWallFormat);
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;
@@ -171,6 +177,19 @@ public sealed partial class NativeJsonAdapter
 
     private static int? ClampNullableInt(int? value, int min, int max) =>
         value is { } intValue ? Math.Clamp(intValue, min, max) : null;
+
+    private static double? ClampNullableDouble(double? value, double min, double max) =>
+        value is { } doubleValue && double.IsFinite(doubleValue)
+            ? Math.Clamp(doubleValue, min, max)
+            : null;
+
+    private static void SanitizeChartSurfaceFormat(ChartSurfaceFormatModel? format)
+    {
+        if (format is null)
+            return;
+
+        format.BorderThickness = ClampNullableDouble(format.BorderThickness, 0, 10);
+    }
 
     private static double NormalizeChartAngle(double value)
     {

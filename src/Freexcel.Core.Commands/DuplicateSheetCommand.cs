@@ -211,6 +211,9 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                     ShowOutline = chart.DataTable.ShowOutline,
                     ShowLegendKeys = chart.DataTable.ShowLegendKeys
                 },
+            FloorFormat = CloneSurfaceFormat(chart.FloorFormat),
+            SideWallFormat = CloneSurfaceFormat(chart.SideWallFormat),
+            BackWallFormat = CloneSurfaceFormat(chart.BackWallFormat),
             BarGapWidth = chart.BarGapWidth,
             BarOverlap = chart.BarOverlap,
             VaryColorsByPoint = chart.VaryColorsByPoint,
@@ -268,6 +271,17 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             HighLowLineThickness = chart.HighLowLineThickness,
             HighLowLineDashStyle = chart.HighLowLineDashStyle,
             ShowUpDownBars = chart.ShowUpDownBars,
+            UpDownBarGapWidth = chart.UpDownBarGapWidth,
+            UpBarFillColor = chart.UpBarFillColor,
+            UpBarFillThemeColor = chart.UpBarFillThemeColor,
+            UpBarBorderColor = chart.UpBarBorderColor,
+            UpBarBorderThemeColor = chart.UpBarBorderThemeColor,
+            UpBarBorderThickness = chart.UpBarBorderThickness,
+            DownBarFillColor = chart.DownBarFillColor,
+            DownBarFillThemeColor = chart.DownBarFillThemeColor,
+            DownBarBorderColor = chart.DownBarBorderColor,
+            DownBarBorderThemeColor = chart.DownBarBorderThemeColor,
+            DownBarBorderThickness = chart.DownBarBorderThickness,
             ShowSecondaryAxis = chart.ShowSecondaryAxis,
             SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
             ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
@@ -288,5 +302,17 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
 
     private static GridRange? RemapRange(GridRange? range, SheetId sheetId) =>
         range.HasValue ? RemapRange(range.Value, sheetId) : null;
+
+    private static ChartSurfaceFormatModel? CloneSurfaceFormat(ChartSurfaceFormatModel? format) =>
+        format is null
+            ? null
+            : new ChartSurfaceFormatModel
+            {
+                FillColor = format.FillColor,
+                FillThemeColor = format.FillThemeColor,
+                BorderColor = format.BorderColor,
+                BorderThemeColor = format.BorderThemeColor,
+                BorderThickness = format.BorderThickness
+            };
 }
 
