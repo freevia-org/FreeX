@@ -12704,7 +12704,7 @@ public partial class FileAdapterSmokeTests
         var pivotSource = chartXml.Root!.Element(chartNs + "pivotSource");
         pivotSource.Should().NotBeNull();
         pivotSource!.Element(chartNs + "name")!.Value.Should().Be("Data!PivotTable1");
-        pivotSource.Element(chartNs + "fmtId")!.Attribute("val")!.Value.Should().Be("0");
+        pivotSource.Element(chartNs + "fmtId")!.Attribute("val")!.Value.Should().Be("7");
 
         var pivotTableXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
         pivotTableXml.ToString().Should().Contain("pivotTableStyleInfo");
@@ -17152,7 +17152,7 @@ public partial class FileAdapterSmokeTests
                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
           <c:pivotSource>
             <c:name>Data!PivotTable1</c:name>
-            <c:fmtId val="0"/>
+            <c:fmtId val="7"/>
           </c:pivotSource>
           <c:chart>
             <c:title><c:tx><c:rich><a:p><a:r><a:t>Pivot Chart</a:t></a:r></a:p></c:rich></c:tx></c:title>
