@@ -107,6 +107,18 @@ public sealed class ColorPickerDialogTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesFirstThemeSwatch()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml.cs"));
+
+        source.Should().Contain("private Button? _initialFocusButton;");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_initialFocusButton?.Focus();");
+        source.Should().Contain("Keyboard.Focus(_initialFocusButton);");
+    }
+
+    [Fact]
     public void DialogXaml_CustomTab_LabelsRgbAndHexInputsLikeExcelMoreColors()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
