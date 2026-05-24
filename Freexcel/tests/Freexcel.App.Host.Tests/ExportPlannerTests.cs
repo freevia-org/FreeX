@@ -284,6 +284,19 @@ public class ExportPlannerTests
         source.Should().Contain("Keyboard.Focus(_activeSheetButton);");
     }
 
+    [Fact]
+    public void ExportOptionsDialog_InvalidPageRange_RefocusesPageRangeEntry()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("FocusInvalidPageRangeInput();");
+        source.Should().Contain("private void FocusInvalidPageRangeInput()");
+        source.Should().Contain("_pagesRangeButton.IsChecked = true;");
+        source.Should().Contain("_fromPageBox.Focus();");
+        source.Should().Contain("_fromPageBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_fromPageBox);");
+    }
+
     [Theory]
     [InlineData("", "", true, null, null)]
     [InlineData("2", "4", true, 2, 4)]
