@@ -607,6 +607,19 @@ public class PhaseCFinancialTests
     // ── PRICE / YIELD round-trip ──────────────────────────────────────────
 
     [Fact]
+    public void CouponFunctions_RangeSettlementArgument_SpillElementwise()
+    {
+        var cells = new[] { (1, 1, 43831.0), (2, 1, 43845.0) };
+
+        AssertApproxColumn(EvalWithData("COUPDAYBS(A1:A2,44197,2)", cells), Calc("COUPDAYBS(43831,44197,2)"), Calc("COUPDAYBS(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPDAYS(A1:A2,44197,2)", cells), Calc("COUPDAYS(43831,44197,2)"), Calc("COUPDAYS(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPDAYSNC(A1:A2,44197,2)", cells), Calc("COUPDAYSNC(43831,44197,2)"), Calc("COUPDAYSNC(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPNCD(A1:A2,44197,2)", cells), Calc("COUPNCD(43831,44197,2)"), Calc("COUPNCD(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPNUM(A1:A2,44197,2)", cells), Calc("COUPNUM(43831,44197,2)"), Calc("COUPNUM(43845,44197,2)"));
+        AssertApproxColumn(EvalWithData("COUPPCD(A1:A2,44197,2)", cells), Calc("COUPPCD(43831,44197,2)"), Calc("COUPPCD(43845,44197,2)"));
+    }
+
+    [Fact]
     public void CouponFunctions_InvalidBasis_ReturnNumError()
     {
         CalcError("COUPDAYBS(43831,44197,2,5)").Should().Be("#NUM!");
