@@ -63,7 +63,7 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (IsFormulasRibbonGroupSet(groupNames))
         {
-            ApplyFormulasBreakpointOverrides(availableWidth, groupNames, states);
+            ApplyFormulasBreakpointOverrides(availableWidth, states);
             return states;
         }
 
@@ -207,6 +207,9 @@ public static class RibbonAdaptiveLayoutPlanner
             return;
         }
 
+        if (states.Length > 0)
+            states[0] = RibbonAdaptiveGroupState.Full;
+
         if (availableWidth <= 1120)
         {
             if (states.Length > 0)
@@ -226,15 +229,17 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static void ApplyFormulasBreakpointOverrides(
         double availableWidth,
-        IReadOnlyList<string> groupNames,
         RibbonAdaptiveGroupState[] states)
     {
-        if (availableWidth <= 900)
+        if (availableWidth <= 760)
         {
             for (var i = 0; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
         }
+
+        if (states.Length > 0)
+            states[0] = RibbonAdaptiveGroupState.Full;
 
         if (availableWidth <= 1120)
         {
@@ -245,12 +250,6 @@ public static class RibbonAdaptiveLayoutPlanner
         {
             for (var i = 2; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
-        }
-
-        if (availableWidth <= 1500 &&
-            TryFindGroupIndex(groupNames, "Function Library", out var functionLibraryIndex))
-        {
-            states[functionLibraryIndex] = RibbonAdaptiveGroupState.Collapsed;
         }
     }
 

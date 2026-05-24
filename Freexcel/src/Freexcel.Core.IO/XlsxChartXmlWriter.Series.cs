@@ -42,6 +42,9 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
+                    ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
+                    : null,
                 ToCategoryRangeXml(categoryRange, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
@@ -56,6 +59,11 @@ internal static partial class XlsxChartXmlWriter
             : new XElement(chartNs + "cat",
                 new XElement(chartNs + "strRef",
                     new XElement(chartNs + "f", categoryRange)));
+
+    private static XElement? ToSeriesSmoothXml(ChartModel chart, int seriesIndex, XNamespace chartNs) =>
+        GetSeriesFormat(chart, seriesIndex)?.Smooth is { } smooth
+            ? new XElement(chartNs + "smooth", new XAttribute("val", smooth ? "1" : "0"))
+            : null;
 
     private static IEnumerable<XElement> BuildScatterChartSeries(
         ChartModel chart,
@@ -88,6 +96,7 @@ internal static partial class XlsxChartXmlWriter
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToSeriesSmoothXml(chart, seriesIndex, chartNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", xValueRange))),
@@ -278,8 +287,15 @@ internal static partial class XlsxChartXmlWriter
         if (format is null)
             return null;
 
-        var fill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
-        if (format.MarkerStyle is null && format.MarkerSize is null && fill is null)
+        var shapeProperties = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            format.FillThemeColor,
+            format.FillColor,
+            format.MarkerBorderThemeColor,
+            format.MarkerBorderColor,
+            format.MarkerBorderThickness);
+        if (format.MarkerStyle is null && format.MarkerSize is null && shapeProperties is null)
             return null;
 
         return new XElement(chartNs + "marker",
@@ -289,9 +305,7 @@ internal static partial class XlsxChartXmlWriter
             format.MarkerSize is { } markerSize
                 ? new XElement(chartNs + "size", new XAttribute("val", Math.Clamp((int)Math.Round(markerSize), 1, 30)))
                 : null,
-            fill is not null
-                ? new XElement(chartNs + "spPr", fill)
-                : null);
+            shapeProperties);
     }
 
     private static XElement? ToSeriesShapeProperties(

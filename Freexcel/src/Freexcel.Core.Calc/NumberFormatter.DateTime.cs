@@ -8,6 +8,9 @@ public static partial class NumberFormatter
     private static FormatResult FormatDateTimeWithColor(double oaDate, string[] sections)
     {
         var parsed = SelectDateTimeSection(oaDate, sections);
+        if (parsed.Format == "")
+            return new FormatResult("", parsed.ColorHex);
+
         return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
     }
 

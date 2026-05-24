@@ -1282,7 +1282,7 @@ internal static class XlsxCorpusFixtureFactory
                 ShowOutline = true,
                 ShowLegendKeys = true
             },
-            SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196))]
+            SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196), Smooth: true)]
         });
         sheet.Charts.Add(new ChartModel
         {
@@ -1302,7 +1302,14 @@ internal static class XlsxCorpusFixtureFactory
             HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
             HighLowLineThickness = 2,
             HighLowLineDashStyle = ChartLineDashStyle.Dash,
-            ShowUpDownBars = true
+            ShowUpDownBars = true,
+            UpDownBarGapWidth = 180,
+            UpBarFillColor = new CellColor(112, 173, 71),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 1,
+            DownBarFillColor = new CellColor(192, 0, 0),
+            DownBarBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            DownBarBorderThickness = 2
         });
         sheet.Charts.Add(new ChartModel
         {
@@ -1325,6 +1332,24 @@ internal static class XlsxCorpusFixtureFactory
                 DepthPercent = 150,
                 RightAngleAxes = false,
                 Perspective = 30
+            },
+            FloorFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 234, 211),
+                BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+                BorderThickness = 1
+            },
+            SideWallFormat = new ChartSurfaceFormatModel
+            {
+                FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+                BorderColor = new CellColor(192, 0, 0),
+                BorderThickness = 2
+            },
+            BackWallFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 225, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 3
             }
         });
         return workbook;

@@ -29,6 +29,19 @@ public sealed class CsvFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Café"));
     }
 
+    [Theory]
+    [MemberData(nameof(Utf32BomCsvPayloads))]
+    public void Load_HonorsUtf32ByteOrderMarks(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new BoolValue(true));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(42));
+    }
+
     [Fact]
     public void Load_TreatsStandaloneCarriageReturnsAsRecordSeparators()
     {
@@ -281,6 +294,28 @@ public sealed class CsvFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
+    [Theory]
+    [InlineData("+42")]
+    [InlineData("-42")]
+    public void Save_RoundTripsSignedNumericTextFieldsAsLiteralText(string text)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue(text));
+    }
+
     [Fact]
     public void Save_WritesFormulaCellsAsExcelFormulaFields()
     {
@@ -294,4 +329,13 @@ public sealed class CsvFileAdapterTests
 
         Encoding.UTF8.GetString(stream.ToArray()).Should().Be("2,=A1*2\r\n");
     }
+
+    public static TheoryData<byte[]> Utf32BomCsvPayloads() => new()
+    {
+        Encoding.UTF32.GetPreamble().Concat(Encoding.UTF32.GetBytes("TRUE,42\r\n")).ToArray(),
+        new UTF32Encoding(bigEndian: true, byteOrderMark: true)
+            .GetPreamble()
+            .Concat(new UTF32Encoding(bigEndian: true, byteOrderMark: true).GetBytes("TRUE,42\r\n"))
+            .ToArray()
+    };
 }

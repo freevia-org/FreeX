@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -47,5 +48,12 @@ public sealed class CreateNamesFromSelectionDialog : Window
         root.Children.Add(DialogButtonRowFactory.Create(() => DialogResult = true, buttonWidth: 76));
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _topRow.Focus();
+        Keyboard.Focus(_topRow);
     }
 }

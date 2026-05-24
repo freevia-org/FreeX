@@ -87,6 +87,18 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectSizeDialogOpenedFromKeyboard_FocusesFirstSizeInput()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_heightBox.Focus();");
+        source.Should().Contain("_heightBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_heightBox);");
+    }
+
+    [Fact]
     public void ObjectDialogs_LabelSharedInputHelpersWithTargets()
     {
         var source = ReadObjectDialogSources();
@@ -154,6 +166,18 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void RotationDialogOpenedFromKeyboard_FocusesDegreesInput()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rotationBox.Focus();");
+        source.Should().Contain("_rotationBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_rotationBox);");
+    }
+
+    [Fact]
     public void PictureCropDialog_TryCreateResult_RejectsCropThatRemovesVisibleArea()
     {
         PictureCropDialog.TryCreateResult("60, 0, 50, 0", out _, out var error).Should().BeFalse();
@@ -180,6 +204,18 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_cropBottomBox");
         source.Should().Contain("Left:");
         source.Should().Contain("Right:");
+    }
+
+    [Fact]
+    public void PictureCropDialogOpenedFromKeyboard_FocusesLeftCropInput()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_cropLeftBox.Focus();");
+        source.Should().Contain("_cropLeftBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_cropLeftBox);");
     }
 
     [Fact]
@@ -305,10 +341,34 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialogOpenedFromKeyboard_FocusesAddressBox()
+    {
+        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_targetBox.Focus();");
+        source.Should().Contain("_targetBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_targetBox);");
+    }
+
+    [Fact]
     public void TextEntryDialog_CreateResult_TrimsNullToEmptyText()
     {
         TextEntryDialog.CreateResult(null).Text.Should().Be("");
         TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
+    }
+
+    [Fact]
+    public void TextEntryDialogOpenedFromKeyboard_FocusesTextBox()
+    {
+        var source = ReadClassSource("ObjectDialogs.cs", "public class TextEntryDialog", "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_textBox.Focus();");
+        source.Should().Contain("_textBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_textBox);");
     }
 
     private static string ReadObjectDialogSources() =>
@@ -316,4 +376,16 @@ public sealed class ObjectDialogTests
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
+
+    private static string ReadClassSource(string fileName, string startMarker, string endMarker)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName));
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        var end = endMarker.Length == 0 ? source.Length : source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        if (end < 0)
+            end = source.Length;
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
+    }
 }

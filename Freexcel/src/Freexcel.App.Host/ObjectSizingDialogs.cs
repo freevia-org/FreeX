@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -34,6 +35,7 @@ public sealed class ObjectSizeDialog : Window
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateSizeContent(Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
@@ -72,6 +74,13 @@ public sealed class ObjectSizeDialog : Window
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _heightBox.Focus();
+        _heightBox.SelectAll();
+        Keyboard.Focus(_heightBox);
     }
 
     private void WidthBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -162,6 +171,7 @@ public sealed class RotationDialog : Window
         ShowInTaskbar = false;
         _rotationBox.Text = degrees.ToString(CultureInfo.InvariantCulture);
         Content = ObjectSizeDialog.CreateSingleInputContent("Degrees:", _rotationBox, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryParseRotation(string input, out RotationDialogResult result)
@@ -180,6 +190,13 @@ public sealed class RotationDialog : Window
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rotationBox.Focus();
+        _rotationBox.SelectAll();
+        Keyboard.Focus(_rotationBox);
     }
 }
 
@@ -208,6 +225,7 @@ public sealed class PictureCropDialog : Window
         _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
         _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
         Content = CreateCropContent(Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryCreateResult(string input, out PictureCropDialogResult result, out string? error)
@@ -231,6 +249,13 @@ public sealed class PictureCropDialog : Window
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _cropLeftBox.Focus();
+        _cropLeftBox.SelectAll();
+        Keyboard.Focus(_cropLeftBox);
     }
 
     private StackPanel CreateCropContent(Action accept)

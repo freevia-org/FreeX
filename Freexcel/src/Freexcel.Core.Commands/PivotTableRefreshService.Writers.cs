@@ -79,11 +79,7 @@ public static partial class PivotTableRefreshService
             {
                 for (var index = 0; index < group.Key.Values.Count; index++)
                 {
-                    var suppressRepeat = !pivotTable.RepeatItemLabels &&
-                        index < group.Key.Values.Count - 1 &&
-                        previousRowKey is not null &&
-                        previousRowKey.Values.Count > index &&
-                        string.Equals(previousRowKey.Values[index], group.Key.Values[index], StringComparison.CurrentCultureIgnoreCase);
+                    var suppressRepeat = ShouldSuppressRepeatedRowLabel(pivotTable, group.Key, previousRowKey, index);
                     if (!suppressRepeat)
                         sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(group.Key.Values[index]));
                 }
@@ -367,6 +363,7 @@ public static partial class PivotTableRefreshService
         }
 
         var outputRow = start.Row + (uint)columnFields.Count;
+        PivotKey? previousRowKey = null;
         foreach (var rowGroup in rowGroups)
         {
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
@@ -376,7 +373,11 @@ public static partial class PivotTableRefreshService
             else
             {
                 for (var index = 0; index < rowGroup.Key.Values.Count; index++)
-                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(rowGroup.Key.Values[index]));
+                {
+                    var suppressRepeat = ShouldSuppressRepeatedRowLabel(pivotTable, rowGroup.Key, previousRowKey, index);
+                    if (!suppressRepeat)
+                        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(rowGroup.Key.Values[index]));
+                }
             }
 
             var visibleRowGroupRows = rowGroup
@@ -419,7 +420,14 @@ public static partial class PivotTableRefreshService
                     outputColumn++;
                 }
             }
+            previousRowKey = rowGroup.Key;
             outputRow++;
+            if (pivotTable.BlankLineAfterItems &&
+                rowFields.Count > 1 &&
+                IsEndOfOuterItem(rowGroups, rowGroup, rowFields.Count))
+            {
+                outputRow++;
+            }
         }
 
         if (pivotTable.ShowColumnGrandTotals)
@@ -459,6 +467,18 @@ public static partial class PivotTableRefreshService
             }
         }
     }
+
+    private static bool ShouldSuppressRepeatedRowLabel(
+        PivotTableModel pivotTable,
+        PivotKey currentRowKey,
+        PivotKey? previousRowKey,
+        int index) =>
+        !pivotTable.RepeatItemLabels &&
+        index < currentRowKey.Values.Count - 1 &&
+        previousRowKey is not null &&
+        previousRowKey.Values.Count > index &&
+        string.Equals(previousRowKey.Values[index], currentRowKey.Values[index], StringComparison.CurrentCultureIgnoreCase);
+
     private static void WritePageFields(
         Sheet sheet,
         PivotTableModel pivotTable,

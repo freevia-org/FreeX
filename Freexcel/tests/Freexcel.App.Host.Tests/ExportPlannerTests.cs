@@ -236,6 +236,17 @@ public class ExportPlannerTests
         source.Should().NotContain("CSV _delimiter:");
     }
 
+    [Fact]
+    public void ExportOptionsDialogOpenedFromKeyboard_FocusesActiveSheetChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_activeSheetButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_activeSheetButton);");
+    }
+
     [Theory]
     [InlineData("", "", true, null, null)]
     [InlineData("2", "4", true, 2, 4)]
@@ -487,6 +498,28 @@ public class ExportPlannerTests
                 ReadViewerPreference(pdf, "/FitWindow").Should().BeTrue();
                 ReadViewerPreference(pdf, "/CenterWindow").Should().BeTrue();
                 ReadViewerPreference(pdf, "/PickTrayByPDFSize").Should().BeTrue();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_SetsDefaultCatalogLanguage()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("en-US");
             }
             finally
             {

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -132,6 +133,7 @@ public sealed partial class SortDialog : Window
     private readonly IReadOnlyList<SortColorChoice> _fontColorChoices;
     private readonly CheckBox _headerCheck;
     private readonly DataGridComboBoxColumn _sortByColumn;
+    private readonly DataGrid _levelsGrid;
     private SortDialogOptions _options;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
@@ -198,7 +200,7 @@ public sealed partial class SortDialog : Window
                 AttachLevel(level);
         };
 
-        var list = new DataGrid
+        _levelsGrid = new DataGrid
         {
             ItemsSource = _levels,
             AutoGenerateColumns = false,
@@ -222,8 +224,8 @@ public sealed partial class SortDialog : Window
             Width = new DataGridLength(1, DataGridLengthUnitType.Star)
         };
         UpdateColumnChoices();
-        list.Columns.Add(_sortByColumn);
-        list.Columns.Add(new DataGridComboBoxColumn
+        _levelsGrid.Columns.Add(_sortByColumn);
+        _levelsGrid.Columns.Add(new DataGridComboBoxColumn
         {
             Header = "Sort On",
             ItemsSource = SortOnChoices,
@@ -236,10 +238,10 @@ public sealed partial class SortDialog : Window
             },
             Width = new DataGridLength(140)
         });
-        list.Columns.Add(CreateOrderColumn());
-        list.Columns.Add(CreateColorColumn());
-        DockPanel.SetDock(list, Dock.Top);
-        root.Children.Add(list);
+        _levelsGrid.Columns.Add(CreateOrderColumn());
+        _levelsGrid.Columns.Add(CreateColorColumn());
+        DockPanel.SetDock(_levelsGrid, Dock.Top);
+        root.Children.Add(_levelsGrid);
 
         var commandDock = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
         var helperRow = new StackPanel
@@ -252,7 +254,7 @@ public sealed partial class SortDialog : Window
         var remove = new Button { Content = "_Delete Level", Width = 104, Margin = new Thickness(0, 0, 8, 0) };
         remove.Click += (_, _) =>
         {
-            var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
+            var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
             var updated = RemoveLevel(_levels, selectedIndex);
             _levels.Clear();
             foreach (var level in updated)
@@ -261,32 +263,32 @@ public sealed partial class SortDialog : Window
         var copy = new Button { Content = "_Copy Level", Width = 98 };
         copy.Click += (_, _) =>
         {
-            var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
+            var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
             var updated = CopyLevel(_levels, selectedIndex);
             _levels.Clear();
             foreach (var level in updated)
                 _levels.Add(level);
-            list.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
+            _levelsGrid.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
         };
         var moveUp = new Button { Content = "Move _Up", Width = 86, Margin = new Thickness(8, 0, 8, 0) };
         moveUp.Click += (_, _) =>
         {
-            var selectedIndex = list.SelectedIndex < 0 ? 0 : list.SelectedIndex;
+            var selectedIndex = _levelsGrid.SelectedIndex < 0 ? 0 : _levelsGrid.SelectedIndex;
             var updated = MoveLevel(_levels, selectedIndex, -1);
             _levels.Clear();
             foreach (var level in updated)
                 _levels.Add(level);
-            list.SelectedIndex = Math.Max(0, selectedIndex - 1);
+            _levelsGrid.SelectedIndex = Math.Max(0, selectedIndex - 1);
         };
         var moveDown = new Button { Content = "Move Do_wn", Width = 92 };
         moveDown.Click += (_, _) =>
         {
-            var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
+            var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
             var updated = MoveLevel(_levels, selectedIndex, 1);
             _levels.Clear();
             foreach (var level in updated)
                 _levels.Add(level);
-            list.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
+            _levelsGrid.SelectedIndex = Math.Min(_levels.Count - 1, selectedIndex + 1);
         };
         helperRow.Children.Add(add);
         helperRow.Children.Add(remove);
@@ -334,6 +336,14 @@ public sealed partial class SortDialog : Window
         root.Children.Add(buttons);
 
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _levelsGrid.SelectedIndex = 0;
+        _levelsGrid.Focus();
+        Keyboard.Focus(_levelsGrid);
     }
 
     private void UpdateColumnChoices()
@@ -484,5 +494,12 @@ public sealed class SortOptionsDialog : Window
             DialogResult = true;
         }, buttonWidth: 72));
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _caseSensitiveBox.Focus();
+        Keyboard.Focus(_caseSensitiveBox);
     }
 }

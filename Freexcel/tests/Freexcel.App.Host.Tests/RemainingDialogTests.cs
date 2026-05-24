@@ -19,11 +19,35 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ConditionalFormatThresholdDialogOpenedFromKeyboard_FocusesThresholdBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_thresholdBox.Focus();");
+        source.Should().Contain("_thresholdBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+    }
+
+    [Fact]
     public void RowHeightDialog_TryCreateResult_RejectsNonPositiveHeights()
     {
         RowHeightDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
 
         error.Should().Contain("positive");
+    }
+
+    [Fact]
+    public void RowHeightDialogOpenedFromKeyboard_FocusesHeightBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_heightBox.Focus();");
+        source.Should().Contain("_heightBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_heightBox);");
     }
 
     [Theory]
@@ -42,6 +66,18 @@ public sealed class RemainingDialogTests
         ColumnWidthDialog.TryCreateResult("8.5", out var result, out _).Should().BeTrue();
 
         result.Should().Be(new ColumnWidthDialogResult(8.5));
+    }
+
+    [Fact]
+    public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public enum PageBreakDialogAction");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_widthBox.Focus();");
+        source.Should().Contain("_widthBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_widthBox);");
     }
 
     [Theory]
@@ -74,6 +110,17 @@ public sealed class RemainingDialogTests
         source.Should().Contain("FillSeriesType.Date");
         source.Should().Contain("FillSeriesDateUnit.Month");
         source.Should().Contain("StopValue");
+    }
+
+    [Fact]
+    public void FillSeriesStepDialogOpenedFromKeyboard_FocusesSelectedSeriesDirection()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_columnsButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_columnsButton);");
     }
 
     [Theory]
@@ -112,6 +159,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialogOpenedFromKeyboard_FocusesCustomZoomEntry()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_customZoomButton.Focus();");
+        source.Should().Contain("_zoomBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_zoomBox);");
+    }
+
+    [Fact]
     public void ZoomDialog_CreateFitSelectionResult_RequestsFitSelectionWithoutChangingPercent()
     {
         ZoomDialog.CreateFitSelectionResult(125)
@@ -147,6 +206,21 @@ public sealed class RemainingDialogTests
         pageBreakSource.Should().Contain("_rowBreakBox");
         pageBreakSource.Should().Contain("_columnBreakBox");
         pageBreakSource.Should().NotContain("ObjectSizeDialog.CreateSingleInputContent(\"Page break:\"");
+    }
+
+    [Fact]
+    public void PageBreakDialogOpenedFromKeyboard_FocusesSelectedBreakEntry()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class PageBreakDialog", "public sealed record ForecastSheetDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_rowBreakBox.Focus();");
+        source.Should().Contain("_rowBreakBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_rowBreakBox);");
+        source.Should().Contain("_columnBreakBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_columnBreakBox);");
+        source.Should().Contain("_resetAllButton.Focus();");
     }
 
     [Fact]
@@ -280,6 +354,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ForecastSheetDialogOpenedFromKeyboard_FocusesPeriodsBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ForecastSheetDialog", "public sealed record SheetNameDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_periodsBox.Focus();");
+        source.Should().Contain("_periodsBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_periodsBox);");
+    }
+
+    [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
         SparklineDialog.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
@@ -348,9 +434,33 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialogOpenedFromKeyboard_FocusesDataRangeBox()
+    {
+        var source = ReadClassSource("SparklineDialog.cs", "public sealed class SparklineDialog", "private void RequestRangeSelection");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_dataRangeBox.Focus();");
+        source.Should().Contain("_dataRangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_dataRangeBox);");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
+    }
+
+    [Fact]
+    public void SheetNameDialogOpenedFromKeyboard_FocusesNameBox()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class SheetNameDialog", "public sealed record UnhideSheetDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
     }
 
     [Fact]
@@ -376,6 +486,17 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_sheetBox.SelectedItem");
         source.Should().NotContain("_sheetBox.IsEditable = true");
         source.Should().NotContain("_sheetBox.Text");
+    }
+
+    [Fact]
+    public void UnhideSheetDialogOpenedFromKeyboard_FocusesSheetList()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class UnhideSheetDialog", "public sealed record FillSeriesStepDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_sheetBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_sheetBox);");
     }
 
     [Fact]
@@ -432,6 +553,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SpellCheckDialogOpenedFromKeyboard_FocusesSuggestionListOrReplacementBox()
+    {
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_suggestionsBox.Items.Count > 0");
+        source.Should().Contain("_suggestionsBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_suggestionsBox);");
+        source.Should().Contain("_replacementBox.Focus();");
+        source.Should().Contain("_replacementBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_replacementBox);");
+    }
+
+    [Fact]
     public void ExportOptionsDialog_ExposesOnlyHonoredPdfXpsChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
@@ -475,6 +611,18 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
+    }
+
+    private static string ReadClassSource(string fileName, string startMarker, string endMarker)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName));
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        if (end < 0)
+            end = source.Length;
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
     }
 
     private static string ReadObjectDialogSources() =>
