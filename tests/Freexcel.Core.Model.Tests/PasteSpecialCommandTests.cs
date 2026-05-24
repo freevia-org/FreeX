@@ -534,6 +534,42 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteDataValidationCommand_RejectsProtectedTargetSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        var existingDestinationRule = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 5), new CellAddress(sheet.Id, 5, 5)),
+            Type = DvType.Decimal,
+            Formula1 = "1",
+            Formula2 = "9"
+        };
+        sheet.DataValidations.Add(existingDestinationRule);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = sourceRange,
+            Type = DvType.List,
+            Formula1 = "Yes,No"
+        });
+        sheet.IsProtected = true;
+
+        var outcome = new PasteDataValidationCommand(
+            sheet.Id,
+            sourceRange,
+            new CellAddress(sheet.Id, 5, 5),
+            transpose: false).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.DataValidations.Should().HaveCount(2);
+        sheet.DataValidations.Should().ContainSingle(rule => ReferenceEquals(rule, existingDestinationRule));
+        sheet.DataValidations.Should().ContainSingle(rule => rule.AppliesTo == sourceRange && rule.Formula1 == "Yes,No");
+    }
+
+    [Fact]
     public void PasteLinkService_CreatesFormulasReferencingSourceCells()
     {
         var sheetId = SheetId.New();
