@@ -33,6 +33,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.SheetTabRatio, 1000);
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.FirstVisibleSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
         workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.ActiveSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
+        workbook.FileSharing = ToWorkbookFileSharing(dto.FileSharing);
         workbook.IsStructureProtected = dto.IsStructureProtected;
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
@@ -378,4 +379,26 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
     private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);
 
     private static CellColor? ParseColor(string text) => NativeJsonColorMapper.ParseColor(text);
+
+    private static WorkbookFileSharingModel? ToWorkbookFileSharing(WorkbookFileSharingDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var userName = string.IsNullOrWhiteSpace(dto.UserName) ? null : dto.UserName;
+        var reservationPassword = string.IsNullOrWhiteSpace(dto.ReservationPassword) ? null : dto.ReservationPassword;
+        if (dto.ReadOnlyRecommended is null &&
+            userName is null &&
+            reservationPassword is null)
+        {
+            return null;
+        }
+
+        return new WorkbookFileSharingModel
+        {
+            ReadOnlyRecommended = dto.ReadOnlyRecommended,
+            UserName = userName,
+            ReservationPassword = reservationPassword
+        };
+    }
 }

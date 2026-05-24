@@ -413,6 +413,19 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialogRangePicker_RefocusesDataRangeAfterRequest()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        dialogSource.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        dialogSource.Should().Contain("target.Focus();");
+        dialogSource.Should().Contain("target.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_InferPreviewEntriesFromChartRange()
     {
         var preview = SelectDataSourceDialog.InferPreviewEntries("Sheet1!$A$1:$C$5", firstColumnIsCategories: true);

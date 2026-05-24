@@ -116,6 +116,14 @@ public sealed partial class ConsolidateDialog : Window
     {
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
+        FocusRangeSelectionInput(request.Target);
+    }
+
+    private static void FocusRangeSelectionInput(TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     private void FocusInitialKeyboardTarget()

@@ -127,6 +127,34 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static WorkbookFileSharingModel? LoadFileSharing(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var fileSharing = workbookXml.Root?.Element(workbookNs + "fileSharing");
+            if (fileSharing is null)
+                return null;
+
+            return new WorkbookFileSharingModel
+            {
+                ReadOnlyRecommended = XlsxXmlAttributeReader.ReadNullableBoolAttribute(fileSharing, "readOnlyRecommended"),
+                UserName = fileSharing.Attribute("userName")?.Value,
+                ReservationPassword = fileSharing.Attribute("reservationPassword")?.Value
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try

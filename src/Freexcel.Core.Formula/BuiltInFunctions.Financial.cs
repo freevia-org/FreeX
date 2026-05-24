@@ -1271,11 +1271,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
         double nperValue = ToNumber(args[1]);
         double pv   = ToNumber(args[2]);
         double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PmtScalar(value, nperValue, pv, fv, type));
+        return PmtScalar(args[0], nperValue, pv, fv, type);
+    }
+
+    private static ScalarValue PmtScalar(ScalarValue rateValue, double nperValue, double pv, double fv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1291,11 +1297,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
         double nperValue = ToNumber(args[1]);
         double pmt  = ToNumber(args[2]);
         double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PvScalar(value, nperValue, pmt, fv, type));
+        return PvScalar(args[0], nperValue, pmt, fv, type);
+    }
+
+    private static ScalarValue PvScalar(ScalarValue rateValue, double nperValue, double pmt, double fv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1311,11 +1323,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
         double nperValue = ToNumber(args[1]);
         double pmt  = ToNumber(args[2]);
         double pv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => FvScalar(value, nperValue, pmt, pv, type));
+        return FvScalar(args[0], nperValue, pmt, pv, type);
+    }
+
+    private static ScalarValue FvScalar(ScalarValue rateValue, double nperValue, double pmt, double pv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
@@ -1329,11 +1347,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate = ToNumber(args[0]);
         double pmt  = ToNumber(args[1]);
         double pv   = ToNumber(args[2]);
         double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => NperScalar(value, pmt, pv, fv, type));
+        return NperScalar(args[0], pmt, pv, fv, type);
+    }
+
+    private static ScalarValue NperScalar(ScalarValue rateValue, double pmt, double pv, double fv, double type)
+    {
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;

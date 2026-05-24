@@ -272,7 +272,8 @@ public partial class FileAdapterSmokeTests
             workbookXml.Root!.AddFirst(new XElement(
                 workbookNs + "fileSharing",
                 new XAttribute("readOnlyRecommended", "1"),
-                new XAttribute("userName", "FreexcelTest")));
+                new XAttribute("userName", "FreexcelTest"),
+                new XAttribute("revisionsPassword", "1234")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
