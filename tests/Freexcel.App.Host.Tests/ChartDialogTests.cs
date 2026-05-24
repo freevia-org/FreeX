@@ -568,6 +568,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAreaLegendDialogOpenedFromKeyboard_FocusesChartAreaFillBox()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_chartAreaFillBox.Focus();");
+        dialogSource.Should().Contain("_chartAreaFillBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_chartAreaFillBox);");
+    }
+
+    [Fact]
     public void ChartDataLabelsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartDataLabelsDialog.CreateResult(
@@ -789,6 +801,17 @@ public sealed class ChartDialogTests
                 MarkerStyle: ChartMarkerStyle.Diamond,
                 MarkerSize: 9));
         options.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0);
+    }
+
+    [Fact]
+    public void ChartSeriesFormatDialogOpenedFromKeyboard_FocusesSeriesSelector()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartSeriesFormatDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_seriesBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_seriesBox);");
     }
 
     [Fact]

@@ -174,10 +174,15 @@ public sealed partial class Sheet
                 AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
                 PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
                 ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
+                EnableDrill = pt.EnableDrill,
                 PrintTitles = pt.PrintTitles,
                 PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
                 AltTextTitle = pt.AltTextTitle,
-                AltTextDescription = pt.AltTextDescription
+                AltTextDescription = pt.AltTextDescription,
+                DataCaption = pt.DataCaption,
+                GrandTotalCaption = pt.GrandTotalCaption,
+                MissingCaption = pt.MissingCaption,
+                ErrorCaption = pt.ErrorCaption
             };
             clonedPt.RowFields.AddRange(pt.RowFields);
             clonedPt.ColumnFields.AddRange(pt.ColumnFields);

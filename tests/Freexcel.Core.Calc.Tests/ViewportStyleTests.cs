@@ -46,6 +46,22 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void GetViewport_CommentOnlyCell_PopulatesDisplayCellWithCommentIndicator()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.Comments[address] = "Review total";
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var dc = vp.Cells.Single(c => c.Row == 2 && c.Col == 2);
+        dc.HasComment.Should().BeTrue();
+        dc.DisplayText.Should().BeEmpty();
+    }
+
+    [Fact]
     public void GetViewport_AboveAverageCF_HighlightsCellsAboveAverage()
     {
         // Arrange: three cells with values 10, 20, 30 — average = 20

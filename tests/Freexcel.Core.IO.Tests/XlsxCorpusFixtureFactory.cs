@@ -1026,7 +1026,12 @@ internal static class XlsxCorpusFixtureFactory
             PackagePart = "xl/pivotTables/pivotTable2.xml",
             StyleName = style.Name,
             ShowRowStripes = true,
-            RepeatItemLabels = false
+            RepeatItemLabels = false,
+            EnableDrill = false,
+            DataCaption = "Corpus Values",
+            GrandTotalCaption = "Corpus Grand Total",
+            MissingCaption = "(corpus missing)",
+            ErrorCaption = "(corpus error)"
         };
         pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Hardware"));
         pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["North"]));
