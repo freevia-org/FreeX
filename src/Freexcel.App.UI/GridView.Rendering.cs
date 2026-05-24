@@ -205,9 +205,8 @@ public partial class GridView
         foreach (var cell in Viewport.Cells)
         {
             if (cell.Style == null) continue;
-            var rowMetric = Viewport.RowMetrics.FirstOrDefault(r => r.Row == cell.Row);
-            var colMetric = Viewport.ColMetrics.FirstOrDefault(c => c.Col == cell.Col);
-            if (rowMetric is null || colMetric is null) continue;
+            if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
+            if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
             double x = colMetric.LeftOffset + ActualRowHeaderWidth;
             double y = rowMetric.TopOffset   + EffectiveColHeaderHeight;
