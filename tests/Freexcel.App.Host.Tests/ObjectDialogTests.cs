@@ -139,6 +139,19 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesHeightInput()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("Enter positive width and height values.");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidSizeInput(_heightBox);");
+        source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
+    }
+
+    [Fact]
     public void ObjectDialogs_LabelSharedInputHelpersWithTargets()
     {
         var source = ReadObjectDialogSources();
@@ -232,6 +245,19 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void RotationDialogInvalidDegrees_ShowsOwnedWarningAndRefocusesInput()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("Enter a numeric rotation value.");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidRotationInput();");
+        source.Should().Contain("private void FocusInvalidRotationInput()");
+    }
+
+    [Fact]
     public void PictureCropDialog_TryCreateResult_RejectsCropThatRemovesVisibleArea()
     {
         PictureCropDialog.TryCreateResult("60, 0, 50, 0", out _, out var error).Should().BeFalse();
@@ -270,6 +296,19 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_cropLeftBox.Focus();");
         source.Should().Contain("_cropLeftBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_cropLeftBox);");
+    }
+
+    [Fact]
+    public void PictureCropDialogInvalidCrop_ShowsOwnedWarningAndRefocusesLeftInput()
+    {
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("error ?? \"Enter four crop percentages.\"");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidCropInput(_cropLeftBox);");
+        source.Should().Contain("private static void FocusInvalidCropInput(TextBox textBox)");
     }
 
     [Fact]
