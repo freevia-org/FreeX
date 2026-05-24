@@ -2007,7 +2007,7 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Size" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Paper Size"
+                                        local:RibbonTooltip.Title="Size"
                                         local:RibbonTooltip.KeyTip="SZ"
                                         local:RibbonTooltip.Description="Choose a paper size for the printed page.">
                                     <Button.ContextMenu>
