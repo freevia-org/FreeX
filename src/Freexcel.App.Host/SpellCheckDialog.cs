@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -52,6 +53,7 @@ public sealed class SpellCheckDialog : Window
         };
 
         Content = CreateSpellCheckContent(word);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static SpellCheckDialogResult CreateReplaceResult(string word, string replacement) =>
@@ -73,6 +75,20 @@ public sealed class SpellCheckDialog : Window
     {
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        if (_suggestionsBox.Items.Count > 0)
+        {
+            _suggestionsBox.Focus();
+            Keyboard.Focus(_suggestionsBox);
+            return;
+        }
+
+        _replacementBox.Focus();
+        _replacementBox.SelectAll();
+        Keyboard.Focus(_replacementBox);
     }
 
     private UIElement CreateSpellCheckContent(string word)
