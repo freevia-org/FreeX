@@ -71,6 +71,21 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void DialogCommandFailure_FocusesViewsList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
+            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("FocusViewsList();");
+        dialogSource.Should().Contain("private void FocusViewsList()");
+        dialogSource.Split("FocusViewsList();").Length.Should().BeGreaterThanOrEqualTo(5);
+        dialogSource.Should().Contain("ViewsList.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(ViewsList);");
+    }
+
+    [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
@@ -99,6 +114,20 @@ public sealed class CustomViewsDialogXamlTests
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_nameBox.Focus();");
+        dialogSource.Should().Contain("_nameBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_nameBox);");
+    }
+
+    [Fact]
+    public void CustomViewNameDialogBlankName_WarnsAndFocusesNameBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("MessageBox.Show(this, \"Enter a view name.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        dialogSource.Should().Contain("FocusNameInput();");
+        dialogSource.Should().Contain("private void FocusNameInput()");
         dialogSource.Should().Contain("_nameBox.Focus();");
         dialogSource.Should().Contain("_nameBox.SelectAll();");
         dialogSource.Should().Contain("Keyboard.Focus(_nameBox);");

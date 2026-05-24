@@ -1924,6 +1924,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
     }
 
+    [Fact]
+    public void Rounding_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1.25)),
+            (2, 1, new NumberValue(-1.25)));
+
+        AssertColumn(_eval.Evaluate("=ROUND(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDUP(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDDOWN(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
+        AssertColumn(_eval.Evaluate("=TRUNC(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
+    }
+
     // ── CEILING ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -3121,6 +3134,28 @@ public class FunctionLibraryTests
         AssertColumn(_eval.Evaluate("=TAN(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
         AssertColumn(_eval.Evaluate("=DEGREES(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
         AssertColumn(_eval.Evaluate("=RADIANS(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+    }
+
+    [Fact]
+    public void AdditionalUnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var zeros = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(0)));
+        AssertColumn(_eval.Evaluate("=ASIN(A1:A2)", zeros), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=ATAN(A1:A2)", zeros), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=EXP(A1:A2)", zeros), new NumberValue(1), new NumberValue(1));
+
+        var ones = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(1)));
+        AssertColumn(_eval.Evaluate("=ACOS(A1:A2)", ones), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=LN(A1:A2)", ones), new NumberValue(0), new NumberValue(0));
+
+        var facts = MakeSheet(
+            (1, 1, new NumberValue(3)),
+            (2, 1, new NumberValue(-1)));
+        AssertColumn(_eval.Evaluate("=FACT(A1:A2)", facts), new NumberValue(6), ErrorValue.Num);
     }
 
     [Fact] public void Asin_One_ReturnsHalfPi() =>
