@@ -840,7 +840,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double alpha = ToNumber(args[0]), stdev = ToNumber(args[1]), size = ToNumber(args[2]);
+        double stdev = ToNumber(args[1]), size = ToNumber(args[2]);
+        if (args[0] is RangeValue alphaRange) return MapUnaryTextRange(alphaRange, value => ConfidenceNormScalar(value, stdev, size));
+        return ConfidenceNormScalar(args[0], stdev, size);
+    }
+
+    private static ScalarValue ConfidenceNormScalar(ScalarValue alphaValue, double stdev, double size)
+    {
+        double alpha = ToNumber(alphaValue);
         if (alpha <= 0 || alpha >= 1 || stdev <= 0 || size < 1) return ErrorValue.Num;
         int n = (int)Math.Truncate(size);
         return NumberResult(NormSInv(1.0 - alpha / 2.0) * stdev / Math.Sqrt(n));
@@ -851,7 +858,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double alpha = ToNumber(args[0]), stdev = ToNumber(args[1]), size = ToNumber(args[2]);
+        double stdev = ToNumber(args[1]), size = ToNumber(args[2]);
+        if (args[0] is RangeValue alphaRange) return MapUnaryTextRange(alphaRange, value => ConfidenceTScalar(value, stdev, size));
+        return ConfidenceTScalar(args[0], stdev, size);
+    }
+
+    private static ScalarValue ConfidenceTScalar(ScalarValue alphaValue, double stdev, double size)
+    {
+        double alpha = ToNumber(alphaValue);
         if (alpha <= 0 || alpha >= 1 || stdev <= 0 || size < 2) return ErrorValue.Num;
         int n = (int)Math.Truncate(size);
         double df = n - 1;
