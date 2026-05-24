@@ -55,6 +55,11 @@ internal static class XlsxWorksheetDrawingReferencePreserver
             if (string.IsNullOrWhiteSpace(sourceRelId))
                 continue;
 
+            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null || targetRoot.Element(workbookNs + "drawing") is not null)
+                continue;
+
             var sourceWorksheetRels = XlsxRelationshipReader.LoadTargets(
                 sourceArchive,
                 XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
@@ -75,11 +80,6 @@ internal static class XlsxWorksheetDrawingReferencePreserver
                 drawingPath,
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
-
-            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
-            var targetRoot = targetWorksheetXml.Root;
-            if (targetRoot is null || targetRoot.Element(workbookNs + "drawing") is not null)
-                continue;
 
             targetRoot.Add(new XElement(workbookNs + "drawing", new XAttribute(relNs + "id", targetRelId)));
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
