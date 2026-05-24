@@ -293,7 +293,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue DecimalToBase(IReadOnlyList<ScalarValue> args, int toBase, long min, long max, long modulus, int negativeWidth, bool upper)
     {
         if (args[0] is ErrorValue error) return error;
-        if (!TryGetEngineeringInteger(args[0], out var value)) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(args[0], out var value)) return ErrorValue.Num;
         if (value < min || value > max) return ErrorValue.Num;
         if (value < 0) return DecimalToBaseText(value, toBase, modulus, negativeWidth, upper);
         return FormatBaseText(value, toBase, args.Count > 1 ? args[1] : null, upper);
@@ -312,7 +312,7 @@ public static partial class BuiltInFunctions
         if (upper) converted = converted.ToUpperInvariant();
         if (placesArg is null or BlankValue) return new TextValue(converted);
         if (placesArg is ErrorValue error) return error;
-        if (!TryGetEngineeringInteger(placesArg, out var places) || places < 0 || places > int.MaxValue) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(placesArg, out var places) || places < 0 || places > int.MaxValue) return ErrorValue.Num;
         if (places < converted.Length) return ErrorValue.Num;
         return new TextValue(converted.PadLeft((int)places, '0'));
     }
@@ -390,7 +390,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (!TryGetBitInteger(args[0], out var number)) return ErrorValue.Num;
-        if (!TryGetEngineeringInteger(args[1], out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(args[1], out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
 
         bool effectiveLeft = leftShift ? shift >= 0 : shift < 0;
         int bits = (int)Math.Abs(shift);
@@ -405,6 +405,18 @@ public static partial class BuiltInFunctions
     {
         if (!TryGetEngineeringInteger(arg, out value)) return false;
         return value >= 0 && value <= MaxBitFunctionValue;
+    }
+
+    private static bool TryGetEngineeringTruncatedInteger(ScalarValue arg, out long value)
+    {
+        value = 0;
+        if (arg is ErrorValue) return false;
+        double number = ToNumber(arg);
+        if (!double.IsFinite(number)) return false;
+        double truncated = Math.Truncate(number);
+        if (truncated < long.MinValue || truncated > long.MaxValue) return false;
+        value = (long)truncated;
+        return true;
     }
 
 }
