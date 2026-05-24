@@ -200,6 +200,18 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
+    {
+        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotTableDataSourceDialog", "internal static class PivotDialogLayout");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_sourceBox.Focus();");
+        source.Should().Contain("_sourceBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_sourceBox);");
+    }
+
+    [Fact]
     public void PivotTableDataSourceReferencePicker_RaisesRangeSelectionRequest()
     {
         StaTestRunner.Run(() =>
@@ -279,6 +291,17 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void InsertSlicerDialogOpenedFromKeyboard_FocusesFieldBox()
+    {
+        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class InsertSlicerDialog", "public sealed record InsertTimelineDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_fieldBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_fieldBox);");
+    }
+
+    [Fact]
     public void InsertTimelineDialog_CreateResult_CapturesDateFieldAndTimelineName()
     {
         InsertTimelineDialog.CreateResult("  Order Date  ", "  Order Date Timeline  ")
@@ -295,6 +318,17 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("_Date field to connect");
         source.Should().Contain("Timeline _caption");
         source.Should().NotContain("Timelines filter PivotTables by date");
+    }
+
+    [Fact]
+    public void InsertTimelineDialogOpenedFromKeyboard_FocusesFieldBox()
+    {
+        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class InsertTimelineDialog", "public sealed record PivotChartTypeDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_fieldBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_fieldBox);");
     }
 
     [Fact]
@@ -326,6 +360,17 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Chart categories");
         source.Should().Contain("Chart subtype gallery");
         source.Should().NotContain("private readonly ComboBox _chartTypeBox");
+    }
+
+    [Fact]
+    public void PivotChartTypeDialogOpenedFromKeyboard_FocusesRecommendedGallery()
+    {
+        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotChartTypeDialog", "public sealed class PivotChartOptionsDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_recommendedGallery.Focus();");
+        source.Should().Contain("Keyboard.Focus(_recommendedGallery);");
     }
 
     [Fact]
@@ -820,6 +865,17 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotFieldGroupingDialogOpenedFromKeyboard_FocusesFieldBox()
+    {
+        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotFieldGroupingDialog", "");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_fieldBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_fieldBox);");
+    }
+
+    [Fact]
     public void PivotCalculatedFieldDialog_CreateResult_TrimsAndBuildsModel()
     {
         var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
@@ -1020,6 +1076,17 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotChartOptionsDialogOpenedFromKeyboard_FocusesStyleGallery()
+    {
+        var source = ReadClassSource("PivotWorkflowDialogs.cs", "public sealed class PivotChartOptionsDialog", "public sealed record PivotFieldGroupingDialogResult");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_styleGallery.Focus();");
+        source.Should().Contain("Keyboard.Focus(_styleGallery);");
+    }
+
+    [Fact]
     public void PivotAuxiliaryDialogs_ExposeAccessKeysForModeledCheckboxes()
     {
         var source = ReadPivotWorkflowSource();
@@ -1041,6 +1108,20 @@ public sealed class PivotWorkflowDialogTests
                 "PivotCalculatedDialogs.cs",
                 "PivotTableOptionsDialog.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static string ReadClassSource(string fileName, string startMarker, string endMarker)
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName));
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = string.IsNullOrEmpty(endMarker)
+            ? source.Length
+            : source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        if (end < 0)
+            end = source.Length;
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)

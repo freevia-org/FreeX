@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 
@@ -36,6 +37,7 @@ public sealed class PivotTableDataSourceDialog : Window
         ShowInTaskbar = false;
         _sourceBox.Text = Result.SourceRangeText;
         Content = CreateContent();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotTableDataSourceDialogResult CreateResult(string sourceRangeText) =>
@@ -70,6 +72,13 @@ public sealed class PivotTableDataSourceDialog : Window
                 RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
                 _requestRangeSelection?.Invoke(RangeSelectionRequest);
             });
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _sourceBox.Focus();
+        _sourceBox.SelectAll();
+        Keyboard.Focus(_sourceBox);
+    }
 }
 
 internal static class PivotDialogLayout
@@ -134,6 +143,7 @@ public sealed class InsertSlicerDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         Content = CreateFieldNameContent(fields, field, Result.SlicerName, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static InsertSlicerDialogResult CreateResult(string fieldName, string slicerName) =>
@@ -159,6 +169,12 @@ public sealed class InsertSlicerDialog : Window
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Choose fields", fieldPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(accept));
         return stack;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _fieldBox.Focus();
+        Keyboard.Focus(_fieldBox);
     }
 }
 
@@ -197,6 +213,7 @@ public sealed class InsertTimelineDialog : Window
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Choose date fields", fieldPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static InsertTimelineDialogResult CreateResult(string dateFieldName, string timelineName) =>
@@ -206,6 +223,12 @@ public sealed class InsertTimelineDialog : Window
     {
         Result = CreateResult(_fieldBox.Text, _nameBox.Text);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _fieldBox.Focus();
+        Keyboard.Focus(_fieldBox);
     }
 }
 
@@ -259,6 +282,7 @@ public sealed class PivotChartTypeDialog : Window
             DialogResult = true;
         }));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
@@ -267,6 +291,12 @@ public sealed class PivotChartTypeDialog : Window
         _tabs.SelectedIndex == 0
             ? _recommendedGallery.SelectedItem as ChartTypeGalleryChoice
             : _subtypeGallery.SelectedItem as ChartTypeGalleryChoice;
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _recommendedGallery.Focus();
+        Keyboard.Focus(_recommendedGallery);
+    }
 }
 
 public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptionsDialogResult>
@@ -427,6 +457,7 @@ public sealed class PivotChartOptionsDialog : Window
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout", layoutPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotChartOptionsDialogResult FromChart(ChartModel chart) =>
@@ -505,6 +536,12 @@ public sealed class PivotChartOptionsDialog : Window
             _showHiddenDataBox.IsChecked == true,
             _blankDisplayBox.SelectedValue is ChartBlankDisplayMode mode ? mode : ChartBlankDisplayMode.Gap);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _styleGallery.Focus();
+        Keyboard.Focus(_styleGallery);
     }
 
     private sealed record BlankDisplayChoice(string Label, ChartBlankDisplayMode Mode);
@@ -602,6 +639,7 @@ public sealed class PivotFieldGroupingDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PivotFieldGroupingDialogResult FromPivotField(IEnumerable<string> fieldNames, PivotFieldModel? currentField)
@@ -715,6 +753,12 @@ public sealed class PivotFieldGroupingDialog : Window
             _intervalBox.Text,
             _ungroupBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _fieldBox.Focus();
+        Keyboard.Focus(_fieldBox);
     }
 
     private static IReadOnlyList<PivotSourceFieldOption> CreateFieldOptions(IEnumerable<string> fieldNames) =>
