@@ -224,7 +224,10 @@ public sealed record ChartPointDataLabelFormat(
     bool? ShowSeriesName = null,
     bool? ShowLegendKey = null,
     bool? ShowPercentage = null,
-    bool? ShowBubbleSize = null)
+    bool? ShowBubbleSize = null,
+    string? NumberFormatCode = null,
+    bool? NumberFormatSourceLinked = null,
+    string? SeparatorText = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;

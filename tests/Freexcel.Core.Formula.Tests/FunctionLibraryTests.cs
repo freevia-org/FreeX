@@ -1199,6 +1199,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Find_RangeWithinTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=FIND(\"p\",A1:A2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new NumberValue(2));
+        range.At(2, 1).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Search_CaseInsensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -1234,6 +1250,22 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=SEARCH(\"xyz\",\"hello\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Search_RangeWithinTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=SEARCH(\"a\",A1:A2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new NumberValue(1));
+        range.At(2, 1).Should().Be(new NumberValue(2));
     }
 
     // ── MID ───────────────────────────────────────────────────────────────────
