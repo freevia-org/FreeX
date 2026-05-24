@@ -151,6 +151,19 @@ public class PhaseCFinancialTests
     // ── CUMPRINC ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void CumulativePaymentFunctions_RangeStartPeriodArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("CUMIPMT(0.1/12,12,10000,A1:A2,12,0)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("CUMIPMT(0.1/12,12,10000,1,12,0)"),
+            Calc("CUMIPMT(0.1/12,12,10000,2,12,0)"));
+        AssertApproxColumn(
+            EvalWithData("CUMPRINC(0.1/12,12,10000,A1:A2,12,0)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("CUMPRINC(0.1/12,12,10000,1,12,0)"),
+            Calc("CUMPRINC(0.1/12,12,10000,2,12,0)"));
+    }
+
+    [Fact]
     public void Cumprinc_AllPeriods_SumApproxNegativePV()
     {
         // Over all periods, total principal repaid = -PV

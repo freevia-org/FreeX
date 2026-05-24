@@ -215,9 +215,15 @@ public static partial class BuiltInFunctions
         double rate  = ToNumber(args[0]);
         double nper  = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
-        double start = ToNumber(args[3]);
         double end   = ToNumber(args[4]);
         double type  = ToNumber(args[5]);
+        if (args[3] is RangeValue startRange) return MapUnaryTextRange(startRange, value => CumipmtScalar(rate, nper, pv, value, end, type));
+        return CumipmtScalar(rate, nper, pv, args[3], end, type);
+    }
+
+    private static ScalarValue CumipmtScalar(double rate, double nper, double pv, ScalarValue startValue, double end, double type)
+    {
+        double start = ToNumber(startValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) ||
             !double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -238,9 +244,15 @@ public static partial class BuiltInFunctions
         double rate  = ToNumber(args[0]);
         double nper  = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
-        double start = ToNumber(args[3]);
         double end   = ToNumber(args[4]);
         double type  = ToNumber(args[5]);
+        if (args[3] is RangeValue startRange) return MapUnaryTextRange(startRange, value => CumprincScalar(rate, nper, pv, value, end, type));
+        return CumprincScalar(rate, nper, pv, args[3], end, type);
+    }
+
+    private static ScalarValue CumprincScalar(double rate, double nper, double pv, ScalarValue startValue, double end, double type)
+    {
+        double start = ToNumber(startValue);
         if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) ||
             !double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(type))
             return ErrorValue.Num;
