@@ -29,6 +29,12 @@ public sealed partial class XlsxFileAdapter
             sheet.DefaultColumnWidth = defaultColumnWidth;
         if (layout.DefaultRowHeight is { } defaultRowHeight)
             sheet.DefaultRowHeight = defaultRowHeight;
+        foreach (var (rowNum, height) in layout.RowHeights)
+            sheet.RowHeights[rowNum] = height;
+        foreach (var (colNum, width) in layout.ColumnWidths)
+            sheet.ColumnWidths[colNum] = width;
+        foreach (var (row, col, text) in layout.Comments)
+            sheet.Comments[new CellAddress(sheet.Id, row, col)] = text;
         sheet.BackgroundImage = layout.BackgroundImage;
         sheet.PageHeaderPictures = layout.HeaderFooterPictures.PageHeader;
         sheet.PageFooterPictures = layout.HeaderFooterPictures.PageFooter;
@@ -150,7 +156,7 @@ public sealed partial class XlsxFileAdapter
         }
         if (layout.IgnoredErrors.ExistingCellOnlyRanges.Count > 0)
         {
-            foreach (var (address, cell) in sheet.GetUsedCells())
+            foreach (var (address, cell) in sheet.EnumerateCells())
             {
                 var comparableAddress = new CellAddress(
                     layout.IgnoredErrors.ExistingCellOnlyRanges[0].Start.Sheet,
