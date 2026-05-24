@@ -85,10 +85,12 @@ public sealed class OpenWorkbookLoaderTests
         }
     }
 
-    [Fact]
-    public async Task LoadAsync_ReturnsTemplateMetadataFromSelectedFormat()
+    [Theory]
+    [InlineData(".xlt", "Excel 97-2003 Template")]
+    [InlineData(".xltx", "Excel Template")]
+    public async Task LoadAsync_ReturnsTemplateMetadataFromSelectedFormat(string extension, string formatName)
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xltx");
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
         await File.WriteAllTextAsync(tempPath, "payload");
         try
         {
@@ -105,8 +107,8 @@ public sealed class OpenWorkbookLoaderTests
             var result = await loader.LoadAsync(
                 tempPath,
                 adapter,
-                ".xltx",
-                new FileFormatDescriptor(".xltx", "Excel Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
+                extension,
+                new FileFormatDescriptor(extension, formatName, CanOpen: true, CanSave: false, OpensAsTemplate: true),
                 new ImmediateProgress<OpenProgressUpdate>(_ => { }));
 
             result.OpenedAsTemplate.Should().BeTrue();
