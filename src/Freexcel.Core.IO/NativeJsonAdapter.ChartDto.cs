@@ -77,6 +77,7 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisMajorUnit { get; set; }
         public double? XAxisMinorUnit { get; set; }
         public bool XAxisLogScale { get; set; }
+        public double? XAxisLogBase { get; set; }
         public bool XAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowXAxisMajorGridlines { get; set; }
@@ -107,11 +108,13 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
         public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
+        public double? XAxisCustomDisplayUnit { get; set; }
         public double? YAxisMinimum { get; set; }
         public double? YAxisMaximum { get; set; }
         public double? YAxisMajorUnit { get; set; }
         public double? YAxisMinorUnit { get; set; }
         public bool YAxisLogScale { get; set; }
+        public double? YAxisLogBase { get; set; }
         public bool YAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowYAxisMajorGridlines { get; set; }
@@ -133,6 +136,7 @@ public sealed partial class NativeJsonAdapter
         public double? YAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
         public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
+        public double? YAxisCustomDisplayUnit { get; set; }
         public ChartDataTableModel? DataTable { get; set; }
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
