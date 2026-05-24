@@ -6,6 +6,8 @@ namespace Freexcel.Core.IO;
 
 internal static partial class XlsxChartXmlWriter
 {
+    private static readonly XNamespace Chart14Ns = "http://schemas.microsoft.com/office/drawing/2007/8/2/chart";
+
     private static XElement? ToPivotFormatsXml(ChartModel chart, XNamespace chartNs)
     {
         if (string.IsNullOrWhiteSpace(chart.PivotFormatsXml))
@@ -43,6 +45,29 @@ internal static partial class XlsxChartXmlWriter
                 dataTable.BorderColor,
                 dataTable.BorderThickness),
             ToDataTableTextProperties(dataTable, chartNs, drawingNs));
+    }
+
+    private static XElement? ToPivotChartOptionsExtensionXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (!chart.IsPivotChart)
+            return null;
+
+        if (chart.ShowPivotChartFieldButtons &&
+            chart.ShowPivotChartReportFilterButtons &&
+            chart.ShowPivotChartAxisFieldButtons &&
+            chart.ShowPivotChartValueFieldButtons)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "extLst",
+            new XElement(chartNs + "ext",
+                new XAttribute("uri", "{C3380CC4-5D6E-409C-BE32-E72D297353CC}"),
+                new XElement(Chart14Ns + "pivotOptions",
+                    new XElement(Chart14Ns + "dropZonesVisible", new XAttribute("val", chart.ShowPivotChartFieldButtons ? "1" : "0")),
+                    new XElement(Chart14Ns + "dropZoneFilter", new XAttribute("val", chart.ShowPivotChartReportFilterButtons ? "1" : "0")),
+                    new XElement(Chart14Ns + "dropZoneCategories", new XAttribute("val", chart.ShowPivotChartAxisFieldButtons ? "1" : "0")),
+                    new XElement(Chart14Ns + "dropZoneData", new XAttribute("val", chart.ShowPivotChartValueFieldButtons ? "1" : "0")))));
     }
 
     private static XElement? ToDataTableTextProperties(
