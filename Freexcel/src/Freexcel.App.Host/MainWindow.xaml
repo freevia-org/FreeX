@@ -15,7 +15,10 @@
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
-        TextOptions.TextHintingMode="Fixed">
+        TextOptions.TextHintingMode="Fixed"
+        AllowDrop="True"
+        DragOver="MainWindow_DragOver"
+        Drop="MainWindow_Drop">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="34" ResizeBorderThickness="5"/>
