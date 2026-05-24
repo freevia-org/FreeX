@@ -218,6 +218,46 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     }
 }
 
+public sealed class RepositionTextBoxCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _textBoxId;
+    private readonly CellAddress _anchor;
+    private CellAddress _previousAnchor;
+    private bool _applied;
+
+    public string Label => "Move Text Box";
+
+    public RepositionTextBoxCommand(SheetId sheetId, Guid textBoxId, CellAddress anchor)
+    {
+        _sheetId = sheetId;
+        _textBoxId = textBoxId;
+        _anchor = anchor;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+        var textBox = sheet.TextBoxes.FirstOrDefault(t => t.Id == _textBoxId);
+        if (textBox is null) return new CommandOutcome(false, "Text box was not found.");
+        _previousAnchor = textBox.Anchor;
+        textBox.Anchor = _anchor;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [_previousAnchor, _anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        var textBox = ctx.GetSheet(_sheetId).TextBoxes.FirstOrDefault(t => t.Id == _textBoxId);
+        if (textBox is null) return;
+        textBox.Anchor = _previousAnchor;
+        _applied = false;
+    }
+}
+
 internal static class TextBoxCommandGuards
 {
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>

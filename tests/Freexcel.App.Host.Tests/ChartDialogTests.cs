@@ -385,6 +385,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialog_HiddenEmptyCellsMessageBoxUsesDialogOwner()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Window.GetWindow(dependencyObject)");
+        dialogSource.Should().Contain("MessageBox.Show(owner,");
+        dialogSource.Should().Contain("\"Hidden and Empty Cell Settings\"");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_RangePickerRaisesSelectionIntent()
     {
         StaTestRunner.Run(() =>

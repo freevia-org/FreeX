@@ -134,8 +134,7 @@ public sealed partial class ConsolidateDialog : Window
                 out var error))
         {
             MessageBox.Show(this, error ?? "Enter a valid source range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            _referenceBox.Focus();
-            _referenceBox.SelectAll();
+            FocusReferenceInput();
             return;
         }
 
