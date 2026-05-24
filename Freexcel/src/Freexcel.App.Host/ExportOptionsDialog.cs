@@ -14,6 +14,8 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
     private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks using sheet names" };
     private readonly ComboBox _bookmarkModeBox = new() { Width = 180, IsEnabled = false };
+    private readonly ComboBox _initialViewBox = new() { Width = 180 };
+    private readonly ComboBox _openModeBox = new() { Width = 180 };
     private readonly RadioButton _standardQualityButton = new() { Content = "_Standard", IsChecked = true };
     private readonly RadioButton _minimumSizeButton = new() { Content = "_Minimum size" };
     private readonly RadioButton _allPagesButton = new() { Content = "_All", GroupName = "PageRange", IsChecked = true };
@@ -69,6 +71,23 @@ internal sealed class ExportOptionsDialog : Window
         bookmarkModePanel.Children.Add(new Label { Content = "Bookmark _mode:", Target = _bookmarkModeBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         bookmarkModePanel.Children.Add(_bookmarkModeBox);
         stack.Children.Add(bookmarkModePanel);
+        _initialViewBox.Items.Add("Single page");
+        _initialViewBox.Items.Add("One continuous column");
+        _initialViewBox.Items.Add("Two columns, odd pages left");
+        _initialViewBox.Items.Add("Two columns, odd pages right");
+        _initialViewBox.SelectedIndex = 0;
+        _openModeBox.Items.Add("Normal");
+        _openModeBox.Items.Add("Bookmarks visible");
+        _openModeBox.Items.Add("Full screen");
+        _openModeBox.SelectedIndex = 0;
+        var initialViewPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        initialViewPanel.Children.Add(new Label { Content = "Initial _view:", Target = _initialViewBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        initialViewPanel.Children.Add(_initialViewBox);
+        stack.Children.Add(initialViewPanel);
+        var openModePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+        openModePanel.Children.Add(new Label { Content = "Open _mode:", Target = _openModeBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        openModePanel.Children.Add(_openModeBox);
+        stack.Children.Add(openModePanel);
         stack.Children.Add(_standardQualityButton);
         stack.Children.Add(_minimumSizeButton);
 
@@ -103,7 +122,9 @@ internal sealed class ExportOptionsDialog : Window
                     ? ExportQuality.MinimumSize
                     : ExportQuality.Standard,
                 _bookmarksBox.IsChecked == true,
-                GetSelectedBookmarkMode());
+                GetSelectedBookmarkMode(),
+                GetSelectedInitialView(),
+                GetSelectedOpenMode());
             DialogResult = true;
         };
         buttons.Children.Add(ok);
@@ -134,7 +155,9 @@ internal sealed class ExportOptionsDialog : Window
         ExportPageRange? pageRange = null,
         ExportQuality quality = ExportQuality.Standard,
         bool createBookmarks = false,
-        PdfBookmarkMode bookmarkMode = PdfBookmarkMode.None) =>
+        PdfBookmarkMode bookmarkMode = PdfBookmarkMode.None,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal) =>
         new(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
@@ -147,7 +170,9 @@ internal sealed class ExportOptionsDialog : Window
                 ? bookmarkMode
                 : createBookmarks
                     ? PdfBookmarkMode.SheetNames
-                    : PdfBookmarkMode.None);
+                    : PdfBookmarkMode.None,
+            Enum.IsDefined(initialView) ? initialView : PdfInitialView.SinglePage,
+            Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
         _bookmarkModeBox.SelectedIndex switch
@@ -155,5 +180,22 @@ internal sealed class ExportOptionsDialog : Window
             1 => PdfBookmarkMode.PrintTitles,
             2 => PdfBookmarkMode.PageNumbers,
             _ => PdfBookmarkMode.SheetNames
+        };
+
+    private PdfInitialView GetSelectedInitialView() =>
+        _initialViewBox.SelectedIndex switch
+        {
+            1 => PdfInitialView.OneColumn,
+            2 => PdfInitialView.TwoColumnLeft,
+            3 => PdfInitialView.TwoColumnRight,
+            _ => PdfInitialView.SinglePage
+        };
+
+    private PdfOpenMode GetSelectedOpenMode() =>
+        _openModeBox.SelectedIndex switch
+        {
+            1 => PdfOpenMode.Outlines,
+            2 => PdfOpenMode.FullScreen,
+            _ => PdfOpenMode.Normal
         };
 }
