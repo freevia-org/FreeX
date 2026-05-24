@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -121,7 +122,14 @@ public sealed class InsertFunctionDialog : Window
 
         Content = outer;
 
-        Loaded += (_, _) => { RefreshList(); _searchBox.Focus(); };
+        Loaded += (_, _) => { RefreshList(); FocusInitialKeyboardTarget(); };
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _searchBox.Focus();
+        _searchBox.SelectAll();
+        Keyboard.Focus(_searchBox);
     }
 
     public static IReadOnlyList<InsertFunctionCatalogEntry> BuildCatalog() =>
