@@ -112,6 +112,32 @@ public sealed class FileDialogFilterBuilderTests
     }
 
     [Theory]
+    [InlineData("XLSX", typeof(XlsxFileAdapter), ".xlsx", false)]
+    [InlineData(".xlsm", typeof(XlsxFileAdapter), ".xlsm", false)]
+    [InlineData("XLTX", typeof(XlsxFileAdapter), ".xltx", true)]
+    [InlineData(".xltm", typeof(XlsxFileAdapter), ".xltm", true)]
+    [InlineData("XLS", typeof(LegacyXlsFileAdapter), ".xls", false)]
+    [InlineData(".xlsb", typeof(LegacyXlsFileAdapter), ".xlsb", false)]
+    [InlineData("XLT", typeof(LegacyXlsFileAdapter), ".xlt", true)]
+    [InlineData(".csv", typeof(CsvFileAdapter), ".csv", false)]
+    public void FindOpenAdapter_RealAdaptersResolveSupportedFormats(
+        string extension,
+        Type expectedAdapterType,
+        string expectedExtension,
+        bool opensAsTemplate)
+    {
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter() };
+
+        var result = FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out var format);
+
+        result.Should().BeOfType(expectedAdapterType);
+        format.Should().NotBeNull();
+        format!.Extension.Should().Be(expectedExtension);
+        format.CanOpen.Should().BeTrue();
+        format.OpensAsTemplate.Should().Be(opensAsTemplate);
+    }
+
+    [Theory]
     [InlineData("xlsx", typeof(XlsxFileAdapter), ".xlsx")]
     [InlineData(".CSV", typeof(CsvFileAdapter), ".csv")]
     public void FindSaveAdapter_RealAdaptersResolveOnlySaveCapableFormats(
