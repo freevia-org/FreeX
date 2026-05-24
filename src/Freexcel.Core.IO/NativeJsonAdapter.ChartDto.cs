@@ -108,6 +108,7 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
         public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
+        public double? XAxisCustomDisplayUnit { get; set; }
         public double? YAxisMinimum { get; set; }
         public double? YAxisMaximum { get; set; }
         public double? YAxisMajorUnit { get; set; }
@@ -135,6 +136,7 @@ public sealed partial class NativeJsonAdapter
         public double? YAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
         public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
+        public double? YAxisCustomDisplayUnit { get; set; }
         public ChartDataTableModel? DataTable { get; set; }
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
