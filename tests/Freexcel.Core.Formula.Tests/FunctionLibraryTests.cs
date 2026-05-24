@@ -43,6 +43,15 @@ public class FunctionLibraryTests
             range.At(row + 1, 1).Should().Be(expected[row]);
     }
 
+    private static void AssertApproxColumn(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            ((NumberValue)range.At(row + 1, 1)).Value.Should().BeApproximately(expected[row], 1e-10);
+    }
+
     private static BoolValue True() => new(true);
 
     private static BoolValue False() => new(false);
@@ -4285,6 +4294,29 @@ public class FunctionLibraryTests
 
     [Fact] public void Pmt_FutureValueError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact]
+    public void CoreFinancialFunctions_RangeRateArgument_SpillElementwise()
+    {
+        var rates = MakeSheet((1, 1, new NumberValue(0.05 / 12)), (2, 1, new NumberValue(0.06 / 12)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=PMT(A1:A2,60,10000)", rates),
+            ((NumberValue)_eval.Evaluate("=PMT(A1,60,10000)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=PMT(A2,60,10000)", rates)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=PV(A1:A2,60,188.71)", rates),
+            ((NumberValue)_eval.Evaluate("=PV(A1,60,188.71)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=PV(A2,60,188.71)", rates)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=FV(A1:A2,12,-100)", rates),
+            ((NumberValue)_eval.Evaluate("=FV(A1,12,-100)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=FV(A2,12,-100)", rates)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=NPER(A1:A2,-188.71,10000)", rates),
+            ((NumberValue)_eval.Evaluate("=NPER(A1,-188.71,10000)", rates)).Value,
+            ((NumberValue)_eval.Evaluate("=NPER(A2,-188.71,10000)", rates)).Value);
+    }
 
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
