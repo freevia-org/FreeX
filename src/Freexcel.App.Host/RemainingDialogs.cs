@@ -179,6 +179,7 @@ public sealed class PageBreakDialog : Window
         ShowInTaskbar = false;
         SeedDefault(defaultValue);
         Content = CreateContent();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static PageBreakDialogResult CreateClearResult() =>
@@ -227,6 +228,27 @@ public sealed class PageBreakDialog : Window
 
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        if (_resetAllButton.IsChecked == true)
+        {
+            _resetAllButton.Focus();
+            Keyboard.Focus(_resetAllButton);
+        }
+        else if (_insertColumnButton.IsChecked == true)
+        {
+            _columnBreakBox.Focus();
+            _columnBreakBox.SelectAll();
+            Keyboard.Focus(_columnBreakBox);
+        }
+        else
+        {
+            _rowBreakBox.Focus();
+            _rowBreakBox.SelectAll();
+            Keyboard.Focus(_rowBreakBox);
+        }
     }
 
     private void SeedDefault(string defaultValue)
@@ -283,6 +305,14 @@ public sealed class ForecastSheetDialog : Window
         ShowInTaskbar = false;
         _periodsBox.Text = periods.ToString(CultureInfo.InvariantCulture);
         Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _periodsBox.Focus();
+        _periodsBox.SelectAll();
+        Keyboard.Focus(_periodsBox);
     }
 
     public static bool TryCreateResult(string input, out ForecastSheetDialogResult result, out string? error)
@@ -331,9 +361,17 @@ public sealed class SheetNameDialog : Window
             Result = CreateResult(_nameBox.Text);
             DialogResult = true;
         });
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static SheetNameDialogResult CreateResult(string sheetName) => new(sheetName.Trim());
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
+    }
 }
 
 public sealed record UnhideSheetDialogResult(string SheetName);
@@ -366,9 +404,16 @@ public sealed class UnhideSheetDialog : Window
         stack.Children.Add(_sheetBox);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static UnhideSheetDialogResult CreateResult(string sheetName) => new(sheetName.Trim());
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _sheetBox.Focus();
+        Keyboard.Focus(_sheetBox);
+    }
 
     private void Accept()
     {
