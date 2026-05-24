@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Freexcel.Core.Model;
@@ -123,6 +124,14 @@ public sealed partial class SelectionPaneDialog : Window
         stack.Children.Add(buttonRow);
         Content = stack;
         UpdateMoveButtons();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _searchBox.Focus();
+        _searchBox.SelectAll();
+        Keyboard.Focus(_searchBox);
     }
 
     private static DataTemplate CreateItemTemplate()
