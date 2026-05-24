@@ -1745,6 +1745,23 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Convert ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Ink to Shape" Width="96" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Ink to Shape"
+                                        local:RibbonTooltip.KeyTip="IS"
+                                        local:RibbonTooltip.Description="Convert drawn ink into an Office shape. Ink conversion is not yet implemented in Freexcel."/>
+                                <Button Content="Ink to Math" Width="88" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Ink to Math"
+                                        local:RibbonTooltip.KeyTip="IM"
+                                        local:RibbonTooltip.Description="Convert handwritten math into typed notation. Ink conversion is not yet implemented in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Convert" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Arrange ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
