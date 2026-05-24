@@ -101,6 +101,39 @@ public sealed partial class ManageConditionalFormatsDialog
         return Brushes.LightGray;
     }
 
+    public static Brush PreviewForegroundBrush(ConditionalFormat cf)
+    {
+        var color = cf.FormatIfTrue?.FontColor ?? CellColor.Black;
+        return new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+    }
+
+    public static FontWeight PreviewFontWeight(ConditionalFormat cf) =>
+        cf.FormatIfTrue?.Bold == true ? FontWeights.Bold : FontWeights.Normal;
+
+    public static FontStyle PreviewFontStyle(ConditionalFormat cf) =>
+        cf.FormatIfTrue?.Italic == true ? FontStyles.Italic : FontStyles.Normal;
+
+    public static TextDecorationCollection? PreviewTextDecorations(ConditionalFormat cf)
+    {
+        var style = cf.FormatIfTrue;
+        if (style is null || (!style.Underline && !style.Strikethrough))
+            return null;
+
+        var decorations = new TextDecorationCollection();
+        if (style.Underline)
+        {
+            foreach (var decoration in TextDecorations.Underline)
+                decorations.Add(decoration);
+        }
+        if (style.Strikethrough)
+        {
+            foreach (var decoration in TextDecorations.Strikethrough)
+                decorations.Add(decoration);
+        }
+        decorations.Freeze();
+        return decorations;
+    }
+
     public static string AppliesToString(GridRange r)
     {
         var sc = CellAddress.NumberToColumnName(r.Start.Col);
@@ -154,6 +187,42 @@ internal sealed class PreviewBrushConverter : System.Windows.Data.IValueConverte
 {
     public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewBrush(cf) : Brushes.LightGray;
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => Binding.DoNothing;
+}
+
+internal sealed class PreviewForegroundBrushConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewForegroundBrush(cf) : Brushes.Black;
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => Binding.DoNothing;
+}
+
+internal sealed class PreviewFontWeightConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewFontWeight(cf) : FontWeights.Normal;
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => Binding.DoNothing;
+}
+
+internal sealed class PreviewFontStyleConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewFontStyle(cf) : FontStyles.Normal;
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => Binding.DoNothing;
+}
+
+internal sealed class PreviewTextDecorationsConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewTextDecorations(cf) ?? [] : [];
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => Binding.DoNothing;
