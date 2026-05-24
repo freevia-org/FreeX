@@ -210,6 +210,7 @@ internal static partial class XlsxChartXmlWriter
             ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
             ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
+            ToBooleanAxisValueXml("noMultiLvlLbl", chart.XAxisNoMultiLevelLabels, chartNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
@@ -393,6 +394,9 @@ internal static partial class XlsxChartXmlWriter
         value > 0
             ? new XElement(chartNs + elementName, new XAttribute("val", value.ToString(CultureInfo.InvariantCulture)))
             : null;
+
+    private static XElement? ToBooleanAxisValueXml(string elementName, bool value, XNamespace chartNs) =>
+        value ? new XElement(chartNs + elementName, new XAttribute("val", "1")) : null;
 
     private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format) =>
         format switch
