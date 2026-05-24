@@ -210,6 +210,19 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupDialogInvalidPrintTitles_SelectsSheetTabInvalidTitleBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+
+        source.Should().Contain("FocusInvalidPrintTitles();");
+        source.Should().Contain("private void FocusInvalidPrintTitles()");
+        source.Should().Contain("PageSetupTabs.SelectedItem = SheetTab;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));

@@ -1,6 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Format as Table">
-  <rect width="20" height="20" fill="none"/>
-  <rect x="3.5" y="5.5" width="13" height="11" fill="#ffffff" stroke="#242424" stroke-width="1"/>
-  <rect x="4.5" y="6.5" width="11" height="3" fill="#107c41"/>
-  <path d="M3.5 10.5H16.5M3.5 13.5H16.5M8.5 5.5V16.5M12.5 5.5V16.5" fill="none" stroke="#242424" stroke-width="1"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <rect class="f s" x="3" y="3" width="14" height="14" stroke-width="1"/>
+  <path class="s" d="M6.5 3 L6.5 17" stroke-width="1"/>
+  <path class="s" d="M10 3 L10 17" stroke-width="1"/>
+  <path class="s" d="M13.5 3 L13.5 17" stroke-width="1"/>
+  <path class="s" d="M3 6.5 L17 6.5" stroke-width="1"/>
+  <path class="s" d="M3 10 L17 10" stroke-width="1"/>
+  <path class="s" d="M3 13.5 L17 13.5" stroke-width="1"/>
+  <rect class="g2" x="3" y="3" width="14" height="3.5" opacity=".8"/>
+  <path d="M15 15 L18 18" fill="none" stroke="#5b9bd5" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
 </svg>
