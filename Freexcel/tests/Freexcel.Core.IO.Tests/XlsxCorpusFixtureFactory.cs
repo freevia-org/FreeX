@@ -1027,6 +1027,7 @@ internal static class XlsxCorpusFixtureFactory
             StyleName = style.Name,
             ShowRowStripes = true,
             RepeatItemLabels = false,
+            EnableDrill = false,
             DataCaption = "Corpus Values",
             GrandTotalCaption = "Corpus Grand Total",
             MissingCaption = "(corpus missing)",
