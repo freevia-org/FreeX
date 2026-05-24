@@ -54,7 +54,7 @@ public partial class GoalSeekDialog : Window
                 out var input,
                 out var error))
         {
-            MessageBox.Show(error, "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, error, "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusInvalidInput(error);
             return;
         }
@@ -97,6 +97,7 @@ public partial class GoalSeekDialog : Window
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         target.Focus();
         target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     public static GoalSeekRangeSelectionRequest CreateRangeSelectionRequest(
