@@ -6197,7 +6197,8 @@ public partial class FileAdapterSmokeTests
                     StrokeThickness: 2.75,
                     DashStyle: ChartLineDashStyle.Dash,
                     MarkerStyle: ChartMarkerStyle.Diamond,
-                    MarkerSize: 7)
+                    MarkerSize: 7,
+                    Smooth: true)
             ],
             DataRange = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
@@ -6218,7 +6219,8 @@ public partial class FileAdapterSmokeTests
                 StrokeThickness: 2.75,
                 DashStyle: ChartLineDashStyle.Dash,
                 MarkerStyle: ChartMarkerStyle.Diamond,
-                MarkerSize: 7));
+                MarkerSize: 7,
+                Smooth: true));
     }
 
     [Fact]

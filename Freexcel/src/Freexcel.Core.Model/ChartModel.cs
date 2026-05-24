@@ -163,7 +163,8 @@ public sealed record ChartSeriesFormat(
     ChartMarkerStyle? MarkerStyle = null,
     double? MarkerSize = null,
     WorkbookThemeColorReference? FillThemeColor = null,
-    WorkbookThemeColorReference? StrokeThemeColor = null)
+    WorkbookThemeColorReference? StrokeThemeColor = null,
+    bool? Smooth = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;
