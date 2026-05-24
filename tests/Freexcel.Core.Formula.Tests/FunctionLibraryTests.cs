@@ -3123,6 +3123,28 @@ public class FunctionLibraryTests
         AssertColumn(_eval.Evaluate("=RADIANS(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
     }
 
+    [Fact]
+    public void AdditionalUnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var zeros = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(0)));
+        AssertColumn(_eval.Evaluate("=ASIN(A1:A2)", zeros), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=ATAN(A1:A2)", zeros), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=EXP(A1:A2)", zeros), new NumberValue(1), new NumberValue(1));
+
+        var ones = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(1)));
+        AssertColumn(_eval.Evaluate("=ACOS(A1:A2)", ones), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=LN(A1:A2)", ones), new NumberValue(0), new NumberValue(0));
+
+        var facts = MakeSheet(
+            (1, 1, new NumberValue(3)),
+            (2, 1, new NumberValue(-1)));
+        AssertColumn(_eval.Evaluate("=FACT(A1:A2)", facts), new NumberValue(6), ErrorValue.Num);
+    }
+
     [Fact] public void Asin_One_ReturnsHalfPi() =>
         ((NumberValue)_eval.Evaluate("=ASIN(1)", MakeSheet())).Value
             .Should().BeApproximately(Math.PI / 2, 1e-10);
