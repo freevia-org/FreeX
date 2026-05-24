@@ -42,6 +42,11 @@ public sealed partial class FindReplaceDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        FocusSearchBox();
+    }
+
+    private void FocusSearchBox()
+    {
         var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
         target.Focus();
         target.SelectAll();
@@ -84,7 +89,7 @@ public sealed partial class FindReplaceDialog : Window
     private void FindNext()
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search)) return;
+        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
         if (search != _lastSearch)
         {
@@ -116,7 +121,7 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll()
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search)) return;
+        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
         _lastSearch = search;
         _currentIndex = -1;
@@ -133,7 +138,7 @@ public sealed partial class FindReplaceDialog : Window
     private void ReplaceAll_Click(object sender, RoutedEventArgs e)
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search)) return;
+        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
         var count = FindReplaceService.ReplaceAll(
             _getWorkbook(), _commandBus, search, ReplaceBox.Text,
@@ -151,7 +156,7 @@ public sealed partial class FindReplaceDialog : Window
     private void ReplaceOne()
     {
         var search = SearchText;
-        if (string.IsNullOrEmpty(search)) return;
+        if (string.IsNullOrEmpty(search) && ShowBlankSearchWarning()) return;
 
         if (_results.Count == 0 || _currentIndex < 0 || search != _lastSearch)
             FindNext();
@@ -183,6 +188,13 @@ public sealed partial class FindReplaceDialog : Window
     }
 
     private string SearchText => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox.Text : FindBox.Text;
+
+    private bool ShowBlankSearchWarning()
+    {
+        StatusLabel.Text = "Enter text in Find what.";
+        FocusSearchBox();
+        return true;
+    }
 
     private FindOptions CreateFindOptions() =>
         new(
