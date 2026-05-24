@@ -160,7 +160,9 @@ internal static partial class DelimitedTextWorkbookReader
         return field.Value[0] switch
         {
             '=' or '@' => true,
-            '+' or '-' => double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _),
+            '+' or '-' =>
+                double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _) ||
+                TryParseCurrency(field.Value, out _),
             _ => false
         };
     }

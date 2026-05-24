@@ -326,6 +326,28 @@ public sealed class CsvFileAdapterTests
         cell.Value.Should().Be(new TextValue(text));
     }
 
+    [Theory]
+    [InlineData("+$42.00")]
+    [InlineData("-$42.00")]
+    public void Save_RoundTripsSignedCurrencyTextFieldsAsLiteralText(string text)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue(text));
+    }
+
     [Fact]
     public void Save_WritesFormulaCellsAsExcelFormulaFields()
     {
