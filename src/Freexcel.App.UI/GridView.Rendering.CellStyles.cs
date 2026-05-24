@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 using Freexcel.Core.Model;
@@ -6,7 +7,12 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
-    private static void DrawBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2)
+    private static void DrawBorderEdge(
+        DrawingContext dc,
+        CellBorder border,
+        Point p1,
+        Point p2,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
     {
         if (border.Style == BorderStyle.None) return;
 
@@ -25,23 +31,34 @@ public partial class GridView
             _ => DashStyles.Solid
         };
 
-        var pen = new Pen(
-            new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B)),
-            thickness) { DashStyle = dash };
+        var pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
 
         dc.DrawLine(pen, p1, p2);
     }
 
-    private static SolidColorBrush BrushForCellColor(CellColor color) =>
-        new(Color.FromRgb(color.R, color.G, color.B));
+    private static SolidColorBrush BrushForCellColor(
+        CellColor color,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
+    {
+        if (brushCache is not null && brushCache.TryGetValue(color, out var cached))
+            return cached;
 
-    private static void DrawFillPattern(DrawingContext dc, Rect rect, CellStyle? style)
+        var brush = MakeBrush(color.R, color.G, color.B);
+        brushCache?.Add(color, brush);
+        return brush;
+    }
+
+    private static void DrawFillPattern(
+        DrawingContext dc,
+        Rect rect,
+        CellStyle? style,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
     {
         if (style is null || style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             return;
 
         var color = style.FillPatternColor ?? CellColor.Black;
-        var pen = new Pen(BrushForCellColor(color), 0.75);
+        var pen = new Pen(BrushForCellColor(color, brushCache), 0.75);
         const double step = 6;
 
         dc.PushClip(new RectangleGeometry(rect));
@@ -74,8 +91,8 @@ public partial class GridView
                 break;
             case CellFillPatternStyle.LightGrid:
             case CellFillPatternStyle.DarkGrid:
-                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightHorizontal, FillPatternColor = color });
-                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightVertical, FillPatternColor = color });
+                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightHorizontal, FillPatternColor = color }, brushCache);
+                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightVertical, FillPatternColor = color }, brushCache);
                 break;
             case CellFillPatternStyle.LightDown:
             case CellFillPatternStyle.DarkDown:

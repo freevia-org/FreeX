@@ -108,6 +108,8 @@ public sealed partial class SetChartLayoutCommand
         chart.TrendlineOrder = 2;
         chart.ShowTrendlineEquation = false;
         chart.ShowTrendlineRSquared = false;
+        chart.TrendlineLabelNumberFormatCode = null;
+        chart.TrendlineLabelNumberFormatSourceLinked = null;
         chart.TrendlineColor = null;
         chart.TrendlineThemeColor = null;
         chart.TrendlineThickness = 1.5;

@@ -1341,8 +1341,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Clean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, CleanText);
+        return CleanText(args[0]);
+    }
+
+    private static ScalarValue CleanText(ScalarValue value)
+    {
         var sb = new System.Text.StringBuilder();
-        foreach (char c in ToText(args[0]))
+        foreach (char c in ToText(value))
             if (c >= 32) sb.Append(c);
         return TextResult(sb.ToString());
     }
