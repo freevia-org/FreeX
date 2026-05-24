@@ -383,10 +383,4 @@ internal static partial class XlsxPivotTableWriter
                     new XAttribute("dataField", sort.DataFieldIndex.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("field", sort.FieldIndex.ToString(CultureInfo.InvariantCulture)))));
 
-    private static string FormatInvariant(double value) =>
-        value.ToString("0.########", CultureInfo.InvariantCulture);
-
-    private static XAttribute? OptionalAttribute(string name, string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value.Trim());
-
 }
