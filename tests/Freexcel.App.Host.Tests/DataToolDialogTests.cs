@@ -902,6 +902,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialogInvalidFinalValidation_RefocusesInvalidEntry()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("FocusInvalidFinalValidation(error);");
+        source.Should().Contain("private void FocusInvalidFinalValidation(string? error)");
+        source.Should().Contain("FocusReferenceInput();");
+        source.Should().Contain("FocusDestinationInput();");
+        source.Should().Contain("_referencesList.Focus();");
+        source.Should().Contain("_destinationBox.SelectAll();");
+    }
+
+    [Fact]
     public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
