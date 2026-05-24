@@ -51,6 +51,29 @@ internal static partial class XlsxChartXmlWriter
         return element.HasElements ? element : null;
     }
 
+    private static XElement? ToChartSurfaceFormatXml(
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        string elementName,
+        ChartSurfaceFormatModel? format)
+    {
+        if (format is null)
+            return null;
+
+        var shapeProperties = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            format.FillThemeColor,
+            format.FillColor,
+            format.BorderThemeColor,
+            format.BorderColor,
+            format.BorderThickness);
+
+        return shapeProperties is null
+            ? null
+            : new XElement(chartNs + elementName, shapeProperties);
+    }
+
     private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
         chart.BlankDisplayMode == ChartBlankDisplayMode.Gap
             ? null
