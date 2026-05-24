@@ -24,7 +24,7 @@ internal static partial class XlsxChartXmlWriter
         }
     }
 
-    private static XElement? ToChartDataTableXml(ChartModel chart, XNamespace chartNs)
+    private static XElement? ToChartDataTableXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
         if (chart.DataTable is not { } dataTable)
             return null;
@@ -33,7 +33,35 @@ internal static partial class XlsxChartXmlWriter
             ToChartBooleanValueXml(chartNs, "showHorzBorder", dataTable.ShowHorizontalBorder),
             ToChartBooleanValueXml(chartNs, "showVertBorder", dataTable.ShowVerticalBorder),
             ToChartBooleanValueXml(chartNs, "showOutline", dataTable.ShowOutline),
-            ToChartBooleanValueXml(chartNs, "showKeys", dataTable.ShowLegendKeys));
+            ToChartBooleanValueXml(chartNs, "showKeys", dataTable.ShowLegendKeys),
+            ToShapeProperties(
+                chartNs,
+                drawingNs,
+                dataTable.FillThemeColor,
+                dataTable.FillColor,
+                dataTable.BorderThemeColor,
+                dataTable.BorderColor,
+                dataTable.BorderThickness),
+            ToDataTableTextProperties(dataTable, chartNs, drawingNs));
+    }
+
+    private static XElement? ToDataTableTextProperties(
+        ChartDataTableModel dataTable,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var textFill = ToSolidFill(dataTable.TextThemeColor, dataTable.TextColor, drawingNs);
+        if (textFill is null && dataTable.FontSize is null)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        dataTable.FontSize is { } fontSize
+                            ? new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200))
+                            : null,
+                        textFill))));
     }
 
     private static XElement? ToChart3DViewXml(ChartModel chart, XNamespace chartNs)

@@ -50,7 +50,7 @@ internal static partial class XlsxChartXmlWriter
                         ShouldWriteChartAxes(chart.Type)
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
                             : null,
-                        ToChartDataTableXml(chart, chartNs),
+                        ToChartDataTableXml(chart, chartNs, drawingNs),
                         ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
                     ToLegendXml(chart, chartNs, drawingNs),
                     chart.ShowDataInHiddenRowsAndColumns ? new XElement(chartNs + "plotVisOnly", new XAttribute("val", "0")) : null,
