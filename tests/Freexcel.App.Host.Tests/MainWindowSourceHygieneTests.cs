@@ -711,11 +711,14 @@ public sealed class MainWindowSourceHygieneTests
         var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
         var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Editing.cs");
         var dropdownSourcePath = Path.Combine(appHostDirectory, "MainWindow.EditingDropdowns.cs");
+        var formulaReferenceSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormulaReferenceEditing.cs");
 
         File.Exists(editingSourcePath).Should().BeTrue();
         File.Exists(dropdownSourcePath).Should().BeTrue();
+        File.Exists(formulaReferenceSourcePath).Should().BeTrue();
         var editingSource = File.ReadAllText(editingSourcePath);
         var dropdownSource = File.ReadAllText(dropdownSourcePath);
+        var formulaReferenceSource = File.ReadAllText(formulaReferenceSourcePath);
 
         mainSource.Should().NotContain("private void EnterEditMode(");
         mainSource.Should().NotContain("private void ShowInlineEditor(");
@@ -736,6 +739,9 @@ public sealed class MainWindowSourceHygieneTests
         editingSource.Should().Contain("private bool CommitPreparedEdits(");
         editingSource.Should().Contain("ExcelEditKeyPlanner");
         editingSource.Should().Contain("CellEntryParser");
+        formulaReferenceSource.Should().Contain("private bool TryApplyFormulaRangeSelection(");
+        formulaReferenceSource.Should().Contain("FormulaRangeEntryPlanner");
+        formulaReferenceSource.Should().Contain("FormulaReferenceHighlightPlanner");
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");
         dropdownSource.Should().Contain("AutoFilterDropdownPlanner");
@@ -1918,7 +1924,8 @@ public sealed class MainWindowSourceHygieneTests
             new[]
             {
                 "MainWindow.Editing.cs",
-                "MainWindow.EditingDropdowns.cs"
+                "MainWindow.EditingDropdowns.cs",
+                "MainWindow.FormulaReferenceEditing.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 
