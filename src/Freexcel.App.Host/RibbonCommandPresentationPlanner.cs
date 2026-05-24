@@ -246,6 +246,7 @@ public static class RibbonCommandPresentationPlanner
 
         if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help);
         if (name.Contains("training")) return new(RibbonCommandIconKind.Book);
+        if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
         if (name.Contains("blog")) return new(RibbonCommandIconKind.Generic);
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
@@ -291,6 +292,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("view")) return new(RibbonCommandIconKind.Grid);
         if (name.Contains("zoom")) return new(RibbonCommandIconKind.Zoom);
         if (name.Contains("macro")) return new(RibbonCommandIconKind.GetData);
+        if (name.Contains("convert")) return new(RibbonCommandIconKind.Math);
+        if (name.Contains("help")) return new(RibbonCommandIconKind.Help);
 
         return new(RibbonCommandIconKind.Generic);
     }
@@ -393,6 +396,9 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("sync scrolling") ||
         name.Contains("reset position") ||
         name.Contains("help online") ||
+        name.Contains("contact support") ||
+        name.Contains("training") ||
+        name.Contains("what's new") ||
         name.Contains("about") ||
         name.Contains("feedback");
 

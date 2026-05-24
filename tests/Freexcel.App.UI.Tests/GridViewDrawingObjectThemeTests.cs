@@ -70,6 +70,16 @@ public sealed class GridViewDrawingObjectThemeTests
         source.Should().Contain("RenderCharts(dc)");
     }
 
+    [Fact]
+    public void PictureRenderer_DrawsSelectionAdornerForPictureAtActiveCell()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+
+        source.Should().Contain("DrawPictureSelectionAdorner");
+        source.Should().Contain("SelectedRange?.Start != picture.Anchor");
+        source.Should().Contain("dc.DrawRectangle(null, selectedPen, rect);");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

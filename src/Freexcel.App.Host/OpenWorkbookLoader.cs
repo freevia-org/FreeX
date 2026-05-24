@@ -56,17 +56,24 @@ public sealed class OpenWorkbookLoader
             });
         ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
-        await RunStageAsync(
-            progress,
-            "calculating",
-            90,
-            98,
-            TimeSpan.FromSeconds(12),
-            () =>
-            {
-                _recalculateAllFormulas(workbook);
-                return true;
-            });
+        if (WorkbookFormulaScanner.HasFormulas(workbook))
+        {
+            await RunStageAsync(
+                progress,
+                "calculating",
+                90,
+                98,
+                TimeSpan.FromSeconds(12),
+                () =>
+                {
+                    _recalculateAllFormulas(workbook);
+                    return true;
+                });
+        }
+        else
+        {
+            progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail("calculating", TimeSpan.Zero), 98));
+        }
 
         return new OpenWorkbookResult(
             workbook,

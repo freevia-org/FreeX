@@ -4,6 +4,15 @@ namespace Freexcel.App.Host;
 
 public static class ViewportScrollCalculator
 {
+    public static int NormalizeWheelNotches(int delta)
+    {
+        if (delta == 0)
+            return 0;
+
+        var notches = delta / 120;
+        return notches != 0 ? notches : Math.Sign(delta);
+    }
+
     public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
         Sheet? sheet,
         double verticalScrollValue,

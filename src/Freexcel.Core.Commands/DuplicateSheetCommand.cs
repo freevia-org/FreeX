@@ -51,6 +51,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 IsVisible = textBox.IsVisible,
                 FillColor = textBox.FillColor,
                 OutlineColor = textBox.OutlineColor,
+                Title = textBox.Title,
                 AltText = textBox.AltText
             });
         foreach (var shape in source.DrawingShapes)
@@ -65,6 +66,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 IsVisible = shape.IsVisible,
                 FillColor = shape.FillColor,
                 OutlineColor = shape.OutlineColor,
+                Title = shape.Title,
                 AltText = shape.AltText
             });
         foreach (var picture in source.Pictures)
@@ -83,6 +85,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 LockAspectRatio = picture.LockAspectRatio,
                 RotationDegrees = picture.RotationDegrees,
                 IsVisible = picture.IsVisible,
+                Title = picture.Title,
                 AltText = picture.AltText
             };
             foreach (var cell in picture.Cells)

@@ -11,6 +11,7 @@ internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
     string ContentType,
     string? Name,
+    string? Title,
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double CropLeft,
@@ -21,6 +22,7 @@ internal sealed record XlsxPicturePackagePart(
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
     string? Name,
+    string? Title,
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
@@ -32,6 +34,7 @@ internal sealed record XlsxTextBoxPackagePart(
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
     string? Name,
+    string? Title,
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
@@ -164,6 +167,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             imageStream.CopyTo(ms);
 
             var name = ReadNonVisualName(pictureElement);
+            var title = ReadNonVisualTitle(pictureElement);
             var altText = ReadNonVisualDescription(pictureElement);
             var sourceRectangle = pictureElement
                 .Element(spreadsheetDrawingNs + "blipFill")?
@@ -173,6 +177,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ms.ToArray(),
                 XlsxPackagePath.GetImageContentType(imagePath),
                 name,
+                title,
                 altText,
                 ReadNearestAnchor(pictureElement),
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
@@ -201,6 +206,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         foreach (var shapeElement in drawingContext.Value.DrawingXml.Descendants(spreadsheetDrawingNs + "sp"))
         {
             var name = ReadNonVisualName(shapeElement);
+            var title = ReadNonVisualTitle(shapeElement);
             var altText = ReadNonVisualDescription(shapeElement);
             var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
             var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
@@ -230,6 +236,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 textBoxes.Add(new XlsxTextBoxPackagePart(
                     text,
                     name,
+                    title,
                     altText,
                     ReadNearestAnchor(shapeElement),
                     rotation,
@@ -248,6 +255,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 shapes.Add(new XlsxShapePackagePart(
                     kind,
                     name,
+                    title,
                     altText,
                     ReadNearestAnchor(shapeElement),
                     rotation,
@@ -314,6 +322,15 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return element
             .Descendants(spreadsheetDrawingNs + "cNvPr")
             .Select(item => item.Attribute("descr")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static string? ReadNonVisualTitle(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        return element
+            .Descendants(spreadsheetDrawingNs + "cNvPr")
+            .Select(item => item.Attribute("title")?.Value)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 

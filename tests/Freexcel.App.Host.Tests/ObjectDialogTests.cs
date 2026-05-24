@@ -38,6 +38,46 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void HyperlinkDialogPrefill_UsesExistingCellTextAsDisplayText()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 4, 2);
+        var sheet = new Sheet(sheetId, "Sheet1");
+        sheet.SetCell(address, new TextValue("Quarterly report"));
+
+        HyperlinkDialogPrefill.FromCell(sheet, address).Should().Be(new HyperlinkDialogPrefill(
+            "https://",
+            "Quarterly report"));
+    }
+
+    [Fact]
+    public void HyperlinkNavigationPlanner_CreatesExternalLaunchPlanForWebLink()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1, 1);
+        var sheet = new Sheet(sheetId, "Sheet1");
+        sheet.Hyperlinks[address] = "https://example.test";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+        plan.Should().Be(new HyperlinkNavigationPlan(HyperlinkNavigationKind.External, "https://example.test", null));
+    }
+
+    [Fact]
+    public void HyperlinkNavigationPlanner_CreatesWorksheetPlanForDocumentLink()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1, 1);
+        var sheet = new Sheet(sheetId, "Sheet1");
+        sheet.Hyperlinks[address] = "Sheet2!C3";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+        plan!.Kind.Should().Be(HyperlinkNavigationKind.WorksheetCell);
+        plan.Target.Should().Be("Sheet2!C3");
+    }
+
+    [Fact]
     public void ObjectSizeDialog_TryParseSize_AcceptsExcelLikeWidthByHeightText()
     {
         ObjectSizeDialog.TryParseSize("320 x 180", out var size).Should().BeTrue();
