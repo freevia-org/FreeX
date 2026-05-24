@@ -85,4 +85,16 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("Header = \"Value\"");
         source.Should().Contain("Header = \"Formula\"");
     }
+
+    [Fact]
+    public void WatchWindowDialogOpenedFromKeyboard_FocusesWatchList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_listView.SelectedIndex = 0;");
+        source.Should().Contain("_listView.Focus();");
+        source.Should().Contain("Keyboard.Focus(_listView);");
+    }
 }
