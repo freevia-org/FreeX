@@ -61,7 +61,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void FormulasRibbon_CollapsesFunctionLibraryAtShortWideWidths()
+    public void FormulasRibbon_KeepsFunctionLibraryExpandedAtNormalWideWidths()
     {
         StaTestRunner.Run(() =>
         {
@@ -69,7 +69,10 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Formulas", 1465);
 
-            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Function Library", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Function Library", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["Insert Function", "AutoSum"],
+                "Excel keeps the primary Formulas command block available before collapsing lower-priority groups");
         });
     }
 
@@ -141,6 +144,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
     [Theory]
     [InlineData("Page Layout", "Themes")]
+    [InlineData("Formulas", "Function Library")]
     [InlineData("Data", "Get & Transform")]
     [InlineData("Review", "Proofing")]
     [InlineData("View", "Workbook Views")]
@@ -385,9 +389,11 @@ public sealed class MainWindowAdaptiveRibbonTests
                     : child.GetType().Name));
 
         public string DebugActiveRibbonChildren =>
+            $"RibbonTabs={(_window.FindName("RibbonTabs") as TabControl)?.ActualWidth:0.0}, " +
+            $"ActivePanelDesired={ActiveRibbonPanel?.DesiredSize.Width:0.0}, " +
             string.Join(", ", ActiveRibbonPanel?.Children.Cast<UIElement>().Select(child =>
                 child is FrameworkElement fe
-                    ? $"{child.GetType().Name}:{fe.Tag}:{fe.Visibility}:{RibbonTooltip.GetTitle(fe) ?? fe.Name}"
+                    ? $"{child.GetType().Name}:{fe.Tag}:{fe.Visibility}:{RibbonTooltip.GetTitle(fe) ?? fe.Name}:{fe.DesiredSize.Width:0.0}/{fe.ActualWidth:0.0}"
                     : child.GetType().Name) ?? []);
 
         public IReadOnlyList<string> VisibleRibbonCommandLabels =>
@@ -487,6 +493,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             _window.Width = width;
             _window.UpdateLayout();
             PumpDispatcher();
+            PumpDispatcher();
+            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
