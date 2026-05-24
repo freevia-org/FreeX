@@ -8178,6 +8178,52 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartAxisCrossingMetadataPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisCrossingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            YAxisCrosses = ChartAxisCrosses.Custom,
+            YAxisCrossesAt = 5,
+            YAxisCrossBetween = ChartAxisCrossBetween.MidCategory,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            var valueAxis = chartXml.Descendants(chartNs + "valAx").Single();
+            valueAxis.Element(chartNs + "crosses").Should().BeNull();
+            valueAxis.Element(chartNs + "crossesAt")!.Attribute("val")!.Value.Should().Be("5");
+            valueAxis.Element(chartNs + "crossBetween")!.Attribute("val")!.Value.Should().Be("midCat");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.YAxisCrosses.Should().Be(ChartAxisCrosses.Custom);
+        loadedChart.YAxisCrossesAt.Should().Be(5);
+        loadedChart.YAxisCrossBetween.Should().Be(ChartAxisCrossBetween.MidCategory);
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_DropsOutOfRangePointDataLabelFormattingPackagePart()
     {
         var workbook = new Workbook("ChartPointDataLabelPackageSave");
