@@ -117,6 +117,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("number format")) return new(RibbonCommandIconKind.Number);
         if (name.Contains("percent")) return new(RibbonCommandIconKind.Percent);
         if (name.Contains("comma style")) return new(RibbonCommandIconKind.Comma);
+        if (name.Contains("selection pane")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("find") || name.Contains("select")) return new(RibbonCommandIconKind.Search);
         if (name.Contains("increase decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);
@@ -143,7 +144,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("link")) return new(RibbonCommandIconKind.Link);
         if (name.Contains("delete")) return new(RibbonCommandIconKind.Delete);
         if (name.Contains("delete note") || name.Contains("delete comment")) return new(RibbonCommandIconKind.Delete);
-        if (name.Contains("clear")) return new(RibbonCommandIconKind.Delete);
+        if (name.Contains("clear")) return new(RibbonCommandIconKind.Clear);
         if (name.Contains("previous comment") || name.Contains("previous note")) return new(RibbonCommandIconKind.Previous);
         if (name.Contains("next comment") || name.Contains("next note")) return new(RibbonCommandIconKind.Next);
         if (name.Contains("note") || name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
@@ -469,6 +470,7 @@ public enum RibbonCommandIconKind
     Comment,
     Consolidate,
     Copy,
+    Clear,
     Currency,
     Cut,
     Date,

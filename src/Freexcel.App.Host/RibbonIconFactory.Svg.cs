@@ -230,7 +230,11 @@ public static partial class RibbonIconFactory
             "object-rotate" => "rotate",
             "shape-gradient" => "gradient",
             "object-effects" => "effects",
+            "selection-pane" => "selection-pane",
+            "ink-to-shape" => "shapes",
+            "ink-to-math" => "math-trig",
             "math" => "math-trig",
+            "recently-used" => "recent",
             "date" => "date-time",
             "lookup" => "lookup-reference",
             "formula-auditing" => "evaluate-formula",
@@ -242,7 +246,13 @@ public static partial class RibbonIconFactory
             "show-details" => "show-detail",
             "links-and-objects" => "hyperlink",
             "help-online" => "help",
+            "contact-support" => "contact-support",
+            "what-s-new" => "what-s-new",
+            "whats-new" => "what-s-new",
             "about-freexcel" => "about",
+            "side-by-side" => "view-side-by-side",
+            "sync-scrolling" => "synchronous-scrolling",
+            "reset-position" => "reset-window-position",
             _ => ""
         };
 

@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  
-  <path d="M8 14.4 H24 V27.2 H8 Z M11.2 14.4 V10.72 C11.2 6.08 20.8 6.08 20.8 10.72 V14.4" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <path class="f s" d="M6.4 9.6 C11.2 8 14.4 9.6 16 11.2 C17.6 9.6 20.8 8 25.6 9.6 V25.6 C20.8 24 17.6 25.6 16 27.2 C14.4 25.6 11.2 24 6.4 25.6 Z" stroke-width="1"/>
+  <path class="f s" d="M12.8 17.6 H24 V27.2 H12.8 Z M14.72 17.6 V15.2 C14.72 12 22.08 12 22.08 15.2 V17.6" stroke-width="1"/>
 </svg>

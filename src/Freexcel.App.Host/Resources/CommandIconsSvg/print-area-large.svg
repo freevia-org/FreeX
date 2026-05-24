@@ -1,12 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  
-  <rect x="4.8" y="4.8" width="22.4" height="22.4" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M10.4 4.8 L10.4 27.2" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M16 4.8 L16 27.2" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M21.6 4.8 L21.6 27.2" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4.8 10.4 L27.2 10.4" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4.8 16 L27.2 16" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4.8 21.6 L27.2 21.6" stroke-width="1.12" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="10.4" y="10.4" width="11.2" height="11.2" opacity="0.55" fill="#dff6dd"/>
-  <rect x="10.4" y="10.4" width="11.2" height="11.2" stroke-width="1.76" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <rect class="f s" x="4.8" y="4.8" width="22.4" height="22.4" stroke-width="1"/>
+  <path class="s" d="M10.4 4.8 L10.4 27.2" stroke-width="1"/>
+  <path class="s" d="M16 4.8 L16 27.2" stroke-width="1"/>
+  <path class="s" d="M21.6 4.8 L21.6 27.2" stroke-width="1"/>
+  <path class="s" d="M4.8 10.4 L27.2 10.4" stroke-width="1"/>
+  <path class="s" d="M4.8 16 L27.2 16" stroke-width="1"/>
+  <path class="s" d="M4.8 21.6 L27.2 21.6" stroke-width="1"/>
+  <rect class="g2" x="10.4" y="10.4" width="11.2" height="11.2" opacity="0.55"/>
+  <rect class="s" x="10.4" y="10.4" width="11.2" height="11.2" stroke-width="1"/>
 </svg>
