@@ -291,6 +291,9 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? XAxisLabelTextThemeColor { get; set; }
     public double XAxisLabelFontSize { get; set; } = 11;
     public double XAxisLabelAngle { get; set; }
+    public int XAxisLabelSkip { get; set; }
+    public int XAxisTickMarkSkip { get; set; }
+    public int XAxisLabelOffset { get; set; }
     public CellColor? XAxisLineColor { get; set; }
     public double XAxisLineThickness { get; set; } = 1;
     public double? YAxisMinimum { get; set; }
