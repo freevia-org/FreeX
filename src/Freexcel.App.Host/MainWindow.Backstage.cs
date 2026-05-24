@@ -241,6 +241,7 @@ public partial class MainWindow
         FormulaBar.Text = "";
         RefreshSheetTabs();
         UpdateViewport();
+        RecordDiagnosticEvent("workbook_new");
     }
 
     private async Task OpenFileAsync(string path)
@@ -275,9 +276,21 @@ public partial class MainWindow
             HideStartScreen();
             ShowOpenProgress("Opening workbook", "Loading file (done)", 100);
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
+            RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["format"] = format?.FormatName,
+                ["worksheetCount"] = _workbook.Sheets.Count.ToString()
+            });
         }
         catch (Exception ex)
         {
+            RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["format"] = format?.FormatName,
+                ["reason"] = ex.GetType().Name
+            });
             MessageBox.Show($"Failed to open file:\n{ex.Message}", "Open Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -569,10 +582,22 @@ public partial class MainWindow
             _currentFilePath = target.Path;
             _recentFiles.AddOrUpdate(target.Path);
             UpdateTitleBar();
+            RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["format"] = target.Adapter.FormatName,
+                ["worksheetCount"] = _workbook.Sheets.Count.ToString()
+            });
             return true;
         }
         catch (Exception ex)
         {
+            RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
+            {
+                ["extension"] = ext,
+                ["format"] = target.Adapter.FormatName,
+                ["reason"] = ex.GetType().Name
+            });
             MessageBox.Show($"Failed to save file:\n{ex.Message}", "Save Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
