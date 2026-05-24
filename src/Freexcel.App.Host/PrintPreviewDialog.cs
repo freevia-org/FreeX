@@ -5,6 +5,10 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using VerticalAlignment = System.Windows.VerticalAlignment;
 
 namespace Freexcel.App.Host;
 
@@ -21,14 +25,22 @@ public sealed partial class PrintPreviewDialog : Window
         PrintSettingsPlan settings,
         Action? showMargins = null,
         Action? showPageSetup = null,
-        Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null)
+        Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null,
+        SheetId sheetId = default,
+        Sheet? sheet = null,
+        Action<IWorkbookCommand>? executeCommand = null)
     {
         Title = CreateTitle(workbookName);
-        Width = 900;
+        Width = 1120;
         Height = 700;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        var root = new DockPanel();
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
         var toolbar = new ToolBar
         {
             Padding = new Thickness(4),
@@ -256,9 +268,27 @@ public sealed partial class PrintPreviewDialog : Window
             MaxWidth = 620
         };
         toolbar.Items.Add(settingsSummaryText);
-        DockPanel.SetDock(toolbar, Dock.Top);
-        root.Children.Add(toolbar);
+
+        // Left settings panel
+        var settingsScroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Background = System.Windows.Media.Brushes.WhiteSmoke
+        };
+        settingsScroll.Content = BuildPrintSettingsPanel(sheetId, sheet, executeCommand, RefreshPreviewDocument);
+        Grid.SetRow(settingsScroll, 1);
+        Grid.SetColumn(settingsScroll, 0);
+        root.Children.Add(settingsScroll);
+
+        Grid.SetRow(viewer, 1);
+        Grid.SetColumn(viewer, 1);
         root.Children.Add(viewer);
+
+        Grid.SetRow(toolbar, 0);
+        Grid.SetColumnSpan(toolbar, 2);
+        root.Children.Add(toolbar);
+
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);
     }

@@ -1,5 +1,12 @@
 namespace Freexcel.Core.Model;
 
+public sealed class WorkbookFileSharingModel
+{
+    public bool? ReadOnlyRecommended { get; set; }
+    public string? UserName { get; set; }
+    public string? ReservationPassword { get; set; }
+}
+
 /// <summary>
 /// Represents a workbook containing one or more worksheets.
 /// This is the top-level domain object.
@@ -94,6 +101,9 @@ public sealed class Workbook
 
     /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
     public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
+
+    /// <summary>Excel workbook file-sharing/read-only recommendation metadata.</summary>
+    public WorkbookFileSharingModel? FileSharing { get; set; }
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;

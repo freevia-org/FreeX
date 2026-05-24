@@ -26,6 +26,12 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         XlsxWorkbookMetadataWriter.SaveWorkbookViewProperties(packageStream, workbook);
 
+        if (workbook.FileSharing is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
+        }
+
         if (workbook.IsStructureProtected)
         {
             packageStream.Position = 0;
@@ -206,6 +212,12 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        if (workbook.FileSharing is not null)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
+        }
 
         if (workbook.Sheets.Any(sheet => sheet.AutoFilter is not null))
         {
