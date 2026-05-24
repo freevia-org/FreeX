@@ -77,6 +77,10 @@ public sealed partial class Sheet
             IsVeryHidden                  = IsVeryHidden,
             CodeName                      = CodeName,
             TabColor                      = TabColor,
+            OutlineSummaryBelow           = OutlineSummaryBelow,
+            OutlineSummaryRight           = OutlineSummaryRight,
+            ShowOutlineSymbols            = ShowOutlineSymbols,
+            ApplyOutlineStyles            = ApplyOutlineStyles,
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
             // Previously missed fields:

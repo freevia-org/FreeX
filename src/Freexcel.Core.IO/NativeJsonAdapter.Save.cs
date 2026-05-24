@@ -111,6 +111,10 @@ public sealed partial class NativeJsonAdapter
                     .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key) && NativeJsonValueSanitizer.IsValidOutlineLevel(pair.Value))
                     .Select(pair => new UIntIntDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
+                OutlineSummaryBelow = s.OutlineSummaryBelow,
+                OutlineSummaryRight = s.OutlineSummaryRight,
+                ShowOutlineSymbols = s.ShowOutlineSymbols,
+                ApplyOutlineStyles = s.ApplyOutlineStyles,
                 GroupHiddenRows = s.GroupHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
                 GroupHiddenCols = s.GroupHiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 ViewMode = NativeJsonValueSanitizer.ValidEnumOrDefault(s.ViewMode, WorksheetViewMode.Normal),
