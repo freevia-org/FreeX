@@ -1037,7 +1037,7 @@ public sealed class FormulaEvaluator
              or "FREQUENCY"
              or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
-             or "TEXTJOIN" or "EXACT";
+             or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";

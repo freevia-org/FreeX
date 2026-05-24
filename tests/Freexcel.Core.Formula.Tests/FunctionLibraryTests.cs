@@ -6233,6 +6233,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void CharAndCode_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(65)),
+            (2, 2, new NumberValue(66)));
+
+        var code = _eval.Evaluate("=CODE(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        code.Cells[0, 0].Should().Be(new NumberValue(65));
+        code.Cells[1, 0].Should().Be(new NumberValue(66));
+
+        var chars = _eval.Evaluate("=CHAR(B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        chars.Cells[0, 0].Should().Be(new TextValue("A"));
+        chars.Cells[1, 0].Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
     public void Exact_IsCaseSensitiveAndPropagatesErrors()
     {
         _eval.Evaluate("=EXACT(\"Excel\",\"Excel\")", MakeSheet()).Should().Be(new BoolValue(true));

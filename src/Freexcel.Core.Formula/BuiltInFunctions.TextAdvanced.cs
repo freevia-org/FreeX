@@ -114,7 +114,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Code(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, CodeScalar);
+        return CodeScalar(args[0]);
+    }
+
+    private static ScalarValue CodeScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var text = ToText(value);
         if (text.Length == 0) return ErrorValue.Value;
         return new NumberValue(CharToExcelAnsiCode(text[0]));
     }
@@ -122,11 +129,28 @@ public static partial class BuiltInFunctions
     private static ScalarValue Char(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, CharScalar);
+        return CharScalar(args[0]);
+    }
+
+    private static ScalarValue CharScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Value;
         int code = (int)n;
         if (code <= 0 || code > 255) return ErrorValue.Value;
         return new TextValue(ExcelAnsiCodeToChar(code).ToString());
+    }
+
+    private static RangeValue MapTextAdvancedRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = map(range.Cells[r, c]);
+
+        return new RangeValue(cells);
     }
 
     private static ScalarValue Asc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
