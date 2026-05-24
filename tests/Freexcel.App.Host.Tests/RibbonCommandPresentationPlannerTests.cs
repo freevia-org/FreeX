@@ -68,6 +68,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Check Accessibility", RibbonCommandIconKind.Accessibility)]
     [InlineData("Protect Sheet", RibbonCommandIconKind.Protect)]
     [InlineData("Help Online", RibbonCommandIconKind.Help)]
+    [InlineData("What's New", RibbonCommandIconKind.Info)]
     [InlineData("Unknown Command", RibbonCommandIconKind.Generic)]
     public void GetIcon_MapsKnownCommandsToSemanticVectorKinds(string commandName, RibbonCommandIconKind expectedKind)
     {
@@ -93,6 +94,8 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Clipboard", RibbonCommandIconKind.Paste)]
     [InlineData("Font", RibbonCommandIconKind.Font)]
     [InlineData("Editing", RibbonCommandIconKind.Search)]
+    [InlineData("Convert", RibbonCommandIconKind.Math)]
+    [InlineData("Help", RibbonCommandIconKind.Help)]
     [InlineData("Unknown", RibbonCommandIconKind.Generic)]
     public void GetGroupIcon_MapsExcelRibbonGroupsToSemanticVectorKinds(string groupName, RibbonCommandIconKind expectedKind)
     {
