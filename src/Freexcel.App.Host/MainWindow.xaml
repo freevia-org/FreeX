@@ -2146,22 +2146,22 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Define Name"    Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DefineNameBtn_Click"
-                                        local:RibbonTooltip.Title="Define Name"
-                                        local:RibbonTooltip.KeyTip="DN"
-                                        local:RibbonTooltip.Description="Assign a name to a cell or range so you can refer to it in formulas."/>
-                                <Button Content="Create from Selection" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CreateNamesFromSelectionBtn_Click"
-                                        local:RibbonTooltip.Title="Create from Selection"
-                                        local:RibbonTooltip.KeyTip="CS"
-                                        local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
-                                <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
-                                        local:RibbonTooltip.Title="Use in Formula"
-                                        local:RibbonTooltip.KeyTip="I"
-                                        local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>
                                 <Button Content="Name Manager"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NamedRangesButton_Click"
                                         local:RibbonTooltip.Title="Name Manager"
                                         local:RibbonTooltip.KeyTip="N"
                                         local:RibbonTooltip.Description="View, create, edit, and delete all named ranges in the workbook."/>
+                                <Button Content="Define Name"    Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DefineNameBtn_Click"
+                                        local:RibbonTooltip.Title="Define Name"
+                                        local:RibbonTooltip.KeyTip="DN"
+                                        local:RibbonTooltip.Description="Assign a name to a cell or range so you can refer to it in formulas."/>
+                                <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
+                                        local:RibbonTooltip.Title="Use in Formula"
+                                        local:RibbonTooltip.KeyTip="I"
+                                        local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>
+                                <Button Content="Create from Selection" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CreateNamesFromSelectionBtn_Click"
+                                        local:RibbonTooltip.Title="Create from Selection"
+                                        local:RibbonTooltip.KeyTip="CS"
+                                        local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Defined Names" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2764,18 +2764,36 @@
                             <Grid Style="{StaticResource RibbonGroupPanel}">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                    <Button Content="Field List" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldListBtn_Click"
-                                            local:RibbonTooltip.Title="Field List"
-                                            local:RibbonTooltip.KeyTip="FL"
-                                            local:RibbonTooltip.Description="Show or hide the PivotTable Fields task pane."/>
-                                    <Button Content="Refresh" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
-                                            local:RibbonTooltip.Title="Refresh"
-                                            local:RibbonTooltip.KeyTip="R"
-                                            local:RibbonTooltip.Description="Refresh the selected PivotTable."/>
+                                    <Button Content="PivotTable Name" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="PivotTable Name"
+                                            local:RibbonTooltip.KeyTip="N"
+                                            local:RibbonTooltip.Description="Renaming PivotTables from the ribbon is deferred in Freexcel."/>
+                                    <Button Content="Options" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="PivotTable Options"
+                                            local:RibbonTooltip.KeyTip="O"
+                                            local:RibbonTooltip.Description="Advanced PivotTable options are edited through supported PivotTable commands."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Show Details" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
                                             local:RibbonTooltip.Title="Show Details"
                                             local:RibbonTooltip.KeyTip="D"
                                             local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
+                                    <Button Content="Field Settings" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldValueSettingsMenuItem_Click"
+                                            local:RibbonTooltip.Title="Field Settings"
+                                            local:RibbonTooltip.KeyTip="FS"
+                                            local:RibbonTooltip.Description="Open value field settings for the selected PivotTable field."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Active Field" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Group Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGroupFieldBtn_Click"
                                             local:RibbonTooltip.Title="Group Field"
                                             local:RibbonTooltip.KeyTip="GF"
@@ -2785,7 +2803,71 @@
                                             local:RibbonTooltip.KeyTip="UG"
                                             local:RibbonTooltip.Description="Remove grouping from the selected PivotTable field."/>
                                 </StackPanel>
-                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable" Style="{StaticResource GroupLbl}"/></Border>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Group" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Insert Slicer" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
+                                            local:RibbonTooltip.Title="Insert Slicer"
+                                            local:RibbonTooltip.KeyTip="IS"
+                                            local:RibbonTooltip.Description="Create a slicer connected to the selected PivotTable field."/>
+                                    <Button Content="Insert Timeline" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertTimelineBtn_Click"
+                                            local:RibbonTooltip.Title="Insert Timeline"
+                                            local:RibbonTooltip.KeyTip="IT"
+                                            local:RibbonTooltip.Description="Create a timeline connected to the selected PivotTable date field."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Filter" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Refresh" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
+                                            local:RibbonTooltip.Title="Refresh"
+                                            local:RibbonTooltip.KeyTip="R"
+                                            local:RibbonTooltip.Description="Refresh the selected PivotTable."/>
+                                    <Button Content="Change Source" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChangeDataSourceBtn_Click"
+                                            local:RibbonTooltip.Title="Change Data Source"
+                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.Description="Change the source range for the selected PivotTable."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Clear" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="Clear"
+                                            local:RibbonTooltip.KeyTip="C"
+                                            local:RibbonTooltip.Description="Clearing PivotTable fields from the ribbon is deferred in Freexcel."/>
+                                    <Button Content="Select" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="Select"
+                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.Description="PivotTable selection shortcuts are deferred in Freexcel."/>
+                                    <Button Content="Move PivotTable" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="Move PivotTable"
+                                            local:RibbonTooltip.KeyTip="M"
+                                            local:RibbonTooltip.Description="Moving PivotTables from the ribbon is deferred in Freexcel."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Actions" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Calc Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedFieldBtn_Click"
+                                            local:RibbonTooltip.Title="Calculated Field"
+                                            local:RibbonTooltip.KeyTip="CF"
+                                            local:RibbonTooltip.Description="Create or replace a calculated field in the selected PivotTable."/>
+                                    <Button Content="Calc Item" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedItemBtn_Click"
+                                            local:RibbonTooltip.Title="Calculated Item"
+                                            local:RibbonTooltip.KeyTip="CI"
+                                            local:RibbonTooltip.Description="Create or replace a calculated item in the selected PivotTable."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Calculations" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
                             <Grid Style="{StaticResource RibbonGroupPanel}">
@@ -2803,28 +2885,19 @@
                                             local:RibbonTooltip.Title="PivotChart Options"
                                             local:RibbonTooltip.KeyTip="CO"
                                             local:RibbonTooltip.Description="Change PivotChart style and field button visibility."/>
-                                    <Button Content="Insert Slicer" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
-                                            local:RibbonTooltip.Title="Insert Slicer"
-                                            local:RibbonTooltip.KeyTip="IS"
-                                            local:RibbonTooltip.Description="Create a slicer connected to the selected PivotTable field."/>
-                                    <Button Content="Insert Timeline" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertTimelineBtn_Click"
-                                            local:RibbonTooltip.Title="Insert Timeline"
-                                            local:RibbonTooltip.KeyTip="IT"
-                                            local:RibbonTooltip.Description="Create a timeline connected to the selected PivotTable date field."/>
-                                    <Button Content="Change Source" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChangeDataSourceBtn_Click"
-                                            local:RibbonTooltip.Title="Change Data Source"
-                                            local:RibbonTooltip.KeyTip="S"
-                                            local:RibbonTooltip.Description="Change the source range for the selected PivotTable."/>
-                                    <Button Content="Calc Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedFieldBtn_Click"
-                                            local:RibbonTooltip.Title="Calculated Field"
-                                            local:RibbonTooltip.KeyTip="CF"
-                                            local:RibbonTooltip.Description="Create or replace a calculated field in the selected PivotTable."/>
-                                    <Button Content="Calc Item" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedItemBtn_Click"
-                                            local:RibbonTooltip.Title="Calculated Item"
-                                            local:RibbonTooltip.KeyTip="CI"
-                                            local:RibbonTooltip.Description="Create or replace a calculated item in the selected PivotTable."/>
                                 </StackPanel>
-                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data" Style="{StaticResource GroupLbl}"/></Border>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tools" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Field List" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldListBtn_Click"
+                                            local:RibbonTooltip.Title="Field List"
+                                            local:RibbonTooltip.KeyTip="FL"
+                                            local:RibbonTooltip.Description="Show or hide the PivotTable Fields task pane."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Show" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>
@@ -2864,10 +2937,6 @@
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <StackPanel>
-                                        <Button Content="Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotStyleGalleryBtn_Click"
-                                                local:RibbonTooltip.Title="PivotTable Styles"
-                                                local:RibbonTooltip.KeyTip="Y"
-                                                local:RibbonTooltip.Description="Open PivotTable layout and style options."/>
                                         <Button Content="Banded Rows" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBandedRowsBtn_Click"
                                                 local:RibbonTooltip.Title="Banded Rows"
                                                 local:RibbonTooltip.KeyTip="R"
@@ -2889,6 +2958,17 @@
                                     </StackPanel>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable Style Options" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotStyleGalleryBtn_Click"
+                                            local:RibbonTooltip.Title="PivotTable Styles"
+                                            local:RibbonTooltip.KeyTip="Y"
+                                            local:RibbonTooltip.Description="Open PivotTable layout and style options."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable Styles" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                         </StackPanel>
                     </ScrollViewer>

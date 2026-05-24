@@ -69,7 +69,7 @@ public sealed partial class XlsxFileAdapter
             IReadOnlySet<string>? sheetsToPreserve = null;
             if (SourcePackages.TryGetValue(workbook, out var sourcePackage))
             {
-                using var sourceStream = new MemoryStream(sourcePackage.Bytes, writable: false);
+                using var sourceStream = sourcePackage.OpenRead();
                 sheetsToPreserve = XlsxHeaderFooterPictureReaderWriter.FindSheetsWithUnchangedSourcePictures(
                     sourceStream,
                     workbook);

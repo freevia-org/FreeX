@@ -156,7 +156,7 @@ public sealed class RecalcEngine
 
         foreach (var sheet in workbook.Sheets)
         {
-            foreach (var (addr, cell) in sheet.GetUsedCells())
+            foreach (var (addr, cell) in sheet.EnumerateCells())
             {
                 if (!cell.HasFormula || cell.FormulaText is null)
                     continue;
@@ -180,9 +180,9 @@ public sealed class RecalcEngine
     {
         RebuildFormulaDependencies(workbook);
         var formulaCells = workbook.Sheets
-            .SelectMany(sheet => sheet.GetUsedCells())
-            .Where(pair => pair.Value.HasFormula)
-            .Select(pair => pair.Key)
+            .SelectMany(sheet => sheet.EnumerateCells())
+            .Where(entry => entry.Cell.HasFormula)
+            .Select(entry => entry.Address)
             .ToList();
 
         return Recalculate(workbook, formulaCells);
@@ -196,9 +196,9 @@ public sealed class RecalcEngine
         if (sheet is null)
             return new RecalcReport([], [], []);
 
-        var formulaCells = sheet.GetUsedCells()
-            .Where(pair => pair.Value.HasFormula)
-            .Select(pair => pair.Key)
+        var formulaCells = sheet.EnumerateCells()
+            .Where(entry => entry.Cell.HasFormula)
+            .Select(entry => entry.Address)
             .ToList();
 
         var report = Recalculate(workbook, formulaCells);

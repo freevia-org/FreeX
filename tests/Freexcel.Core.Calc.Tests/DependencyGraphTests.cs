@@ -9,6 +9,17 @@ namespace Freexcel.Core.Calc.Tests;
 public class DependencyGraphTests
 {
     [Fact]
+    public void RecalcEngine_ScansFormulaCellsWithoutCopyingUsedCellDictionaries()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.Calc", "RecalcEngine.cs"));
+
+        source.Should().NotContain(
+            "GetUsedCells()",
+            "full and sheet recalculation should stream occupied cells instead of allocating dictionaries");
+    }
+
+    [Fact]
     public void SetDependencies_TracksDependents()
     {
         var graph = new DependencyGraph();
@@ -73,6 +84,20 @@ public class DependencyGraphTests
         var plan = graph.GetRecalcOrder([a1]);
 
         plan.CyclicCells.Should().NotBeEmpty();
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(parts));
     }
 }
 
