@@ -147,6 +147,33 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialog_TryCreateResult_RejectsInvalidNonBlankStopValue()
+    {
+        FillSeriesStepDialog.TryCreateResult(
+                FillSeriesDirection.Columns,
+                FillSeriesType.Linear,
+                FillSeriesDateUnit.Day,
+                "1",
+                "not-a-number",
+                out _,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Contain("stop");
+    }
+
+    [Fact]
+    public void FillSeriesStepDialogInvalidStop_ShowsOwnedWarningAndRefocusesStopInput()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("FocusInvalidStopInput();");
+        source.Should().Contain("private void FocusInvalidStopInput()");
+        source.Should().Contain("Enter a numeric stop value or leave it blank.");
+    }
+
+    [Fact]
     public void ZoomDialog_TryCreateResult_AcceptsPercentWithinExcelRange()
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
