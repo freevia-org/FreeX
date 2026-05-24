@@ -53,6 +53,7 @@ internal sealed class NameDefinitionDialog : Window
             _requestRangeSelection?.Invoke(RangeSelectionRequest);
             _refersToBox.Focus();
             _refersToBox.SelectAll();
+            Keyboard.Focus(_refersToBox);
         };
 
         Content = CreateContent();
