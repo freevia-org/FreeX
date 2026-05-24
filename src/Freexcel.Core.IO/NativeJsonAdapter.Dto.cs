@@ -17,6 +17,7 @@ public sealed partial class NativeJsonAdapter
         public int? FirstVisibleSheetIndex { get; set; }
         public int? ActiveSheetIndex { get; set; }
         public WorkbookFileSharingDto? FileSharing { get; set; }
+        public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
@@ -54,6 +55,15 @@ public sealed partial class NativeJsonAdapter
         public bool? ReadOnlyRecommended { get; set; }
         public string? UserName { get; set; }
         public string? ReservationPassword { get; set; }
+    }
+
+    private class WorkbookFileRecoveryPropertiesDto
+    {
+        public bool? AutoRecover { get; set; }
+        public bool? CrashSave { get; set; }
+        public bool? DataExtractLoad { get; set; }
+        public bool? RepairLoad { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
     private class NamedRangeDto

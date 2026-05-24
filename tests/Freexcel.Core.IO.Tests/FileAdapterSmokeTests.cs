@@ -82,6 +82,33 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookFileRecoveryProperties()
+    {
+        var workbook = new Workbook("FileRecoveryNativeJson");
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true,
+            CrashSave = true,
+            NativeAttributes = new Dictionary<string, string> { ["customRecoveryFlag"] = "keep" }
+        });
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            DataExtractLoad = true,
+            RepairLoad = false
+        });
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.FileRecoveryProperties.Should().BeEquivalentTo(workbook.FileRecoveryProperties);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -11522,6 +11549,13 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.FileRecoveryProperties.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true,
+            CrashSave = true,
+            RepairLoad = false,
+            NativeAttributes = new Dictionary<string, string> { ["customRecoveryFlag"] = "keep" }
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11535,6 +11569,7 @@ public partial class FileAdapterSmokeTests
         recovery.Should().NotBeNull();
         recovery!.Attribute("autoRecover")!.Value.Should().Be("1");
         recovery.Attribute("crashSave")!.Value.Should().Be("1");
+        recovery.Attribute("customRecoveryFlag")!.Value.Should().Be("keep");
     }
 
     [Fact]
@@ -11565,6 +11600,11 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.FileRecoveryProperties.Should().HaveCount(2);
+        loaded.FileRecoveryProperties[0].AutoRecover.Should().BeTrue();
+        loaded.FileRecoveryProperties[0].CrashSave.Should().BeTrue();
+        loaded.FileRecoveryProperties[1].DataExtractLoad.Should().BeTrue();
+        loaded.FileRecoveryProperties[1].RepairLoad.Should().BeTrue();
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();

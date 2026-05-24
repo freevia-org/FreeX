@@ -131,6 +131,57 @@ internal static class XlsxWorkbookMetadataWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
     }
 
+    public static void SaveFileRecoveryProperties(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        root.Elements(workbookNs + "fileRecoveryPr").Remove();
+        if (workbook.FileRecoveryProperties.Count == 0)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        var recoveryElements = workbook.FileRecoveryProperties.Select(item =>
+        {
+            var element = new XElement(workbookNs + "fileRecoveryPr");
+            foreach (var attribute in item.NativeAttributes)
+            {
+                if (!string.IsNullOrWhiteSpace(attribute.Key) &&
+                    attribute.Key is not "autoRecover" and not "crashSave" and not "dataExtractLoad" and not "repairLoad")
+                {
+                    element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                }
+            }
+
+            SetBooleanAttribute(element, "autoRecover", item.AutoRecover);
+            SetBooleanAttribute(element, "crashSave", item.CrashSave);
+            SetBooleanAttribute(element, "dataExtractLoad", item.DataExtractLoad);
+            SetBooleanAttribute(element, "repairLoad", item.RepairLoad);
+            return element;
+        }).ToArray();
+
+        var extensionList = root.Element(workbookNs + "extLst");
+        if (extensionList is not null)
+            extensionList.AddBeforeSelf(recoveryElements);
+        else
+            root.Add(recoveryElements);
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+
+        static void SetBooleanAttribute(XElement element, string name, bool? value) =>
+            element.SetAttributeValue(name, value is { } boolValue ? boolValue ? "1" : "0" : null);
+    }
+
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);

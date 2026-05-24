@@ -20,6 +20,10 @@ public sealed partial class NativeJsonAdapter
             FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, Math.Max(0, workbook.Sheets.Count - 1)),
             ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.ActiveSheetIndex, Math.Max(0, workbook.Sheets.Count - 1)),
             FileSharing = FromWorkbookFileSharing(workbook.FileSharing),
+            FileRecoveryProperties = workbook.FileRecoveryProperties
+                .Select(FromWorkbookFileRecoveryProperties)
+                .OfType<WorkbookFileRecoveryPropertiesDto>()
+                .ToList(),
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
@@ -265,6 +269,33 @@ public sealed partial class NativeJsonAdapter
             ReadOnlyRecommended = model.ReadOnlyRecommended,
             UserName = userName,
             ReservationPassword = reservationPassword
+        };
+    }
+
+    private static WorkbookFileRecoveryPropertiesDto? FromWorkbookFileRecoveryProperties(WorkbookFileRecoveryPropertiesModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = (model.NativeAttributes ?? new Dictionary<string, string>())
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        if (model.AutoRecover is null &&
+            model.CrashSave is null &&
+            model.DataExtractLoad is null &&
+            model.RepairLoad is null &&
+            nativeAttributes.Count == 0)
+        {
+            return null;
+        }
+
+        return new WorkbookFileRecoveryPropertiesDto
+        {
+            AutoRecover = model.AutoRecover,
+            CrashSave = model.CrashSave,
+            DataExtractLoad = model.DataExtractLoad,
+            RepairLoad = model.RepairLoad,
+            NativeAttributes = nativeAttributes
         };
     }
 }
