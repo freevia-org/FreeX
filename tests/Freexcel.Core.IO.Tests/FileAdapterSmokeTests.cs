@@ -58,6 +58,30 @@ public partial class FileAdapterSmokeTests
     // ── XLSX ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookFileSharing()
+    {
+        var workbook = new Workbook("FileSharingNativeJson")
+        {
+            FileSharing = new WorkbookFileSharingModel
+            {
+                ReadOnlyRecommended = true,
+                UserName = "FreexcelTest",
+                ReservationPassword = "ABCD"
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.FileSharing.Should().BeEquivalentTo(workbook.FileSharing);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -11462,6 +11486,11 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.FileSharing.Should().BeEquivalentTo(new WorkbookFileSharingModel
+        {
+            ReadOnlyRecommended = true,
+            UserName = "FreexcelTest"
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11475,6 +11504,7 @@ public partial class FileAdapterSmokeTests
         fileSharing.Should().NotBeNull();
         fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1");
         fileSharing.Attribute("userName")!.Value.Should().Be("FreexcelTest");
+        fileSharing.Attribute("revisionsPassword")!.Value.Should().Be("1234");
     }
 
     [Fact]

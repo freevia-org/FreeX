@@ -16,6 +16,7 @@ public sealed partial class NativeJsonAdapter
         public int? SheetTabRatio { get; set; }
         public int? FirstVisibleSheetIndex { get; set; }
         public int? ActiveSheetIndex { get; set; }
+        public WorkbookFileSharingDto? FileSharing { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
@@ -46,6 +47,13 @@ public sealed partial class NativeJsonAdapter
     {
         public WorkbookThemeColorSlot Slot { get; set; }
         public string? Color { get; set; }
+    }
+
+    private class WorkbookFileSharingDto
+    {
+        public bool? ReadOnlyRecommended { get; set; }
+        public string? UserName { get; set; }
+        public string? ReservationPassword { get; set; }
     }
 
     private class NamedRangeDto
