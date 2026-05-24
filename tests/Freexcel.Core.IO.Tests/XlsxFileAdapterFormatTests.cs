@@ -13,6 +13,7 @@ public sealed class XlsxFileAdapterFormatTests
         var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
+        adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
     }
 
