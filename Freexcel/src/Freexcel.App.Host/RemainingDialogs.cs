@@ -331,6 +331,14 @@ public sealed class SheetNameDialog : Window
             Result = CreateResult(_nameBox.Text);
             DialogResult = true;
         });
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 
     public static SheetNameDialogResult CreateResult(string sheetName) => new(sheetName.Trim());
