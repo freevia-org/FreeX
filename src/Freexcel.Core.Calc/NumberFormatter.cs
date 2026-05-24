@@ -99,6 +99,18 @@ public static partial class NumberFormatter
             return text;
         }
 
+        if (TryGetFillDirective(format, out var fillChar, out var fillAfterNumber))
+        {
+            var fill = new string(fillChar, targetWidthCharacters.Value - text.Length);
+            if (fillAfterNumber)
+                return text + fill;
+
+            int directiveFillIndex = FindAccountingFillInsertionIndex(text);
+            return directiveFillIndex < 0
+                ? text.PadLeft(targetWidthCharacters.Value, fillChar)
+                : text.Insert(directiveFillIndex, fill);
+        }
+
         int fillIndex = FindAccountingFillInsertionIndex(text);
         if (fillIndex < 0)
             return text.PadLeft(targetWidthCharacters.Value);
@@ -120,6 +132,42 @@ public static partial class NumberFormatter
 
             if (!inQuote && (c == '_' || c == '*'))
                 return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetFillDirective(string format, out char fillChar, out bool fillAfterNumber)
+    {
+        fillChar = ' ';
+        fillAfterNumber = false;
+        bool inQuote = false;
+        int firstNumericPlaceholder = -1;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && firstNumericPlaceholder < 0 && IsNumericPlaceholder(c))
+                firstNumericPlaceholder = i;
+
+            if (!inQuote && c == '*' && i + 1 < format.Length)
+            {
+                fillChar = format[i + 1];
+                fillAfterNumber = firstNumericPlaceholder >= 0;
+                return true;
+            }
         }
 
         return false;
