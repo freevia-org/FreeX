@@ -111,6 +111,18 @@ internal static class XlsxStructuredTableWriter
             new XAttribute("displayName", string.IsNullOrWhiteSpace(table.DisplayName) ? table.Name : table.DisplayName),
             new XAttribute("ref", table.Range.ToString()),
             new XAttribute("totalsRowShown", table.TotalsRowShown ? "1" : "0"));
+        if (table.HeaderRowCount is { } headerRowCount)
+            root.SetAttributeValue("headerRowCount", headerRowCount.ToString(CultureInfo.InvariantCulture));
+        if (table.TotalsRowCount is { } totalsRowCount)
+            root.SetAttributeValue("totalsRowCount", totalsRowCount.ToString(CultureInfo.InvariantCulture));
+        if (table.InsertRow is { } insertRow)
+            root.SetAttributeValue("insertRow", insertRow ? "1" : "0");
+        if (table.InsertRowShift is { } insertRowShift)
+            root.SetAttributeValue("insertRowShift", insertRowShift ? "1" : "0");
+        if (table.Published is { } published)
+            root.SetAttributeValue("published", published ? "1" : "0");
+        if (!string.IsNullOrWhiteSpace(table.Comment))
+            root.SetAttributeValue("comment", table.Comment);
         foreach (var (name, value) in table.NativeAttributes ?? new Dictionary<string, string>())
         {
             if (!string.IsNullOrWhiteSpace(name) && root.Attribute(name) is null)
