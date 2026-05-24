@@ -29,7 +29,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return new CommandOutcome(false, "Slicer is not connected to a PivotTable field.");
         }
 
-        var target = FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
+        var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
         if (target is null)
             return new CommandOutcome(false, "Connected PivotTable was not found.");
 
@@ -38,7 +38,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
-        var headers = ReadPivotHeaders(sourceSheet, pivotTable);
+        var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
         var sourceFieldIndex = headers.FindIndex(header =>
             string.Equals(header, slicer.SourceFieldName, StringComparison.OrdinalIgnoreCase));
         if (sourceFieldIndex < 0)
@@ -49,9 +49,9 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         slicer.SelectedItems.Clear();
         slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.CurrentCultureIgnoreCase));
-        ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, slicer.SelectedItems);
-        ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, slicer.SelectedItems);
-        ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
+        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, slicer.SelectedItems);
+        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, slicer.SelectedItems);
+        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
@@ -61,7 +61,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
     {
         var slicer = ctx.Workbook.Slicers.FirstOrDefault(item =>
             string.Equals(item.Name, _slicerName, StringComparison.OrdinalIgnoreCase));
-        var target = slicer?.SourcePivotTableName is null ? null : FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
+        var target = slicer?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
         if (slicer is not null && target is { } connected && _snapshot is not null)
         {
             _snapshot.Restore(slicer, connected.PivotTable);
@@ -70,48 +70,6 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
 
         _snapshot = null;
         _targetSnapshot = null;
-    }
-
-    private static (Sheet Sheet, PivotTableModel PivotTable)? FindConnectedPivotTable(Workbook workbook, string pivotTableName)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
-            if (pivotTable is not null)
-                return (sheet, pivotTable);
-        }
-
-        return null;
-    }
-
-    private static List<string> ReadPivotHeaders(Sheet sheet, PivotTableModel pivotTable)
-    {
-        var headers = new List<string>();
-        for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
-        {
-            var value = sheet.GetValue(pivotTable.SourceRange.Start.Row, col);
-            headers.Add(value is TextValue text && !string.IsNullOrWhiteSpace(text.Value)
-                ? text.Value
-                : $"Field{headers.Count + 1}");
-        }
-
-        return headers;
-    }
-
-    private static void ReplaceSelectedItems(List<PivotFieldModel> fields, int sourceFieldIndex, IReadOnlyList<string> selectedItems)
-    {
-        for (var index = 0; index < fields.Count; index++)
-        {
-            if (fields[index].SourceFieldIndex != sourceFieldIndex)
-                continue;
-
-            fields[index] = fields[index] with
-            {
-                SelectedItem = selectedItems.Count == 1 ? selectedItems[0] : null,
-                SelectedItems = selectedItems.Count == 0 ? null : selectedItems.ToList()
-            };
-        }
     }
 
     private sealed record SlicerSelectionSnapshot(
@@ -172,7 +130,7 @@ public sealed class AddSlicerCommand : IWorkbookCommand
         if (ctx.Workbook.Slicers.Any(slicer => string.Equals(slicer.Name, _slicerName, StringComparison.OrdinalIgnoreCase)))
             return new CommandOutcome(false, "A slicer with that name already exists.");
 
-        var target = FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
+        var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
         if (target is null)
             return new CommandOutcome(false, "Connected PivotTable was not found.");
         if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
@@ -181,14 +139,14 @@ public sealed class AddSlicerCommand : IWorkbookCommand
             return objectProtectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(target.Value.PivotTable.SourceRange.Start.Sheet) ?? target.Value.Sheet;
-        var headers = ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
+        var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
         if (!headers.Contains(_sourceFieldName, StringComparer.CurrentCultureIgnoreCase))
             return new CommandOutcome(false, "Connected PivotTable field was not found.");
 
         var slicer = new SlicerModel
         {
             Name = _slicerName.Trim(),
-            CacheName = $"Slicer_{SanitizeCacheName(_slicerName)}",
+            CacheName = $"Slicer_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_slicerName, "Slicer")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
             SourceFieldName = headers.First(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase))
         };
@@ -204,39 +162,6 @@ public sealed class AddSlicerCommand : IWorkbookCommand
         _addedSlicer = null;
     }
 
-    private static (Sheet Sheet, PivotTableModel PivotTable)? FindConnectedPivotTable(Workbook workbook, string pivotTableName)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
-            if (pivotTable is not null)
-                return (sheet, pivotTable);
-        }
-
-        return null;
-    }
-
-    private static List<string> ReadPivotHeaders(Sheet sheet, PivotTableModel pivotTable)
-    {
-        var headers = new List<string>();
-        for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
-        {
-            var value = sheet.GetValue(pivotTable.SourceRange.Start.Row, col);
-            headers.Add(value is TextValue text && !string.IsNullOrWhiteSpace(text.Value)
-                ? text.Value
-                : $"Field{headers.Count + 1}");
-        }
-
-        return headers;
-    }
-
-    private static string SanitizeCacheName(string name)
-    {
-        var chars = name.Trim().Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
-        var sanitized = new string(chars).Trim('_');
-        return string.IsNullOrWhiteSpace(sanitized) ? "Slicer" : sanitized;
-    }
 }
 
 public sealed class SetTimelineRangeCommand : IWorkbookCommand
@@ -273,7 +198,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         if (startDate > endDate)
             return new CommandOutcome(false, "Timeline start date must be on or before the end date.");
 
-        var target = FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
+        var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
         if (target is null)
             return new CommandOutcome(false, "Connected PivotTable was not found.");
 
@@ -282,7 +207,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             return protectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
-        var headers = ReadPivotHeaders(sourceSheet, pivotTable);
+        var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
         var sourceFieldIndex = headers.FindIndex(header =>
             string.Equals(header, timeline.SourceFieldName, StringComparison.OrdinalIgnoreCase));
         if (sourceFieldIndex < 0)
@@ -294,9 +219,9 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         timeline.SelectedStartDate = _selectedStartDate;
         timeline.SelectedEndDate = _selectedEndDate;
         var selectedItems = ReadTimelineSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
-        ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, selectedItems);
-        ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
-        ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, selectedItems);
+        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, selectedItems);
+        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
+        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, selectedItems);
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
@@ -306,7 +231,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
     {
         var timeline = ctx.Workbook.Timelines.FirstOrDefault(item =>
             string.Equals(item.Name, _timelineName, StringComparison.OrdinalIgnoreCase));
-        var target = timeline?.SourcePivotTableName is null ? null : FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
+        var target = timeline?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
         if (timeline is not null && target is { } connected && _snapshot is not null)
         {
             _snapshot.Restore(timeline, connected.PivotTable);
@@ -326,48 +251,6 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
             out var parsed)
             ? parsed
             : fallback;
-
-    private static (Sheet Sheet, PivotTableModel PivotTable)? FindConnectedPivotTable(Workbook workbook, string pivotTableName)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
-            if (pivotTable is not null)
-                return (sheet, pivotTable);
-        }
-
-        return null;
-    }
-
-    private static List<string> ReadPivotHeaders(Sheet sheet, PivotTableModel pivotTable)
-    {
-        var headers = new List<string>();
-        for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
-        {
-            var value = sheet.GetValue(pivotTable.SourceRange.Start.Row, col);
-            headers.Add(value is TextValue text && !string.IsNullOrWhiteSpace(text.Value)
-                ? text.Value
-                : $"Field{headers.Count + 1}");
-        }
-
-        return headers;
-    }
-
-    private static void ReplaceSelectedItems(List<PivotFieldModel> fields, int sourceFieldIndex, IReadOnlyList<string> selectedItems)
-    {
-        for (var index = 0; index < fields.Count; index++)
-        {
-            if (fields[index].SourceFieldIndex != sourceFieldIndex)
-                continue;
-
-            fields[index] = fields[index] with
-            {
-                SelectedItem = selectedItems.Count == 1 ? selectedItems[0] : null,
-                SelectedItems = selectedItems.Count == 0 ? null : selectedItems.ToList()
-            };
-        }
-    }
 
     private static IReadOnlyList<string> ReadTimelineSelectedItems(
         Sheet sheet,
@@ -474,7 +357,7 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         if (ctx.Workbook.Timelines.Any(timeline => string.Equals(timeline.Name, _timelineName, StringComparison.OrdinalIgnoreCase)))
             return new CommandOutcome(false, "A timeline with that name already exists.");
 
-        var target = FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
+        var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, _pivotTableName);
         if (target is null)
             return new CommandOutcome(false, "Connected PivotTable was not found.");
         if (CommandGuards.RejectIfProtectedWithoutPermission(target.Value.Sheet, SheetProtectionPermission.UsePivotTableReports) is { } protectedOutcome)
@@ -483,7 +366,7 @@ public sealed class AddTimelineCommand : IWorkbookCommand
             return objectProtectedOutcome;
 
         var sourceSheet = ctx.Workbook.GetSheet(target.Value.PivotTable.SourceRange.Start.Sheet) ?? target.Value.Sheet;
-        var headers = ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
+        var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, target.Value.PivotTable);
         var sourceFieldIndex = headers.FindIndex(header => string.Equals(header, _sourceFieldName, StringComparison.CurrentCultureIgnoreCase));
         if (sourceFieldIndex < 0)
             return new CommandOutcome(false, "Connected PivotTable field was not found.");
@@ -492,7 +375,7 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         var timeline = new TimelineModel
         {
             Name = _timelineName.Trim(),
-            CacheName = $"Timeline_{SanitizeCacheName(_timelineName)}",
+            CacheName = $"Timeline_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_timelineName, "Timeline")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
             SourceFieldName = headers[sourceFieldIndex],
             StartDate = dateBounds.Start,
@@ -508,33 +391,6 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         if (_addedTimeline is not null)
             ctx.Workbook.Timelines.Remove(_addedTimeline);
         _addedTimeline = null;
-    }
-
-    private static (Sheet Sheet, PivotTableModel PivotTable)? FindConnectedPivotTable(Workbook workbook, string pivotTableName)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
-                string.Equals(pivot.Name, pivotTableName, StringComparison.OrdinalIgnoreCase));
-            if (pivotTable is not null)
-                return (sheet, pivotTable);
-        }
-
-        return null;
-    }
-
-    private static List<string> ReadPivotHeaders(Sheet sheet, PivotTableModel pivotTable)
-    {
-        var headers = new List<string>();
-        for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
-        {
-            var value = sheet.GetValue(pivotTable.SourceRange.Start.Row, col);
-            headers.Add(value is TextValue text && !string.IsNullOrWhiteSpace(text.Value)
-                ? text.Value
-                : $"Field{headers.Count + 1}");
-        }
-
-        return headers;
     }
 
     private static (string? Start, string? End) ReadDateBounds(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
@@ -572,11 +428,5 @@ public sealed class AddTimelineCommand : IWorkbookCommand
         }
     }
 
-    private static string SanitizeCacheName(string name)
-    {
-        var chars = name.Trim().Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
-        var sanitized = new string(chars).Trim('_');
-        return string.IsNullOrWhiteSpace(sanitized) ? "Timeline" : sanitized;
-    }
 }
 
