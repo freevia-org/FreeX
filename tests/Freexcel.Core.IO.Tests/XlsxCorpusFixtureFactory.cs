@@ -1008,7 +1008,12 @@ internal static class XlsxCorpusFixtureFactory
             PackagePart = "xl/pivotCache/pivotCacheDefinition2.xml",
             RefreshOnLoad = true,
             PreserveSourceSortFilter = false,
-            RefreshedBy = "Freexcel Corpus"
+            RecordCount = 3,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4,
+            RefreshedVersion = 8,
+            RefreshedBy = "Freexcel Corpus",
+            RefreshedDateIso = "2026-05-24T12:34:56Z"
         };
         cache.Fields.Add(new PivotCacheFieldModel("Region", ContainsString: true, SharedItems: ["North", "South"]));
         cache.Fields.Add(new PivotCacheFieldModel("Category", ContainsString: true, SharedItems: ["Hardware", "Software", "Services"]));
@@ -1448,7 +1453,10 @@ internal static class XlsxCorpusFixtureFactory
             SourceType = PivotCacheSourceType.WorksheetRange,
             SourceSheetName = sheet.Name,
             SourceReference = "A1:B3",
-            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml"
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml",
+            RecordCount = 2,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4
         };
         cache.Fields.Add(new PivotCacheFieldModel("Category"));
         cache.Fields.Add(new PivotCacheFieldModel("Amount", 4));
