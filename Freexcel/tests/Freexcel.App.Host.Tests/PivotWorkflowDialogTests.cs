@@ -819,6 +819,11 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Name and formula");
         source.Should().Contain("Formula:");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
         source.Should().NotContain("Use field names in formulas");
         source.Should().NotContain("Calculated fields are added to the Values area");
     }
@@ -862,6 +867,11 @@ public sealed class PivotWorkflowDialogTests
         var source = ReadPivotWorkflowSource();
 
         source.Should().Contain("Field and item");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
         source.Should().NotContain("Calculated items are evaluated within the selected field");
         source.Should().Contain("Source _field");
         source.Should().Contain("Item _formula");
