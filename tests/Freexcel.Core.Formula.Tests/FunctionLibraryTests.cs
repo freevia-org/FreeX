@@ -25,6 +25,24 @@ public class FunctionLibraryTests
         return sheet;
     }
 
+    private static void AssertTextColumn(ScalarValue value, params string[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.At(row + 1, 1).Should().Be(new TextValue(expected[row]));
+    }
+
+    private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.At(row + 1, 1).Should().Be(expected[row]);
+    }
+
     // ── IFERROR ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -957,6 +975,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TextAndValue_RangeArgument_SpillsElementwise()
+    {
+        var textSheet = MakeSheet(
+            (1, 1, new TextValue(" apple ")),
+            (2, 1, new TextValue("BANANA")));
+        AssertTextColumn(_eval.Evaluate("=TEXT(A1:A2,\"@\")", textSheet), " apple ", "BANANA");
+
+        var valueSheet = MakeSheet(
+            (1, 1, new TextValue("10")),
+            (2, 1, new TextValue("x")));
+        AssertColumn(_eval.Evaluate("=VALUE(A1:A2)", valueSheet), new NumberValue(10), ErrorValue.Value);
+    }
+
+    [Fact]
     public void Trim_RemovesLeadingTrailing()
     {
         var sheet = MakeSheet();
@@ -1041,6 +1073,20 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
 
         _eval.Evaluate("=PROPER(A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void TextCaseAndCleanup_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue(" apple ")),
+            (2, 1, new TextValue("BANANA")));
+
+        AssertTextColumn(_eval.Evaluate("=UPPER(A1:A2)", sheet), " APPLE ", "BANANA");
+        AssertTextColumn(_eval.Evaluate("=LOWER(A1:A2)", sheet), " apple ", "banana");
+        AssertTextColumn(_eval.Evaluate("=PROPER(A1:A2)", sheet), " Apple ", "Banana");
+        AssertTextColumn(_eval.Evaluate("=TRIM(A1:A2)", sheet), "apple", "BANANA");
+        AssertTextColumn(_eval.Evaluate("=CLEAN(A1:A2)", sheet), " apple ", "BANANA");
     }
 
     // ── SUBSTITUTE ─────────────────────────────────────────────────────────────
@@ -1199,6 +1245,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Find_RangeWithinTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=FIND(\"p\",A1:A2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new NumberValue(2));
+        range.At(2, 1).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Search_CaseInsensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -1234,6 +1296,22 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=SEARCH(\"xyz\",\"hello\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Search_RangeWithinTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=SEARCH(\"a\",A1:A2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new NumberValue(1));
+        range.At(2, 1).Should().Be(new NumberValue(2));
     }
 
     // ── MID ───────────────────────────────────────────────────────────────────

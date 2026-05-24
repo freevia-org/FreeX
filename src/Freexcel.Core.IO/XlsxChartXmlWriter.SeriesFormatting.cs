@@ -43,7 +43,10 @@ internal static partial class XlsxChartXmlWriter
         || format.ShowSeriesName is not null
         || format.ShowLegendKey is not null
         || format.ShowPercentage is not null
-        || format.ShowBubbleSize is not null;
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
 
     private static XElement ToPointDataLabelXml(
         ChartPointDataLabelFormat format,
@@ -57,12 +60,16 @@ internal static partial class XlsxChartXmlWriter
             format.Position is { } position
                 ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
                 : null,
+            ToPointDataLabelNumberFormatXml(format, chartNs),
             ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs),
             ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs),
             ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs),
             ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs),
             ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs),
             ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs),
+            format.SeparatorText is { } separator
+                ? new XElement(chartNs + "separator", separator)
+                : null,
             ToShapeProperties(
                 chartNs,
                 drawingNs,
@@ -77,6 +84,17 @@ internal static partial class XlsxChartXmlWriter
         value is { } flag
             ? new XElement(chartNs + name, new XAttribute("val", flag ? "1" : "0"))
             : null;
+
+    private static XElement? ToPointDataLabelNumberFormatXml(ChartPointDataLabelFormat format, XNamespace chartNs) =>
+        string.IsNullOrEmpty(format.NumberFormatCode) && format.NumberFormatSourceLinked is null
+            ? null
+            : new XElement(chartNs + "numFmt",
+                string.IsNullOrEmpty(format.NumberFormatCode)
+                    ? null
+                    : new XAttribute("formatCode", format.NumberFormatCode),
+                format.NumberFormatSourceLinked is { } sourceLinked
+                    ? new XAttribute("sourceLinked", sourceLinked ? "1" : "0")
+                    : null);
 
     private static XElement? ToPointDataLabelTextProperties(
         ChartPointDataLabelFormat format,
@@ -123,13 +141,27 @@ internal static partial class XlsxChartXmlWriter
             ToOptionalTrendlineDoubleXml("intercept", chart.TrendlineIntercept, chartNs),
             ToTrendlineShapeProperties(chart, chartNs, drawingNs),
             new XElement(chartNs + "dispEq", new XAttribute("val", chart.ShowTrendlineEquation ? "1" : "0")),
-            new XElement(chartNs + "dispRSqr", new XAttribute("val", chart.ShowTrendlineRSquared ? "1" : "0")));
+            new XElement(chartNs + "dispRSqr", new XAttribute("val", chart.ShowTrendlineRSquared ? "1" : "0")),
+            ToTrendlineLabelXml(chart, chartNs));
     }
 
     private static XElement? ToOptionalTrendlineDoubleXml(string name, double? value, XNamespace chartNs) =>
         value is { } number && double.IsFinite(number)
             ? new XElement(chartNs + name, new XAttribute("val", number.ToString(CultureInfo.InvariantCulture)))
             : null;
+
+    private static XElement? ToTrendlineLabelXml(ChartModel chart, XNamespace chartNs) =>
+        string.IsNullOrEmpty(chart.TrendlineLabelNumberFormatCode) &&
+        chart.TrendlineLabelNumberFormatSourceLinked is null
+            ? null
+            : new XElement(chartNs + "trendlineLbl",
+                new XElement(chartNs + "numFmt",
+                    string.IsNullOrEmpty(chart.TrendlineLabelNumberFormatCode)
+                        ? null
+                        : new XAttribute("formatCode", chart.TrendlineLabelNumberFormatCode),
+                    chart.TrendlineLabelNumberFormatSourceLinked is { } sourceLinked
+                        ? new XAttribute("sourceLinked", sourceLinked ? "1" : "0")
+                        : null));
 
     private static XElement? ToTrendlineShapeProperties(
         ChartModel chart,

@@ -107,6 +107,9 @@ public sealed partial class NativeJsonAdapter
         chart.TrendlineForward = ClampNullableDouble(chart.TrendlineForward, 0, 1000);
         chart.TrendlineBackward = ClampNullableDouble(chart.TrendlineBackward, 0, 1000);
         chart.TrendlineIntercept = chart.TrendlineIntercept is { } intercept && double.IsFinite(intercept) ? intercept : null;
+        chart.TrendlineLabelNumberFormatCode = string.IsNullOrWhiteSpace(chart.TrendlineLabelNumberFormatCode)
+            ? null
+            : chart.TrendlineLabelNumberFormatCode;
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
         chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
         chart.ErrorBarKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarKind, ChartErrorBarKind.StandardError);
@@ -149,6 +152,8 @@ public sealed partial class NativeJsonAdapter
             chart.TrendlineIntercept = null;
             chart.ShowTrendlineEquation = false;
             chart.ShowTrendlineRSquared = false;
+            chart.TrendlineLabelNumberFormatCode = null;
+            chart.TrendlineLabelNumberFormatSourceLinked = null;
             chart.TrendlineColor = null;
             chart.TrendlineThemeColor = null;
             chart.TrendlineThickness = 1.5;
@@ -347,5 +352,8 @@ public sealed partial class NativeJsonAdapter
         || format.ShowSeriesName is not null
         || format.ShowLegendKey is not null
         || format.ShowPercentage is not null
-        || format.ShowBubbleSize is not null;
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
 }

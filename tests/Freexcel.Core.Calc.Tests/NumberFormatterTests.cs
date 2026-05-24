@@ -748,4 +748,11 @@ public class NumberFormatterTests
 
         Assert.Equal("€1\u00A0234,50", result);
     }
+    [Fact]
+    public void Format_LcidDateToken_UsesLocalizedDayAndMonthNames()
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), "[$-0407]dddd, d. mmmm yyyy");
+
+        Assert.Equal("Montag, 1. Januar 2024", result);
+    }
 }

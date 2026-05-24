@@ -78,6 +78,7 @@ public partial class MainWindow
 
         if (SheetGrid.SelectedRange is not { } range)
         {
+            _toolbarVisualStateCache.Clear();
             _lastToolbarVisualState = null;
             UndoQatBtn.IsEnabled = canUndo;
             RedoQatBtn.IsEnabled = canRedo;
@@ -86,13 +87,21 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
         {
+            _toolbarVisualStateCache.Clear();
             _lastToolbarVisualState = null;
             UndoQatBtn.IsEnabled = canUndo;
             RedoQatBtn.IsEnabled = canRedo;
             return;
         }
-        var style = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
-        var state = ToolbarVisualState.From(style, canUndo, canRedo);
+        var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
+        if (_toolbarVisualStateCache.TryGetCurrent(styleId, canUndo, canRedo, out _))
+            return;
+
+        var state = _toolbarVisualStateCache.GetOrCreate(
+            styleId,
+            canUndo,
+            canRedo,
+            () => ToolbarVisualState.From(_workbook.GetStyle(styleId), canUndo, canRedo));
         if (state == _lastToolbarVisualState)
             return;
 

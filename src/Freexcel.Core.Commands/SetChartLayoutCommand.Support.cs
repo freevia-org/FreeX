@@ -108,6 +108,8 @@ public sealed partial class SetChartLayoutCommand
         chart.TrendlineOrder = 2;
         chart.ShowTrendlineEquation = false;
         chart.ShowTrendlineRSquared = false;
+        chart.TrendlineLabelNumberFormatCode = null;
+        chart.TrendlineLabelNumberFormatSourceLinked = null;
         chart.TrendlineColor = null;
         chart.TrendlineThemeColor = null;
         chart.TrendlineThickness = 1.5;
@@ -162,7 +164,10 @@ public sealed partial class SetChartLayoutCommand
         || format.ShowSeriesName is not null
         || format.ShowLegendKey is not null
         || format.ShowPercentage is not null
-        || format.ShowBubbleSize is not null;
+        || format.ShowBubbleSize is not null
+        || !string.IsNullOrEmpty(format.NumberFormatCode)
+        || format.NumberFormatSourceLinked is not null
+        || format.SeparatorText is not null;
 
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {

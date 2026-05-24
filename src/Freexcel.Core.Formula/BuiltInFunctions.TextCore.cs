@@ -15,8 +15,26 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue formatError) return formatError;
         var fmt = ToText(args[1]);
+        if (args[0] is RangeValue range) return MapTextFuncRange(range, fmt);
+        return TextFormatValue(args[0], fmt);
+    }
+
+    private static RangeValue MapTextFuncRange(RangeValue range, string fmt)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : TextFormatValue(value, fmt);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue TextFormatValue(ScalarValue val, string fmt)
+    {
         // Simple inline formatter (avoids depending on Freexcel.Core.Calc)
-        var val = args[0];
         if (TryCellNumber(val, out double value))
             return TextResult(FormatNumberInline(value, fmt));
         return TextResult(ToText(val));
@@ -170,26 +188,59 @@ public static partial class BuiltInFunctions
     private static ScalarValue Trim(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = MultiSpaceRegex.Replace(ToText(args[0]).Trim(), " ");
-        return TextResult(text);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, TrimText);
+        return TrimText(args[0]);
     }
 
     private static ScalarValue Upper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(ToText(args[0]).ToUpperInvariant());
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, UpperText);
+        return UpperText(args[0]);
     }
 
     private static ScalarValue Lower(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(ToText(args[0]).ToLowerInvariant());
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, LowerText);
+        return LowerText(args[0]);
     }
 
     private static ScalarValue Proper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ProperText);
+        return ProperText(args[0]);
+    }
+
+    private static RangeValue MapUnaryTextRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : map(value);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue TrimText(ScalarValue value)
+    {
+        var text = MultiSpaceRegex.Replace(ToText(value).Trim(), " ");
+        return TextResult(text);
+    }
+
+    private static ScalarValue UpperText(ScalarValue value) =>
+        TextResult(ToText(value).ToUpperInvariant());
+
+    private static ScalarValue LowerText(ScalarValue value) =>
+        TextResult(ToText(value).ToLowerInvariant());
+
+    private static ScalarValue ProperText(ScalarValue value)
+    {
+        var text = ToText(value);
         if (text.Length == 0) return new TextValue("");
         var sb = new System.Text.StringBuilder(text.Length);
         bool capitaliseNext = true;
@@ -248,8 +299,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var findText   = ToText(args[0]);
-        var withinText = ToText(args[1]);
+        var findText = ToText(args[0]);
         int startNum = 1;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
@@ -258,6 +308,25 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
+        if (args[1] is RangeValue range) return MapFindRange(findText, range, startNum);
+        return FindText(findText, ToText(args[1]), startNum);
+    }
+
+    private static RangeValue MapFindRange(string findText, RangeValue range, int startNum)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : FindText(findText, ToText(value), startNum);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue FindText(string findText, string withinText, int startNum)
+    {
         bool hasSurrogatePair = ContainsSurrogatePair(withinText);
         int startIdx = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(withinText, startNum)
@@ -279,8 +348,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        var findText   = ToText(args[0]);
-        var withinText = ToText(args[1]);
+        var findText = ToText(args[0]);
         int startNum = 1;
         if (args.Count > 2 && args[2] is not BlankValue)
         {
@@ -289,6 +357,25 @@ public static partial class BuiltInFunctions
             startNum = (int)rawStart;
         }
         if (startNum < 1) return ErrorValue.Value;
+        if (args[1] is RangeValue range) return MapSearchRange(findText, range, startNum);
+        return SearchText(findText, ToText(args[1]), startNum);
+    }
+
+    private static RangeValue MapSearchRange(string findText, RangeValue range, int startNum)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : SearchText(findText, ToText(value), startNum);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue SearchText(string findText, string withinText, int startNum)
+    {
         bool hasSurrogatePair = ContainsSurrogatePair(withinText);
         int startIdx = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(withinText, startNum)
@@ -424,8 +511,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue ValueFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is NumberValue nv) return nv;
-        var text = ToText(args[0]).Trim();
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ValueScalar);
+        return ValueScalar(args[0]);
+    }
+
+    private static ScalarValue ValueScalar(ScalarValue value)
+    {
+        if (value is NumberValue nv) return nv;
+        var text = ToText(value).Trim();
         var usCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
         if (text.EndsWith('%') &&
             double.TryParse(text[..^1].Trim(), System.Globalization.NumberStyles.Any,
