@@ -43,6 +43,25 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void RuleDialogOpenedFromKeyboard_FocusesFirstRuleEditor()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_formulaBox is { IsVisible: true }");
+        source.Should().Contain("_value1Box.IsVisible");
+        source.Should().Contain("_topBottomRankBox.IsVisible");
+        source.Should().Contain("_dataBarMinTypeBox.IsVisible");
+        source.Should().Contain("_colorScaleMinTypeBox.IsVisible");
+        source.Should().Contain("_iconSetStyleBox.IsVisible");
+        source.Should().Contain("_dateOccurringPeriodBox.IsVisible");
+        source.Should().Contain("_duplicateValuesKindBox.IsVisible");
+        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void NewRuleDialog_UsesExcelRuleShell()
     {
         StaTestRunner.Run(() =>
