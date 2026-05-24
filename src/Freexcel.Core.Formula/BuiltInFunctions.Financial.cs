@@ -812,9 +812,16 @@ public static partial class BuiltInFunctions
         double issue         = ToNumber(args[0]);
         double firstInterest = ToNumber(args[1]);
         double settlement    = ToNumber(args[2]);
-        double rate          = ToNumber(args[3]);
         double par           = ToNumber(args[4]);
         double frequency     = ToNumber(args[5]);
+        if (args[3] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => AccrintScalar(issue, firstInterest, settlement, value, par, frequency, args));
+        return AccrintScalar(issue, firstInterest, settlement, args[3], par, frequency, args);
+    }
+
+    private static ScalarValue AccrintScalar(double issue, double firstInterest, double settlement, ScalarValue rateValue, double par, double frequency, IReadOnlyList<ScalarValue> args)
+    {
+        _ = firstInterest;
+        double rate = ToNumber(rateValue);
         if (!double.IsFinite(issue) || !double.IsFinite(settlement) || !double.IsFinite(rate) ||
             !double.IsFinite(par) || !double.IsFinite(frequency))
             return ErrorValue.Num;
@@ -1291,10 +1298,16 @@ public static partial class BuiltInFunctions
         double issue       = ToNumber(args[2]);
         double firstCoupon = ToNumber(args[3]);
         double rate        = ToNumber(args[4]);
-        double yld         = ToNumber(args[5]);
         double redemption  = ToNumber(args[6]);
         int frequency      = (int)Math.Truncate(ToNumber(args[7]));
         int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
+        if (args[5] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, value, redemption, frequency, basis));
+        return OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, args[5], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddfpriceScalar(double settlement, double maturity, double issue, double firstCoupon, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(firstCoupon) || !double.IsFinite(rate) || !double.IsFinite(yld) ||
             !double.IsFinite(redemption))
@@ -1320,10 +1333,16 @@ public static partial class BuiltInFunctions
         double issue       = ToNumber(args[2]);
         double firstCoupon = ToNumber(args[3]);
         double rate        = ToNumber(args[4]);
-        double pr          = ToNumber(args[5]);
         double redemption  = ToNumber(args[6]);
         int frequency      = (int)Math.Truncate(ToNumber(args[7]));
         int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
+        if (args[5] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, value, redemption, frequency, basis));
+        return OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, args[5], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddfyieldScalar(double settlement, double maturity, double issue, double firstCoupon, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
             !double.IsFinite(firstCoupon) || !double.IsFinite(rate) || !double.IsFinite(pr) ||
             !double.IsFinite(redemption))
@@ -1360,10 +1379,16 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double lastInterest = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double yld         = ToNumber(args[4]);
         double redemption  = ToNumber(args[5]);
         int frequency      = (int)Math.Truncate(ToNumber(args[6]));
         int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
+        if (args[4] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => OddlpriceScalar(settlement, maturity, lastInterest, rate, value, redemption, frequency, basis));
+        return OddlpriceScalar(settlement, maturity, lastInterest, rate, args[4], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddlpriceScalar(double settlement, double maturity, double lastInterest, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
+    {
+        double yld = ToNumber(yieldValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(lastInterest) ||
             !double.IsFinite(rate) || !double.IsFinite(yld) || !double.IsFinite(redemption))
             return ErrorValue.Num;
@@ -1385,10 +1410,16 @@ public static partial class BuiltInFunctions
         double maturity    = ToNumber(args[1]);
         double lastInterest = ToNumber(args[2]);
         double rate        = ToNumber(args[3]);
-        double pr          = ToNumber(args[4]);
         double redemption  = ToNumber(args[5]);
         int frequency      = (int)Math.Truncate(ToNumber(args[6]));
         int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
+        if (args[4] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => OddlyieldScalar(settlement, maturity, lastInterest, rate, value, redemption, frequency, basis));
+        return OddlyieldScalar(settlement, maturity, lastInterest, rate, args[4], redemption, frequency, basis);
+    }
+
+    private static ScalarValue OddlyieldScalar(double settlement, double maturity, double lastInterest, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(lastInterest) ||
             !double.IsFinite(rate) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
