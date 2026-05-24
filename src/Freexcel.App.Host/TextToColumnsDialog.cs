@@ -144,6 +144,13 @@ public sealed partial class TextToColumnsDialog : Window
         UpdateWizardStep();
         RefreshMode();
         RefreshPreview();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _delimitedButton.Focus();
+        Keyboard.Focus(_delimitedButton);
     }
 
     private GroupBox CreateOriginalDataTypePanel()

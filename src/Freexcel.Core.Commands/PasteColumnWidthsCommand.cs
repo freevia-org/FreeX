@@ -25,7 +25,7 @@ public sealed class PasteColumnWidthsCommand : IWorkbookCommand
 
         var sourceSheet = ctx.GetSheet(_sourceRange.Start.Sheet);
         var targetSheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(targetSheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(targetSheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
             return protectedOutcome;
 
         var destinationEndCol = _destinationStartCol + _sourceRange.ColCount - 1;
