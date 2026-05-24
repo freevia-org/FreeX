@@ -348,6 +348,7 @@ public sealed class SelectDataSourceDialog : Window
             DialogResult = true;
         }));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static SelectDataSourceDialogResult CreateResult(
@@ -399,6 +400,13 @@ public sealed class SelectDataSourceDialog : Window
 
     public static SelectDataSourceRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rangeBox.Focus();
+        _rangeBox.SelectAll();
+        Keyboard.Focus(_rangeBox);
+    }
 
     private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
         DialogReferencePicker.CreateEditor(
