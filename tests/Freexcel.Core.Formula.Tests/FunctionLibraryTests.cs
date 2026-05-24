@@ -34,6 +34,15 @@ public class FunctionLibraryTests
             range.At(row + 1, 1).Should().Be(new TextValue(expected[row]));
     }
 
+    private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.At(row + 1, 1).Should().Be(expected[row]);
+    }
+
     // ── IFERROR ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -963,6 +972,20 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=TEXT(1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void TextAndValue_RangeArgument_SpillsElementwise()
+    {
+        var textSheet = MakeSheet(
+            (1, 1, new TextValue(" apple ")),
+            (2, 1, new TextValue("BANANA")));
+        AssertTextColumn(_eval.Evaluate("=TEXT(A1:A2,\"@\")", textSheet), " apple ", "BANANA");
+
+        var valueSheet = MakeSheet(
+            (1, 1, new TextValue("10")),
+            (2, 1, new TextValue("x")));
+        AssertColumn(_eval.Evaluate("=VALUE(A1:A2)", valueSheet), new NumberValue(10), ErrorValue.Value);
     }
 
     [Fact]

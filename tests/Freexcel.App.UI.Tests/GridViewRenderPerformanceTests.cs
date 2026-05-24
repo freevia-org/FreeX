@@ -33,6 +33,44 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
     }
 
+    [Fact]
+    public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var brushCache = new Dictionary<CellColor, SolidColorBrush>();");
+        renderCells.Should().Contain("BrushForCellColor(bg.FillColor.Value, brushCache)");
+        renderCells.Should().Contain("BrushForCellColor(fc, brushCache)");
+        renderCells.Should().NotContain("new SolidColorBrush");
+    }
+
+    [Fact]
+    public void RenderCells_ReusesBorderPensWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var borderPenCache = new Dictionary<CellBorder, Pen>();");
+        renderCells.Should().Contain("brushCache, borderPenCache");
+    }
+
+    [Fact]
+    public void RenderCells_ReusesTypefacesWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();");
+        renderCells.Should().Contain("CreateCellTypeface(style, typefaceCache)");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

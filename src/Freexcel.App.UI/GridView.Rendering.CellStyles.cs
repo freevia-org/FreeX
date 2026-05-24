@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 using Freexcel.Core.Model;
@@ -6,9 +7,23 @@ namespace Freexcel.App.UI;
 
 public partial class GridView
 {
-    private static void DrawBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2)
+    private readonly record struct CellTypefaceKey(string FontName, bool Italic, bool Bold);
+
+    private static void DrawBorderEdge(
+        DrawingContext dc,
+        CellBorder border,
+        Point p1,
+        Point p2,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null,
+        Dictionary<CellBorder, Pen>? borderPenCache = null)
     {
         if (border.Style == BorderStyle.None) return;
+
+        if (borderPenCache is not null && borderPenCache.TryGetValue(border, out var cachedPen))
+        {
+            dc.DrawLine(cachedPen, p1, p2);
+            return;
+        }
 
         double thickness = border.Style switch
         {
@@ -25,23 +40,37 @@ public partial class GridView
             _ => DashStyles.Solid
         };
 
-        var pen = new Pen(
-            new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B)),
-            thickness) { DashStyle = dash };
+        var pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
+        if (pen.CanFreeze)
+            pen.Freeze();
+        borderPenCache?.Add(border, pen);
 
         dc.DrawLine(pen, p1, p2);
     }
 
-    private static SolidColorBrush BrushForCellColor(CellColor color) =>
-        new(Color.FromRgb(color.R, color.G, color.B));
+    private static SolidColorBrush BrushForCellColor(
+        CellColor color,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
+    {
+        if (brushCache is not null && brushCache.TryGetValue(color, out var cached))
+            return cached;
 
-    private static void DrawFillPattern(DrawingContext dc, Rect rect, CellStyle? style)
+        var brush = MakeBrush(color.R, color.G, color.B);
+        brushCache?.Add(color, brush);
+        return brush;
+    }
+
+    private static void DrawFillPattern(
+        DrawingContext dc,
+        Rect rect,
+        CellStyle? style,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null)
     {
         if (style is null || style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             return;
 
         var color = style.FillPatternColor ?? CellColor.Black;
-        var pen = new Pen(BrushForCellColor(color), 0.75);
+        var pen = new Pen(BrushForCellColor(color, brushCache), 0.75);
         const double step = 6;
 
         dc.PushClip(new RectangleGeometry(rect));
@@ -74,8 +103,8 @@ public partial class GridView
                 break;
             case CellFillPatternStyle.LightGrid:
             case CellFillPatternStyle.DarkGrid:
-                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightHorizontal, FillPatternColor = color });
-                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightVertical, FillPatternColor = color });
+                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightHorizontal, FillPatternColor = color }, brushCache);
+                DrawFillPattern(dc, rect, new CellStyle { FillPatternStyle = CellFillPatternStyle.LightVertical, FillPatternColor = color }, brushCache);
                 break;
             case CellFillPatternStyle.LightDown:
             case CellFillPatternStyle.DarkDown:
@@ -114,12 +143,36 @@ public partial class GridView
 
     public static Typeface CreateCellTypeface(CellStyle? style)
     {
+        var key = CreateCellTypefaceKey(style);
+        return CreateCellTypeface(key);
+    }
+
+    private static Typeface CreateCellTypeface(
+        CellStyle? style,
+        Dictionary<CellTypefaceKey, Typeface> typefaceCache)
+    {
+        var key = CreateCellTypefaceKey(style);
+        if (typefaceCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var typeface = CreateCellTypeface(key);
+        typefaceCache.Add(key, typeface);
+        return typeface;
+    }
+
+    private static CellTypefaceKey CreateCellTypefaceKey(CellStyle? style)
+    {
         var fontName = string.IsNullOrWhiteSpace(style?.FontName)
             ? "Calibri"
             : style!.FontName;
-        var fontStyle = style?.Italic == true ? FontStyles.Italic : FontStyles.Normal;
-        var fontWeight = style?.Bold == true ? FontWeights.Bold : FontWeights.Normal;
+        return new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true);
+    }
 
-        return new Typeface(new FontFamily(fontName), fontStyle, fontWeight, FontStretches.Normal);
+    private static Typeface CreateCellTypeface(CellTypefaceKey key)
+    {
+        var fontStyle = key.Italic ? FontStyles.Italic : FontStyles.Normal;
+        var fontWeight = key.Bold ? FontWeights.Bold : FontWeights.Normal;
+
+        return new Typeface(new FontFamily(key.FontName), fontStyle, fontWeight, FontStretches.Normal);
     }
 }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 
@@ -48,6 +49,9 @@ public partial class GridView
 
         var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var brushCache = new Dictionary<CellColor, SolidColorBrush>();
+        var borderPenCache = new Dictionary<CellBorder, Pen>();
+        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
             var cell = layout.Cell;
@@ -58,17 +62,17 @@ public partial class GridView
 
             Brush? fill = WorksheetBackground == null ? Brushes.White : null;
             if (style?.FillColor is { } fillColor)
-                fill = BrushForCellColor(fillColor);
+                fill = BrushForCellColor(fillColor, brushCache);
 
             dc.DrawRectangle(fill, GridPen, rect);
-            DrawFillPattern(dc, rect, style);
+            DrawFillPattern(dc, rect, style, brushCache);
 
             if (style is not null)
             {
-                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
-                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
-                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
-                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), brushCache, borderPenCache);
+                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), brushCache, borderPenCache);
             }
 
             if (!ShouldDrawCellContent(cell, EditingCell))
@@ -92,11 +96,11 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var typeface = CreateCellTypeface(style);
+            var typeface = CreateCellTypeface(style, typefaceCache);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
-                textBrush = new SolidColorBrush(Color.FromRgb(fontColor.R, fontColor.G, fontColor.B));
+                textBrush = BrushForCellColor(fontColor, brushCache);
 
             var indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && style.WrapText != true)
@@ -165,6 +169,9 @@ public partial class GridView
         var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var brushCache = new Dictionary<CellColor, SolidColorBrush>();
+        var borderPenCache = new Dictionary<CellBorder, Pen>();
+        var typefaceCache = new Dictionary<CellTypefaceKey, Typeface>();
 
 
         // Pass 1: backgrounds
@@ -194,12 +201,12 @@ public partial class GridView
                 if (styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg)
                     && bg.FillColor.HasValue)
                 {
-                    fill = BrushForCellColor(bg.FillColor.Value);
+                    fill = BrushForCellColor(bg.FillColor.Value, brushCache);
                 }
 
                 dc.DrawRectangle(fill, GridPen, rect);
                 if (bg is not null)
-                    DrawFillPattern(dc, rect, bg);
+                    DrawFillPattern(dc, rect, bg, brushCache);
             }
         }
 
@@ -215,10 +222,10 @@ public partial class GridView
             double w = colMetric.Width;
             double h = rowMetric.Height;
 
-            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y));
-            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h));
-            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h));
-            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h));
+            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), brushCache, borderPenCache);
+            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), brushCache, borderPenCache);
         }
 
         // Pass 2b: comment/note indicators
@@ -295,7 +302,7 @@ public partial class GridView
                 }
             }
 
-            var typeface = CreateCellTypeface(style);
+            var typeface = CreateCellTypeface(style, typefaceCache);
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
@@ -303,7 +310,7 @@ public partial class GridView
 
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fc && !fc.IsBlack)
-                textBrush = new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
+                textBrush = BrushForCellColor(fc, brushCache);
 
             double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && !wrapText)

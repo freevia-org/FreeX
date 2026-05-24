@@ -1039,7 +1039,8 @@ public sealed class FormulaEvaluator
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
              or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
              or "FIND" or "SEARCH"
-             or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN";
+             or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN"
+             or "TEXT" or "VALUE";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
