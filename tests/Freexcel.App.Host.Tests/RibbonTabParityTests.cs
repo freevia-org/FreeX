@@ -107,6 +107,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var formulasTab = ExtractTabXaml(xaml, "Formulas", "Data");
+        var functionLibraryGroup = ExtractGroupXaml(formulasTab, "Function Library");
         var definedNamesGroup = ExtractGroupXaml(formulasTab, "Defined Names");
 
         ExtractGroupLabels(formulasTab).Should().Equal(
@@ -115,6 +116,17 @@ public sealed class RibbonTabParityTests
             "Formula Auditing",
             "Calculation");
 
+        ExtractTooltipTitles(functionLibraryGroup).Should().ContainInOrder(
+            "Insert Function",
+            "AutoSum",
+            "Recently Used",
+            "Financial",
+            "Logical Functions",
+            "Text Functions",
+            "Date & Time",
+            "Lookup & Reference",
+            "Math & Trig",
+            "More Functions");
         ExtractTooltipTitles(definedNamesGroup).Should().ContainInOrder(
             "Name Manager",
             "Define Name",

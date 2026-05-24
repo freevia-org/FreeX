@@ -110,6 +110,9 @@ public sealed partial class NativeJsonAdapter
         chart.TrendlineLabelNumberFormatCode = string.IsNullOrWhiteSpace(chart.TrendlineLabelNumberFormatCode)
             ? null
             : chart.TrendlineLabelNumberFormatCode;
+        chart.TrendlineLabelBorderThickness = ClampNullableDouble(chart.TrendlineLabelBorderThickness, 0, 10);
+        chart.TrendlineLabelFontSize = ClampNullableDouble(chart.TrendlineLabelFontSize, 6, 72);
+        chart.TrendlineLabelAngle = ClampNullableDouble(chart.TrendlineLabelAngle, -90, 90);
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
         chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
         chart.ErrorBarKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarKind, ChartErrorBarKind.StandardError);
@@ -156,6 +159,16 @@ public sealed partial class NativeJsonAdapter
             chart.ShowTrendlineRSquared = false;
             chart.TrendlineLabelNumberFormatCode = null;
             chart.TrendlineLabelNumberFormatSourceLinked = null;
+            chart.TrendlineLabelLayout = null;
+            chart.TrendlineLabelFillColor = null;
+            chart.TrendlineLabelFillThemeColor = null;
+            chart.TrendlineLabelBorderColor = null;
+            chart.TrendlineLabelBorderThemeColor = null;
+            chart.TrendlineLabelBorderThickness = null;
+            chart.TrendlineLabelTextColor = null;
+            chart.TrendlineLabelTextThemeColor = null;
+            chart.TrendlineLabelFontSize = null;
+            chart.TrendlineLabelAngle = null;
             chart.TrendlineColor = null;
             chart.TrendlineThemeColor = null;
             chart.TrendlineThickness = 1.5;

@@ -142,7 +142,7 @@ internal static partial class XlsxChartXmlWriter
             ToTrendlineShapeProperties(chart, chartNs, drawingNs),
             new XElement(chartNs + "dispEq", new XAttribute("val", chart.ShowTrendlineEquation ? "1" : "0")),
             new XElement(chartNs + "dispRSqr", new XAttribute("val", chart.ShowTrendlineRSquared ? "1" : "0")),
-            ToTrendlineLabelXml(chart, chartNs));
+            ToTrendlineLabelXml(chart, chartNs, drawingNs));
     }
 
     private static XElement? ToOptionalTrendlineDoubleXml(string name, double? value, XNamespace chartNs) =>
@@ -150,18 +150,55 @@ internal static partial class XlsxChartXmlWriter
             ? new XElement(chartNs + name, new XAttribute("val", number.ToString(CultureInfo.InvariantCulture)))
             : null;
 
-    private static XElement? ToTrendlineLabelXml(ChartModel chart, XNamespace chartNs) =>
-        string.IsNullOrEmpty(chart.TrendlineLabelNumberFormatCode) &&
-        chart.TrendlineLabelNumberFormatSourceLinked is null
+    private static XElement? ToTrendlineLabelXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        var layout = ToManualLayoutXml(chart.TrendlineLabelLayout, chartNs);
+        var shapeProperties = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            chart.TrendlineLabelFillThemeColor,
+            chart.TrendlineLabelFillColor,
+            chart.TrendlineLabelBorderThemeColor,
+            chart.TrendlineLabelBorderColor,
+            chart.TrendlineLabelBorderThickness);
+        var textProperties = ToTrendlineLabelTextProperties(chart, chartNs, drawingNs);
+        var numberFormat = ToTrendlineLabelNumberFormatXml(chart, chartNs);
+
+        return layout is null && shapeProperties is null && textProperties is null && numberFormat is null
             ? null
-            : new XElement(chartNs + "trendlineLbl",
-                new XElement(chartNs + "numFmt",
-                    string.IsNullOrEmpty(chart.TrendlineLabelNumberFormatCode)
-                        ? null
-                        : new XAttribute("formatCode", chart.TrendlineLabelNumberFormatCode),
-                    chart.TrendlineLabelNumberFormatSourceLinked is { } sourceLinked
-                        ? new XAttribute("sourceLinked", sourceLinked ? "1" : "0")
-                        : null));
+            : new XElement(chartNs + "trendlineLbl", layout, numberFormat, shapeProperties, textProperties);
+    }
+
+    private static XElement? ToTrendlineLabelNumberFormatXml(ChartModel chart, XNamespace chartNs) =>
+        string.IsNullOrEmpty(chart.TrendlineLabelNumberFormatCode) && chart.TrendlineLabelNumberFormatSourceLinked is null
+            ? null
+            : new XElement(chartNs + "numFmt",
+                string.IsNullOrEmpty(chart.TrendlineLabelNumberFormatCode)
+                    ? null
+                    : new XAttribute("formatCode", chart.TrendlineLabelNumberFormatCode),
+                chart.TrendlineLabelNumberFormatSourceLinked is { } sourceLinked
+                    ? new XAttribute("sourceLinked", sourceLinked ? "1" : "0")
+                    : null);
+
+    private static XElement? ToTrendlineLabelTextProperties(
+        ChartModel chart,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var textFill = ToSolidFill(chart.TrendlineLabelTextThemeColor, chart.TrendlineLabelTextColor, drawingNs);
+        if (textFill is null && chart.TrendlineLabelFontSize is null && chart.TrendlineLabelAngle is null)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            chart.TrendlineLabelAngle is { } angle ? ToTextBodyProperties(angle, drawingNs) : null,
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        chart.TrendlineLabelFontSize is { } fontSize
+                            ? new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200))
+                            : null,
+                        textFill))));
+    }
 
     private static XElement? ToTrendlineShapeProperties(
         ChartModel chart,
