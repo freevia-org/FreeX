@@ -51,6 +51,9 @@ public sealed partial class NativeJsonAdapter
         public bool HideYAxis { get; set; }
         public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
         public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
+        public CellColor? ChartDefaultTextColor { get; set; }
+        public ThemeColorReferenceDto? ChartDefaultTextThemeColor { get; set; }
+        public double ChartDefaultFontSize { get; set; } = 11;
         public CellColor? ChartTitleTextColor { get; set; }
         public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;

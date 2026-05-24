@@ -7,6 +7,7 @@ public sealed partial class NativeJsonAdapter
     private static void SanitizeLoadedChart(ChartModel chart)
     {
         chart.Type = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.Type, ChartType.Column);
+        chart.ChartDefaultFontSize = Math.Clamp(chart.ChartDefaultFontSize, 6, 72);
         chart.ChartTitleFontSize = Math.Clamp(chart.ChartTitleFontSize, 6, 72);
         chart.AxisTitleFontSize = Math.Clamp(chart.AxisTitleFontSize, 6, 72);
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
