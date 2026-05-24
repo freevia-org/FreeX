@@ -9510,7 +9510,12 @@ public partial class FileAdapterSmokeTests
                 ShowHorizontalBorder = true,
                 ShowVerticalBorder = false,
                 ShowOutline = true,
-                ShowLegendKeys = true
+                ShowLegendKeys = true,
+                FillColor = new CellColor(242, 242, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 1.5,
+                TextColor = new CellColor(192, 0, 0),
+                FontSize = 10.5
             }
         });
 
@@ -9527,6 +9532,39 @@ public partial class FileAdapterSmokeTests
         dataTable.Element(chartNs + "showVertBorder")!.Attribute("val")!.Value.Should().Be("0");
         dataTable.Element(chartNs + "showOutline")!.Attribute("val")!.Value.Should().Be("1");
         dataTable.Element(chartNs + "showKeys")!.Attribute("val")!.Value.Should().Be("1");
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        dataTable.Element(chartNs + "spPr")!
+            .Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("F2F2F2");
+        var line = dataTable.Element(chartNs + "spPr")!.Element(drawingNs + "ln")!;
+        line.Attribute("w")!.Value.Should().Be("19050");
+        line.Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("4472C4");
+        var textProperties = dataTable.Element(chartNs + "txPr")!
+            .Descendants(drawingNs + "defRPr")
+            .Single();
+        textProperties.Attribute("sz")!.Value.Should().Be("1050");
+        textProperties.Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("C00000");
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        loaded.GetSheetAt(0).Charts.Should().ContainSingle()
+            .Which.DataTable.Should().BeEquivalentTo(new ChartDataTableModel
+            {
+                ShowHorizontalBorder = true,
+                ShowVerticalBorder = false,
+                ShowOutline = true,
+                ShowLegendKeys = true,
+                FillColor = new CellColor(242, 242, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 1.5,
+                TextColor = new CellColor(192, 0, 0),
+                FontSize = 10.5
+            });
     }
 
     [Fact]

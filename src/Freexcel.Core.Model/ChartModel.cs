@@ -162,6 +162,14 @@ public sealed class ChartDataTableModel
     public bool? ShowVerticalBorder { get; set; }
     public bool? ShowOutline { get; set; }
     public bool? ShowLegendKeys { get; set; }
+    public CellColor? FillColor { get; set; }
+    public WorkbookThemeColorReference? FillThemeColor { get; set; }
+    public CellColor? BorderColor { get; set; }
+    public WorkbookThemeColorReference? BorderThemeColor { get; set; }
+    public double? BorderThickness { get; set; }
+    public CellColor? TextColor { get; set; }
+    public WorkbookThemeColorReference? TextThemeColor { get; set; }
+    public double? FontSize { get; set; }
 }
 
 public sealed class Chart3DViewModel
