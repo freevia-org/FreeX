@@ -123,6 +123,21 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialogRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void UpdateDestinationState", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         PivotTableDialog.CreateRangeSelectionRequest(PivotTableRangeSelectionTarget.DestinationRange, " Report!F3 ")
@@ -212,6 +227,21 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("_sourceBox.Focus();");
         source.Should().Contain("_sourceBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_sourceBox);");
+    }
+
+    [Fact]
+    public void PivotTableDataSourceRangePicker_RefocusesSourceInputAfterRequest()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+
+        source.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
