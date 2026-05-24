@@ -2874,6 +2874,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void XlookupAndXmatch_RangeLookupValue_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")), (3, 1, new TextValue("C")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)), (3, 2, new NumberValue(3)),
+            (1, 4, new TextValue("B")), (2, 4, new TextValue("C")));
+
+        AssertColumn(_eval.Evaluate("=XMATCH(D1:D2,A1:A3)", sheet), new NumberValue(2), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=XLOOKUP(D1:D2,A1:A3,B1:B3)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
     public void Xlookup_And_Xmatch_TreatScalarLookupArraysAsSingleItemArrays()
     {
         _eval.Evaluate("=XMATCH(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
