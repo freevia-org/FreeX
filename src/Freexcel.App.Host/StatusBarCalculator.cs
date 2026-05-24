@@ -21,10 +21,9 @@ public static class StatusBarCalculator
                         * (long)(range.End.Col - range.Start.Col + 1);
 
         IEnumerable<ScalarValue?> source = totalCells > 10_000
-            ? sheet.GetUsedCells()
-                   .Where(kvp => kvp.Key.Row >= range.Start.Row && kvp.Key.Row <= range.End.Row
-                              && kvp.Key.Col >= range.Start.Col && kvp.Key.Col <= range.End.Col)
-                   .Select(kvp => kvp.Value.Value)
+            ? sheet.EnumerateCells()
+                   .Where(entry => range.Contains(entry.Address))
+                   .Select(entry => entry.Cell.Value)
             : range.AllCells().Select(a => sheet.GetValue(a));
 
         foreach (var value in source)

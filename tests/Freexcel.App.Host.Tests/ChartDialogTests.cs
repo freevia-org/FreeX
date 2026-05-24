@@ -604,6 +604,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataLabelsDialogOpenedFromKeyboard_FocusesShowDataLabelsChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDataLabelsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
     public void ChartTrendlineOptionsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartTrendlineOptionsDialog.CreateResult(

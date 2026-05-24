@@ -12,7 +12,7 @@ public sealed partial class XlsxFileAdapter
         if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
             return;
 
-        using var sourceStream = new MemoryStream(sourcePackage.Bytes, writable: false);
+        using var sourceStream = sourcePackage.OpenRead();
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
@@ -36,5 +36,21 @@ public sealed partial class XlsxFileAdapter
     }
 
 
-    private sealed record XlsxSourcePackage(byte[] Bytes);
+    private sealed record XlsxSourcePackage(byte[] Buffer, int Offset, int Count)
+    {
+        public static XlsxSourcePackage Capture(MemoryStream stream)
+        {
+            if (stream.TryGetBuffer(out var buffer))
+                return new XlsxSourcePackage(buffer.Array!, buffer.Offset, buffer.Count);
+
+            var bytes = new byte[stream.Length];
+            var previousPosition = stream.Position;
+            stream.Position = 0;
+            stream.ReadExactly(bytes);
+            stream.Position = previousPosition;
+            return new XlsxSourcePackage(bytes, 0, bytes.Length);
+        }
+
+        public MemoryStream OpenRead() => new(Buffer, Offset, Count, writable: false);
+    }
 }

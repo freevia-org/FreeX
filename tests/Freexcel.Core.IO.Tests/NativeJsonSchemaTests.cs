@@ -9,6 +9,16 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class NativeJsonSchemaTests
 {
     [Fact]
+    public void Save_ScansCellsWithoutCopyingUsedCellDictionary()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "NativeJsonAdapter.Save.cs"));
+
+        source.Should().NotContain(
+            "GetUsedCells()",
+            "native JSON save should stream occupied cells directly into DTOs");
+    }
+
+    [Fact]
     public void Save_WritesCurrentNativeJsonSchemaHeader()
     {
         var workbook = new Workbook("Schema");
@@ -73,5 +83,20 @@ public sealed class NativeJsonSchemaTests
 
         act.Should().Throw<InvalidDataException>()
             .WithMessage("*schema version*999*");
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
     }
 }
