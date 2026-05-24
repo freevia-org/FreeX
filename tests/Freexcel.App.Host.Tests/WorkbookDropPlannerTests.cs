@@ -37,6 +37,20 @@ public sealed class WorkbookDropPlannerTests
         selected.Should().BeNull();
     }
 
+    [Fact]
+    public void SelectOpenableFile_UsesAdapterFormatAliases()
+    {
+        var selected = WorkbookDropPlanner.SelectOpenableFile(
+            [
+                @"C:\Temp\notes.pdf",
+                @"C:\Temp\Template.XLT",
+                @"C:\Temp\Book.xls"
+            ],
+            [new LegacyXlsFileAdapter()]);
+
+        selected.Should().Be(@"C:\Temp\Template.XLT");
+    }
+
     private sealed class FakeAdapter(string extension, string formatName) : IFileAdapter
     {
         public string Extension => extension;
