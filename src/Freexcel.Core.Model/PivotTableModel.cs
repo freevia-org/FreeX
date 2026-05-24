@@ -106,6 +106,10 @@ public sealed class PivotTableModel
     public bool PrintExpandCollapseButtons { get; set; }
     public string? AltTextTitle { get; set; }
     public string? AltTextDescription { get; set; }
+    public string? DataCaption { get; set; }
+    public string? GrandTotalCaption { get; set; }
+    public string? MissingCaption { get; set; }
+    public string? ErrorCaption { get; set; }
     public List<PivotFieldModel> RowFields { get; } = [];
     public List<PivotFieldModel> ColumnFields { get; } = [];
     public List<PivotFieldModel> PageFields { get; } = [];
