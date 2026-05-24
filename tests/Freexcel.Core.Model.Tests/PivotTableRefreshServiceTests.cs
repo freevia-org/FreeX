@@ -1809,6 +1809,34 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MatrixWritesBlankLineAfterOuterItemsWhenEnabled()
+    {
+        var workbook = new Workbook("PivotMatrixBlankLineTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "J12"),
+            BlankLineAfterItems = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Text(sheet, "F4").Should().Be("Q2");
+        sheet.GetCell(Addr(sheet, "E5")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "G5")).Should().BeNull();
+        Text(sheet, "E6").Should().Be("West");
+    }
+
+    [Fact]
     public void Refresh_EvaluatesCalculatedFields()
     {
         var workbook = new Workbook("PivotRefreshTest");
