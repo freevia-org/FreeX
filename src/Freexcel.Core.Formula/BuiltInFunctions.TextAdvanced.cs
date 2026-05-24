@@ -82,7 +82,7 @@ public static partial class BuiltInFunctions
         var value = ToNumber(args[0]);
         if (!double.IsFinite(value)) return ErrorValue.Value;
 
-        var rounded = Math.Round(Math.Abs(value), 2, MidpointRounding.AwayFromZero);
+        var rounded = Math.Round(Math.Abs(value) + 1e-12, 2, MidpointRounding.AwayFromZero);
         if (rounded > long.MaxValue) return ErrorValue.Num;
 
         long baht = (long)Math.Floor(rounded);
