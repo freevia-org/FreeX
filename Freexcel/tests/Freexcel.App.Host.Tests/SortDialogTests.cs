@@ -98,6 +98,18 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void DialogOpenedFromKeyboard_FocusesFirstSortLevel()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_levelsGrid.SelectedIndex = 0;");
+        source.Should().Contain("_levelsGrid.Focus();");
+        source.Should().Contain("Keyboard.Focus(_levelsGrid);");
+    }
+
+    [Fact]
     public void BuildOrderChoices_UsesExcelColorSortLabelsForColorSorts()
     {
         SortDialog.BuildOrderChoices("Cell Values").Should().Equal(
