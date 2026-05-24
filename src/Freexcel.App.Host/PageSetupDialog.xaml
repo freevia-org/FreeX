@@ -12,7 +12,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0">
+        <TabControl x:Name="PageSetupTabs" Grid.Row="0">
             <TabItem Header="_Page">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
@@ -189,7 +189,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="_Sheet">
+            <TabItem x:Name="SheetTab" Header="_Sheet">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
