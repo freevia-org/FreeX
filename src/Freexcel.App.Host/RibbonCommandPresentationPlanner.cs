@@ -367,6 +367,7 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("add-ins") ||
         name.Contains("recommended chart") ||
         name.Contains("recommended pivottable") ||
+        name == "3d map" ||
         name == "insert picture" ||
         name == "pictures" ||
         name == "shapes" ||
@@ -437,6 +438,7 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("side by side") ||
         name.Contains("sync scrolling") ||
         name.Contains("reset position") ||
+        name == "macros" ||
         name.Contains("help online") ||
         name.Contains("contact support") ||
         name.Contains("training") ||
