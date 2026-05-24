@@ -1974,6 +1974,7 @@ public sealed class MainWindowSourceHygieneTests
             new[]
             {
                 "MainWindow.PivotCommands.cs",
+                "MainWindow.PivotAdvancedCommands.cs",
                 "MainWindow.PivotChartCommands.cs",
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
