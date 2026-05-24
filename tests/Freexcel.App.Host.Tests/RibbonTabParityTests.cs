@@ -60,6 +60,22 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
+    public void DrawTab_ExposesExcelLikeInkConversionGroup()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var drawTab = ExtractTabXaml(xaml, "Draw", "Page Layout");
+
+        ExtractGroupLabels(drawTab).Should().Equal(
+            "Draw",
+            "Convert",
+            "Arrange",
+            "Format");
+
+        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
+        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
+    }
+
+    [Fact]
     public void PageLayoutTab_UsesExcelLikeGroupOrderAndArrangeCommands()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
