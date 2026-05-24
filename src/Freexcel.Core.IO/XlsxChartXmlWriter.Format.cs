@@ -66,9 +66,9 @@ internal static partial class XlsxChartXmlWriter
             drawingNs,
             chart.ChartAreaFillThemeColor,
             chart.ChartAreaFillColor,
-            borderThemeColor: null,
-            borderColor: null,
-            borderThickness: null);
+            chart.ChartAreaBorderThemeColor,
+            chart.ChartAreaBorderColor,
+            chart.ChartAreaBorderThickness);
 
     private static XElement? ToPlotAreaShapeProperties(
         ChartModel chart,

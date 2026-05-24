@@ -37,18 +37,37 @@ internal static class XlsxChartFormattingReader
             return;
 
         var solidFill = shapeProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is null)
-            return;
-
-        if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
         {
             chart.ChartAreaFillThemeColor = themeColor;
             chart.ChartAreaFillColor = null;
         }
-        else if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
         {
             chart.ChartAreaFillColor = color;
             chart.ChartAreaFillThemeColor = null;
+        }
+
+        var line = shapeProperties.Element(DrawingNs + "ln");
+        if (line is null)
+            return;
+
+        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            chart.ChartAreaBorderThickness = Math.Clamp(emus / 12700.0, 0, 10);
+
+        var lineFill = line.Element(DrawingNs + "solidFill");
+        if (lineFill is null)
+            return;
+
+        if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var borderThemeColor))
+        {
+            chart.ChartAreaBorderThemeColor = borderThemeColor;
+            chart.ChartAreaBorderColor = null;
+        }
+        else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var borderColor))
+        {
+            chart.ChartAreaBorderColor = borderColor;
+            chart.ChartAreaBorderThemeColor = null;
         }
     }
 

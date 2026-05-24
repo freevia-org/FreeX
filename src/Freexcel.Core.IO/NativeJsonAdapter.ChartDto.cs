@@ -55,6 +55,9 @@ public sealed partial class NativeJsonAdapter
         public double AxisTitleFontSize { get; set; } = 12;
         public CellColor? ChartAreaFillColor { get; set; }
         public ThemeColorReferenceDto? ChartAreaFillThemeColor { get; set; }
+        public CellColor? ChartAreaBorderColor { get; set; }
+        public ThemeColorReferenceDto? ChartAreaBorderThemeColor { get; set; }
+        public double? ChartAreaBorderThickness { get; set; }
         public CellColor? PlotAreaFillColor { get; set; }
         public ThemeColorReferenceDto? PlotAreaFillThemeColor { get; set; }
         public CellColor? PlotAreaBorderColor { get; set; }

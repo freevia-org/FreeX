@@ -287,6 +287,9 @@ public sealed class ChartModel
     public double AxisTitleFontSize { get; set; } = 12;
     public CellColor? ChartAreaFillColor { get; set; }
     public WorkbookThemeColorReference? ChartAreaFillThemeColor { get; set; }
+    public CellColor? ChartAreaBorderColor { get; set; }
+    public WorkbookThemeColorReference? ChartAreaBorderThemeColor { get; set; }
+    public double? ChartAreaBorderThickness { get; set; }
     public CellColor? PlotAreaFillColor { get; set; }
     public WorkbookThemeColorReference? PlotAreaFillThemeColor { get; set; }
     public CellColor? PlotAreaBorderColor { get; set; }
@@ -456,6 +459,9 @@ public sealed class ChartModel
 
     public CellColor? ResolveChartAreaFillColor(WorkbookTheme theme) =>
         ChartAreaFillThemeColor?.Resolve(theme) ?? ChartAreaFillColor;
+
+    public CellColor? ResolveChartAreaBorderColor(WorkbookTheme theme) =>
+        ChartAreaBorderThemeColor?.Resolve(theme) ?? ChartAreaBorderColor;
 
     public CellColor? ResolvePlotAreaFillColor(WorkbookTheme theme) =>
         PlotAreaFillThemeColor?.Resolve(theme) ?? PlotAreaFillColor;
