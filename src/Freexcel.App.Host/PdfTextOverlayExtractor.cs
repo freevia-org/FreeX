@@ -121,19 +121,26 @@ internal static class PdfTextOverlayExtractor
 
         var parts = new List<string>();
         foreach (var inline in textBlock.Inlines)
-        {
-            switch (inline)
-            {
-                case Run run:
-                    parts.Add(run.Text);
-                    break;
-                case LineBreak:
-                    parts.Add("\n");
-                    break;
-            }
-        }
+            AppendInlineText(inline, parts);
 
         return string.Concat(parts);
+    }
+
+    private static void AppendInlineText(Inline inline, List<string> parts)
+    {
+        switch (inline)
+        {
+            case Run run:
+                parts.Add(run.Text);
+                break;
+            case LineBreak:
+                parts.Add("\n");
+                break;
+            case Span span:
+                foreach (var child in span.Inlines)
+                    AppendInlineText(child, parts);
+                break;
+        }
     }
 
     private static string NormalizeAccessText(string text)
