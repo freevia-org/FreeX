@@ -307,6 +307,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             ErrorBarKind = chart.ErrorBarKind,
             ErrorBarDirection = chart.ErrorBarDirection,
             ErrorBarValue = chart.ErrorBarValue,
+            ErrorBarPlusRangeFormula = chart.ErrorBarPlusRangeFormula,
+            ErrorBarMinusRangeFormula = chart.ErrorBarMinusRangeFormula,
             ErrorBarEndCaps = chart.ErrorBarEndCaps,
             ErrorBarColor = chart.ErrorBarColor,
             ErrorBarThemeColor = chart.ErrorBarThemeColor,

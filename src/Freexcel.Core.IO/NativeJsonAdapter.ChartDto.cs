@@ -193,6 +193,8 @@ public sealed partial class NativeJsonAdapter
         public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
         public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
         public double ErrorBarValue { get; set; } = 5;
+        public string? ErrorBarPlusRangeFormula { get; set; }
+        public string? ErrorBarMinusRangeFormula { get; set; }
         public bool ErrorBarEndCaps { get; set; } = true;
         public CellColor? ErrorBarColor { get; set; }
         public ThemeColorReferenceDto? ErrorBarThemeColor { get; set; }
