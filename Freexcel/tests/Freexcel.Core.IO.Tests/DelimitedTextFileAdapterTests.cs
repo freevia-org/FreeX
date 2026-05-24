@@ -56,13 +56,14 @@ public sealed class DelimitedTextFileAdapterTests
     public void Load_UsesExcelLikeTextCoercionForPercentages()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("12.5%\t-3%\t\"-4%\"\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(0.125));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-0.03));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(-0.04));
     }
 
     [Fact]

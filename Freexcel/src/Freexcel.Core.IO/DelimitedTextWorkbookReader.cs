@@ -152,10 +152,18 @@ internal static class DelimitedTextWorkbookReader
 
     internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
 
-    private static bool ShouldPreserveQuotedFormulaLikeText(DelimitedTextField field) =>
-        field.WasQuoted &&
-        field.Value.Length > 0 &&
-        field.Value[0] is '=' or '+' or '-' or '@';
+    private static bool ShouldPreserveQuotedFormulaLikeText(DelimitedTextField field)
+    {
+        if (!field.WasQuoted || field.Value.Length == 0)
+            return false;
+
+        return field.Value[0] switch
+        {
+            '=' or '@' => true,
+            '+' or '-' => double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _),
+            _ => false
+        };
+    }
 
     private static TextReader CreateTextReader(Stream stream)
     {
