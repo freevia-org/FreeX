@@ -2197,7 +2197,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="Financial" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaFinancialBtn_Click"
                                                 local:RibbonTooltip.Title="Financial"
-                                                local:RibbonTooltip.KeyTip="I"
+                                                local:RibbonTooltip.KeyTip="Y"
                                                 local:RibbonTooltip.Description="Browse and insert financial functions like PMT, NPV, and IRR."/>
                                         <Button Content="Logical"  Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLogicalBtn_Click"
                                                 local:RibbonTooltip.Title="Logical Functions"
