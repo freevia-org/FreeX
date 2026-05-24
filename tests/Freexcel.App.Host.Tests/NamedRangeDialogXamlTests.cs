@@ -274,6 +274,19 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameManagerRefersToPicker_RefocusesSummaryWithKeyboardFocus()
+    {
+        var source = ReadNamedRangeDialogSource();
+        var handlerSource = source[
+            source.IndexOf("private void RefersToPickerButton_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void NewButton_Click", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("RefersToBox.Focus();");
+        handlerSource.Should().Contain("RefersToBox.SelectAll();");
+        handlerSource.Should().Contain("Keyboard.Focus(RefersToBox);");
+    }
+
+    [Fact]
     public void NameDefinitionRefersToPicker_RaisesRangeSelectionRequest()
     {
         StaTestRunner.Run(() =>
@@ -300,6 +313,19 @@ public sealed class NamedRangeDialogXamlTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void NameDefinitionRefersToPicker_RefocusesInputWithKeyboardFocus()
+    {
+        var source = ReadNamedRangeDialogSource();
+        var handlerSource = source[
+            source.IndexOf("_rangePickerButton.Click += (_, _) =>", StringComparison.Ordinal)..
+            source.IndexOf("Content = CreateContent();", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("_refersToBox.Focus();");
+        handlerSource.Should().Contain("_refersToBox.SelectAll();");
+        handlerSource.Should().Contain("Keyboard.Focus(_refersToBox);");
     }
 
     private static T GetControl<T>(NamedRangeDialog dialog, string name)
