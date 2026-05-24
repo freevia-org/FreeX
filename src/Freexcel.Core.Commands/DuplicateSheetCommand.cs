@@ -259,10 +259,11 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                     ShowVerticalBorder = chart.DataTable.ShowVerticalBorder,
                     ShowOutline = chart.DataTable.ShowOutline,
                     ShowLegendKeys = chart.DataTable.ShowLegendKeys
-                },
+            },
             FloorFormat = CloneSurfaceFormat(chart.FloorFormat),
             SideWallFormat = CloneSurfaceFormat(chart.SideWallFormat),
             BackWallFormat = CloneSurfaceFormat(chart.BackWallFormat),
+            PrintSettings = ClonePrintSettings(chart.PrintSettings),
             BarGapWidth = chart.BarGapWidth,
             BarOverlap = chart.BarOverlap,
             VaryColorsByPoint = chart.VaryColorsByPoint,
@@ -398,6 +399,52 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 BorderColor = format.BorderColor,
                 BorderThemeColor = format.BorderThemeColor,
                 BorderThickness = format.BorderThickness
+            };
+
+    private static ChartPrintSettingsModel? ClonePrintSettings(ChartPrintSettingsModel? printSettings) =>
+        printSettings is null
+            ? null
+            : new ChartPrintSettingsModel
+            {
+                PageMargins = printSettings.PageMargins is null
+                    ? null
+                    : new ChartPageMarginsModel
+                    {
+                        Left = printSettings.PageMargins.Left,
+                        Right = printSettings.PageMargins.Right,
+                        Top = printSettings.PageMargins.Top,
+                        Bottom = printSettings.PageMargins.Bottom,
+                        Header = printSettings.PageMargins.Header,
+                        Footer = printSettings.PageMargins.Footer
+                    },
+                PageSetup = printSettings.PageSetup is null
+                    ? null
+                    : new ChartPageSetupModel
+                    {
+                        PaperSize = printSettings.PageSetup.PaperSize,
+                        Orientation = printSettings.PageSetup.Orientation,
+                        Copies = printSettings.PageSetup.Copies,
+                        UsePrinterDefaults = printSettings.PageSetup.UsePrinterDefaults,
+                        FirstPageNumber = printSettings.PageSetup.FirstPageNumber,
+                        HorizontalDpi = printSettings.PageSetup.HorizontalDpi,
+                        VerticalDpi = printSettings.PageSetup.VerticalDpi,
+                        BlackAndWhite = printSettings.PageSetup.BlackAndWhite,
+                        Draft = printSettings.PageSetup.Draft
+                    },
+                HeaderFooter = printSettings.HeaderFooter is null
+                    ? null
+                    : new ChartHeaderFooterModel
+                    {
+                        DifferentOddEven = printSettings.HeaderFooter.DifferentOddEven,
+                        DifferentFirst = printSettings.HeaderFooter.DifferentFirst,
+                        AlignWithMargins = printSettings.HeaderFooter.AlignWithMargins,
+                        OddHeader = printSettings.HeaderFooter.OddHeader,
+                        OddFooter = printSettings.HeaderFooter.OddFooter,
+                        EvenHeader = printSettings.HeaderFooter.EvenHeader,
+                        EvenFooter = printSettings.HeaderFooter.EvenFooter,
+                        FirstHeader = printSettings.HeaderFooter.FirstHeader,
+                        FirstFooter = printSettings.HeaderFooter.FirstFooter
+                    }
             };
 }
 

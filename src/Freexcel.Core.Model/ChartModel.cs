@@ -107,6 +107,20 @@ public sealed class ChartPrintSettingsModel
 {
     public ChartPageMarginsModel? PageMargins { get; set; }
     public ChartPageSetupModel? PageSetup { get; set; }
+    public ChartHeaderFooterModel? HeaderFooter { get; set; }
+}
+
+public sealed class ChartHeaderFooterModel
+{
+    public bool? DifferentOddEven { get; set; }
+    public bool? DifferentFirst { get; set; }
+    public bool? AlignWithMargins { get; set; }
+    public string? OddHeader { get; set; }
+    public string? OddFooter { get; set; }
+    public string? EvenHeader { get; set; }
+    public string? EvenFooter { get; set; }
+    public string? FirstHeader { get; set; }
+    public string? FirstFooter { get; set; }
 }
 
 public sealed class ChartColorMapOverrideModel

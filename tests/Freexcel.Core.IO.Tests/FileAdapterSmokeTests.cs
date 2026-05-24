@@ -14640,6 +14640,18 @@ public partial class FileAdapterSmokeTests
                     VerticalDpi = 600,
                     BlackAndWhite = true,
                     Draft = false
+                },
+                HeaderFooter = new ChartHeaderFooterModel
+                {
+                    DifferentOddEven = true,
+                    DifferentFirst = true,
+                    AlignWithMargins = false,
+                    OddHeader = "&CSales chart",
+                    OddFooter = "&P of &N",
+                    EvenHeader = "&LConfidential",
+                    EvenFooter = "&RPrepared",
+                    FirstHeader = "&CFirst page",
+                    FirstFooter = "&D"
                 }
             },
             RoundedCorners = true,
@@ -14760,6 +14772,16 @@ public partial class FileAdapterSmokeTests
             pageSetup.Attribute("verticalDpi")!.Value.Should().Be("600");
             pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
             pageSetup.Attribute("draft")!.Value.Should().Be("0");
+            var headerFooter = printSettings.Element(chartNs + "headerFooter")!;
+            headerFooter.Attribute("differentOddEven")!.Value.Should().Be("1");
+            headerFooter.Attribute("differentFirst")!.Value.Should().Be("1");
+            headerFooter.Attribute("alignWithMargins")!.Value.Should().Be("0");
+            headerFooter.Element(chartNs + "oddHeader")!.Value.Should().Be("&CSales chart");
+            headerFooter.Element(chartNs + "oddFooter")!.Value.Should().Be("&P of &N");
+            headerFooter.Element(chartNs + "evenHeader")!.Value.Should().Be("&LConfidential");
+            headerFooter.Element(chartNs + "evenFooter")!.Value.Should().Be("&RPrepared");
+            headerFooter.Element(chartNs + "firstHeader")!.Value.Should().Be("&CFirst page");
+            headerFooter.Element(chartNs + "firstFooter")!.Value.Should().Be("&D");
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
             var pivotFormats = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "pivotFmts")!;
             pivotFormats.Element(chartNs + "pivotFmt")!.Element(chartNs + "idx")!.Attribute("val")!.Value.Should().Be("0");
@@ -16390,7 +16412,18 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(source);
 
         var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
-        table.NativeAttributes.Should().ContainKey("published").WhoseValue.Should().Be("1");
+        table.Published.Should().BeTrue();
+        table.Comment.Should().Be("Freexcel root comment");
+        table.HeaderRowCount.Should().Be(1);
+        table.TotalsRowCount.Should().Be(0);
+        table.InsertRow.Should().BeFalse();
+        table.InsertRowShift.Should().BeFalse();
+        table.NativeAttributes.Should().NotContainKey("published");
+        table.NativeAttributes.Should().NotContainKey("comment");
+        table.NativeAttributes.Should().NotContainKey("headerRowCount");
+        table.NativeAttributes.Should().NotContainKey("totalsRowCount");
+        table.NativeAttributes.Should().NotContainKey("insertRow");
+        table.NativeAttributes.Should().NotContainKey("insertRowShift");
         table.NativeAttributes.Should().ContainKey("headerRowDxfId").WhoseValue.Should().Be("2");
         table.NativeChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEXCEL-TABLE-ROOT-EXT}");
@@ -16402,6 +16435,11 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         tableXml.Should().Contain("published=\"1\"");
+        tableXml.Should().Contain("comment=\"Freexcel root comment\"");
+        tableXml.Should().Contain("headerRowCount=\"1\"");
+        tableXml.Should().Contain("totalsRowCount=\"0\"");
+        tableXml.Should().Contain("insertRow=\"0\"");
+        tableXml.Should().Contain("insertRowShift=\"0\"");
         tableXml.Should().Contain("headerRowDxfId=\"2\"");
         tableXml.Should().Contain("extLst");
         tableXml.Should().Contain("{FREEXCEL-TABLE-ROOT-EXT}");
@@ -19513,6 +19551,11 @@ public partial class FileAdapterSmokeTests
                ref="A1:B3"
                totalsRowShown="0"
                published="1"
+               comment="Freexcel root comment"
+               headerRowCount="1"
+               totalsRowCount="0"
+               insertRow="0"
+               insertRowShift="0"
                headerRowDxfId="2">
           <autoFilter ref="A1:B3"/>
           <tableColumns count="2">
