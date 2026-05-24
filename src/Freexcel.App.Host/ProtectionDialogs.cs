@@ -172,16 +172,22 @@ public sealed class ConfirmPasswordDialog : Window
         if (!ProtectionDialogPlanner.PasswordsMatch(_password, _confirmationBox.Password))
         {
             MessageBox.Show(this, "The confirmation password does not match.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusConfirmationInput();
             return;
         }
 
         DialogResult = true;
     }
 
-    private void FocusInitialKeyboardTarget()
+    private void FocusConfirmationInput()
     {
         _confirmationBox.Focus();
         Keyboard.Focus(_confirmationBox);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        FocusConfirmationInput();
     }
 }
 
@@ -310,6 +316,7 @@ public sealed class AllowEditRangeDialog : Window
         if (!ProtectionDialogPlanner.TryParseAllowEditRange(_rangeBox.Text, _sheetId, out var range))
         {
             MessageBox.Show(this, "Enter a valid range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusRangeInput();
             return;
         }
 
@@ -343,6 +350,11 @@ public sealed class AllowEditRangeDialog : Window
     }
 
     private void FocusInitialKeyboardTarget()
+    {
+        FocusRangeInput();
+    }
+
+    private void FocusRangeInput()
     {
         _rangeBox.Focus();
         _rangeBox.SelectAll();
