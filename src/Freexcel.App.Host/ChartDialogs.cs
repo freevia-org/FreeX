@@ -109,6 +109,7 @@ public sealed class ChartStyleDialog : Window
         stack.Children.Add(_styleGallery);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartStyleDialogResult FromChart(ChartModel chart) =>
@@ -128,6 +129,12 @@ public sealed class ChartStyleDialog : Window
             ? CreateResult(option.StyleId)
             : CreateResult(null);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _styleGallery.Focus();
+        Keyboard.Focus(_styleGallery);
     }
 
     private static DataTemplate CreateStyleGalleryTemplate()

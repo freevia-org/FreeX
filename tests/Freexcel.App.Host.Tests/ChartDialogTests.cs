@@ -254,6 +254,20 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartStyleDialogOpenedFromKeyboard_FocusesStyleGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class ChartStyleDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record MoveChartDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_styleGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_styleGallery);");
+    }
+
+    [Fact]
     public void MoveChartDialog_CreatesObjectAndNewSheetResults()
     {
         MoveChartDialog.CreateObjectResult("Sheet2").Should().Be(
