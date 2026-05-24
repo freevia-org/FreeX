@@ -674,6 +674,42 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void RibbonTabs_DoNotUseCommandKeyTipPrefixesWithinTheSameTab()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var collisions = document
+            .Descendants(presentation + "TabItem")
+            .SelectMany(tab =>
+            {
+                var commands = tab.Descendants()
+                    .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is not null)
+                    .Where(element => element.Name != presentation + "MenuItem")
+                    .Select(element => new
+                    {
+                        Scope = tab.Attribute("Header")?.Value ?? "Tab",
+                        Name = element.Attribute(local + "RibbonTooltip.Title")?.Value
+                            ?? element.Attribute("Content")?.Value
+                            ?? element.Attribute("Header")?.Value
+                            ?? element.Attribute("Click")?.Value
+                            ?? element.Name.LocalName,
+                        KeyTip = element.Attribute(local + "RibbonTooltip.KeyTip")!.Value
+                    })
+                    .ToList();
+
+                return commands.SelectMany(command => commands
+                    .Where(other => !ReferenceEquals(command, other))
+                    .Where(other => other.KeyTip.StartsWith(command.KeyTip, StringComparison.OrdinalIgnoreCase))
+                    .Select(other => $"{command.Scope}:{command.Name}:{command.KeyTip} prefixes {other.Name}:{other.KeyTip}"));
+            })
+            .ToList();
+
+        collisions.Should().BeEmpty("command keytips in the same ribbon scope must not shadow longer sibling keytips");
+    }
+
+    [Fact]
     public void KeyedRibbonDropDowns_HaveKeyTipsForDirectMenuItems()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -1228,6 +1264,38 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void RibbonMenus_DoNotUseKeyTipPrefixesWithinTheSameMenu()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var collisions = document
+            .Descendants(presentation + "ContextMenu")
+            .Concat(document.Descendants(presentation + "MenuItem")
+                .Where(menuItem => menuItem.Elements(presentation + "MenuItem").Any()))
+            .SelectMany(menu =>
+            {
+                var items = menu.Elements(presentation + "MenuItem")
+                    .Select(item => new
+                    {
+                        Header = item.Attribute("Header")?.Value ?? item.Attribute("Click")?.Value ?? "MenuItem",
+                        KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value
+                    })
+                    .Where(item => !string.IsNullOrWhiteSpace(item.KeyTip))
+                    .ToList();
+
+                return items.SelectMany(item => items
+                    .Where(other => !ReferenceEquals(item, other))
+                    .Where(other => other.KeyTip!.StartsWith(item.KeyTip!, StringComparison.OrdinalIgnoreCase))
+                    .Select(other => $"{menu.Attribute("Header")?.Value ?? "ContextMenu"}:{item.Header}:{item.KeyTip} prefixes {other.Header}:{other.KeyTip}"));
+            })
+            .ToList();
+
+        collisions.Should().BeEmpty("menu-level keytips must not shadow longer sibling keytips");
+    }
+
+    [Fact]
     public void ErrorCheckingButton_ExposesOptionsEntryPoint()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -1270,7 +1338,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Breaks");
 
         breaksButton.Attribute("Click")?.Value.Should().Be("PageBreaksBtn_Click");
-        breaksButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("B");
+        breaksButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("BK");
         breaksButton.Descendants(presentation + "MenuItem")
             .Select(item => new
             {

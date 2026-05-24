@@ -33,6 +33,7 @@ internal static class XlsxChartDataLabelReader
         chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separator?.Attribute("val")?.Value ?? separator?.Value);
         ApplyDataLabelShapeProperties(dataLabels.Element(ChartNs + "spPr"), chart);
         ApplyDataLabelTextProperties(dataLabels.Element(ChartNs + "txPr"), chart);
+        ApplyDataLabelLeaderLineProperties(dataLabels.Element(ChartNs + "leaderLines")?.Element(ChartNs + "spPr"), chart);
     }
 
     public static void ApplyPointDataLabels(XElement series, int seriesIndex, ChartModel chart)
@@ -141,6 +142,34 @@ internal static class XlsxChartDataLabelReader
         {
             chart.DataLabelTextColor = textColor;
             chart.DataLabelTextThemeColor = null;
+        }
+    }
+
+    private static void ApplyDataLabelLeaderLineProperties(XElement? shapeProperties, ChartModel chart)
+    {
+        var line = shapeProperties?.Element(DrawingNs + "ln");
+        if (line is null)
+            return;
+
+        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            chart.DataLabelLeaderLineThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
+
+        chart.DataLabelLeaderLineDashStyle = XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(
+            line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value);
+
+        var lineFill = line.Element(DrawingNs + "solidFill");
+        if (lineFill is null)
+            return;
+
+        if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var themeColor))
+        {
+            chart.DataLabelLeaderLineThemeColor = themeColor;
+            chart.DataLabelLeaderLineColor = null;
+        }
+        else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var color))
+        {
+            chart.DataLabelLeaderLineColor = color;
+            chart.DataLabelLeaderLineThemeColor = null;
         }
     }
 

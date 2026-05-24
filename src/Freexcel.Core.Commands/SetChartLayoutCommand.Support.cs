@@ -333,6 +333,10 @@ public sealed partial class SetChartLayoutCommand
         chart.DataLabelBorderThickness = snapshot.DataLabelBorderThickness ?? 0;
         chart.DataLabelFontSize = snapshot.DataLabelFontSize ?? 11;
         chart.DataLabelAngle = snapshot.DataLabelAngle ?? 0;
+        chart.DataLabelLeaderLineColor = snapshot.DataLabelLeaderLineColor;
+        chart.DataLabelLeaderLineThemeColor = snapshot.DataLabelLeaderLineThemeColor;
+        chart.DataLabelLeaderLineThickness = snapshot.DataLabelLeaderLineThickness ?? 1;
+        chart.DataLabelLeaderLineDashStyle = snapshot.DataLabelLeaderLineDashStyle ?? ChartLineDashStyle.Solid;
         chart.ShowLinearTrendline = snapshot.ShowLinearTrendline ?? false;
         chart.TrendlineType = snapshot.TrendlineType ?? ChartTrendlineType.Linear;
         chart.TrendlinePeriod = snapshot.TrendlinePeriod ?? 2;

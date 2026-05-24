@@ -8348,6 +8348,80 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartDataLabelLeaderLineFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartDataLabelLeaderLineFormattingPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1200));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2400));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(3600));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:dLbls>
+                      <c:dLblPos val="outEnd"/>
+                      <c:showVal val="1"/>
+                      <c:showLeaderLines val="1"/>
+                      <c:leaderLines>
+                        <c:spPr>
+                          <a:ln w="25400">
+                            <a:solidFill><a:srgbClr val="C00000"/></a:solidFill>
+                            <a:prstDash val="dash"/>
+                          </a:ln>
+                        </c:spPr>
+                      </c:leaderLines>
+                    </c:dLbls>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ShowDataLabelCallouts.Should().BeTrue();
+        loadedChart.DataLabelLeaderLineColor.Should().Be(new CellColor(192, 0, 0));
+        loadedChart.DataLabelLeaderLineThickness.Should().Be(2);
+        loadedChart.DataLabelLeaderLineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var leaderLine = chartXml.Descendants(chartNs + "leaderLines").Should().ContainSingle().Subject;
+        var line = leaderLine.Descendants(drawingNs + "ln").Should().ContainSingle().Subject;
+        line.Attribute("w")?.Value.Should().Be("25400");
+        line.Descendants(drawingNs + "srgbClr").Should().ContainSingle()
+            .Which.Attribute("val")?.Value.Should().Be("C00000");
+        line.Descendants(drawingNs + "prstDash").Should().ContainSingle()
+            .Which.Attribute("val")?.Value.Should().Be("dash");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartPointDataLabelPackagePart()
     {
         var workbook = new Workbook("ChartPointDataLabelPackageSave");

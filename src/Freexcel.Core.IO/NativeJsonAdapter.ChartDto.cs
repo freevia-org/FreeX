@@ -181,6 +181,10 @@ public sealed partial class NativeJsonAdapter
         public double DataLabelBorderThickness { get; set; }
         public double DataLabelFontSize { get; set; } = 11;
         public double DataLabelAngle { get; set; }
+        public CellColor? DataLabelLeaderLineColor { get; set; }
+        public ThemeColorReferenceDto? DataLabelLeaderLineThemeColor { get; set; }
+        public double DataLabelLeaderLineThickness { get; set; } = 1;
+        public ChartLineDashStyle DataLabelLeaderLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
         public bool ShowLinearTrendline { get; set; }
         public string? TrendlineName { get; set; }
         public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
