@@ -863,6 +863,7 @@ public sealed class ChartDialogTests
         {
             "ChartTypeDialogs.cs",
             "ChartTypeDialogs.Planner.cs",
-            "ChartTypeDialogs.PickerUi.cs"
+            "ChartTypeDialogs.PickerUi.cs",
+            "ChartTypeDialogs.Change.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 }
