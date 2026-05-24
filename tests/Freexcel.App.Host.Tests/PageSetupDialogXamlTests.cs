@@ -181,8 +181,12 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("target.Text = targetName switch");
         source.Should().Contain("selection.ToString()");
         source.Should().Contain("CellAddress.NumberToColumnName(selection.Start.Col)");
-        source.Should().Contain("target.Focus()");
-        source.Should().Contain("target.SelectAll()");
+        var pickerHandlerSource = source[
+            source.IndexOf("private void RangePickerButton_Click", StringComparison.Ordinal)..
+            source.IndexOf("public static PageSetupRangeSelectionRequest", StringComparison.Ordinal)];
+        pickerHandlerSource.Should().Contain("target.Focus()");
+        pickerHandlerSource.Should().Contain("target.SelectAll()");
+        pickerHandlerSource.Should().Contain("Keyboard.Focus(target)");
     }
 
     [Fact]
