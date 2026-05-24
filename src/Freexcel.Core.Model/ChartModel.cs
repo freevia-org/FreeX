@@ -49,6 +49,10 @@ public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
+public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
+
+public enum ChartAxisCrossBetween { Between, MidCategory }
+
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
 public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
@@ -297,6 +301,9 @@ public sealed class ChartModel
     public int XAxisLabelOffset { get; set; }
     public CellColor? XAxisLineColor { get; set; }
     public double XAxisLineThickness { get; set; } = 1;
+    public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
+    public double? XAxisCrossesAt { get; set; }
+    public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
     public double? YAxisMinimum { get; set; }
     public double? YAxisMaximum { get; set; }
     public double? YAxisMajorUnit { get; set; }
@@ -317,6 +324,9 @@ public sealed class ChartModel
     public double YAxisLabelAngle { get; set; }
     public CellColor? YAxisLineColor { get; set; }
     public double YAxisLineThickness { get; set; } = 1;
+    public ChartAxisCrosses YAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
+    public double? YAxisCrossesAt { get; set; }
+    public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
     public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;
