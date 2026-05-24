@@ -86,6 +86,14 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void DialogSelectionGuards_FocusViewsListWhenNoViewIsSelected()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+
+        source.Should().Contain("if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }");
+    }
+
+    [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));

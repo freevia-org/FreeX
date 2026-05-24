@@ -243,6 +243,21 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogInvalidCustomDelimiter_ReturnsToStepTwoAndFocusesOtherDelimiter()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("FocusInvalidCustomDelimiterInput();");
+        source.Should().Contain("private void FocusInvalidCustomDelimiterInput()");
+        source.Should().Contain("_wizardStep = 2;");
+        source.Should().Contain("_delimitedButton.IsChecked = true;");
+        source.Should().Contain("_otherBox.IsChecked = true;");
+        source.Should().Contain("_customBox.Focus();");
+        source.Should().Contain("_customBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_customBox);");
+    }
+
+    [Fact]
     public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
     {
         TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
