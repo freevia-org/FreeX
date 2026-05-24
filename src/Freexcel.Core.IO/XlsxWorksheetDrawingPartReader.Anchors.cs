@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
@@ -40,6 +41,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return null;
 
         return new XlsxDrawingAnchor(
+            ChartDrawingAnchorKind.TwoCell,
             fromRow,
             fromCol,
             fromRowOffset,
@@ -71,6 +73,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return null;
 
         return new XlsxDrawingAnchor(
+            ChartDrawingAnchorKind.OneCell,
             fromRow,
             fromCol,
             fromRowOffset,
@@ -101,6 +104,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return null;
 
         return new XlsxDrawingAnchor(
+            ChartDrawingAnchorKind.Absolute,
             FromRowZeroBased: 0,
             FromColumnZeroBased: 0,
             FromRowOffset: 0,
