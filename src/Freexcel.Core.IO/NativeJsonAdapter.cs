@@ -114,6 +114,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.SplitColumn = sheet.FrozenRows > 0 || sheet.FrozenCols > 0
                 ? null
                 : NativeJsonValueSanitizer.ValidColumnPaneOrNull(sDto.SplitColumn);
+            sheet.AutoFilter = ToWorksheetAutoFilter(sDto.AutoFilter);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }

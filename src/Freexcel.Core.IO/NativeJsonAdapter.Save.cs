@@ -142,6 +142,7 @@ public sealed partial class NativeJsonAdapter
                 SplitColumn = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(s.FrozenRows) > 0 || NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(s.FrozenCols) > 0
                     ? null
                     : NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.SplitColumn),
+                AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter),
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),

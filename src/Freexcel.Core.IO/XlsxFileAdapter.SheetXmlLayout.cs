@@ -32,6 +32,7 @@ public sealed partial class XlsxFileAdapter
         uint? ViewLeftCol,
         uint? ActiveRow,
         uint? ActiveCol,
+        WorksheetAutoFilterModel? AutoFilter,
         bool? UsePrinterDefaults,
         int? PrintCopies,
         bool? FitToPage,
@@ -138,6 +139,13 @@ public sealed partial class XlsxFileAdapter
 
     private static double? ReadDoubleAttribute(XElement element, string attributeName) =>
         XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
+
+    private static WorksheetAutoFilterModel? ReadWorksheetAutoFilter(XElement? autoFilter) =>
+        autoFilter is null
+            ? null
+            : new WorksheetAutoFilterModel(
+                autoFilter.Attribute("ref")?.Value,
+                autoFilter.ToString(SaveOptions.DisableFormatting));
 
     private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
         XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);
@@ -308,6 +316,7 @@ public sealed partial class XlsxFileAdapter
             viewTopLeft?.Col,
             activeCell?.Row,
             activeCell?.Col,
+            ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter")),
             ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
             ParseOptionalBool(pageSetUpPr?.Attribute("fitToPage")?.Value),

@@ -14,10 +14,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double rawMonth = ToNumber(args[1]);
-        double rawDay = ToNumber(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DateScalar(value, rawMonth, rawDay));
-        return DateScalar(args[0], rawMonth, rawDay);
+        if (args[0] is RangeValue yearRange)
+        {
+            double rawMonth = ToNumber(args[1]);
+            double rawDay = ToNumber(args[2]);
+            return MapUnaryTextRange(yearRange, value => DateScalar(value, rawMonth, rawDay));
+        }
+        if (args[1] is RangeValue monthRange)
+        {
+            double rawDay = ToNumber(args[2]);
+            return MapUnaryTextRange(monthRange, value => DateScalar(args[0], ToNumber(value), rawDay));
+        }
+        if (args[2] is RangeValue dayRange)
+        {
+            double rawMonth = ToNumber(args[1]);
+            return MapUnaryTextRange(dayRange, value => DateScalar(args[0], rawMonth, ToNumber(value)));
+        }
+        return DateScalar(args[0], ToNumber(args[1]), ToNumber(args[2]));
     }
 
     private static ScalarValue DateScalar(ScalarValue yearValue, double rawMonth, double rawDay)
@@ -291,9 +304,22 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TimeScalar(value, rawM, rawS));
-        return TimeScalar(args[0], rawM, rawS);
+        if (args[0] is RangeValue hourRange)
+        {
+            double rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
+            return MapUnaryTextRange(hourRange, value => TimeScalar(value, rawM, rawS));
+        }
+        if (args[1] is RangeValue minuteRange)
+        {
+            double rawS = ToNumber(args[2]);
+            return MapUnaryTextRange(minuteRange, value => TimeScalar(args[0], ToNumber(value), rawS));
+        }
+        if (args[2] is RangeValue secondRange)
+        {
+            double rawM = ToNumber(args[1]);
+            return MapUnaryTextRange(secondRange, value => TimeScalar(args[0], rawM, ToNumber(value)));
+        }
+        return TimeScalar(args[0], ToNumber(args[1]), ToNumber(args[2]));
     }
 
     private static ScalarValue TimeScalar(ScalarValue hourValue, double rawM, double rawS)

@@ -14178,6 +14178,9 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AutoFilter.Should().NotBeNull();
+        loaded.GetSheetAt(0).AutoFilter!.Reference.Should().Be("A1:B3");
+        loaded.GetSheetAt(0).AutoFilter!.NativeXml.Should().Contain("filterColumn");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
