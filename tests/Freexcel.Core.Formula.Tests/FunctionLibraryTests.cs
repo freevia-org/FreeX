@@ -4505,10 +4505,23 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Dollar_BlankDecimalsSlot_UsesZeroDecimals()
+    {
+        _eval.Evaluate("=DOLLAR(1234.5,)", MakeSheet())
+            .Should().Be(new TextValue("$1,235"));
+    }
+
+    [Fact]
     public void Dollar_NegativeDecimals_RoundsLeftOfDecimal()
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=DOLLAR(1234.567,-1)", sheet).Should().Be(new TextValue("$1,230"));
+    }
+
+    [Fact]
+    public void Dollar_NegativeDecimalsRoundedToZero_FormatsWithoutParentheses()
+    {
+        _eval.Evaluate("=DOLLAR(-1,-1)", MakeSheet()).Should().Be(new TextValue("$0"));
     }
 
     [Fact]

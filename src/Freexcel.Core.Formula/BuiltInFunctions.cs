@@ -1289,14 +1289,19 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         double n = ToNumber(args[0]);
         int dec = 2;
-        if (args.Count > 1 && args[1] is not BlankValue)
+        if (args.Count > 1 && args[1] is BlankValue)
+        {
+            dec = 0;
+        }
+        else if (args.Count > 1)
         {
             double rawDec = ToNumber(args[1]);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        var formatted = "$" + FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
-        return TextResult(n < 0 ? "(" + formatted + ")" : formatted);
+        var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
+        var formatted = "$" + numberText;
+        return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
     }
 
     private static string FormatRoundedNumber(double value, int decimals, bool useCommas)
