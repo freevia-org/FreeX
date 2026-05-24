@@ -126,7 +126,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ColorPickerButtons_OpenContextNamedExcelDialogs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
+        var source = ReadFormatCellsDialogSource();
 
         source.Should().Contain("PickColorInto(DlgFontColorBox, allowNoColor: false, \"Font Color\")");
         source.Should().Contain("PickColorInto(DlgFillColorBox, allowNoColor: true, \"Fill Color\")");
@@ -459,7 +459,7 @@ public sealed class FormatCellsDialogXamlTests
     public void FormatCellsDialog_FillTab_ExposesBackgroundPatternControlsAndSamplePreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
+        var source = ReadFormatCellsDialogSource();
 
         foreach (var text in new[]
         {
@@ -1019,6 +1019,17 @@ public sealed class FormatCellsDialogXamlTests
         var dialog = new FormatCellsDialog(current);
         dialog.Show();
         return dialog;
+    }
+
+    private static string ReadFormatCellsDialogSource()
+    {
+        return string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.Number.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.Font.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.Fill.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.Border.cs")));
     }
 
     private static T GetControl<T>(FormatCellsDialog dialog, string name)

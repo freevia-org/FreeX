@@ -153,6 +153,22 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameDefinitionDialogInvalidInputs_StayOpenAndFocusInvalidField()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        source.Should().Contain("Func<string, bool>? isValidRange");
+        source.Should().Contain("isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)");
+        source.Should().Contain("FocusNameInput();");
+        source.Should().Contain("FocusRefersToInput();");
+        source.Should().Contain("private void FocusNameInput()");
+        source.Should().Contain("private void FocusRefersToInput()");
+        source.Should().Contain("_refersToBox.Focus();");
+        source.Should().Contain("_refersToBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_refersToBox);");
+    }
+
+    [Fact]
     public void NameManagerDialogOpenedFromKeyboard_FocusesNamesListOrNewButton()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
@@ -166,6 +182,20 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("Keyboard.Focus(NamesList);");
         source.Should().Contain("NewButton.Focus();");
         source.Should().Contain("Keyboard.Focus(NewButton);");
+    }
+
+    [Fact]
+    public void NameManagerWarnings_FocusRelevantNameManagerField()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        source.Should().Contain("FocusNamesListOrNewButton();");
+        source.Should().Contain("private void FocusNamesListOrNewButton()");
+        source.Should().Contain("FocusRefersToSummary();");
+        source.Should().Contain("private void FocusRefersToSummary()");
+        source.Should().Contain("RefersToBox.Focus();");
+        source.Should().Contain("RefersToBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(RefersToBox);");
     }
 
     [Fact]

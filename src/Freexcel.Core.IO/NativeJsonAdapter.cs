@@ -79,6 +79,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var entry in sDto.ColOutlineLevels ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index) && NativeJsonValueSanitizer.IsValidOutlineLevel(entry.Value))
                     sheet.ColOutlineLevels[entry.Index] = entry.Value;
+            sheet.OutlineSummaryBelow = sDto.OutlineSummaryBelow;
+            sheet.OutlineSummaryRight = sDto.OutlineSummaryRight;
+            sheet.ShowOutlineSymbols = sDto.ShowOutlineSymbols;
+            sheet.ApplyOutlineStyles = sDto.ApplyOutlineStyles;
             foreach (var row in sDto.GroupHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.GroupHiddenRows.Add(row);
@@ -145,9 +149,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (sDto.PageOrder is { } pageOrder && Enum.IsDefined(pageOrder))
                 sheet.PageOrder = pageOrder;
             sheet.FirstPageNumber = sDto.FirstPageNumber is > 0 ? sDto.FirstPageNumber : null;
+            sheet.UsePrinterDefaults = sDto.UsePrinterDefaults;
+            sheet.PrintCopies = sDto.PrintCopies is > 0 ? sDto.PrintCopies : null;
             sheet.PrintBlackAndWhite = sDto.PrintBlackAndWhite;
             sheet.PrintDraftQuality = sDto.PrintDraftQuality;
             sheet.PrintQualityDpi = sDto.PrintQualityDpi is > 0 ? sDto.PrintQualityDpi : null;
+            sheet.PrintQualityVerticalDpi = sDto.PrintQualityVerticalDpi is > 0 ? sDto.PrintQualityVerticalDpi : null;
             if (sDto.PrintErrorValue is { } printErrorValue && Enum.IsDefined(printErrorValue))
                 sheet.PrintErrorValue = printErrorValue;
             if (sDto.PrintComments is { } printComments && Enum.IsDefined(printComments))
@@ -156,6 +163,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 sheet.ScaleToFit = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(
                     new WorksheetScaleToFit(scaleToFit.ScalePercent, scaleToFit.FitToPagesWide, scaleToFit.FitToPagesTall),
                     WorksheetScaleToFit.Default);
+            sheet.FitToPage = sDto.FitToPage;
+            sheet.AutoPageBreaks = sDto.AutoPageBreaks;
             foreach (var rowBreak in sDto.RowPageBreaks ?? [])
                 if (rowBreak is >= 2 and <= CellAddress.MaxRow)
                     sheet.RowPageBreaks.Add(rowBreak);

@@ -112,6 +112,10 @@ public sealed partial class NativeJsonAdapter
         public List<uint> HiddenCols { get; set; } = [];
         public List<UIntIntDto> RowOutlineLevels { get; set; } = [];
         public List<UIntIntDto> ColOutlineLevels { get; set; } = [];
+        public bool? OutlineSummaryBelow { get; set; }
+        public bool? OutlineSummaryRight { get; set; }
+        public bool? ShowOutlineSymbols { get; set; }
+        public bool? ApplyOutlineStyles { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -160,12 +164,17 @@ public sealed partial class NativeJsonAdapter
         public bool CenterVerticallyOnPage { get; set; }
         public WorksheetPageOrder? PageOrder { get; set; }
         public int? FirstPageNumber { get; set; }
+        public bool? UsePrinterDefaults { get; set; }
+        public int? PrintCopies { get; set; }
         public bool PrintBlackAndWhite { get; set; }
         public bool PrintDraftQuality { get; set; }
         public int? PrintQualityDpi { get; set; }
+        public int? PrintQualityVerticalDpi { get; set; }
         public WorksheetPrintErrorValue? PrintErrorValue { get; set; }
         public WorksheetPrintComments? PrintComments { get; set; }
         public ScaleToFitDto? ScaleToFit { get; set; }
+        public bool? FitToPage { get; set; }
+        public bool? AutoPageBreaks { get; set; }
         public List<uint> RowPageBreaks { get; set; } = [];
         public List<uint> ColumnPageBreaks { get; set; } = [];
         public List<string> MergedRegions { get; set; } = [];

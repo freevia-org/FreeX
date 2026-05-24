@@ -14,15 +14,31 @@ public sealed class XlsxFileAdapterFormatTests
         var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
         var diagnosticsSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetDiagnosticsMapper.cs"));
         var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
+        var worksheetMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
+            .ReplaceLineEndings("\n");
+        var worksheetCellMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
+        var pivotReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
+        var styleOnlyStripperSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
+        var sheetXmlLayoutSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
+        saveSource.Should().Contain("GetStyleOnlyRuns");
         savePostProcessingSource.Should().NotContain("GetUsedCells()");
         diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
-        sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage)");
+        sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting)");
+        adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream)");
+        sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");
         sanitizerSource.Should().Contain("return sourcePackage;");
+        worksheetMetadataSource.Should().NotContain(".Descendants(workbookNs + \"c\")\n                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute(\"r\")?.Value))\n                .ToList();");
+        worksheetMetadataSource.Should().Contain("MergeWorksheetCellNativeMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs)");
+        worksheetCellMetadataSource.Should().Contain("private static bool MergeWorksheetCellNativeMetadata");
+        pivotReferencePreserverSource.Should().Contain("HasWorksheetPivotTableRelationships(sourceArchive, context)");
+        adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
+        styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex.Value)");
+        sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
     }
 
     [Fact]

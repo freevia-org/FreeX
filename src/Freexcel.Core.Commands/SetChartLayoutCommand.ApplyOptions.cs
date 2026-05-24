@@ -239,6 +239,15 @@ public sealed partial class SetChartLayoutCommand
             chart.DataLabelFontSize = ClampFinite(options.DataLabelFontSize.Value, 6, 72);
         if (options.DataLabelAngle is not null)
             chart.DataLabelAngle = ClampFinite(options.DataLabelAngle.Value, -90, 90);
+        if (options.DataLabelLeaderLineColor is not null)
+        {
+            chart.DataLabelLeaderLineColor = options.DataLabelLeaderLineColor;
+            chart.DataLabelLeaderLineThemeColor = null;
+        }
+        if (options.DataLabelLeaderLineThickness is not null)
+            chart.DataLabelLeaderLineThickness = ClampFinite(options.DataLabelLeaderLineThickness.Value, 0.5, 10);
+        if (options.DataLabelLeaderLineDashStyle is not null)
+            chart.DataLabelLeaderLineDashStyle = ValidEnumOrDefault(options.DataLabelLeaderLineDashStyle.Value, ChartLineDashStyle.Solid);
         if (options.ShowLinearTrendline is not null)
             chart.ShowLinearTrendline = options.ShowLinearTrendline.Value;
         if (options.TrendlineType is not null)

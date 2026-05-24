@@ -223,6 +223,20 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyViewOptions()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            InitialView: PdfInitialView.TwoColumnLeft,
+            OpenMode: PdfOpenMode.FullScreen);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Active sheet only; standard quality; PDF initial view is PDF-only; PDF open mode is PDF-only; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyMinimumSize()
     {
         var options = new ExportOptions(
@@ -829,6 +843,33 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedInlineTextBlocks()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateNestedInlineTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Nested Inline PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForAccessText()
     {
         StaTestRunner.Run(() =>
@@ -901,6 +942,168 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Label PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForObjectContentControls()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateObjectContentControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("12345");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControls()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHeaderedContentControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Header PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControlObjectHeaders()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateObjectHeaderedContentControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("67890");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControlHeaderElements()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHeaderElementContentControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Element Header PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForItemsControlStringItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateStringItemsControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Item PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForItemsControlObjectItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateObjectItemsControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("24680");
             }
             finally
             {
@@ -1153,6 +1356,27 @@ public class ExportPlannerTests
         return document;
     }
 
+    private static FixedDocument CreateNestedInlineTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new Run("Nested "));
+        text.Inlines.Add(new Bold(new Run("Inline ")));
+        text.Inlines.Add(new Italic(new Run("PDF Text")));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
     private static FixedDocument CreateAccessTextDocument()
     {
         var document = new FixedDocument();
@@ -1208,6 +1432,143 @@ public class ExportPlannerTests
             Margin = new System.Windows.Thickness(12),
             Padding = new System.Windows.Thickness(0)
         });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateObjectContentControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new Label
+        {
+            Content = 12345,
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateHeaderedContentControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new GroupBox
+        {
+            Header = "Header PDF Text",
+            Content = "",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateObjectHeaderedContentControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new GroupBox
+        {
+            Header = 67890,
+            Content = "",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateHeaderElementContentControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(220, 120);
+        var page = new FixedPage
+        {
+            Width = 220,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new GroupBox
+        {
+            Header = new TextBlock { Text = "Element Header PDF Text" },
+            Content = "",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateStringItemsControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var items = new ListBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0)
+        };
+        items.Items.Add("Item PDF Text");
+        page.Children.Add(items);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateObjectItemsControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var items = new ListBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0)
+        };
+        items.Items.Add(24680);
+        page.Children.Add(items);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);
         document.Pages.Add(content);

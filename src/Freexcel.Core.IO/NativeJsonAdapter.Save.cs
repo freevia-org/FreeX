@@ -111,6 +111,10 @@ public sealed partial class NativeJsonAdapter
                     .Where(pair => NativeJsonValueSanitizer.IsValidColumnIndex(pair.Key) && NativeJsonValueSanitizer.IsValidOutlineLevel(pair.Value))
                     .Select(pair => new UIntIntDto { Index = pair.Key, Value = pair.Value })
                     .ToList(),
+                OutlineSummaryBelow = s.OutlineSummaryBelow,
+                OutlineSummaryRight = s.OutlineSummaryRight,
+                ShowOutlineSymbols = s.ShowOutlineSymbols,
+                ApplyOutlineStyles = s.ApplyOutlineStyles,
                 GroupHiddenRows = s.GroupHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
                 GroupHiddenCols = s.GroupHiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 ViewMode = NativeJsonValueSanitizer.ValidEnumOrDefault(s.ViewMode, WorksheetViewMode.Normal),
@@ -163,9 +167,12 @@ public sealed partial class NativeJsonAdapter
                 CenterVerticallyOnPage = s.CenterVerticallyOnPage,
                 PageOrder = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrder, WorksheetPageOrder.DownThenOver),
                 FirstPageNumber = s.FirstPageNumber is > 0 ? s.FirstPageNumber : null,
+                UsePrinterDefaults = s.UsePrinterDefaults,
+                PrintCopies = s.PrintCopies is > 0 ? s.PrintCopies : null,
                 PrintBlackAndWhite = s.PrintBlackAndWhite,
                 PrintDraftQuality = s.PrintDraftQuality,
                 PrintQualityDpi = s.PrintQualityDpi is > 0 ? s.PrintQualityDpi : null,
+                PrintQualityVerticalDpi = s.PrintQualityVerticalDpi is > 0 ? s.PrintQualityVerticalDpi : null,
                 PrintErrorValue = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintErrorValue, WorksheetPrintErrorValue.Displayed),
                 PrintComments = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintComments, WorksheetPrintComments.None),
                 ScaleToFit = new ScaleToFitDto
@@ -174,6 +181,8 @@ public sealed partial class NativeJsonAdapter
                     FitToPagesWide = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).FitToPagesWide,
                     FitToPagesTall = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).FitToPagesTall
                 },
+                FitToPage = s.FitToPage,
+                AutoPageBreaks = s.AutoPageBreaks,
                 RowPageBreaks = s.RowPageBreaks.Where(rowBreak => rowBreak is >= 2 and <= CellAddress.MaxRow).ToList(),
                 ColumnPageBreaks = s.ColumnPageBreaks.Where(columnBreak => columnBreak is >= 2 and <= CellAddress.MaxCol).ToList(),
                 MergedRegions = s.MergedRegions

@@ -50,12 +50,13 @@ internal static partial class XlsxChartXmlWriter
                         ShouldWriteChartAxes(chart.Type)
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
                             : null,
-                        ToChartDataTableXml(chart, chartNs),
+                        ToChartDataTableXml(chart, chartNs, drawingNs),
                         ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
                     ToLegendXml(chart, chartNs, drawingNs),
                     chart.ShowDataInHiddenRowsAndColumns ? new XElement(chartNs + "plotVisOnly", new XAttribute("val", "0")) : null,
                     ToBlankDisplayXml(chart, chartNs),
-                    chart.ShowDataLabelsOverMaximum ? new XElement(chartNs + "showDLblsOverMax", new XAttribute("val", "1")) : null)));
+                    chart.ShowDataLabelsOverMaximum ? new XElement(chartNs + "showDLblsOverMax", new XAttribute("val", "1")) : null,
+                    ToPivotChartOptionsExtensionXml(chart, chartNs))));
     }
 
     private static bool ShouldWriteChartAxes(ChartType chartType) =>

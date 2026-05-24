@@ -264,6 +264,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         Keyboard.Focus(_scopeBox);
     }
 
+    private void FocusRulesList()
+    {
+        _listView.Focus();
+        Keyboard.Focus(_listView);
+    }
+
     private void ScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         PopulateRules();
@@ -311,7 +317,11 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void EditRule_Click(object sender, RoutedEventArgs e)
     {
-        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+        if (_listView.SelectedItem is not ConditionalFormat selected)
+        {
+            FocusRulesList();
+            return;
+        }
 
         var dlg = new ConditionalFormatDialog(selected) { Owner = this };
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } edited)
@@ -325,14 +335,22 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private void DeleteRule_Click(object sender, RoutedEventArgs e)
     {
-        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+        if (_listView.SelectedItem is not ConditionalFormat selected)
+        {
+            FocusRulesList();
+            return;
+        }
         _rules.Remove(selected);
         ReassignPriorities();
     }
 
     private void DuplicateRule_Click(object sender, RoutedEventArgs e)
     {
-        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+        if (_listView.SelectedItem is not ConditionalFormat selected)
+        {
+            FocusRulesList();
+            return;
+        }
 
         var idx = _rules.IndexOf(selected);
         if (idx < 0) return;

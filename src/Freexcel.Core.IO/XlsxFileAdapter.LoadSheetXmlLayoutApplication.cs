@@ -43,11 +43,24 @@ public sealed partial class XlsxFileAdapter
         sheet.EvenPageHeaderPictures = layout.HeaderFooterPictures.EvenPageHeader;
         sheet.EvenPageFooterPictures = layout.HeaderFooterPictures.EvenPageFooter;
         sheet.CodeName = layout.CodeName;
+        sheet.UsePrinterDefaults = layout.UsePrinterDefaults;
+        sheet.PrintCopies = layout.PrintCopies;
+        sheet.FitToPage = layout.FitToPage;
+        sheet.AutoPageBreaks = layout.AutoPageBreaks;
+        if (layout.PrintQualityDpi is { } printQualityDpi)
+            sheet.PrintQualityDpi = printQualityDpi;
+        sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
+            ? null
+            : layout.PrintQualityVerticalDpi;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;
         foreach (var (colNum, level) in layout.ColOutlineLevels)
             sheet.ColOutlineLevels[colNum] = level;
+        sheet.OutlineSummaryBelow = layout.OutlineSummaryBelow;
+        sheet.OutlineSummaryRight = layout.OutlineSummaryRight;
+        sheet.ShowOutlineSymbols = layout.ShowOutlineSymbols;
+        sheet.ApplyOutlineStyles = layout.ApplyOutlineStyles;
         sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
         sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
         foreach (var chartPart in layout.ChartParts)

@@ -73,8 +73,8 @@ internal static class PdfTextOverlayExtractor
                 textBox.FontStyle == FontStyles.Italic || textBox.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBox.Foreground)));
         }
-        else if (element is ContentControl { Content: string contentText } contentControl &&
-                 !string.IsNullOrWhiteSpace(contentText))
+        else if (element is ContentControl contentControl &&
+                 ExtractContentText(contentControl.Content) is { Length: > 0 } contentText)
         {
             overlays.Add(new PdfTextOverlay(
                 contentText,
@@ -85,6 +85,31 @@ internal static class PdfTextOverlayExtractor
                 contentControl.FontWeight >= FontWeights.SemiBold,
                 contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
                 ResolveColor(contentControl.Foreground)));
+        }
+        else if (element is HeaderedContentControl headeredContentControl &&
+                 ExtractContentText(headeredContentControl.Header) is { Length: > 0 } headerText)
+        {
+            overlays.Add(new PdfTextOverlay(
+                headerText,
+                x + headeredContentControl.Padding.Left,
+                y + headeredContentControl.Padding.Top,
+                headeredContentControl.FontSize,
+                headeredContentControl.FontFamily.Source,
+                headeredContentControl.FontWeight >= FontWeights.SemiBold,
+                headeredContentControl.FontStyle == FontStyles.Italic || headeredContentControl.FontStyle == FontStyles.Oblique,
+                ResolveColor(headeredContentControl.Foreground)));
+        }
+        else if (element is ItemsControl itemsControl && ExtractItemsText(itemsControl) is { Length: > 0 } itemsText)
+        {
+            overlays.Add(new PdfTextOverlay(
+                itemsText,
+                x,
+                y,
+                itemsControl.FontSize,
+                itemsControl.FontFamily.Source,
+                itemsControl.FontWeight >= FontWeights.SemiBold,
+                itemsControl.FontStyle == FontStyles.Italic || itemsControl.FontStyle == FontStyles.Oblique,
+                ResolveColor(itemsControl.Foreground)));
         }
         else if (element is Glyphs glyphs && !string.IsNullOrEmpty(glyphs.UnicodeString))
         {
@@ -112,6 +137,9 @@ internal static class PdfTextOverlayExtractor
         {
             Extract(contentChild, x, y, overlays);
         }
+
+        if (element is HeaderedContentControl { Header: UIElement headerChild })
+            Extract(headerChild, x, y, overlays);
     }
 
     private static string ExtractText(TextBlock textBlock)
@@ -121,19 +149,48 @@ internal static class PdfTextOverlayExtractor
 
         var parts = new List<string>();
         foreach (var inline in textBlock.Inlines)
-        {
-            switch (inline)
-            {
-                case Run run:
-                    parts.Add(run.Text);
-                    break;
-                case LineBreak:
-                    parts.Add("\n");
-                    break;
-            }
-        }
+            AppendInlineText(inline, parts);
 
         return string.Concat(parts);
+    }
+
+    private static string ExtractContentText(object? content)
+    {
+        if (content is null or UIElement)
+            return "";
+
+        var text = content.ToString();
+        return string.IsNullOrWhiteSpace(text) ? "" : text;
+    }
+
+    private static string ExtractItemsText(ItemsControl itemsControl)
+    {
+        var parts = new List<string>();
+        foreach (var item in itemsControl.Items)
+        {
+            var text = ExtractContentText(item);
+            if (!string.IsNullOrWhiteSpace(text))
+                parts.Add(text);
+        }
+
+        return string.Join("\n", parts);
+    }
+
+    private static void AppendInlineText(Inline inline, List<string> parts)
+    {
+        switch (inline)
+        {
+            case Run run:
+                parts.Add(run.Text);
+                break;
+            case LineBreak:
+                parts.Add("\n");
+                break;
+            case Span span:
+                foreach (var child in span.Inlines)
+                    AppendInlineText(child, parts);
+                break;
+        }
     }
 
     private static string NormalizeAccessText(string text)

@@ -156,14 +156,22 @@ public static partial class BuiltInFunctions
     private static ScalarValue Asc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(ConvertToHalfWidth(ToText(args[0])));
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, AscScalar);
+        return AscScalar(args[0]);
     }
+
+    private static ScalarValue AscScalar(ScalarValue value) =>
+        TextResult(ConvertToHalfWidth(ToText(value)));
 
     private static ScalarValue Dbcs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(ConvertToFullWidth(ToText(args[0])));
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, DbcsScalar);
+        return DbcsScalar(args[0]);
     }
+
+    private static ScalarValue DbcsScalar(ScalarValue value) =>
+        TextResult(ConvertToFullWidth(ToText(value)));
 
     private static ScalarValue Phonetic(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -175,8 +183,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue BahtText(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, BahtTextScalar);
+        return BahtTextScalar(args[0]);
+    }
 
-        var value = ToNumber(args[0]);
+    private static ScalarValue BahtTextScalar(ScalarValue input)
+    {
+        var value = ToNumber(input);
         if (!double.IsFinite(value)) return ErrorValue.Value;
 
         var rounded = Math.Round(Math.Abs(value) + 1e-12, 2, MidpointRounding.AwayFromZero);

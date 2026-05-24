@@ -23,7 +23,7 @@ public static partial class NumberFormatter
 
     private static FormatResult FormatWithColor(ScalarValue value, string formatString, int? targetWidthCharacters)
     {
-        if (string.IsNullOrEmpty(formatString) || formatString == "General")
+        if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
             return new FormatResult(FormatGeneral(value));
 
         // Pure text format
@@ -130,6 +130,12 @@ public static partial class NumberFormatter
                 continue;
             }
 
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
             if (!inQuote && (c == '_' || c == '*'))
                 return true;
         }
@@ -194,7 +200,7 @@ public static partial class NumberFormatter
 
     private static string ApplyNumericFormat(double value, string format)
     {
-        if (string.IsNullOrEmpty(format) || format == "General")
+        if (string.IsNullOrEmpty(format) || IsGeneralFormat(format))
             return FormatNumberGeneral(value);
 
         if (TryResolveSpecialDateTimeLocaleToken(format, out var specialDateTimeToken))
@@ -511,6 +517,9 @@ public static partial class NumberFormatter
 
     private static bool IsNumericPlaceholder(char c)
         => c is '0' or '#' or '?';
+
+    private static bool IsGeneralFormat(string format) =>
+        string.Equals(format, "General", StringComparison.OrdinalIgnoreCase);
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 

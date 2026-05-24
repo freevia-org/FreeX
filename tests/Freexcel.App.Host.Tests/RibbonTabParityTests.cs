@@ -80,6 +80,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var pageLayoutTab = ExtractTabXaml(xaml, "Page Layout", "Formulas");
+        var pageSetupGroup = ExtractGroupXaml(pageLayoutTab, "Page Setup");
 
         ExtractGroupLabels(pageLayoutTab).Should().Equal(
             "Themes",
@@ -88,6 +89,13 @@ public sealed class RibbonTabParityTests
             "Sheet Options",
             "Arrange");
 
+        ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
+            "Margins",
+            "Orientation",
+            "Size",
+            "Print Area",
+            "Breaks");
+        ExtractTooltipTitles(pageSetupGroup).Should().NotContain("Paper Size");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Bring Forward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
@@ -99,6 +107,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var formulasTab = ExtractTabXaml(xaml, "Formulas", "Data");
+        var functionLibraryGroup = ExtractGroupXaml(formulasTab, "Function Library");
         var definedNamesGroup = ExtractGroupXaml(formulasTab, "Defined Names");
 
         ExtractGroupLabels(formulasTab).Should().Equal(
@@ -107,6 +116,17 @@ public sealed class RibbonTabParityTests
             "Formula Auditing",
             "Calculation");
 
+        ExtractTooltipTitles(functionLibraryGroup).Should().ContainInOrder(
+            "Insert Function",
+            "AutoSum",
+            "Recently Used",
+            "Financial",
+            "Logical Functions",
+            "Text Functions",
+            "Date & Time",
+            "Lookup & Reference",
+            "Math & Trig",
+            "More Functions");
         ExtractTooltipTitles(definedNamesGroup).Should().ContainInOrder(
             "Name Manager",
             "Define Name",
@@ -119,6 +139,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var dataTab = ExtractTabXaml(xaml, "Data", "Review");
+        var sortFilterGroup = ExtractGroupXaml(dataTab, "Sort & Filter");
 
         ExtractGroupLabels(dataTab).Should().Equal(
             "Get & Transform Data",
@@ -130,6 +151,14 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(dataTab, "Get & Transform Data").Should().Contain("local:RibbonTooltip.Title=\"Get Data\"");
         ExtractGroupXaml(dataTab, "Queries & Connections").Should().Contain("local:RibbonTooltip.Title=\"Refresh All\"");
+        ExtractTooltipTitles(sortFilterGroup).Should().ContainInOrder(
+            "Sort A to Z",
+            "Sort Z to A",
+            "Filter",
+            "Clear Filter",
+            "Advanced Filter");
+        ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Ascending");
+        ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Descending");
         ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"Forecast Sheet\"");
         ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"What-If Analysis\"");
     }
@@ -139,6 +168,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var reviewTab = ExtractTabXaml(xaml, "Review", "View");
+        var proofingGroup = ExtractGroupXaml(reviewTab, "Proofing");
 
         ExtractGroupLabels(reviewTab).Should().Equal(
             "Proofing",
@@ -147,6 +177,8 @@ public sealed class RibbonTabParityTests
             "Notes",
             "Protect");
 
+        proofingGroup.Should().Contain("Content=\"Workbook Statistics\"");
+        proofingGroup.Should().NotContain("Content=\"Workbook Stats\"");
         ExtractGroupXaml(reviewTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
         ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonTooltip.Title=\"New Note\"");
         ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonTooltip.Title=\"Show Notes\"");
@@ -157,6 +189,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var viewTab = ExtractTabXaml(xaml, "View", "PivotTable Analyze");
+        var windowGroup = ExtractGroupXaml(viewTab, "Window");
 
         ExtractGroupLabels(viewTab).Should().Equal(
             "Workbook Views",
@@ -165,8 +198,15 @@ public sealed class RibbonTabParityTests
             "Window",
             "Macros");
 
-        ExtractGroupXaml(viewTab, "Window").Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
-        ExtractGroupXaml(viewTab, "Window").Should().Contain("local:RibbonTooltip.Title=\"Split\"");
+        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
+        windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Split\"");
+        ExtractTooltipTitles(windowGroup).Should().ContainInOrder(
+            "New Window",
+            "Arrange All",
+            "View Side by Side",
+            "Synchronous Scrolling",
+            "Reset Window Position",
+            "Switch Windows");
         ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonTooltip.Title=\"Macros\"");
     }
 

@@ -329,6 +329,17 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void SelectionGuardCommands_FocusRulesListWhenNoRuleIsSelected()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        source.Should().Contain("FocusRulesList();");
+        source.Should().Contain("private void FocusRulesList()");
+        source.Should().Contain("_listView.Focus();");
+        source.Should().Contain("Keyboard.Focus(_listView);");
+    }
+
+    [Fact]
     public void DuplicateRuleCommand_InsertsCopyBelowSelectedRuleWithNewIdentity()
     {
         StaTestRunner.Run(() =>

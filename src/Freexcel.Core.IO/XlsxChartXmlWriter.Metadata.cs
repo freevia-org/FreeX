@@ -6,6 +6,8 @@ namespace Freexcel.Core.IO;
 
 internal static partial class XlsxChartXmlWriter
 {
+    private static readonly XNamespace Chart14Ns = "http://schemas.microsoft.com/office/drawing/2007/8/2/chart";
+
     private static XElement? ToPivotFormatsXml(ChartModel chart, XNamespace chartNs)
     {
         if (string.IsNullOrWhiteSpace(chart.PivotFormatsXml))
@@ -24,7 +26,7 @@ internal static partial class XlsxChartXmlWriter
         }
     }
 
-    private static XElement? ToChartDataTableXml(ChartModel chart, XNamespace chartNs)
+    private static XElement? ToChartDataTableXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
         if (chart.DataTable is not { } dataTable)
             return null;
@@ -33,7 +35,58 @@ internal static partial class XlsxChartXmlWriter
             ToChartBooleanValueXml(chartNs, "showHorzBorder", dataTable.ShowHorizontalBorder),
             ToChartBooleanValueXml(chartNs, "showVertBorder", dataTable.ShowVerticalBorder),
             ToChartBooleanValueXml(chartNs, "showOutline", dataTable.ShowOutline),
-            ToChartBooleanValueXml(chartNs, "showKeys", dataTable.ShowLegendKeys));
+            ToChartBooleanValueXml(chartNs, "showKeys", dataTable.ShowLegendKeys),
+            ToShapeProperties(
+                chartNs,
+                drawingNs,
+                dataTable.FillThemeColor,
+                dataTable.FillColor,
+                dataTable.BorderThemeColor,
+                dataTable.BorderColor,
+                dataTable.BorderThickness),
+            ToDataTableTextProperties(dataTable, chartNs, drawingNs));
+    }
+
+    private static XElement? ToPivotChartOptionsExtensionXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (!chart.IsPivotChart)
+            return null;
+
+        if (chart.ShowPivotChartFieldButtons &&
+            chart.ShowPivotChartReportFilterButtons &&
+            chart.ShowPivotChartAxisFieldButtons &&
+            chart.ShowPivotChartValueFieldButtons)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "extLst",
+            new XElement(chartNs + "ext",
+                new XAttribute("uri", "{C3380CC4-5D6E-409C-BE32-E72D297353CC}"),
+                new XElement(Chart14Ns + "pivotOptions",
+                    new XElement(Chart14Ns + "dropZonesVisible", new XAttribute("val", chart.ShowPivotChartFieldButtons ? "1" : "0")),
+                    new XElement(Chart14Ns + "dropZoneFilter", new XAttribute("val", chart.ShowPivotChartReportFilterButtons ? "1" : "0")),
+                    new XElement(Chart14Ns + "dropZoneCategories", new XAttribute("val", chart.ShowPivotChartAxisFieldButtons ? "1" : "0")),
+                    new XElement(Chart14Ns + "dropZoneData", new XAttribute("val", chart.ShowPivotChartValueFieldButtons ? "1" : "0")))));
+    }
+
+    private static XElement? ToDataTableTextProperties(
+        ChartDataTableModel dataTable,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var textFill = ToSolidFill(dataTable.TextThemeColor, dataTable.TextColor, drawingNs);
+        if (textFill is null && dataTable.FontSize is null)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        dataTable.FontSize is { } fontSize
+                            ? new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200))
+                            : null,
+                        textFill))));
     }
 
     private static XElement? ToChart3DViewXml(ChartModel chart, XNamespace chartNs)
@@ -167,6 +220,10 @@ internal static partial class XlsxChartXmlWriter
             element.SetAttributeValue("orientation", pageSetup.Orientation);
         if (pageSetup.Copies is { } copies)
             element.SetAttributeValue("copies", copies.ToString(CultureInfo.InvariantCulture));
+        AddOptionalBoolAttribute(element, "usePrinterDefaults", pageSetup.UsePrinterDefaults);
+        AddOptionalIntAttribute(element, "firstPageNumber", pageSetup.FirstPageNumber);
+        AddOptionalIntAttribute(element, "horizontalDpi", pageSetup.HorizontalDpi);
+        AddOptionalIntAttribute(element, "verticalDpi", pageSetup.VerticalDpi);
         AddOptionalBoolAttribute(element, "blackAndWhite", pageSetup.BlackAndWhite);
         AddOptionalBoolAttribute(element, "draft", pageSetup.Draft);
         return element.HasAttributes ? element : null;
@@ -188,6 +245,12 @@ internal static partial class XlsxChartXmlWriter
     {
         if (value is { } intValue)
             element.Add(new XElement(chartNs + name, new XAttribute("val", intValue.ToString(CultureInfo.InvariantCulture))));
+    }
+
+    private static void AddOptionalIntAttribute(XElement element, string name, int? value)
+    {
+        if (value is { } intValue)
+            element.SetAttributeValue(name, intValue.ToString(CultureInfo.InvariantCulture));
     }
 
     private static void AddOptionalDoubleAttribute(XElement element, string name, double? value)

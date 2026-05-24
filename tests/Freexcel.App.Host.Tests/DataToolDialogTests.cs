@@ -229,6 +229,35 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogInvalidFixedWidthBreaks_ReturnsToStepTwoAndFocusesBreaks()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("FocusInvalidFixedWidthBreaksInput();");
+        source.Should().Contain("private void FocusInvalidFixedWidthBreaksInput()");
+        source.Should().Contain("_wizardStep = 2;");
+        source.Should().Contain("_fixedWidthButton.IsChecked = true;");
+        source.Should().Contain("_fixedWidthBreaksBox.Focus();");
+        source.Should().Contain("_fixedWidthBreaksBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_fixedWidthBreaksBox);");
+    }
+
+    [Fact]
+    public void TextToColumnsDialogInvalidCustomDelimiter_ReturnsToStepTwoAndFocusesOtherDelimiter()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("FocusInvalidCustomDelimiterInput();");
+        source.Should().Contain("private void FocusInvalidCustomDelimiterInput()");
+        source.Should().Contain("_wizardStep = 2;");
+        source.Should().Contain("_delimitedButton.IsChecked = true;");
+        source.Should().Contain("_otherBox.IsChecked = true;");
+        source.Should().Contain("_customBox.Focus();");
+        source.Should().Contain("_customBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_customBox);");
+    }
+
+    [Fact]
     public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
     {
         TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
@@ -1364,6 +1393,9 @@ public sealed class DataToolDialogTests
 
             var button = DialogReferencePicker.CreateButton(box, "Select table range");
             button.ToolTip.Should().Be("Collapse dialog and select range");
+
+            var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DialogReferencePicker.cs"));
+            pickerSource.Should().Contain("Keyboard.Focus(textBox);");
         });
     }
 
@@ -1395,6 +1427,18 @@ public sealed class DataToolDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_hasHeadersBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_hasHeadersBox);");
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialogInvalidColumnSelection_FocusesColumnChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+
+        source.Should().Contain("FocusFirstColumnChoice();");
+        source.Should().Contain("private void FocusFirstColumnChoice()");
+        source.Should().Contain("_boxes.FirstOrDefault()");
+        source.Should().Contain("firstColumnBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(firstColumnBox);");
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)

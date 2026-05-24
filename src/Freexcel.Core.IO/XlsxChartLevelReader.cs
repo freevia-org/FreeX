@@ -67,13 +67,81 @@ internal static class XlsxChartLevelReader
         if (dataTable is null)
             return null;
 
-        return new ChartDataTableModel
+        var result = new ChartDataTableModel
         {
             ShowHorizontalBorder = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showHorzBorder")?.Attribute("val")?.Value),
             ShowVerticalBorder = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showVertBorder")?.Attribute("val")?.Value),
             ShowOutline = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showOutline")?.Attribute("val")?.Value),
             ShowLegendKeys = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showKeys")?.Attribute("val")?.Value)
         };
+
+        ApplyDataTableShapeProperties(dataTable.Element(ChartNs + "spPr"), result);
+        ApplyDataTableTextProperties(dataTable.Element(ChartNs + "txPr"), result);
+        return result;
+    }
+
+    private static void ApplyDataTableShapeProperties(XElement? shapeProperties, ChartDataTableModel dataTable)
+    {
+        var fill = shapeProperties?.Element(DrawingNs + "solidFill");
+        if (fill is not null)
+        {
+            if (XlsxDrawingColorReader.TryReadThemeColorReference(fill, DrawingNs, out var fillThemeColor))
+            {
+                dataTable.FillThemeColor = fillThemeColor;
+                dataTable.FillColor = null;
+            }
+            else if (XlsxDrawingColorReader.TryReadConcreteColor(fill, DrawingNs, out var fillColor))
+            {
+                dataTable.FillColor = fillColor;
+                dataTable.FillThemeColor = null;
+            }
+        }
+
+        var line = shapeProperties?.Element(DrawingNs + "ln");
+        if (line is null)
+            return;
+
+        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            dataTable.BorderThickness = Math.Clamp(emus / 12700.0, 0, 10);
+
+        var lineFill = line.Element(DrawingNs + "solidFill");
+        if (lineFill is null)
+            return;
+
+        if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var borderThemeColor))
+        {
+            dataTable.BorderThemeColor = borderThemeColor;
+            dataTable.BorderColor = null;
+        }
+        else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var borderColor))
+        {
+            dataTable.BorderColor = borderColor;
+            dataTable.BorderThemeColor = null;
+        }
+    }
+
+    private static void ApplyDataTableTextProperties(XElement? textPropertiesRoot, ChartDataTableModel dataTable)
+    {
+        var textProperties = textPropertiesRoot?
+            .Descendants(DrawingNs + "defRPr")
+            .FirstOrDefault();
+        if (textProperties is null)
+            return;
+
+        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+            dataTable.FontSize = Math.Clamp(size / 100.0, 6, 72);
+
+        var textFill = textProperties.Element(DrawingNs + "solidFill");
+        if (textFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(textFill, DrawingNs, out var textThemeColor))
+        {
+            dataTable.TextThemeColor = textThemeColor;
+            dataTable.TextColor = null;
+        }
+        else if (textFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(textFill, DrawingNs, out var textColor))
+        {
+            dataTable.TextColor = textColor;
+            dataTable.TextThemeColor = null;
+        }
     }
 
     private static Chart3DViewModel? Read3DView(XElement? view3D)

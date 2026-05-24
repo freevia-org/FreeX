@@ -44,7 +44,9 @@ public sealed partial class NativeJsonAdapter
         public ChartManualLayoutModel? TitleLayout { get; set; }
         public bool TitleOverlay { get; set; }
         public string? XAxisTitle { get; set; }
+        public ChartManualLayoutModel? XAxisTitleLayout { get; set; }
         public string? YAxisTitle { get; set; }
+        public ChartManualLayoutModel? YAxisTitleLayout { get; set; }
         public bool HideXAxis { get; set; }
         public bool HideYAxis { get; set; }
         public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
@@ -179,6 +181,10 @@ public sealed partial class NativeJsonAdapter
         public double DataLabelBorderThickness { get; set; }
         public double DataLabelFontSize { get; set; } = 11;
         public double DataLabelAngle { get; set; }
+        public CellColor? DataLabelLeaderLineColor { get; set; }
+        public ThemeColorReferenceDto? DataLabelLeaderLineThemeColor { get; set; }
+        public double DataLabelLeaderLineThickness { get; set; } = 1;
+        public ChartLineDashStyle DataLabelLeaderLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
         public bool ShowLinearTrendline { get; set; }
         public string? TrendlineName { get; set; }
         public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
@@ -189,6 +195,18 @@ public sealed partial class NativeJsonAdapter
         public double? TrendlineIntercept { get; set; }
         public bool ShowTrendlineEquation { get; set; }
         public bool ShowTrendlineRSquared { get; set; }
+        public string? TrendlineLabelNumberFormatCode { get; set; }
+        public bool? TrendlineLabelNumberFormatSourceLinked { get; set; }
+        public ChartManualLayoutModel? TrendlineLabelLayout { get; set; }
+        public CellColor? TrendlineLabelFillColor { get; set; }
+        public ThemeColorReferenceDto? TrendlineLabelFillThemeColor { get; set; }
+        public CellColor? TrendlineLabelBorderColor { get; set; }
+        public ThemeColorReferenceDto? TrendlineLabelBorderThemeColor { get; set; }
+        public double? TrendlineLabelBorderThickness { get; set; }
+        public CellColor? TrendlineLabelTextColor { get; set; }
+        public ThemeColorReferenceDto? TrendlineLabelTextThemeColor { get; set; }
+        public double? TrendlineLabelFontSize { get; set; }
+        public double? TrendlineLabelAngle { get; set; }
         public CellColor? TrendlineColor { get; set; }
         public ThemeColorReferenceDto? TrendlineThemeColor { get; set; }
         public double TrendlineThickness { get; set; } = 1.5;

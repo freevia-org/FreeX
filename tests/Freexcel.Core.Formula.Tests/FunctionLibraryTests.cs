@@ -43,6 +43,10 @@ public class FunctionLibraryTests
             range.At(row + 1, 1).Should().Be(expected[row]);
     }
 
+    private static BoolValue True() => new(true);
+
+    private static BoolValue False() => new(false);
+
     // ── IFERROR ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -989,6 +993,23 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void IsFunctions_RangeArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new TextValue("x")),
+            (3, 1, ErrorValue.NA),
+            (4, 1, new BoolValue(true)));
+
+        AssertColumn(_eval.Evaluate("=ISNUMBER(A1:A5)", sheet), True(), False(), False(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISTEXT(A1:A5)", sheet), False(), True(), False(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISERROR(A1:A5)", sheet), False(), False(), True(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISNA(A1:A5)", sheet), False(), False(), True(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISLOGICAL(A1:A5)", sheet), False(), False(), False(), True(), False());
+        AssertColumn(_eval.Evaluate("=ISBLANK(A1:A5)", sheet), False(), False(), False(), False(), True());
+    }
+
+    [Fact]
     public void Trim_RemovesLeadingTrailing()
     {
         var sheet = MakeSheet();
@@ -1619,7 +1640,106 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SECOND(A1)", sheet).Should().Be(new NumberValue(45));
     }
 
+    [Fact]
+    public void DateTimeExtractors_RangeArgument_SpillElementwise()
+    {
+        var dates = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2026, 5, 24).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2027, 6, 25).ToOADate())));
+        AssertColumn(_eval.Evaluate("=YEAR(A1:A2)", dates), new NumberValue(2026), new NumberValue(2027));
+        AssertColumn(_eval.Evaluate("=MONTH(A1:A2)", dates), new NumberValue(5), new NumberValue(6));
+        AssertColumn(_eval.Evaluate("=DAY(A1:A2)", dates), new NumberValue(24), new NumberValue(25));
+
+        var times = MakeSheet(
+            (1, 1, new NumberValue(new TimeSpan(1, 2, 3).TotalDays)),
+            (2, 1, new NumberValue(new TimeSpan(4, 5, 6).TotalDays)));
+        AssertColumn(_eval.Evaluate("=HOUR(A1:A2)", times), new NumberValue(1), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=MINUTE(A1:A2)", times), new NumberValue(2), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=SECOND(A1:A2)", times), new NumberValue(3), new NumberValue(6));
+    }
+
     // ── WEEKDAY ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DateTimeScalarRangeArguments_SpillElementwise()
+    {
+        var dates = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 7).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 8).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=WEEKDAY(A1:A2,2)", dates), new NumberValue(7), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=WEEKNUM(A1:A2,2)", dates), new NumberValue(1), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=ISOWEEKNUM(A1:A2)", dates), new NumberValue(1), new NumberValue(2));
+
+        var monthEnds = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(A1:A2,1)", monthEnds),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 29).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(A1:A2,1)", monthEnds),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+
+        var textDates = MakeSheet(
+            (1, 1, new TextValue("2024-01-07")),
+            (2, 1, new TextValue("not a date")));
+        AssertColumn(
+            _eval.Evaluate("=DATEVALUE(A1:A2)", textDates),
+            new NumberValue(new DateTime(2024, 1, 7).ToOADate()),
+            ErrorValue.Value);
+
+        var textTimes = MakeSheet(
+            (1, 1, new TextValue("01:02:03")),
+            (2, 1, new TextValue("not a time")));
+        AssertColumn(
+            _eval.Evaluate("=TIMEVALUE(A1:A2)", textTimes),
+            new NumberValue(new TimeSpan(1, 2, 3).TotalDays),
+            ErrorValue.Value);
+    }
+
+    [Fact]
+    public void DateDifferenceRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 31).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=WORKDAY(A1:A2,1)", sheet),
+            new NumberValue(new DateTime(2024, 1, 2).ToOADate()),
+            new NumberValue(new DateTime(2024, 1, 3).ToOADate()));
+        AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1)", sheet), new NumberValue(5), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=DAYS(B1,A1:A2)", sheet), new NumberValue(4), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,C1)", sheet), new NumberValue(30), new NumberValue(29));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,C1,0)", sheet), new NumberValue(30.0 / 360.0), new NumberValue(29.0 / 360.0));
+    }
+
+    [Fact]
+    public void DateTimeSecondRangeArguments_SpillElementwise()
+    {
+        var offsets = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(DATE(2024,1,31),A1:A2)", offsets),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(DATE(2024,1,31),A1:A2)", offsets),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY(DATE(2024,1,1),A1:A2)", offsets),
+            new NumberValue(new DateTime(2024, 1, 2).ToOADate()),
+            new NumberValue(new DateTime(2024, 1, 3).ToOADate()));
+        AssertColumn(_eval.Evaluate("=WEEKDAY(DATE(2024,1,7),A1:A2)", offsets), new NumberValue(1), new NumberValue(7));
+    }
 
     [Fact]
     public void Weekday_ReturnType1_SundayIs1()
@@ -1864,7 +1984,52 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SQRT(A1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void UnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=ABS(A1:A2)", sheet), new NumberValue(4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SQRT(A1:A2)", sheet), ErrorValue.Num, new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=INT(A1:A2)", sheet), new NumberValue(-4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SIGN(A1:A2)", sheet), new NumberValue(-1), new NumberValue(1));
+    }
+
     // ── INT ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void BinaryMath_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=POWER(A1:A2,2)", sheet), new NumberValue(16), new NumberValue(81));
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,2)", sheet), new NumberValue(0), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=LOG(A1:A2,2)", sheet), new NumberValue(2), new NumberValue(Math.Log(9) / Math.Log(2)));
+        AssertColumn(_eval.Evaluate("=QUOTIENT(A1:A2,2)", sheet), new NumberValue(2), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=CEILING(A1:A2,5)", sheet), new NumberValue(5), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=FLOOR(A1:A2,5)", sheet), new NumberValue(0), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=MROUND(A1:A2,5)", sheet), new NumberValue(5), new NumberValue(10));
+    }
+
+    [Fact]
+    public void BinaryMath_RangeSecondArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(4)));
+
+        AssertColumn(_eval.Evaluate("=POWER(2,A1:A2)", sheet), new NumberValue(4), new NumberValue(16));
+        AssertColumn(_eval.Evaluate("=MOD(10,A1:A2)", sheet), new NumberValue(0), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=LOG(16,A1:A2)", sheet), new NumberValue(4), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=QUOTIENT(10,A1:A2)", sheet), new NumberValue(5), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=CEILING(10,A1:A2)", sheet), new NumberValue(10), new NumberValue(12));
+        AssertColumn(_eval.Evaluate("=FLOOR(10,A1:A2)", sheet), new NumberValue(10), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=MROUND(10,A1:A2)", sheet), new NumberValue(10), new NumberValue(12));
+    }
 
     [Fact]
     public void Int_TruncatesDown()
@@ -1909,6 +2074,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUND(1.2345,16)", MakeSheet()).Should().Be(new NumberValue(1.2345));
         _eval.Evaluate("=ROUND(12345,-16)", MakeSheet()).Should().Be(new NumberValue(0));
         _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Rounding_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1.25)),
+            (2, 1, new NumberValue(-1.25)));
+
+        AssertColumn(_eval.Evaluate("=ROUND(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDUP(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDDOWN(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
+        AssertColumn(_eval.Evaluate("=TRUNC(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
     }
 
     // ── CEILING ───────────────────────────────────────────────────────────────
@@ -3096,6 +3274,42 @@ public class FunctionLibraryTests
         _eval.Evaluate("=TAN(A1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void UnaryTrig_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(0)));
+
+        AssertColumn(_eval.Evaluate("=SIN(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=COS(A1:A2)", sheet), new NumberValue(1), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=TAN(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=DEGREES(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=RADIANS(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+    }
+
+    [Fact]
+    public void AdditionalUnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var zeros = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(0)));
+        AssertColumn(_eval.Evaluate("=ASIN(A1:A2)", zeros), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=ATAN(A1:A2)", zeros), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=EXP(A1:A2)", zeros), new NumberValue(1), new NumberValue(1));
+
+        var ones = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(1)));
+        AssertColumn(_eval.Evaluate("=ACOS(A1:A2)", ones), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=LN(A1:A2)", ones), new NumberValue(0), new NumberValue(0));
+
+        var facts = MakeSheet(
+            (1, 1, new NumberValue(3)),
+            (2, 1, new NumberValue(-1)));
+        AssertColumn(_eval.Evaluate("=FACT(A1:A2)", facts), new NumberValue(6), ErrorValue.Num);
+    }
+
     [Fact] public void Asin_One_ReturnsHalfPi() =>
         ((NumberValue)_eval.Evaluate("=ASIN(1)", MakeSheet())).Value
             .Should().BeApproximately(Math.PI / 2, 1e-10);
@@ -3135,6 +3349,25 @@ public class FunctionLibraryTests
     [Fact] public void Atan2_XY_ReturnsCorrect() =>
         ((NumberValue)_eval.Evaluate("=ATAN2(1,1)", MakeSheet())).Value
             .Should().BeApproximately(Math.PI / 4, 1e-10);
+
+    [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=ATAN2(1,A1:A2)", sheet), new NumberValue(Math.Atan2(2, 1)), new NumberValue(Math.Atan2(3, 1)));
+        AssertColumn(_eval.Evaluate("=ATAN2(A1:A2,1)", sheet), new NumberValue(Math.Atan2(1, 2)), new NumberValue(Math.Atan2(1, 3)));
+        AssertColumn(_eval.Evaluate("=COMBIN(5,A1:A2)", sheet), new NumberValue(10), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=PERMUT(5,A1:A2)", sheet), new NumberValue(20), new NumberValue(60));
+
+        var numbers = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(6)));
+        AssertColumn(_eval.Evaluate("=COMBIN(A1:A2,2)", numbers), new NumberValue(10), new NumberValue(15));
+        AssertColumn(_eval.Evaluate("=PERMUT(A1:A2,2)", numbers), new NumberValue(20), new NumberValue(30));
+    }
 
     [Fact]
     public void Atan2_NonFiniteInput_ReturnsNumError()
@@ -3356,6 +3589,19 @@ public class FunctionLibraryTests
 
     [Fact] public void Even_3_Returns4() =>
         _eval.Evaluate("=EVEN(3)", MakeSheet()).Should().Be(new NumberValue(4));
+
+    [Fact]
+    public void OddEvenAndIsParity_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=ODD(A1:A2)", sheet), new NumberValue(3), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=EVEN(A1:A2)", sheet), new NumberValue(2), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=ISEVEN(A1:A2)", sheet), True(), False());
+        AssertColumn(_eval.Evaluate("=ISODD(A1:A2)", sheet), False(), True());
+    }
 
     // ── Date / Time ──────────────────────────────────────────────────────────────
 
@@ -4837,6 +5083,26 @@ public class FunctionLibraryTests
     }
 
     // ── SEQUENCE ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void N_RangeArgument_SpillsElementwise()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(42)),
+            (2, 1, new TextValue("x")),
+            (3, 1, new BoolValue(true)),
+            (4, 1, date),
+            (5, 1, ErrorValue.NA));
+
+        AssertColumn(
+            _eval.Evaluate("=N(A1:A5)", sheet),
+            new NumberValue(42),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(date.Value),
+            ErrorValue.NA);
+    }
 
     [Fact]
     public void Sequence_3Rows_ReturnsColumnVector()
@@ -6505,6 +6771,25 @@ public class FunctionLibraryTests
     public void Unicode_EmptyText_ReturnsValueError() =>
         _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
 
+    [Fact]
+    public void UnicharUnicodeAndNumbervalue_RangeArgument_SpillsElementwise()
+    {
+        var codePoints = MakeSheet(
+            (1, 1, new NumberValue(65)),
+            (2, 1, new NumberValue(9731)));
+        AssertTextColumn(_eval.Evaluate("=UNICHAR(A1:A2)", codePoints), "A", "\u2603");
+
+        var text = MakeSheet(
+            (1, 1, new TextValue("A")),
+            (2, 1, new TextValue("\u2603")));
+        AssertColumn(_eval.Evaluate("=UNICODE(A1:A2)", text), new NumberValue(65), new NumberValue(9731));
+
+        var numbers = MakeSheet(
+            (1, 1, new TextValue("1234.5")),
+            (2, 1, new TextValue("x")));
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2)", numbers), new NumberValue(1234.5), ErrorValue.Value);
+    }
+
     // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
 
     [Fact]
@@ -6519,6 +6804,28 @@ public class FunctionLibraryTests
     {
         _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
             .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
+    }
+
+    [Fact]
+    public void AscAndDbcs_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("ï¼¡ï¼¢ï¼£")),
+            (2, 1, new TextValue("ABC")));
+
+        var asc = _eval.Evaluate("=ASC(A1:A2)", sheet);
+        var ascRange = asc.Should().BeOfType<RangeValue>().Subject;
+        ascRange.RowCount.Should().Be(2);
+        ascRange.ColCount.Should().Be(1);
+        ascRange.At(1, 1).Should().Be(_eval.Evaluate("=ASC(A1)", sheet));
+        ascRange.At(2, 1).Should().Be(_eval.Evaluate("=ASC(A2)", sheet));
+
+        var dbcs = _eval.Evaluate("=DBCS(A1:A2)", sheet);
+        var dbcsRange = dbcs.Should().BeOfType<RangeValue>().Subject;
+        dbcsRange.RowCount.Should().Be(2);
+        dbcsRange.ColCount.Should().Be(1);
+        dbcsRange.At(1, 1).Should().Be(_eval.Evaluate("=DBCS(A1)", sheet));
+        dbcsRange.At(2, 1).Should().Be(_eval.Evaluate("=DBCS(A2)", sheet));
     }
 
     [Fact]
@@ -6541,6 +6848,22 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบหกสตางค์"));
         _eval.Evaluate("=BAHTTEXT(-21.5)", MakeSheet())
             .Should().Be(new TextValue("ลบยี่สิบเอ็ดบาทห้าสิบสตางค์"));
+    }
+
+    [Fact]
+    public void Bahttext_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.3)));
+
+        var result = _eval.Evaluate("=BAHTTEXT(A1:A2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(_eval.Evaluate("=BAHTTEXT(A1)", sheet));
+        range.At(2, 1).Should().Be(_eval.Evaluate("=BAHTTEXT(A2)", sheet));
     }
 
     [Fact]
@@ -6825,6 +7148,21 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ERROR.TYPE(1)", MakeSheet()).Should().Be(ErrorValue.NA);
 
     // ── DSUM ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ErrorType_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(1)));
+
+        AssertColumn(
+            _eval.Evaluate("=ERROR.TYPE(A1:A3)", sheet),
+            new NumberValue(2),
+            new NumberValue(7),
+            ErrorValue.NA);
+    }
 
     private Sheet MakeDbSheet()
     {

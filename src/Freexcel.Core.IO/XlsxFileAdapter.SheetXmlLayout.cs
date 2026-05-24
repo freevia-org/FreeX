@@ -32,10 +32,20 @@ public sealed partial class XlsxFileAdapter
         uint? ViewLeftCol,
         uint? ActiveRow,
         uint? ActiveCol,
+        bool? UsePrinterDefaults,
+        int? PrintCopies,
+        bool? FitToPage,
+        bool? AutoPageBreaks,
+        int? PrintQualityDpi,
+        int? PrintQualityVerticalDpi,
         WorksheetBackgroundImage? BackgroundImage,
         XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
+        bool? OutlineSummaryBelow,
+        bool? OutlineSummaryRight,
+        bool? ShowOutlineSymbols,
+        bool? ApplyOutlineStyles,
         HashSet<uint> GroupHiddenRows,
         HashSet<uint> GroupHiddenCols,
         Dictionary<uint, double> RowHeights,
@@ -239,6 +249,13 @@ public sealed partial class XlsxFileAdapter
             .FirstOrDefault();
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
+        var pageSetUpPr = worksheetXml.Root?
+            .Element(worksheetNs + "sheetPr")?
+            .Element(worksheetNs + "pageSetUpPr");
+        var outlinePr = worksheetXml.Root?
+            .Element(worksheetNs + "sheetPr")?
+            .Element(worksheetNs + "outlinePr");
+        var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
@@ -249,9 +266,7 @@ public sealed partial class XlsxFileAdapter
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
         var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
-        var chartParts = XlsxWorksheetDrawingPartReader.ReadChartParts(archive, worksheetPath, worksheetXml);
-        var pictureParts = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, worksheetPath, worksheetXml);
-        var (textBoxParts, shapeParts) = XlsxWorksheetDrawingPartReader.ReadShapeParts(archive, worksheetPath, worksheetXml);
+        var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
         var sparklines = XlsxSparklineMapper.Read(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
@@ -293,19 +308,29 @@ public sealed partial class XlsxFileAdapter
             viewTopLeft?.Col,
             activeCell?.Row,
             activeCell?.Col,
+            ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
+            ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
+            ParseOptionalBool(pageSetUpPr?.Attribute("fitToPage")?.Value),
+            ParseOptionalBool(pageSetUpPr?.Attribute("autoPageBreaks")?.Value),
+            ParseOptionalPositiveInt(pageSetup?.Attribute("horizontalDpi")?.Value),
+            ParseOptionalPositiveInt(pageSetup?.Attribute("verticalDpi")?.Value),
             background,
             headerFooterPictures,
             rowOutlineLevels,
             colOutlineLevels,
+            ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value),
+            ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value),
+            ParseOptionalBool(outlinePr?.Attribute("showOutlineSymbols")?.Value),
+            ParseOptionalBool(outlinePr?.Attribute("applyStyles")?.Value),
             groupHiddenRows,
             groupHiddenCols,
             rowHeights,
             columnWidths,
             comments,
-            chartParts,
-            pictureParts,
-            textBoxParts,
-            shapeParts,
+            drawingParts.ChartParts,
+            drawingParts.PictureParts,
+            drawingParts.TextBoxParts,
+            drawingParts.ShapeParts,
             sparklines,
             advancedConditionalFormats,
             dataValidationNativeMetadata,
@@ -436,6 +461,20 @@ public sealed partial class XlsxFileAdapter
 
     private static bool IsFalse(string? value) =>
         value is "0" || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+
+    private static bool? ParseOptionalBool(string? value)
+    {
+        if (IsTruthy(value))
+            return true;
+        if (IsFalse(value))
+            return false;
+        return null;
+    }
+
+    private static int? ParseOptionalPositiveInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : null;
 
     private static int ParseZoomPercent(string? value) =>
         int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;

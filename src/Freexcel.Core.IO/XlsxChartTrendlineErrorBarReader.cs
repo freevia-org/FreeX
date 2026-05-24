@@ -31,11 +31,11 @@ internal static class XlsxChartTrendlineErrorBarReader
 
         chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
         chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
-        var trendlineLabelNumberFormat = trendline
-            .Element(ChartNs + "trendlineLbl")?
-            .Element(ChartNs + "numFmt");
+        var trendlineLabel = trendline.Element(ChartNs + "trendlineLbl");
+        var trendlineLabelNumberFormat = trendlineLabel?.Element(ChartNs + "numFmt");
         chart.TrendlineLabelNumberFormatCode = trendlineLabelNumberFormat?.Attribute("formatCode")?.Value;
         chart.TrendlineLabelNumberFormatSourceLinked = ReadNullableBool(trendlineLabelNumberFormat?.Attribute("sourceLinked")?.Value);
+        ApplyTrendlineLabelMetadata(trendlineLabel, chart);
         ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
     }
 
@@ -167,6 +167,84 @@ internal static class XlsxChartTrendlineErrorBarReader
         {
             chart.TrendlineColor = color;
             chart.TrendlineThemeColor = null;
+        }
+    }
+
+    private static void ApplyTrendlineLabelMetadata(XElement? trendlineLabel, ChartModel chart)
+    {
+        if (trendlineLabel is null)
+            return;
+
+        chart.TrendlineLabelLayout = XlsxChartMetadataReader.ReadManualLayout(trendlineLabel.Element(ChartNs + "layout"));
+        ApplyTrendlineLabelShapeProperties(trendlineLabel.Element(ChartNs + "spPr"), chart);
+        ApplyTrendlineLabelTextProperties(trendlineLabel.Element(ChartNs + "txPr"), chart);
+    }
+
+    private static void ApplyTrendlineLabelShapeProperties(XElement? shapeProperties, ChartModel chart)
+    {
+        var fill = shapeProperties?.Element(DrawingNs + "solidFill");
+        if (fill is not null)
+        {
+            if (XlsxDrawingColorReader.TryReadThemeColorReference(fill, DrawingNs, out var fillThemeColor))
+            {
+                chart.TrendlineLabelFillThemeColor = fillThemeColor;
+                chart.TrendlineLabelFillColor = null;
+            }
+            else if (XlsxDrawingColorReader.TryReadConcreteColor(fill, DrawingNs, out var fillColor))
+            {
+                chart.TrendlineLabelFillColor = fillColor;
+                chart.TrendlineLabelFillThemeColor = null;
+            }
+        }
+
+        var line = shapeProperties?.Element(DrawingNs + "ln");
+        if (line is null)
+            return;
+
+        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
+            chart.TrendlineLabelBorderThickness = Math.Clamp(emus / 12700.0, 0, 10);
+
+        var lineFill = line.Element(DrawingNs + "solidFill");
+        if (lineFill is null)
+            return;
+
+        if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var borderThemeColor))
+        {
+            chart.TrendlineLabelBorderThemeColor = borderThemeColor;
+            chart.TrendlineLabelBorderColor = null;
+        }
+        else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var borderColor))
+        {
+            chart.TrendlineLabelBorderColor = borderColor;
+            chart.TrendlineLabelBorderThemeColor = null;
+        }
+    }
+
+    private static void ApplyTrendlineLabelTextProperties(XElement? textPropertiesRoot, ChartModel chart)
+    {
+        var bodyProperties = textPropertiesRoot?.Element(DrawingNs + "bodyPr");
+        if (int.TryParse(bodyProperties?.Attribute("rot")?.Value, out var rotation))
+            chart.TrendlineLabelAngle = Math.Clamp(rotation / 60000.0, -90, 90);
+
+        var textProperties = textPropertiesRoot?
+            .Descendants(DrawingNs + "defRPr")
+            .FirstOrDefault();
+        if (textProperties is null)
+            return;
+
+        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
+            chart.TrendlineLabelFontSize = Math.Clamp(size / 100.0, 6, 72);
+
+        var textFill = textProperties.Element(DrawingNs + "solidFill");
+        if (textFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(textFill, DrawingNs, out var textThemeColor))
+        {
+            chart.TrendlineLabelTextThemeColor = textThemeColor;
+            chart.TrendlineLabelTextColor = null;
+        }
+        else if (textFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(textFill, DrawingNs, out var textColor))
+        {
+            chart.TrendlineLabelTextColor = textColor;
+            chart.TrendlineLabelTextThemeColor = null;
         }
     }
 

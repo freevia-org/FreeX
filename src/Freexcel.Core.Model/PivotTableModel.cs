@@ -63,6 +63,9 @@ public sealed class PivotTableModel
     public GridRange SourceRange { get; set; }
     public GridRange TargetRange { get; init; }
     public string PackagePart { get; init; } = "";
+    public int? CreatedVersion { get; set; }
+    public int? UpdatedVersion { get; set; }
+    public int? MinRefreshableVersion { get; set; }
     public bool DataOnRows { get; set; } = true;
     public int FirstHeaderRow { get; set; } = 1;
     public int FirstDataRow { get; set; } = 1;
@@ -146,7 +149,14 @@ public sealed record PivotFieldModel(
     PivotFieldGrouping Grouping = PivotFieldGrouping.None,
     double? GroupStart = null,
     double? GroupEnd = null,
-    double? GroupInterval = null);
+    double? GroupInterval = null,
+    bool? ShowAll = null,
+    bool? IncludeNewItemsInFilter = null,
+    bool? MultipleItemSelectionAllowed = null,
+    bool? DragToRow = null,
+    bool? DragToColumn = null,
+    bool? DragToPage = null,
+    bool? DragToData = null);
 
 public enum PivotFieldGrouping
 {

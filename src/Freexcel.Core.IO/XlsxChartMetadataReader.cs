@@ -7,6 +7,7 @@ namespace Freexcel.Core.IO;
 internal static class XlsxChartMetadataReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace Chart14Ns = "http://schemas.microsoft.com/office/drawing/2007/8/2/chart";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace OfficeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
@@ -33,6 +34,7 @@ internal static class XlsxChartMetadataReader
         chart.ExternalData = ReadExternalData(chartXml.Root?.Element(ChartNs + "externalData"));
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
         chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
+        ApplyPivotChartFieldButtonMetadata(chartXml.Root?.Element(ChartNs + "chart"), chart);
 
         chart.RoundedCorners = XlsxChartScalarReader.IsTrue(chartXml.Root?
             .Element(ChartNs + "roundedCorners")?
@@ -70,6 +72,25 @@ internal static class XlsxChartMetadataReader
             result.Height is null
             ? null
             : result;
+    }
+
+    private static void ApplyPivotChartFieldButtonMetadata(XElement? chartElement, ChartModel chart)
+    {
+        var pivotOptions = chartElement?
+            .Element(ChartNs + "extLst")?
+            .Descendants(Chart14Ns + "pivotOptions")
+            .FirstOrDefault();
+        if (pivotOptions is null)
+            return;
+
+        if (XlsxChartScalarReader.ReadOptionalBool(pivotOptions.Element(Chart14Ns + "dropZonesVisible")?.Attribute("val")?.Value) is { } visible)
+            chart.ShowPivotChartFieldButtons = visible;
+        if (XlsxChartScalarReader.ReadOptionalBool(pivotOptions.Element(Chart14Ns + "dropZoneFilter")?.Attribute("val")?.Value) is { } reportFilter)
+            chart.ShowPivotChartReportFilterButtons = reportFilter;
+        if (XlsxChartScalarReader.ReadOptionalBool(pivotOptions.Element(Chart14Ns + "dropZoneCategories")?.Attribute("val")?.Value) is { } axis)
+            chart.ShowPivotChartAxisFieldButtons = axis;
+        if (XlsxChartScalarReader.ReadOptionalBool(pivotOptions.Element(Chart14Ns + "dropZoneData")?.Attribute("val")?.Value) is { } values)
+            chart.ShowPivotChartValueFieldButtons = values;
     }
 
     private static ChartColorMapOverrideModel? ReadColorMapOverride(XElement? colorMapOverride)
@@ -153,6 +174,10 @@ internal static class XlsxChartMetadataReader
                 PaperSize = pageSetup.Attribute("paperSize")?.Value,
                 Orientation = pageSetup.Attribute("orientation")?.Value,
                 Copies = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("copies")?.Value),
+                UsePrinterDefaults = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("usePrinterDefaults")?.Value),
+                FirstPageNumber = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("firstPageNumber")?.Value),
+                HorizontalDpi = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("horizontalDpi")?.Value),
+                VerticalDpi = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("verticalDpi")?.Value),
                 BlackAndWhite = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
                 Draft = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
             }

@@ -43,20 +43,14 @@ public sealed partial class XlsxFileAdapter
                 XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
             }
 
-            foreach (var ((row, col), styleId) in sheet.GetStyleOnlyEntries())
+            foreach (var run in GetStyleOnlyRuns(sheet))
             {
-                if (!IsValidWorksheetRow(row) || !IsValidWorksheetColumn(col))
-                    continue;
-
-                if (sheet.GetCell(row, col) is not null)
-                    continue;
-
-                var style = workbook.GetStyle(styleId);
+                var style = workbook.GetStyle(run.StyleId);
                 if (style.Equals(CellStyle.Default))
                     continue;
 
-                var xlCell = xlSheet.Cell((int)row, (int)col);
-                XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
+                var xlRange = xlSheet.Range((int)run.Row, (int)run.StartCol, (int)run.Row, (int)run.EndCol);
+                XlsxClosedXmlCellMapper.ApplyStyle(xlRange.Style, style);
             }
 
             foreach (var (rowNum, height) in sheet.RowHeights)
@@ -189,7 +183,13 @@ public sealed partial class XlsxFileAdapter
             if (sheet.PrintQualityDpi is { } printQualityDpi && printQualityDpi > 0)
             {
                 xlSheet.PageSetup.HorizontalDpi = printQualityDpi;
-                xlSheet.PageSetup.VerticalDpi = printQualityDpi;
+                xlSheet.PageSetup.VerticalDpi = sheet.PrintQualityVerticalDpi is { } verticalDpi && verticalDpi > 0
+                    ? verticalDpi
+                    : printQualityDpi;
+            }
+            else if (sheet.PrintQualityVerticalDpi is { } verticalDpi && verticalDpi > 0)
+            {
+                xlSheet.PageSetup.VerticalDpi = verticalDpi;
             }
 
             xlSheet.PageSetup.PrintErrorValue = XlsxWorksheetPageSetupMapper.ToPrintErrorValue(printErrorValue);
@@ -278,4 +278,41 @@ public sealed partial class XlsxFileAdapter
 
     private static bool CanSavePackageInPlace(Stream stream) =>
         stream.CanRead && stream.CanWrite && stream.CanSeek;
+
+    private static IEnumerable<StyleOnlyRun> GetStyleOnlyRuns(Sheet sheet)
+    {
+        foreach (var rowGroup in sheet.GetStyleOnlyEntries()
+                     .Where(entry =>
+                         IsValidWorksheetRow(entry.Key.Row) &&
+                         IsValidWorksheetColumn(entry.Key.Col) &&
+                         sheet.GetCell(entry.Key.Row, entry.Key.Col) is null)
+                     .GroupBy(entry => entry.Key.Row))
+        {
+            uint? startCol = null;
+            uint previousCol = 0;
+            StyleId? previousStyleId = null;
+            foreach (var ((_, col), styleId) in rowGroup.OrderBy(entry => entry.Key.Col))
+            {
+                if (startCol.HasValue &&
+                    previousStyleId == styleId &&
+                    col == previousCol + 1)
+                {
+                    previousCol = col;
+                    continue;
+                }
+
+                if (startCol.HasValue && previousStyleId is { } runStyleId)
+                    yield return new StyleOnlyRun(rowGroup.Key, startCol.Value, previousCol, runStyleId);
+
+                startCol = col;
+                previousCol = col;
+                previousStyleId = styleId;
+            }
+
+            if (startCol.HasValue && previousStyleId is { } finalStyleId)
+                yield return new StyleOnlyRun(rowGroup.Key, startCol.Value, previousCol, finalStyleId);
+        }
+    }
+
+    private readonly record struct StyleOnlyRun(uint Row, uint StartCol, uint EndCol, StyleId StyleId);
 }

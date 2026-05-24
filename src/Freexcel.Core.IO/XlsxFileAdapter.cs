@@ -52,8 +52,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var xlsxCustomViews = XlsxWorkbookMetadataReader.LoadCustomViews(packageStream);
 
         packageStream.Position = 0;
-        using var closedXmlPackageStream = XlsxClosedXmlLoadPackageSanitizer.Create(packageStream);
-        using var xlWorkbook = new XLWorkbook(closedXmlPackageStream);
+        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream);
+        using var closedXmlPackageStream = closedXmlLoad.PackageStream;
+        using var xlWorkbook = closedXmlLoad.Workbook;
         var workbook = new Workbook("Untitled");
         SourcePackages.Remove(workbook);
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
@@ -134,6 +135,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
+            var explicitStyleOnlyRepresentativesByXlsxStyleIndex = (xmlLayout?.ExplicitStyleOnlyCells ?? [])
+                .GroupBy(cell => cell.StyleIndex)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (group.First().Row, group.First().Col));
             foreach (var (row, col, styleIndex) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {
                 if (sheet.GetCell(row, col) is not null)
@@ -141,7 +147,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
                 {
-                    var xlCell = xlSheet.Cell((int)row, (int)col);
+                    var representative = explicitStyleOnlyRepresentativesByXlsxStyleIndex.TryGetValue(styleIndex, out var address)
+                        ? address
+                        : (row, col);
+                    var xlCell = xlSheet.Cell((int)representative.Item1, (int)representative.Item2);
                     var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
                     styleId = style.Equals(CellStyle.Default)
                         ? null
@@ -252,6 +261,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.PrintQualityDpi = xlSheet.PageSetup.HorizontalDpi > 0
                 ? xlSheet.PageSetup.HorizontalDpi
                 : xlSheet.PageSetup.VerticalDpi > 0 ? xlSheet.PageSetup.VerticalDpi : null;
+            sheet.PrintQualityVerticalDpi = xlSheet.PageSetup.VerticalDpi > 0
+                ? xlSheet.PageSetup.VerticalDpi
+                : null;
             sheet.PrintErrorValue = XlsxWorksheetPageSetupMapper.FromPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
             sheet.PrintComments = XlsxWorksheetPageSetupMapper.FromPrintComments(xlSheet.PageSetup.ShowComments);
             sheet.DifferentFirstPageHeaderFooter = xlSheet.PageSetup.DifferentFirstPageOnHF;
@@ -364,6 +376,64 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             : new MemoryStream();
         stream.CopyTo(packageStream);
         return packageStream;
+    }
+
+    private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithSanitizationFallback(
+        MemoryStream packageStream)
+    {
+        var closedXmlPackageStream = CreateClosedXmlParsePackage(
+            packageStream,
+            removeUnsupportedConditionalFormatting: false);
+        try
+        {
+            return (closedXmlPackageStream, new XLWorkbook(closedXmlPackageStream));
+        }
+        catch
+        {
+            if (!ReferenceEquals(closedXmlPackageStream, packageStream))
+                closedXmlPackageStream.Dispose();
+
+            packageStream.Position = 0;
+            var fallbackPackageStream = CreateClosedXmlParsePackage(
+                packageStream,
+                removeUnsupportedConditionalFormatting: true);
+            try
+            {
+                return (fallbackPackageStream, new XLWorkbook(fallbackPackageStream));
+            }
+            catch
+            {
+                if (!ReferenceEquals(fallbackPackageStream, packageStream))
+                    fallbackPackageStream.Dispose();
+                throw;
+            }
+        }
+    }
+
+    private static MemoryStream CreateClosedXmlParsePackage(
+        MemoryStream packageStream,
+        bool removeUnsupportedConditionalFormatting)
+    {
+        var styleOptimizedPackage = XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream);
+        try
+        {
+            var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
+                styleOptimizedPackage,
+                removeUnsupportedConditionalFormatting);
+            if (!ReferenceEquals(sanitizedPackage, styleOptimizedPackage) &&
+                !ReferenceEquals(styleOptimizedPackage, packageStream))
+            {
+                styleOptimizedPackage.Dispose();
+            }
+
+            return sanitizedPackage;
+        }
+        catch
+        {
+            if (!ReferenceEquals(styleOptimizedPackage, packageStream))
+                styleOptimizedPackage.Dispose();
+            throw;
+        }
     }
 
 }

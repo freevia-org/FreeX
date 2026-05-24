@@ -152,6 +152,10 @@ public sealed class ChartPageSetupModel
     public string? PaperSize { get; set; }
     public string? Orientation { get; set; }
     public int? Copies { get; set; }
+    public bool? UsePrinterDefaults { get; set; }
+    public int? FirstPageNumber { get; set; }
+    public int? HorizontalDpi { get; set; }
+    public int? VerticalDpi { get; set; }
     public bool? BlackAndWhite { get; set; }
     public bool? Draft { get; set; }
 }
@@ -162,6 +166,14 @@ public sealed class ChartDataTableModel
     public bool? ShowVerticalBorder { get; set; }
     public bool? ShowOutline { get; set; }
     public bool? ShowLegendKeys { get; set; }
+    public CellColor? FillColor { get; set; }
+    public WorkbookThemeColorReference? FillThemeColor { get; set; }
+    public CellColor? BorderColor { get; set; }
+    public WorkbookThemeColorReference? BorderThemeColor { get; set; }
+    public double? BorderThickness { get; set; }
+    public CellColor? TextColor { get; set; }
+    public WorkbookThemeColorReference? TextThemeColor { get; set; }
+    public double? FontSize { get; set; }
 }
 
 public sealed class Chart3DViewModel
@@ -289,7 +301,9 @@ public sealed class ChartModel
     public ChartManualLayoutModel? TitleLayout { get; set; }
     public bool TitleOverlay { get; set; }
     public string? XAxisTitle { get; set; }
+    public ChartManualLayoutModel? XAxisTitleLayout { get; set; }
     public string? YAxisTitle { get; set; }
+    public ChartManualLayoutModel? YAxisTitleLayout { get; set; }
     public bool HideXAxis { get; set; }
     public bool HideYAxis { get; set; }
     public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
@@ -416,6 +430,10 @@ public sealed class ChartModel
     public double DataLabelBorderThickness { get; set; }
     public double DataLabelFontSize { get; set; } = 11;
     public double DataLabelAngle { get; set; }
+    public CellColor? DataLabelLeaderLineColor { get; set; }
+    public WorkbookThemeColorReference? DataLabelLeaderLineThemeColor { get; set; }
+    public double DataLabelLeaderLineThickness { get; set; } = 1;
+    public ChartLineDashStyle DataLabelLeaderLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowLinearTrendline { get; set; }
     public string? TrendlineName { get; set; }
     public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
@@ -428,6 +446,16 @@ public sealed class ChartModel
     public bool ShowTrendlineRSquared { get; set; }
     public string? TrendlineLabelNumberFormatCode { get; set; }
     public bool? TrendlineLabelNumberFormatSourceLinked { get; set; }
+    public ChartManualLayoutModel? TrendlineLabelLayout { get; set; }
+    public CellColor? TrendlineLabelFillColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineLabelFillThemeColor { get; set; }
+    public CellColor? TrendlineLabelBorderColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineLabelBorderThemeColor { get; set; }
+    public double? TrendlineLabelBorderThickness { get; set; }
+    public CellColor? TrendlineLabelTextColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineLabelTextThemeColor { get; set; }
+    public double? TrendlineLabelFontSize { get; set; }
+    public double? TrendlineLabelAngle { get; set; }
     public CellColor? TrendlineColor { get; set; }
     public WorkbookThemeColorReference? TrendlineThemeColor { get; set; }
     public double TrendlineThickness { get; set; } = 1.5;

@@ -24,7 +24,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("IsPathRooted");
         script.Should().Contain("\"--self-contained\", \"false\"");
         script.Should().Contain("-p:PublishSingleFile=true");
-        script.Should().Contain("-p:EnableCompressionInSingleFile=true");
+        script.Should().NotContain("-p:EnableCompressionInSingleFile=true");
         script.Should().Contain("-p:IncludeAllContentForSelfExtract=true");
         script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
         script.Should().Contain("\"-r\", $RuntimeIdentifier");

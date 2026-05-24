@@ -1055,22 +1055,44 @@ public static partial class BuiltInFunctions
     // ═══════════════════════════════════════════════════════════════════
 
     private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new BoolValue(args[0] is BlankValue);
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is BlankValue)
+            : new BoolValue(args[0] is BlankValue);
 
     private static ScalarValue Isnumber(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new BoolValue(args[0] is NumberValue or DateTimeValue);
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is NumberValue or DateTimeValue)
+            : new BoolValue(args[0] is NumberValue or DateTimeValue);
 
     private static ScalarValue Istext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new BoolValue(args[0] is TextValue);
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is TextValue)
+            : new BoolValue(args[0] is TextValue);
 
     private static ScalarValue Iserror(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new BoolValue(args[0] is ErrorValue);
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is ErrorValue)
+            : new BoolValue(args[0] is ErrorValue);
 
     private static ScalarValue Isna(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is ErrorValue e2 && e2.Code == "#N/A")
+            : new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
 
     private static ScalarValue Islogical(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        new BoolValue(args[0] is BoolValue);
+        args[0] is RangeValue range
+            ? MapPredicateRange(range, value => value is BoolValue)
+            : new BoolValue(args[0] is BoolValue);
+
+    private static RangeValue MapPredicateRange(RangeValue range, Func<ScalarValue, bool> predicate)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = new BoolValue(predicate(range.Cells[r, c]));
+
+        return new RangeValue(cells);
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 5 – Reference helpers: ROW, COLUMN, ROWS, COLUMNS
@@ -1238,14 +1260,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (!TryTruncateToLong(ToNumber(args[0]), out long n)) return ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsevenScalar);
+        return IsevenScalar(args[0]);
+    }
+
+    private static ScalarValue IsevenScalar(ScalarValue value)
+    {
+        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
         return new BoolValue(n % 2 == 0);
     }
 
     private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (!TryTruncateToLong(ToNumber(args[0]), out long n)) return ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsoddScalar);
+        return IsoddScalar(args[0]);
+    }
+
+    private static ScalarValue IsoddScalar(ScalarValue value)
+    {
+        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
         return new BoolValue(n % 2 != 0);
     }
 
@@ -1473,8 +1507,14 @@ public static partial class BuiltInFunctions
 
 
 
-    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] switch
+    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NScalar);
+        return NScalar(args[0]);
+    }
+
+    private static ScalarValue NScalar(ScalarValue value) =>
+        value switch
         {
             NumberValue nv   => nv,
             DateTimeValue dt => new NumberValue(dt.Value),

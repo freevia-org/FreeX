@@ -188,6 +188,18 @@ public sealed partial class TextToColumnsDialog : Window
                 throw new ArgumentException("Enter a single destination cell, such as F2.");
             }
 
+            if (_fixedWidthButton.IsChecked == true && ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text).Count == 0)
+            {
+                FocusInvalidFixedWidthBreaksInput();
+                throw new ArgumentException("Enter at least one fixed-width break position.");
+            }
+
+            if (_fixedWidthButton.IsChecked != true && _otherBox.IsChecked == true && string.IsNullOrEmpty(_customBox.Text))
+            {
+                FocusInvalidCustomDelimiterInput();
+                throw new ArgumentException("Custom delimiter is required.");
+            }
+
             Result = _fixedWidthButton.IsChecked == true
                 ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount), BuildAdvancedOptions())
                 : CreateResult(

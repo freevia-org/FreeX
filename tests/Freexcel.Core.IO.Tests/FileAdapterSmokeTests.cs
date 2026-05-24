@@ -3578,7 +3578,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -3677,7 +3678,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -3745,7 +3747,8 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -7340,6 +7343,8 @@ public partial class FileAdapterSmokeTests
             Title = "Sales",
             XAxisTitle = "Month",
             YAxisTitle = "Amount",
+            XAxisTitleLayout = new ChartManualLayoutModel { XMode = "edge", X = 0.25, Y = 0.86 },
+            YAxisTitleLayout = new ChartManualLayoutModel { XMode = "edge", X = 0.02, Y = 0.35 },
             DataRange = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 4, 2))
@@ -7354,6 +7359,8 @@ public partial class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.XAxisTitle.Should().Be("Month");
         loadedChart.YAxisTitle.Should().Be("Amount");
+        loadedChart.XAxisTitleLayout.Should().BeEquivalentTo(new ChartManualLayoutModel { XMode = "edge", X = 0.25, Y = 0.86 });
+        loadedChart.YAxisTitleLayout.Should().BeEquivalentTo(new ChartManualLayoutModel { XMode = "edge", X = 0.02, Y = 0.35 });
     }
 
     [Fact]
@@ -8341,6 +8348,80 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartDataLabelLeaderLineFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartDataLabelLeaderLineFormattingPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1200));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2400));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(3600));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:dLbls>
+                      <c:dLblPos val="outEnd"/>
+                      <c:showVal val="1"/>
+                      <c:showLeaderLines val="1"/>
+                      <c:leaderLines>
+                        <c:spPr>
+                          <a:ln w="25400">
+                            <a:solidFill><a:srgbClr val="C00000"/></a:solidFill>
+                            <a:prstDash val="dash"/>
+                          </a:ln>
+                        </c:spPr>
+                      </c:leaderLines>
+                    </c:dLbls>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ShowDataLabelCallouts.Should().BeTrue();
+        loadedChart.DataLabelLeaderLineColor.Should().Be(new CellColor(192, 0, 0));
+        loadedChart.DataLabelLeaderLineThickness.Should().Be(2);
+        loadedChart.DataLabelLeaderLineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var leaderLine = chartXml.Descendants(chartNs + "leaderLines").Should().ContainSingle().Subject;
+        var line = leaderLine.Descendants(drawingNs + "ln").Should().ContainSingle().Subject;
+        line.Attribute("w")?.Value.Should().Be("25400");
+        line.Descendants(drawingNs + "srgbClr").Should().ContainSingle()
+            .Which.Attribute("val")?.Value.Should().Be("C00000");
+        line.Descendants(drawingNs + "prstDash").Should().ContainSingle()
+            .Which.Attribute("val")?.Value.Should().Be("dash");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartPointDataLabelPackagePart()
     {
         var workbook = new Workbook("ChartPointDataLabelPackageSave");
@@ -8769,6 +8850,116 @@ public partial class FileAdapterSmokeTests
             .Element(chartNs + "numFmt")!;
         numberFormat.Attribute("formatCode")!.Value.Should().Be("0.000E+00");
         numberFormat.Attribute("sourceLinked")!.Value.Should().Be("0");
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartTrendlineLabelLayoutAndFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartTrendlineLabelFormattingPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                      <c:trendline>
+                        <c:trendlineType val="linear"/>
+                        <c:dispEq val="1"/>
+                        <c:dispRSqr val="1"/>
+                        <c:trendlineLbl>
+                          <c:layout>
+                            <c:manualLayout>
+                              <c:xMode val="edge"/>
+                              <c:yMode val="edge"/>
+                              <c:x val="0.36"/>
+                              <c:y val="0.18"/>
+                              <c:w val="0.22"/>
+                              <c:h val="0.12"/>
+                            </c:manualLayout>
+                          </c:layout>
+                          <c:spPr>
+                            <a:solidFill><a:srgbClr val="FCE4D6"/></a:solidFill>
+                            <a:ln w="19050"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:ln>
+                          </c:spPr>
+                          <c:txPr>
+                            <a:bodyPr rot="-2700000"/>
+                            <a:p><a:pPr><a:defRPr sz="1400"><a:solidFill><a:srgbClr val="7030A0"/></a:solidFill></a:defRPr></a:pPr></a:p>
+                          </c:txPr>
+                        </c:trendlineLbl>
+                      </c:trendline>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.TrendlineLabelLayout.Should().BeEquivalentTo(new ChartManualLayoutModel
+        {
+            XMode = "edge",
+            YMode = "edge",
+            X = 0.36,
+            Y = 0.18,
+            Width = 0.22,
+            Height = 0.12
+        });
+        loadedChart.TrendlineLabelFillColor.Should().Be(new CellColor(0xFC, 0xE4, 0xD6));
+        loadedChart.TrendlineLabelBorderColor.Should().Be(new CellColor(0xC0, 0x00, 0x00));
+        loadedChart.TrendlineLabelBorderThickness.Should().Be(1.5);
+        loadedChart.TrendlineLabelTextColor.Should().Be(new CellColor(0x70, 0x30, 0xA0));
+        loadedChart.TrendlineLabelFontSize.Should().Be(14);
+        loadedChart.TrendlineLabelAngle.Should().Be(-45);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var label = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!)
+            .Descendants(chartNs + "trendlineLbl")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        var manualLayout = label.Element(chartNs + "layout")!.Element(chartNs + "manualLayout")!;
+        manualLayout.Element(chartNs + "xMode")!.Attribute("val")!.Value.Should().Be("edge");
+        manualLayout.Element(chartNs + "yMode")!.Attribute("val")!.Value.Should().Be("edge");
+        manualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.36");
+        manualLayout.Element(chartNs + "y")!.Attribute("val")!.Value.Should().Be("0.18");
+        manualLayout.Element(chartNs + "w")!.Attribute("val")!.Value.Should().Be("0.22");
+        manualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.12");
+        label.Element(chartNs + "spPr")!.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("FCE4D6");
+        var border = label.Element(chartNs + "spPr")!.Element(drawingNs + "ln")!;
+        border.Attribute("w")!.Value.Should().Be("19050");
+        border.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("C00000");
+        var textProperties = label.Element(chartNs + "txPr")!;
+        textProperties.Element(drawingNs + "bodyPr")!.Attribute("rot")!.Value.Should().Be("-2700000");
+        var runProperties = textProperties.Descendants(drawingNs + "defRPr").Should().ContainSingle().Subject;
+        runProperties.Attribute("sz")!.Value.Should().Be("1400");
+        runProperties.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("7030A0");
     }
 
     [Fact]
@@ -9510,7 +9701,12 @@ public partial class FileAdapterSmokeTests
                 ShowHorizontalBorder = true,
                 ShowVerticalBorder = false,
                 ShowOutline = true,
-                ShowLegendKeys = true
+                ShowLegendKeys = true,
+                FillColor = new CellColor(242, 242, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 1.5,
+                TextColor = new CellColor(192, 0, 0),
+                FontSize = 10.5
             }
         });
 
@@ -9527,6 +9723,39 @@ public partial class FileAdapterSmokeTests
         dataTable.Element(chartNs + "showVertBorder")!.Attribute("val")!.Value.Should().Be("0");
         dataTable.Element(chartNs + "showOutline")!.Attribute("val")!.Value.Should().Be("1");
         dataTable.Element(chartNs + "showKeys")!.Attribute("val")!.Value.Should().Be("1");
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        dataTable.Element(chartNs + "spPr")!
+            .Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("F2F2F2");
+        var line = dataTable.Element(chartNs + "spPr")!.Element(drawingNs + "ln")!;
+        line.Attribute("w")!.Value.Should().Be("19050");
+        line.Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("4472C4");
+        var textProperties = dataTable.Element(chartNs + "txPr")!
+            .Descendants(drawingNs + "defRPr")
+            .Single();
+        textProperties.Attribute("sz")!.Value.Should().Be("1050");
+        textProperties.Element(drawingNs + "solidFill")!
+            .Element(drawingNs + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("C00000");
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        loaded.GetSheetAt(0).Charts.Should().ContainSingle()
+            .Which.DataTable.Should().BeEquivalentTo(new ChartDataTableModel
+            {
+                ShowHorizontalBorder = true,
+                ShowVerticalBorder = false,
+                ShowOutline = true,
+                ShowLegendKeys = true,
+                FillColor = new CellColor(242, 242, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 1.5,
+                TextColor = new CellColor(192, 0, 0),
+                FontSize = 10.5
+            });
     }
 
     [Fact]
@@ -12042,6 +12271,110 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetOutlineProperties()
+    {
+        var workbook = new Workbook("WorksheetOutlineProperties");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Outline"));
+        sheet.RowOutlineLevels[3] = 1;
+        sheet.ColOutlineLevels[2] = 1;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        using (var sourceArchive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var sourceWorksheetXml = LoadPackageXml(sourceArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace sourceWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetPr = sourceWorksheetXml.Root!.Element(sourceWorksheetNs + "sheetPr");
+            if (sheetPr is null)
+            {
+                sheetPr = new XElement(sourceWorksheetNs + "sheetPr");
+                sourceWorksheetXml.Root!.AddFirst(sheetPr);
+            }
+
+            sheetPr.Element(sourceWorksheetNs + "outlinePr")?.Remove();
+            sheetPr.Add(new XElement(
+                sourceWorksheetNs + "outlinePr",
+                new XAttribute("summaryBelow", "0"),
+                new XAttribute("summaryRight", "0"),
+                new XAttribute("showOutlineSymbols", "0"),
+                new XAttribute("applyStyles", "1")));
+            ReplacePackageXml(sourceArchive, "xl/worksheets/sheet1.xml", sourceWorksheetXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.OutlineSummaryBelow.Should().BeFalse();
+        loadedSheet.OutlineSummaryRight.Should().BeFalse();
+        loadedSheet.ShowOutlineSymbols.Should().BeFalse();
+        loadedSheet.ApplyOutlineStyles.Should().BeTrue();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var outlinePr = worksheetXml.Root!
+            .Element(worksheetNs + "sheetPr")!
+            .Element(worksheetNs + "outlinePr");
+        outlinePr.Should().NotBeNull();
+        outlinePr!.Attribute("summaryBelow")!.Value.Should().Be("0");
+        outlinePr.Attribute("summaryRight")!.Value.Should().Be("0");
+        outlinePr.Attribute("showOutlineSymbols")!.Value.Should().Be("0");
+        outlinePr.Attribute("applyStyles")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAsymmetricPrintQualityDpi()
+    {
+        var workbook = new Workbook("WorksheetAsymmetricPrintQualityDpi");
+        workbook.AddSheet("Sheet1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        using (var sourceArchive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var sourceWorksheetXml = LoadPackageXml(sourceArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace sourceWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sourcePageSetup = sourceWorksheetXml.Root!.Element(sourceWorksheetNs + "pageSetup");
+            if (sourcePageSetup is null)
+            {
+                sourcePageSetup = new XElement(sourceWorksheetNs + "pageSetup");
+                sourceWorksheetXml.Root!.Add(sourcePageSetup);
+            }
+
+            sourcePageSetup.SetAttributeValue("horizontalDpi", "600");
+            sourcePageSetup.SetAttributeValue("verticalDpi", "300");
+            ReplacePackageXml(sourceArchive, "xl/worksheets/sheet1.xml", sourceWorksheetXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrintQualityDpi.Should().Be(600);
+        loadedSheet.PrintQualityVerticalDpi.Should().Be(300);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull();
+        pageSetup!.Attribute("horizontalDpi")!.Value.Should().Be("600");
+        pageSetup.Attribute("verticalDpi")!.Value.Should().Be("300");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPageMarginsHeaderFooterAttributes()
     {
         var workbook = new Workbook("WorksheetPageMarginsNativeMetadata");
@@ -12257,6 +12590,9 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintBlackAndWhite = false;
         loadedSheet.PrintDraftQuality = false;
         loadedSheet.PrintQualityDpi = null;
+        loadedSheet.PrintQualityVerticalDpi = null;
+        loadedSheet.UsePrinterDefaults = false;
+        loadedSheet.PrintCopies = null;
         loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
         loadedSheet.PrintComments = WorksheetPrintComments.None;
 
@@ -12269,8 +12605,8 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
         pageSetup.Should().NotBeNull();
-        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
-        pageSetup.Attribute("copies")!.Value.Should().Be("3");
+        pageSetup!.Attribute("usePrinterDefaults")?.Value.Should().NotBe("1");
+        pageSetup.Attribute("copies")?.Value.Should().NotBe("3");
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
         pageSetup.Attribute("orientation")?.Value.Should().NotBe("landscape");
         pageSetup.Attribute("paperSize")?.Value.Should().NotBe("5");
@@ -12320,6 +12656,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintBlackAndWhite = false;
         loadedSheet.PrintDraftQuality = false;
         loadedSheet.PrintQualityDpi = null;
+        loadedSheet.PrintQualityVerticalDpi = null;
         loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
         loadedSheet.PrintComments = WorksheetPrintComments.None;
 
@@ -12829,7 +13166,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.FitToPage.Should().BeTrue();
+        loadedSheet.AutoPageBreaks.Should().BeFalse();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -12844,6 +13184,7 @@ public partial class FileAdapterSmokeTests
         sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
         sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
+        sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("fitToPage")!.Value.Should().Be("1");
         sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freexcel:test"))
             .Select(element => element.Attribute("id")?.Value)
             .Should()
@@ -14097,6 +14438,79 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesPivotChartFieldButtonExtensionMetadata()
+    {
+        var workbook = new Workbook("PivotChartFieldButtonExtensionPackagePreserve");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:c14="http://schemas.microsoft.com/office/drawing/2007/8/2/chart">
+              <c:pivotSource><c:name>Data!PivotTable1</c:name><c:fmtId val="7"/></c:pivotSource>
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Data!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Data!$A$2:$A$3</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Data!$B$2:$B$3</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+                <c:extLst>
+                  <c:ext uri="{C3380CC4-5D6E-409C-BE32-E72D297353CC}">
+                    <c14:pivotOptions>
+                      <c14:dropZonesVisible val="0"/>
+                      <c14:dropZoneFilter val="0"/>
+                      <c14:dropZoneCategories val="1"/>
+                      <c14:dropZoneData val="0"/>
+                    </c14:pivotOptions>
+                  </c:ext>
+                </c:extLst>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ShowPivotChartFieldButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        loadedChart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chart14Ns = "http://schemas.microsoft.com/office/drawing/2007/8/2/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var pivotOptions = chartXml.Root!
+            .Element(chartNs + "chart")!
+            .Element(chartNs + "extLst")!
+            .Descendants(chart14Ns + "pivotOptions")
+            .Should().ContainSingle().Subject;
+        pivotOptions.Element(chart14Ns + "dropZonesVisible")!.Attribute("val")!.Value.Should().Be("0");
+        pivotOptions.Element(chart14Ns + "dropZoneFilter")!.Attribute("val")!.Value.Should().Be("0");
+        pivotOptions.Element(chart14Ns + "dropZoneCategories")!.Attribute("val")!.Value.Should().Be("1");
+        pivotOptions.Element(chart14Ns + "dropZoneData")!.Attribute("val")!.Value.Should().Be("0");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesAuthoredPivotChartStyleMetadata()
     {
         var workbook = new Workbook("AuthoredPivotChartStyleTest");
@@ -14220,6 +14634,10 @@ public partial class FileAdapterSmokeTests
                     PaperSize = "9",
                     Orientation = "landscape",
                     Copies = 2,
+                    UsePrinterDefaults = true,
+                    FirstPageNumber = 5,
+                    HorizontalDpi = 600,
+                    VerticalDpi = 600,
                     BlackAndWhite = true,
                     Draft = false
                 }
@@ -14336,6 +14754,10 @@ public partial class FileAdapterSmokeTests
             pageSetup.Attribute("paperSize")!.Value.Should().Be("9");
             pageSetup.Attribute("orientation")!.Value.Should().Be("landscape");
             pageSetup.Attribute("copies")!.Value.Should().Be("2");
+            pageSetup.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
+            pageSetup.Attribute("firstPageNumber")!.Value.Should().Be("5");
+            pageSetup.Attribute("horizontalDpi")!.Value.Should().Be("600");
+            pageSetup.Attribute("verticalDpi")!.Value.Should().Be("600");
             pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
             pageSetup.Attribute("draft")!.Value.Should().Be("0");
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
@@ -14410,6 +14832,9 @@ public partial class FileAdapterSmokeTests
         {
             Name = "PivotTable1",
             CacheId = 1,
+            CreatedVersion = 6,
+            UpdatedVersion = 7,
+            MinRefreshableVersion = 5,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
             DataOnRows = false,
@@ -14446,7 +14871,15 @@ public partial class FileAdapterSmokeTests
             MissingCaption = "(missing)",
             ErrorCaption = "(error)"
         };
-        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(
+            0,
+            ShowAll: true,
+            IncludeNewItemsInFilter: true,
+            MultipleItemSelectionAllowed: false,
+            DragToRow: true,
+            DragToColumn: false,
+            DragToPage: true,
+            DragToData: false));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
         sheet.PivotTables.Add(pivot);
 
@@ -14468,6 +14901,9 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("rowFields");
             pivotXml.ToString().Should().Contain("dataFields");
             pivotXml.Root!.Attribute("dataOnRows")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("createdVersion")!.Value.Should().Be("6");
+            pivotXml.Root!.Attribute("updatedVersion")!.Value.Should().Be("7");
+            pivotXml.Root!.Attribute("minRefreshableVersion")!.Value.Should().Be("5");
             pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstHeaderRow")!.Value.Should().Be("0");
             pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstDataRow")!.Value.Should().Be("2");
             pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstDataCol")!.Value.Should().Be("2");
@@ -14501,6 +14937,16 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("grandTotalCaption")!.Value.Should().Be("Overall Total");
             pivotXml.Root!.Attribute("missingCaption")!.Value.Should().Be("(missing)");
             pivotXml.Root!.Attribute("errorCaption")!.Value.Should().Be("(error)");
+            var firstPivotField = pivotXml.Root!.Element(workbookNs + "pivotFields")!
+                .Elements(workbookNs + "pivotField")
+                .First();
+            firstPivotField.Attribute("showAll")!.Value.Should().Be("1");
+            firstPivotField.Attribute("includeNewItemsInFilter")!.Value.Should().Be("1");
+            firstPivotField.Attribute("multipleItemSelectionAllowed")!.Value.Should().Be("0");
+            firstPivotField.Attribute("dragToRow")!.Value.Should().Be("1");
+            firstPivotField.Attribute("dragToCol")!.Value.Should().Be("0");
+            firstPivotField.Attribute("dragToPage")!.Value.Should().Be("1");
+            firstPivotField.Attribute("dragToData")!.Value.Should().Be("0");
         }
 
         saved.Position = 0;
@@ -14509,6 +14955,17 @@ public partial class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        var loadedRowField = loadedPivot.RowFields.Should().ContainSingle().Subject;
+        loadedRowField.ShowAll.Should().BeTrue();
+        loadedRowField.IncludeNewItemsInFilter.Should().BeTrue();
+        loadedRowField.MultipleItemSelectionAllowed.Should().BeFalse();
+        loadedRowField.DragToRow.Should().BeTrue();
+        loadedRowField.DragToColumn.Should().BeFalse();
+        loadedRowField.DragToPage.Should().BeTrue();
+        loadedRowField.DragToData.Should().BeFalse();
+        loadedPivot.CreatedVersion.Should().Be(6);
+        loadedPivot.UpdatedVersion.Should().Be(7);
+        loadedPivot.MinRefreshableVersion.Should().Be(5);
         loadedPivot.DataOnRows.Should().BeFalse();
         loadedPivot.FirstHeaderRow.Should().Be(0);
         loadedPivot.FirstDataRow.Should().Be(2);
@@ -17443,6 +17900,7 @@ public partial class FileAdapterSmokeTests
             {
                 sheetPr.Add(new XElement(
                     worksheetNs + "pageSetUpPr",
+                    new XAttribute("fitToPage", "1"),
                     new XAttribute("autoPageBreaks", "0")));
             }
 

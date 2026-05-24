@@ -96,6 +96,12 @@ public sealed partial class Sheet
     /// <summary>Worksheet print scaling settings.</summary>
     public WorksheetScaleToFit ScaleToFit { get; set; } = WorksheetScaleToFit.Default;
 
+    /// <summary>Optional Excel fit-to-page sheet property. Null lets Excel infer from scaling settings.</summary>
+    public bool? FitToPage { get; set; }
+
+    /// <summary>Optional Excel automatic page-break flag stored in sheet properties.</summary>
+    public bool? AutoPageBreaks { get; set; }
+
     /// <summary>Rows repeated at the top of every printed page.</summary>
     public WorksheetRepeatRange? PrintTitleRows { get; set; }
 
@@ -162,6 +168,12 @@ public sealed partial class Sheet
     /// <summary>Optional first printed page number. Null means automatic numbering from 1.</summary>
     public int? FirstPageNumber { get; set; }
 
+    /// <summary>Whether Excel should use printer defaults for worksheet page setup.</summary>
+    public bool? UsePrinterDefaults { get; set; }
+
+    /// <summary>Optional number of copies for worksheet print settings.</summary>
+    public int? PrintCopies { get; set; }
+
     /// <summary>Whether the worksheet should be printed in black and white.</summary>
     public bool PrintBlackAndWhite { get; set; }
 
@@ -170,6 +182,9 @@ public sealed partial class Sheet
 
     /// <summary>Optional worksheet print quality in dots per inch. Null means printer/default quality.</summary>
     public int? PrintQualityDpi { get; set; }
+
+    /// <summary>Optional vertical worksheet print quality in dots per inch when it differs from horizontal DPI.</summary>
+    public int? PrintQualityVerticalDpi { get; set; }
 
     /// <summary>How formula/cell error values are represented when printing.</summary>
     public WorksheetPrintErrorValue PrintErrorValue { get; set; } = WorksheetPrintErrorValue.Displayed;
@@ -266,6 +281,18 @@ public sealed partial class Sheet
 
     /// <summary>Outline level (1–8) per column. 0 = no grouping.</summary>
     public Dictionary<uint, int> ColOutlineLevels { get; } = [];
+
+    /// <summary>Whether row outline summary rows appear below detail rows. Null means Excel default.</summary>
+    public bool? OutlineSummaryBelow { get; set; }
+
+    /// <summary>Whether column outline summary columns appear to the right of detail columns. Null means Excel default.</summary>
+    public bool? OutlineSummaryRight { get; set; }
+
+    /// <summary>Whether outline symbols are displayed for grouped rows and columns. Null means Excel default.</summary>
+    public bool? ShowOutlineSymbols { get; set; }
+
+    /// <summary>Whether outline styles should be applied automatically. Null means Excel default.</summary>
+    public bool? ApplyOutlineStyles { get; set; }
 
     /// <summary>Rows currently collapsed by a group expand/collapse operation.</summary>
     public HashSet<uint> GroupHiddenRows { get; } = [];

@@ -5,6 +5,8 @@ namespace Freexcel.Core.IO;
 
 internal static class XlsxPivotXmlReferencePreserver
 {
+    private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -149,6 +151,9 @@ internal static class XlsxPivotXmlReferencePreserver
         ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext context)
     {
+        if (!HasWorksheetPivotTableRelationships(sourceArchive, context))
+            return;
+
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
@@ -175,5 +180,24 @@ internal static class XlsxPivotXmlReferencePreserver
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool HasWorksheetPivotTableRelationships(
+        ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext context)
+    {
+        foreach (var sourceWorksheetPath in context.SourceSheets.Values)
+        {
+            var relationshipsEntry = sourceArchive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath));
+            if (relationshipsEntry is null)
+                continue;
+
+            using var relationshipsStream = relationshipsEntry.Open();
+            using var reader = new StreamReader(relationshipsStream);
+            if (reader.ReadToEnd().Contains(PivotTableRelationshipType, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 }
