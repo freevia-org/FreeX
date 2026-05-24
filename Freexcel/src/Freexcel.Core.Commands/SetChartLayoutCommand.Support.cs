@@ -155,6 +155,7 @@ public sealed partial class SetChartLayoutCommand
     {
         var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
         var supportsSmooth = chartType is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
+        var supportsInvertIfNegative = ChartTypeSupport.SupportsInvertIfNegative(chartType);
         return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
@@ -170,7 +171,8 @@ public sealed partial class SetChartLayoutCommand
             MarkerBorderThemeColor = supportsMarkers ? format.MarkerBorderThemeColor : null,
             MarkerBorderThickness = supportsMarkers && format.MarkerBorderThickness is { } markerBorderThickness
                 ? ClampFinite(markerBorderThickness, 0, 10)
-                : null
+                : null,
+            InvertIfNegative = supportsInvertIfNegative ? format.InvertIfNegative : null
         };
     }
 
@@ -186,7 +188,8 @@ public sealed partial class SetChartLayoutCommand
         || format.Smooth is not null
         || format.MarkerBorderColor is not null
         || format.MarkerBorderThemeColor is not null
-        || format.MarkerBorderThickness is not null;
+        || format.MarkerBorderThickness is not null
+        || format.InvertIfNegative is not null;
 
     private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
         where TEnum : struct, Enum =>

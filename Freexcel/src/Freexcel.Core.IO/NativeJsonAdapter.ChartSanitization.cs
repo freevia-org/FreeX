@@ -105,6 +105,16 @@ public sealed partial class NativeJsonAdapter
         chart.DropLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DropLineDashStyle, ChartLineDashStyle.Solid);
         chart.HighLowLineThickness = Math.Clamp(chart.HighLowLineThickness, 0.5, 10);
         chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
+        chart.SeriesLineThickness = Math.Clamp(chart.SeriesLineThickness, 0.5, 10);
+        chart.SeriesLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.SeriesLineDashStyle, ChartLineDashStyle.Solid);
+        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
+        {
+            chart.ShowSeriesLines = false;
+            chart.SeriesLineColor = null;
+            chart.SeriesLineThemeColor = null;
+            chart.SeriesLineThickness = 1;
+            chart.SeriesLineDashStyle = ChartLineDashStyle.Solid;
+        }
         chart.UpDownBarGapWidth = ClampNullableInt(chart.UpDownBarGapWidth, 0, 500);
         chart.UpBarBorderThickness = ClampNullableDouble(chart.UpBarBorderThickness, 0, 10);
         chart.DownBarBorderThickness = ClampNullableDouble(chart.DownBarBorderThickness, 0, 10);
@@ -249,6 +259,7 @@ public sealed partial class NativeJsonAdapter
     {
         var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
         var supportsSmooth = chartType is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
+        var supportsInvertIfNegative = ChartTypeSupport.SupportsInvertIfNegative(chartType);
         return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
@@ -264,7 +275,8 @@ public sealed partial class NativeJsonAdapter
             MarkerBorderThemeColor = supportsMarkers ? format.MarkerBorderThemeColor : null,
             MarkerBorderThickness = supportsMarkers && format.MarkerBorderThickness is { } markerBorderThickness
                 ? Math.Clamp(markerBorderThickness, 0, 10)
-                : null
+                : null,
+            InvertIfNegative = supportsInvertIfNegative ? format.InvertIfNegative : null
         };
     }
 
@@ -280,7 +292,8 @@ public sealed partial class NativeJsonAdapter
         || format.Smooth is not null
         || format.MarkerBorderColor is not null
         || format.MarkerBorderThemeColor is not null
-        || format.MarkerBorderThickness is not null;
+        || format.MarkerBorderThickness is not null
+        || format.InvertIfNegative is not null;
 
     private static ChartPointDataLabelFormat ClampPointDataLabelFormat(ChartPointDataLabelFormat format) =>
         format with

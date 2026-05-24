@@ -4,7 +4,7 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
-internal static class DelimitedTextWorkbookReader
+internal static partial class DelimitedTextWorkbookReader
 {
     public static Workbook Load(Stream stream, char delimiter, bool allowSeparatorDirective = false)
     {
@@ -169,19 +169,20 @@ internal static class DelimitedTextWorkbookReader
     {
         using var memory = new MemoryStream();
         stream.CopyTo(memory);
-        var bytes = memory.ToArray();
+        if (!memory.TryGetBuffer(out var bytes))
+            throw new InvalidOperationException("Buffered delimited text stream is not accessible.");
 
-        return new StringReader(DecodeText(bytes));
+        return new StringReader(DecodeText(bytes.AsSpan()));
     }
 
-    private static string DecodeText(byte[] bytes)
+    private static string DecodeText(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length >= 3 &&
             bytes[0] == 0xEF &&
             bytes[1] == 0xBB &&
             bytes[2] == 0xBF)
         {
-            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+            return Encoding.UTF8.GetString(bytes[3..]);
         }
 
         if (bytes.Length >= 4 &&
@@ -190,7 +191,7 @@ internal static class DelimitedTextWorkbookReader
             bytes[2] == 0x00 &&
             bytes[3] == 0x00)
         {
-            return Encoding.UTF32.GetString(bytes, 4, bytes.Length - 4);
+            return Encoding.UTF32.GetString(bytes[4..]);
         }
 
         if (bytes.Length >= 4 &&
@@ -200,21 +201,21 @@ internal static class DelimitedTextWorkbookReader
             bytes[3] == 0xFF)
         {
             return new UTF32Encoding(bigEndian: true, byteOrderMark: true)
-                .GetString(bytes, 4, bytes.Length - 4);
+                .GetString(bytes[4..]);
         }
 
         if (bytes.Length >= 2 &&
             bytes[0] == 0xFF &&
             bytes[1] == 0xFE)
         {
-            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+            return Encoding.Unicode.GetString(bytes[2..]);
         }
 
         if (bytes.Length >= 2 &&
             bytes[0] == 0xFE &&
             bytes[1] == 0xFF)
         {
-            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+            return Encoding.BigEndianUnicode.GetString(bytes[2..]);
         }
 
         try
@@ -275,188 +276,7 @@ internal static class DelimitedTextWorkbookReader
         var trimmed = field.Trim();
         return DateTime.TryParseExact(
             trimmed,
-            [
-                "yyyy-MM-dd",
-                "yyyy-MM-dd H:mm",
-                "yyyy-MM-dd H:mm:ss",
-                "yyyy-MM-dd H:mm:ss.FFFFFFF",
-                "yyyy-MM-dd HH:mm",
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd HH:mm:ss.FFFFFFF",
-                "yyyy-MM-ddTH:mm",
-                "yyyy-MM-ddTH:mm:ss",
-                "yyyy-MM-ddTH:mm:ss.FFFFFFF",
-                "yyyy-MM-ddTHH:mm",
-                "yyyy-MM-ddTHH:mm:ss",
-                "yyyy-MM-ddTHH:mm:ss.FFFFFFF",
-                "yyyy/M/d",
-                "yyyy/M/d H:mm",
-                "yyyy/M/d H:mm:ss",
-                "yyyy/M/d H:mm:ss.FFFFFFF",
-                "yyyy/M/d HH:mm",
-                "yyyy/M/d HH:mm:ss",
-                "yyyy/M/d HH:mm:ss.FFFFFFF",
-                "yyyy/M/dTH:mm",
-                "yyyy/M/dTH:mm:ss",
-                "yyyy/M/dTH:mm:ss.FFFFFFF",
-                "yyyy/M/dTHH:mm",
-                "yyyy/M/dTHH:mm:ss",
-                "yyyy/M/dTHH:mm:ss.FFFFFFF",
-                "M/d/yyyy",
-                "M/d/yyyy H:mm",
-                "M/d/yyyy H:mm:ss",
-                "M/d/yyyy H:mm:ss.FFFFFFF",
-                "M/d/yyyy HH:mm",
-                "M/d/yyyy HH:mm:ss",
-                "M/d/yyyy HH:mm:ss.FFFFFFF",
-                "M/d/yyyy h:mm tt",
-                "M/d/yyyy h:mm:ss tt",
-                "M/d/yyyy h:mm:ss.FFFFFFF tt",
-                "M-d-yyyy",
-                "M-d-yyyy H:mm",
-                "M-d-yyyy H:mm:ss",
-                "M-d-yyyy H:mm:ss.FFFFFFF",
-                "M-d-yyyy HH:mm",
-                "M-d-yyyy HH:mm:ss",
-                "M-d-yyyy HH:mm:ss.FFFFFFF",
-                "M-d-yyyy h:mm tt",
-                "M-d-yyyy h:mm:ss tt",
-                "M-d-yyyy h:mm:ss.FFFFFFF tt",
-                "M/d/yy",
-                "M/d/yy H:mm",
-                "M/d/yy H:mm:ss",
-                "M/d/yy H:mm:ss.FFFFFFF",
-                "M/d/yy HH:mm",
-                "M/d/yy HH:mm:ss",
-                "M/d/yy HH:mm:ss.FFFFFFF",
-                "M/d/yy h:mm tt",
-                "M/d/yy h:mm:ss tt",
-                "M/d/yy h:mm:ss.FFFFFFF tt",
-                "M-d-yy",
-                "M-d-yy H:mm",
-                "M-d-yy H:mm:ss",
-                "M-d-yy H:mm:ss.FFFFFFF",
-                "M-d-yy HH:mm",
-                "M-d-yy HH:mm:ss",
-                "M-d-yy HH:mm:ss.FFFFFFF",
-                "M-d-yy h:mm tt",
-                "M-d-yy h:mm:ss tt",
-                "M-d-yy h:mm:ss.FFFFFFF tt",
-                "MMMM d, yyyy",
-                "MMMM d, yyyy H:mm",
-                "MMMM d, yyyy H:mm:ss",
-                "MMMM d, yyyy H:mm:ss.FFFFFFF",
-                "MMMM d, yyyy h:mm tt",
-                "MMMM d, yyyy h:mm:ss tt",
-                "MMMM d, yyyy h:mm:ss.FFFFFFF tt",
-                "MMM d, yyyy",
-                "MMM d, yyyy H:mm",
-                "MMM d, yyyy H:mm:ss",
-                "MMM d, yyyy H:mm:ss.FFFFFFF",
-                "MMM d, yyyy h:mm tt",
-                "MMM d, yyyy h:mm:ss tt",
-                "MMM d, yyyy h:mm:ss.FFFFFFF tt",
-                "dddd, MMMM d, yyyy",
-                "dddd, MMMM d, yyyy H:mm",
-                "dddd, MMMM d, yyyy H:mm:ss",
-                "dddd, MMMM d, yyyy H:mm:ss.FFFFFFF",
-                "dddd, MMMM d, yyyy h:mm tt",
-                "dddd, MMMM d, yyyy h:mm:ss tt",
-                "dddd, MMMM d, yyyy h:mm:ss.FFFFFFF tt",
-                "ddd, MMMM d, yyyy",
-                "ddd, MMMM d, yyyy H:mm",
-                "ddd, MMMM d, yyyy H:mm:ss",
-                "ddd, MMMM d, yyyy H:mm:ss.FFFFFFF",
-                "ddd, MMMM d, yyyy h:mm tt",
-                "ddd, MMMM d, yyyy h:mm:ss tt",
-                "ddd, MMMM d, yyyy h:mm:ss.FFFFFFF tt",
-                "dddd, MMM d, yyyy",
-                "dddd, MMM d, yyyy H:mm",
-                "dddd, MMM d, yyyy H:mm:ss",
-                "dddd, MMM d, yyyy H:mm:ss.FFFFFFF",
-                "dddd, MMM d, yyyy h:mm tt",
-                "dddd, MMM d, yyyy h:mm:ss tt",
-                "dddd, MMM d, yyyy h:mm:ss.FFFFFFF tt",
-                "ddd, MMM d, yyyy",
-                "ddd, MMM d, yyyy H:mm",
-                "ddd, MMM d, yyyy H:mm:ss",
-                "ddd, MMM d, yyyy H:mm:ss.FFFFFFF",
-                "ddd, MMM d, yyyy h:mm tt",
-                "ddd, MMM d, yyyy h:mm:ss tt",
-                "ddd, MMM d, yyyy h:mm:ss.FFFFFFF tt",
-                "MMMM d yyyy",
-                "MMMM d yyyy H:mm",
-                "MMMM d yyyy H:mm:ss",
-                "MMMM d yyyy H:mm:ss.FFFFFFF",
-                "MMMM d yyyy h:mm tt",
-                "MMMM d yyyy h:mm:ss tt",
-                "MMMM d yyyy h:mm:ss.FFFFFFF tt",
-                "MMM d yyyy",
-                "MMM d yyyy H:mm",
-                "MMM d yyyy H:mm:ss",
-                "MMM d yyyy H:mm:ss.FFFFFFF",
-                "MMM d yyyy h:mm tt",
-                "MMM d yyyy h:mm:ss tt",
-                "MMM d yyyy h:mm:ss.FFFFFFF tt",
-                "MMMM d yy",
-                "MMM d yy",
-                "d MMMM yyyy",
-                "d MMMM yyyy H:mm",
-                "d MMMM yyyy H:mm:ss",
-                "d MMMM yyyy H:mm:ss.FFFFFFF",
-                "d MMMM yyyy h:mm tt",
-                "d MMMM yyyy h:mm:ss tt",
-                "d MMMM yyyy h:mm:ss.FFFFFFF tt",
-                "d MMM yyyy",
-                "d MMM yyyy H:mm",
-                "d MMM yyyy H:mm:ss",
-                "d MMM yyyy H:mm:ss.FFFFFFF",
-                "d MMM yyyy h:mm tt",
-                "d MMM yyyy h:mm:ss tt",
-                "d MMM yyyy h:mm:ss.FFFFFFF tt",
-                "d MMMM yy",
-                "d MMMM yy H:mm",
-                "d MMMM yy H:mm:ss",
-                "d MMMM yy H:mm:ss.FFFFFFF",
-                "d MMMM yy h:mm tt",
-                "d MMMM yy h:mm:ss tt",
-                "d MMMM yy h:mm:ss.FFFFFFF tt",
-                "d MMM yy",
-                "d MMM yy H:mm",
-                "d MMM yy H:mm:ss",
-                "d MMM yy H:mm:ss.FFFFFFF",
-                "d MMM yy h:mm tt",
-                "d MMM yy h:mm:ss tt",
-                "d MMM yy h:mm:ss.FFFFFFF tt",
-                "d-MMMM-yyyy",
-                "d-MMMM-yyyy H:mm",
-                "d-MMMM-yyyy H:mm:ss",
-                "d-MMMM-yyyy H:mm:ss.FFFFFFF",
-                "d-MMMM-yyyy h:mm tt",
-                "d-MMMM-yyyy h:mm:ss tt",
-                "d-MMMM-yyyy h:mm:ss.FFFFFFF tt",
-                "d-MMM-yyyy",
-                "d-MMM-yyyy H:mm",
-                "d-MMM-yyyy H:mm:ss",
-                "d-MMM-yyyy H:mm:ss.FFFFFFF",
-                "d-MMM-yyyy h:mm tt",
-                "d-MMM-yyyy h:mm:ss tt",
-                "d-MMM-yyyy h:mm:ss.FFFFFFF tt",
-                "d-MMMM-yy",
-                "d-MMMM-yy H:mm",
-                "d-MMMM-yy H:mm:ss",
-                "d-MMMM-yy H:mm:ss.FFFFFFF",
-                "d-MMMM-yy h:mm tt",
-                "d-MMMM-yy h:mm:ss tt",
-                "d-MMMM-yy h:mm:ss.FFFFFFF tt",
-                "d-MMM-yy",
-                "d-MMM-yy H:mm",
-                "d-MMM-yy H:mm:ss",
-                "d-MMM-yy H:mm:ss.FFFFFFF",
-                "d-MMM-yy h:mm tt",
-                "d-MMM-yy h:mm:ss tt",
-                "d-MMM-yy h:mm:ss.FFFFFFF tt"
-            ],
+            DateTimeFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out dateTime);
@@ -467,7 +287,7 @@ internal static class DelimitedTextWorkbookReader
         var trimmed = field.Trim();
         if (TimeSpan.TryParseExact(
             trimmed,
-            ["h\\:mm", "hh\\:mm", "h\\:mm\\:ss", "hh\\:mm\\:ss", "h\\:mm\\:ss\\.FFFFFFF", "hh\\:mm\\:ss\\.FFFFFFF"],
+            TimeSpanFormats,
             CultureInfo.InvariantCulture,
             out time))
         {
@@ -476,7 +296,7 @@ internal static class DelimitedTextWorkbookReader
 
         if (DateTime.TryParseExact(
             trimmed,
-            ["h:mm tt", "hh:mm tt", "h:mm:ss tt", "hh:mm:ss tt", "h:mm:ss.FFFFFFF tt", "hh:mm:ss.FFFFFFF tt"],
+            TimeOfDayFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.NoCurrentDateDefault,
             out var dateTime))

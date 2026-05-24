@@ -7,6 +7,17 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class XlsxFileAdapterFormatTests
 {
     [Fact]
+    public void LoadPath_AvoidsFullPackageToArrayCopies()
+    {
+        var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.cs"));
+        var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
+
+        adapterSource.Should().NotContain("packageStream.ToArray()");
+        adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
+        sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
+    }
+
+    [Fact]
     public void Formats_IncludeModernExcelOpenVariants()
     {
         var adapter = new XlsxFileAdapter();
@@ -48,5 +59,20 @@ public sealed class XlsxFileAdapterFormatTests
         stream.Position = 0;
         using var loaded = new ClosedXML.Excel.XLWorkbook(stream);
         loaded.Worksheet("Sheet1").Cell("A1").GetString().Should().Be("saved");
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
     }
 }

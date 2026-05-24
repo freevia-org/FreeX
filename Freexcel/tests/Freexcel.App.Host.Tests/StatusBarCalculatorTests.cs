@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -37,5 +38,37 @@ public sealed class StatusBarCalculatorTests
         var sheet = new Sheet(SheetId.New(), "Sheet1");
 
         StatusBarCalculator.GetReadyStatusText(sheet, new CellAddress(sheet.Id, 1, 1)).Should().Be("Ready");
+    }
+
+    [Fact]
+    public void Calculate_LargeSelections_ScansSparseCellsWithoutCopyingUsedCellDictionary()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "StatusBarCalculator.cs"));
+
+        source.Should().NotContain(
+            "GetUsedCells()",
+            "status-bar refreshes happen during navigation and should not allocate a full used-cell dictionary");
+    }
+
+    [Fact]
+    public void Calculate_LargeSelections_UsesOnlyOccupiedCellsInsideRange()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1_000_000, 1), Cell.FromValue(new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1_000_000, 2), Cell.FromValue(new NumberValue(90)));
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var stats = StatusBarCalculator.Calculate(sheet, range);
+
+        stats.Count.Should().Be(2);
+        stats.Sum.Should().Be(40);
+        stats.Average.Should().Be(20);
+        stats.Min.Should().Be(10);
+        stats.Max.Should().Be(30);
     }
 }

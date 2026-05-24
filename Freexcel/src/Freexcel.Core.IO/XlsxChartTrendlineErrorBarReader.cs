@@ -78,6 +78,19 @@ internal static class XlsxChartTrendlineErrorBarReader
                 () => chart.HighLowLineThemeColor = null);
         }
 
+        if (plotChart.Element(ChartNs + "serLines") is { } seriesLines)
+        {
+            chart.ShowSeriesLines = true;
+            ApplyLineShapeProperties(
+                seriesLines.Element(ChartNs + "spPr"),
+                color => chart.SeriesLineColor = color,
+                theme => chart.SeriesLineThemeColor = theme,
+                thickness => chart.SeriesLineThickness = thickness,
+                dashStyle => chart.SeriesLineDashStyle = dashStyle,
+                () => chart.SeriesLineColor = null,
+                () => chart.SeriesLineThemeColor = null);
+        }
+
         if (plotChart.Element(ChartNs + "upDownBars") is { } upDownBars)
         {
             chart.ShowUpDownBars = true;

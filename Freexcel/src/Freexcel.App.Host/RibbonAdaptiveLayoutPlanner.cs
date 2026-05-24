@@ -162,7 +162,8 @@ public static class RibbonAdaptiveLayoutPlanner
 
     private static bool IsDataRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count >= 5 &&
-        TryFindGroupIndex(groupNames, "Get & Transform", out _) &&
+        TryFindGroupIndex(groupNames, "Get & Transform Data", out _) &&
+        TryFindGroupIndex(groupNames, "Queries & Connections", out _) &&
         TryFindGroupIndex(groupNames, "Sort & Filter", out _) &&
         TryFindGroupIndex(groupNames, "Data Tools", out _);
 
@@ -170,7 +171,7 @@ public static class RibbonAdaptiveLayoutPlanner
         groupNames.Count >= 5 &&
         TryFindGroupIndex(groupNames, "Workbook Views", out _) &&
         TryFindGroupIndex(groupNames, "Show", out _) &&
-        TryFindGroupIndex(groupNames, "Freeze Panes", out _);
+        TryFindGroupIndex(groupNames, "Window", out _);
 
     private static bool IsReviewRibbonGroupSet(IReadOnlyList<string> groupNames) =>
         groupNames.Count >= 4 &&
@@ -212,6 +213,9 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (availableWidth <= 1120)
         {
+            if (states.Length > 0)
+                states[0] = RibbonAdaptiveGroupState.SmallWithLabels;
+
             for (var i = 1; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;

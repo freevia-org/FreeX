@@ -206,14 +206,14 @@ public sealed partial class NativeJsonAdapter
                     .Select(ToDataValidationDto)
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
-                Cells = s.GetUsedCells().Select(pair => new CellDto
+                Cells = s.EnumerateCells().Select(entry => new CellDto
                 {
-                    Address   = pair.Key.ToA1(),
-                    Value     = NativeJsonScalarValueMapper.Serialize(pair.Value.Value),
-                    ValueType = NativeJsonScalarValueMapper.GetValueType(pair.Value.Value),
-                    Formula   = pair.Value.HasFormula ? pair.Value.FormulaText : null,
-                    IgnoreFormulaError = pair.Value.IgnoreFormulaError,
-                    Style = FromCellStyle(workbook.GetStyle(pair.Value.StyleId))
+                    Address   = entry.Address.ToA1(),
+                    Value     = NativeJsonScalarValueMapper.Serialize(entry.Cell.Value),
+                    ValueType = NativeJsonScalarValueMapper.GetValueType(entry.Cell.Value),
+                    Formula   = entry.Cell.HasFormula ? entry.Cell.FormulaText : null,
+                    IgnoreFormulaError = entry.Cell.IgnoreFormulaError,
+                    Style = FromCellStyle(workbook.GetStyle(entry.Cell.StyleId))
                 }).ToList(),
                 StyleOnlyCells = s.GetStyleOnlyEntries()
                     .Where(entry => NativeJsonValueSanitizer.IsValidRowIndex(entry.Key.Row) && NativeJsonValueSanitizer.IsValidColumnIndex(entry.Key.Col))

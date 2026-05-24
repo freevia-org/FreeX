@@ -8,6 +8,16 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class CsvFileAdapterTests
 {
     [Fact]
+    public void Save_ScansCellsWithoutCopyingUsedCellDictionary()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "CsvFileAdapter.cs"));
+
+        source.Should().NotContain(
+            "GetUsedCells()",
+            "CSV save should build its output index in one streaming pass over occupied cells");
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForBooleans()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("TRUE,false\r\n"));
@@ -338,4 +348,19 @@ public sealed class CsvFileAdapterTests
             .Concat(new UTF32Encoding(bigEndian: true, byteOrderMark: true).GetBytes("TRUE,42\r\n"))
             .ToArray()
     };
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
+    }
 }
