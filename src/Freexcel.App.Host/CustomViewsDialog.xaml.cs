@@ -61,6 +61,7 @@ public sealed partial class CustomViewsDialog : Window
         {
             MessageBox.Show(outcome.ErrorMessage ?? "Could not apply custom view.",
                 "Custom Views", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusViewsList();
             return;
         }
 
@@ -85,6 +86,7 @@ public sealed partial class CustomViewsDialog : Window
         {
             MessageBox.Show(outcome.ErrorMessage ?? "Could not save custom view.",
                 "Custom Views", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusViewsList();
             return;
         }
 
@@ -98,8 +100,11 @@ public sealed partial class CustomViewsDialog : Window
 
         var outcome = _commandBus.Execute(_workbook.Id, new DeleteCustomViewCommand(vm.Name));
         if (!outcome.Success)
+        {
             MessageBox.Show(outcome.ErrorMessage ?? "Could not delete custom view.",
                 "Custom Views", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusViewsList();
+        }
         else
             RefreshList();
     }
@@ -107,6 +112,11 @@ public sealed partial class CustomViewsDialog : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
     private void FocusInitialKeyboardTarget()
+    {
+        FocusViewsList();
+    }
+
+    private void FocusViewsList()
     {
         ViewsList.Focus();
         Keyboard.Focus(ViewsList);
@@ -208,12 +218,21 @@ public sealed class CustomViewNameDialog : Window
             _printSettingsBox.IsChecked == true,
             _hiddenFilterSettingsBox.IsChecked == true);
         if (string.IsNullOrWhiteSpace(Result.ViewName))
+        {
+            MessageBox.Show(this, "Enter a view name.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusNameInput();
             return;
+        }
 
         DialogResult = true;
     }
 
     private void FocusInitialKeyboardTarget()
+    {
+        FocusNameInput();
+    }
+
+    private void FocusNameInput()
     {
         _nameBox.Focus();
         _nameBox.SelectAll();
