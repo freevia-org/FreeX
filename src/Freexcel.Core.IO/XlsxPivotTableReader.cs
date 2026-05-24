@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, true, 1, 1, 1, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -119,7 +119,8 @@ internal static partial class XlsxPivotTableReader
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var name = root.Attribute("name")?.Value ?? "";
         var cacheId = XlsxXmlAttributeReader.ReadIntAttribute(root, "cacheId") ?? 0;
-        var targetReference = root.Element(workbookNs + "location")?.Attribute("ref")?.Value ?? "";
+        var location = root.Element(workbookNs + "location");
+        var targetReference = location?.Attribute("ref")?.Value ?? "";
         if (string.IsNullOrWhiteSpace(name) || cacheId <= 0 || string.IsNullOrWhiteSpace(targetReference))
             return false;
 
@@ -145,6 +146,10 @@ internal static partial class XlsxPivotTableReader
             targetReference,
             pivotCache?.SourceReference ?? "",
             pivotPath,
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "dataOnRows", defaultValue: true),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstHeaderRow") ?? 1),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataRow") ?? 1),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataCol") ?? 1),
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "defaultSubtotal"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "subtotalTop")
                 ? PivotSubtotalPlacement.Top
