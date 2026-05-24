@@ -33,6 +33,8 @@ public sealed record FindOptions(
     FindLookIn LookIn = FindLookIn.Values,
     StyleDiff? RequiredFormat = null);
 
+public sealed record ReplaceAllResult(int ReplacedCount, CommandOutcome? Failure);
+
 /// <summary>Search and replace service. Replace goes through ICommandBus for undo support.</summary>
 public static class FindReplaceService
 {
@@ -107,7 +109,7 @@ public static class FindReplaceService
         bool matchCase = false,
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
-        => ReplaceAll(
+        => TryReplaceAll(
             workbook,
             commandBus,
             searchText,
@@ -115,7 +117,7 @@ public static class FindReplaceService
             new FindOptions(LookIn: FindLookIn.Values),
             matchCase,
             matchEntireCell,
-            replacementFormat);
+            replacementFormat).ReplacedCount;
 
     public static int ReplaceAll(
         Workbook workbook,
@@ -126,13 +128,50 @@ public static class FindReplaceService
         bool matchCase = false,
         bool matchEntireCell = false,
         StyleDiff? replacementFormat = null)
+        => TryReplaceAll(
+            workbook,
+            commandBus,
+            searchText,
+            replaceText,
+            options,
+            matchCase,
+            matchEntireCell,
+            replacementFormat).ReplacedCount;
+
+    public static ReplaceAllResult TryReplaceAll(
+        Workbook workbook,
+        ICommandBus commandBus,
+        string searchText,
+        string replaceText,
+        bool matchCase = false,
+        bool matchEntireCell = false,
+        StyleDiff? replacementFormat = null)
+        => TryReplaceAll(
+            workbook,
+            commandBus,
+            searchText,
+            replaceText,
+            new FindOptions(LookIn: FindLookIn.Values),
+            matchCase,
+            matchEntireCell,
+            replacementFormat);
+
+    public static ReplaceAllResult TryReplaceAll(
+        Workbook workbook,
+        ICommandBus commandBus,
+        string searchText,
+        string replaceText,
+        FindOptions options,
+        bool matchCase = false,
+        bool matchEntireCell = false,
+        StyleDiff? replacementFormat = null)
     {
         if (options.LookIn is not FindLookIn.Values)
-            return 0;
+            return new ReplaceAllResult(0, null);
 
         var matches = Find(workbook, searchText, options, matchCase, matchEntireCell);
         if (matches.Count == 0)
-            return 0;
+            return new ReplaceAllResult(0, null);
 
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
@@ -165,6 +204,7 @@ public static class FindReplaceService
             list.Add((result.Address, newCell));
         }
 
+        var replacedCount = 0;
         foreach (var (sheetId, edits) in editsBySheet)
         {
             var commands = new List<IWorkbookCommand> { new EditCellsCommand(sheetId, edits) };
@@ -179,10 +219,14 @@ public static class FindReplaceService
             var command = commands.Count == 1
                 ? commands[0]
                 : new CompositeWorkbookCommand("Replace All", commands);
-            commandBus.Execute(workbook.Id, command);
+            var outcome = commandBus.Execute(workbook.Id, command);
+            if (!outcome.Success)
+                return new ReplaceAllResult(replacedCount, outcome);
+
+            replacedCount += edits.Count;
         }
 
-        return editsBySheet.Values.Sum(list => list.Count);
+        return new ReplaceAllResult(replacedCount, null);
     }
 
     private static IEnumerable<Sheet> SheetsForScope(Workbook workbook, FindOptions options)
