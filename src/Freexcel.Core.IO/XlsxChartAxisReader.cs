@@ -28,6 +28,8 @@ internal static class XlsxChartAxisReader
             var yAxis = FindAxisById(valueAxes, axisIds.Skip(1).FirstOrDefault()) ?? valueAxes.Skip(1).FirstOrDefault();
             chart.XAxisTitle = ReadAxisTitle(xAxis);
             chart.YAxisTitle = ReadAxisTitle(yAxis);
+            chart.HideXAxis = ReadBool(xAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
+            chart.HideYAxis = ReadBool(yAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
             ApplyAxisTitleFormatting(xAxis, chart);
             ApplyAxisTitleFormatting(yAxis, chart);
             ApplyValueAxisProperties(xAxis, chart, useXAxis: true);
@@ -40,11 +42,13 @@ internal static class XlsxChartAxisReader
         var categoryAxis = plotArea.Element(ChartNs + "dateAx") ?? plotArea.Element(ChartNs + "catAx");
         chart.XAxisIsDateAxis = categoryAxis?.Name == ChartNs + "dateAx";
         chart.XAxisTitle = ReadAxisTitle(categoryAxis);
+        chart.HideXAxis = ReadBool(categoryAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         ApplyAxisTitleFormatting(categoryAxis, chart);
         ApplyCategoryAxisProperties(categoryAxis, chart);
         ApplyAxisLabelFormatting(categoryAxis, chart, useXAxis: true);
         var valueAxis = plotArea.Element(ChartNs + "valAx");
         chart.YAxisTitle = ReadAxisTitle(valueAxis);
+        chart.HideYAxis = ReadBool(valueAxis?.Element(ChartNs + "delete")?.Attribute("val")?.Value);
         ApplyAxisTitleFormatting(valueAxis, chart);
         ApplyValueAxisProperties(valueAxis, chart, useXAxis: false);
         ApplyAxisLabelFormatting(valueAxis, chart, useXAxis: false);
