@@ -158,6 +158,7 @@ internal static class XlsxChartMetadataReader
 
         var pageMargins = printSettings.Element(ChartNs + "pageMargins");
         var pageSetup = printSettings.Element(ChartNs + "pageSetup");
+        var headerFooter = printSettings.Element(ChartNs + "headerFooter");
         return new ChartPrintSettingsModel
         {
             PageMargins = pageMargins is null ? null : new ChartPageMarginsModel
@@ -180,7 +181,25 @@ internal static class XlsxChartMetadataReader
                 VerticalDpi = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("verticalDpi")?.Value),
                 BlackAndWhite = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
                 Draft = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
+            },
+            HeaderFooter = headerFooter is null ? null : new ChartHeaderFooterModel
+            {
+                DifferentOddEven = XlsxChartScalarReader.ReadOptionalBool(headerFooter.Attribute("differentOddEven")?.Value),
+                DifferentFirst = XlsxChartScalarReader.ReadOptionalBool(headerFooter.Attribute("differentFirst")?.Value),
+                AlignWithMargins = XlsxChartScalarReader.ReadOptionalBool(headerFooter.Attribute("alignWithMargins")?.Value),
+                OddHeader = ReadOptionalTextElement(headerFooter, "oddHeader"),
+                OddFooter = ReadOptionalTextElement(headerFooter, "oddFooter"),
+                EvenHeader = ReadOptionalTextElement(headerFooter, "evenHeader"),
+                EvenFooter = ReadOptionalTextElement(headerFooter, "evenFooter"),
+                FirstHeader = ReadOptionalTextElement(headerFooter, "firstHeader"),
+                FirstFooter = ReadOptionalTextElement(headerFooter, "firstFooter")
             }
         };
+    }
+
+    private static string? ReadOptionalTextElement(XElement parent, string localName)
+    {
+        var value = parent.Element(ChartNs + localName)?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }

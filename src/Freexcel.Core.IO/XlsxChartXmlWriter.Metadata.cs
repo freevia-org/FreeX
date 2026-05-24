@@ -189,7 +189,8 @@ internal static partial class XlsxChartXmlWriter
 
         var element = new XElement(chartNs + "printSettings",
             ToChartPageMarginsXml(printSettings.PageMargins, chartNs),
-            ToChartPageSetupXml(printSettings.PageSetup, chartNs));
+            ToChartPageSetupXml(printSettings.PageSetup, chartNs),
+            ToChartHeaderFooterXml(printSettings.HeaderFooter, chartNs));
         return element.HasElements ? element : null;
     }
 
@@ -227,6 +228,30 @@ internal static partial class XlsxChartXmlWriter
         AddOptionalBoolAttribute(element, "blackAndWhite", pageSetup.BlackAndWhite);
         AddOptionalBoolAttribute(element, "draft", pageSetup.Draft);
         return element.HasAttributes ? element : null;
+    }
+
+    private static XElement? ToChartHeaderFooterXml(ChartHeaderFooterModel? headerFooter, XNamespace chartNs)
+    {
+        if (headerFooter is null)
+            return null;
+
+        var element = new XElement(chartNs + "headerFooter");
+        AddOptionalBoolAttribute(element, "differentOddEven", headerFooter.DifferentOddEven);
+        AddOptionalBoolAttribute(element, "differentFirst", headerFooter.DifferentFirst);
+        AddOptionalBoolAttribute(element, "alignWithMargins", headerFooter.AlignWithMargins);
+        AddOptionalStringElement(element, chartNs, "oddHeader", headerFooter.OddHeader);
+        AddOptionalStringElement(element, chartNs, "oddFooter", headerFooter.OddFooter);
+        AddOptionalStringElement(element, chartNs, "evenHeader", headerFooter.EvenHeader);
+        AddOptionalStringElement(element, chartNs, "evenFooter", headerFooter.EvenFooter);
+        AddOptionalStringElement(element, chartNs, "firstHeader", headerFooter.FirstHeader);
+        AddOptionalStringElement(element, chartNs, "firstFooter", headerFooter.FirstFooter);
+        return element.HasAttributes || element.HasElements ? element : null;
+    }
+
+    private static void AddOptionalStringElement(XElement element, XNamespace chartNs, string name, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            element.Add(new XElement(chartNs + name, value));
     }
 
     private static void AddOptionalBoolAttribute(XElement element, string name, bool? value)
