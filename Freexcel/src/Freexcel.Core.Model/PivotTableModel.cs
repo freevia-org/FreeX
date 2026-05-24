@@ -15,8 +15,12 @@ public sealed class PivotCacheModel
     public bool EnableRefresh { get; set; } = true;
     public bool PreserveSourceSortFilter { get; set; } = true;
     public int? MissingItemsLimit { get; set; }
+    public int? RecordCount { get; set; }
+    public int? CreatedVersion { get; set; }
+    public int? MinRefreshableVersion { get; set; }
     public int? RefreshedVersion { get; set; }
     public string? RefreshedBy { get; set; }
+    public string? RefreshedDateIso { get; set; }
     public List<PivotCacheFieldModel> Fields { get; } = [];
 }
 

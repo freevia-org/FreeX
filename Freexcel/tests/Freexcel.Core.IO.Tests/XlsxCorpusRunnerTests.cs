@@ -1430,8 +1430,12 @@ public class XlsxCorpusRunnerTests
             cache.EnableRefresh,
             cache.PreserveSourceSortFilter,
             cache.MissingItemsLimit,
+            cache.RecordCount,
+            cache.CreatedVersion,
+            cache.MinRefreshableVersion,
             cache.RefreshedVersion,
             cache.RefreshedBy ?? "",
+            cache.RefreshedDateIso ?? "",
             cache.Fields
                 .Select(field => new PivotCacheFieldSummary(
                     field.Name,
@@ -2629,8 +2633,12 @@ public class XlsxCorpusRunnerTests
         bool EnableRefresh,
         bool PreserveSourceSortFilter,
         int? MissingItemsLimit,
+        int? RecordCount,
+        int? CreatedVersion,
+        int? MinRefreshableVersion,
         int? RefreshedVersion,
         string RefreshedBy,
+        string RefreshedDateIso,
         IReadOnlyList<PivotCacheFieldSummary> Fields);
 
     private sealed record PivotCacheFieldSummary(
