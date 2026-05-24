@@ -215,6 +215,20 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogInvalidDestination_ReturnsToStepThreeAndFocusesDestination()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("FocusInvalidDestinationInput();");
+        source.Should().Contain("private void FocusInvalidDestinationInput()");
+        source.Should().Contain("_wizardStep = 3;");
+        source.Should().Contain("UpdateWizardStep();");
+        source.Should().Contain("_destinationBox.Focus();");
+        source.Should().Contain("_destinationBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_destinationBox);");
+    }
+
+    [Fact]
     public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
     {
         TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
