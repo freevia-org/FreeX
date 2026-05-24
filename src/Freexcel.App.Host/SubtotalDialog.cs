@@ -152,10 +152,20 @@ public sealed class SubtotalDialog : Window
         catch (ArgumentException ex)
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusSubtotalColumnChoices();
             return;
         }
 
         DialogResult = true;
+    }
+
+    private void FocusSubtotalColumnChoices()
+    {
+        if (_subtotalColumnBoxes.FirstOrDefault() is { } firstColumnBox)
+        {
+            firstColumnBox.Focus();
+            Keyboard.Focus(firstColumnBox);
+        }
     }
 
     private void RemoveAll()
