@@ -272,6 +272,15 @@ public class ExportPlannerTests
                 PdfLanguage: "uk-UA"));
     }
 
+    [Theory]
+    [InlineData(" uk_ua ", "uk-UA")]
+    [InlineData("EN-us", "en-US")]
+    [InlineData("not a culture", "en-US")]
+    public void NormalizePdfLanguage_CanonicalizesKnownCultureTags(string input, string expected)
+    {
+        ExportPlanner.NormalizePdfLanguage(input).Should().Be(expected);
+    }
+
     [Fact]
     public void ExportOptionsDialog_ExposesKeyboardAccessKeys()
     {

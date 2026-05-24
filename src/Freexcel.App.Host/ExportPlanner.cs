@@ -205,8 +205,24 @@ internal static class ExportPlanner
         return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, open);
     }
 
-    public static string NormalizePdfLanguage(string? pdfLanguage) =>
-        string.IsNullOrWhiteSpace(pdfLanguage) ? DefaultPdfLanguage : pdfLanguage.Trim();
+    public static string NormalizePdfLanguage(string? pdfLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(pdfLanguage))
+            return DefaultPdfLanguage;
+
+        var normalized = pdfLanguage.Trim().Replace('_', '-');
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(normalized);
+            return string.IsNullOrWhiteSpace(culture.Name)
+                ? DefaultPdfLanguage
+                : culture.Name;
+        }
+        catch (CultureNotFoundException)
+        {
+            return DefaultPdfLanguage;
+        }
+    }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
     {
