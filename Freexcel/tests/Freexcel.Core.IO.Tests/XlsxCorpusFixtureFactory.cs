@@ -1332,6 +1332,24 @@ internal static class XlsxCorpusFixtureFactory
                 DepthPercent = 150,
                 RightAngleAxes = false,
                 Perspective = 30
+            },
+            FloorFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 234, 211),
+                BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+                BorderThickness = 1
+            },
+            SideWallFormat = new ChartSurfaceFormatModel
+            {
+                FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+                BorderColor = new CellColor(192, 0, 0),
+                BorderThickness = 2
+            },
+            BackWallFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 225, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 3
             }
         });
         return workbook;

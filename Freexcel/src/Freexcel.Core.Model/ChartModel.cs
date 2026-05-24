@@ -145,6 +145,15 @@ public sealed class Chart3DViewModel
     public int? Perspective { get; set; }
 }
 
+public sealed class ChartSurfaceFormatModel
+{
+    public CellColor? FillColor { get; set; }
+    public WorkbookThemeColorReference? FillThemeColor { get; set; }
+    public CellColor? BorderColor { get; set; }
+    public WorkbookThemeColorReference? BorderThemeColor { get; set; }
+    public double? BorderThickness { get; set; }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -218,6 +227,9 @@ public sealed class ChartModel
     public ChartPrintSettingsModel? PrintSettings { get; set; }
     public ChartDataTableModel? DataTable { get; set; }
     public Chart3DViewModel? ThreeDView { get; set; }
+    public ChartSurfaceFormatModel? FloorFormat { get; set; }
+    public ChartSurfaceFormatModel? SideWallFormat { get; set; }
+    public ChartSurfaceFormatModel? BackWallFormat { get; set; }
     public int? BarGapWidth { get; set; }
     public int? BarOverlap { get; set; }
     public bool? VaryColorsByPoint { get; set; }

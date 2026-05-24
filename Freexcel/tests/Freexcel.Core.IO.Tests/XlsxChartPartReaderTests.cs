@@ -500,6 +500,15 @@ public sealed class XlsxChartPartReaderTests
                   <c:rAngAx val="0"/>
                   <c:perspective val="45"/>
                 </c:view3D>
+                <c:floor>
+                  <c:spPr><a:solidFill><a:srgbClr val="D9EAD3"/></a:solidFill><a:ln w="12700"><a:solidFill><a:schemeClr val="accent6"/></a:solidFill></a:ln></c:spPr>
+                </c:floor>
+                <c:sideWall>
+                  <c:spPr><a:solidFill><a:schemeClr val="accent2"/></a:solidFill><a:ln w="25400"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:ln></c:spPr>
+                </c:sideWall>
+                <c:backWall>
+                  <c:spPr><a:solidFill><a:srgbClr val="D9E1F2"/></a:solidFill><a:ln w="38100"><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></a:ln></c:spPr>
+                </c:backWall>
                 <c:plotArea>
                   <c:layout>
                     <c:manualLayout>
@@ -611,6 +620,24 @@ public sealed class XlsxChartPartReaderTests
             DepthPercent = 200,
             RightAngleAxes = false,
             Perspective = 45
+        });
+        chart.FloorFormat.Should().BeEquivalentTo(new ChartSurfaceFormatModel
+        {
+            FillColor = new CellColor(217, 234, 211),
+            BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+            BorderThickness = 1
+        });
+        chart.SideWallFormat.Should().BeEquivalentTo(new ChartSurfaceFormatModel
+        {
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            BorderColor = new CellColor(192, 0, 0),
+            BorderThickness = 2
+        });
+        chart.BackWallFormat.Should().BeEquivalentTo(new ChartSurfaceFormatModel
+        {
+            FillColor = new CellColor(217, 225, 242),
+            BorderColor = new CellColor(68, 114, 196),
+            BorderThickness = 3
         });
         chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
         {

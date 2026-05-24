@@ -37,6 +37,9 @@ public sealed partial class NativeJsonAdapter
                 Protection = chartDto.Protection,
                 PrintSettings = chartDto.PrintSettings,
                 ThreeDView = chartDto.ThreeDView,
+                FloorFormat = ToChartSurfaceFormat(chartDto.FloorFormat),
+                SideWallFormat = ToChartSurfaceFormat(chartDto.SideWallFormat),
+                BackWallFormat = ToChartSurfaceFormat(chartDto.BackWallFormat),
                 ShowPivotChartFieldButtons = chartDto.ShowPivotChartFieldButtons,
                 ShowPivotChartReportFilterButtons = chartDto.ShowPivotChartReportFilterButtons,
                 ShowPivotChartAxisFieldButtons = chartDto.ShowPivotChartAxisFieldButtons,
@@ -226,6 +229,9 @@ public sealed partial class NativeJsonAdapter
         Protection = chart.Protection,
         PrintSettings = chart.PrintSettings,
         ThreeDView = chart.ThreeDView,
+        FloorFormat = FromChartSurfaceFormat(chart.FloorFormat),
+        SideWallFormat = FromChartSurfaceFormat(chart.SideWallFormat),
+        BackWallFormat = FromChartSurfaceFormat(chart.BackWallFormat),
         ShowPivotChartFieldButtons = chart.ShowPivotChartFieldButtons,
         ShowPivotChartReportFilterButtons = chart.ShowPivotChartReportFilterButtons,
         ShowPivotChartAxisFieldButtons = chart.ShowPivotChartAxisFieldButtons,
@@ -380,4 +386,28 @@ public sealed partial class NativeJsonAdapter
         Width = chart.Width,
         Height = chart.Height
     };
+
+    private static ChartSurfaceFormatModel? ToChartSurfaceFormat(ChartSurfaceFormatDto? dto) =>
+        dto is null
+            ? null
+            : new ChartSurfaceFormatModel
+            {
+                FillColor = dto.FillColor,
+                FillThemeColor = ToThemeColorReference(dto.FillThemeColor),
+                BorderColor = dto.BorderColor,
+                BorderThemeColor = ToThemeColorReference(dto.BorderThemeColor),
+                BorderThickness = dto.BorderThickness
+            };
+
+    private static ChartSurfaceFormatDto? FromChartSurfaceFormat(ChartSurfaceFormatModel? format) =>
+        format is null
+            ? null
+            : new ChartSurfaceFormatDto
+            {
+                FillColor = format.FillColor,
+                FillThemeColor = FromThemeColorReference(format.FillThemeColor),
+                BorderColor = format.BorderColor,
+                BorderThemeColor = FromThemeColorReference(format.BorderThemeColor),
+                BorderThickness = format.BorderThickness
+            };
 }
