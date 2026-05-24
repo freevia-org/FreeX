@@ -28,6 +28,20 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
+    public void CreateCellTypeface_UsesStyleFontNameAndWeight()
+    {
+        var typeface = GridView.CreateCellTypeface(new CellStyle
+        {
+            FontName = "Aptos",
+            Bold = true
+        });
+
+        typeface.FontFamily.Source.Should().Be("Aptos");
+        typeface.Weight.Should().Be(FontWeights.Bold);
+        typeface.Style.Should().Be(FontStyles.Normal);
+    }
+
+    [Fact]
     public void ResolveShrinkFontSize_ReducesFontSizeUntilTextFitsAndRespectsFloor()
     {
         var reduced = GridView.ResolveShrinkFontSize(

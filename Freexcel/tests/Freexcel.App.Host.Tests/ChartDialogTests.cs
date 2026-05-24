@@ -568,6 +568,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAreaLegendDialogOpenedFromKeyboard_FocusesChartAreaFillBox()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_chartAreaFillBox.Focus();");
+        dialogSource.Should().Contain("_chartAreaFillBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_chartAreaFillBox);");
+    }
+
+    [Fact]
     public void ChartDataLabelsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartDataLabelsDialog.CreateResult(
@@ -641,6 +653,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTrendlineOptionsDialogOpenedFromKeyboard_FocusesShowTrendlineChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTrendlineOptionsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
     public void ChartErrorBarsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartErrorBarsDialog.CreateResult(
@@ -678,6 +701,17 @@ public sealed class ChartDialogTests
                 ChartErrorBarDirection.Plus,
                 1000,
                 false));
+    }
+
+    [Fact]
+    public void ChartErrorBarsDialogOpenedFromKeyboard_FocusesShowErrorBarsChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_showBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_showBox);");
     }
 
     [Fact]
@@ -725,6 +759,18 @@ public sealed class ChartDialogTests
             YAxisLabelAngle: 30,
             YAxisLineColor: new CellColor(4, 5, 6),
             YAxisLineThickness: 2));
+    }
+
+    [Fact]
+    public void ChartAxisFormatDialogOpenedFromKeyboard_FocusesMinimumBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartAxisFormatDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_minimumBox.Focus();");
+        source.Should().Contain("_minimumBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_minimumBox);");
     }
 
     [Fact]

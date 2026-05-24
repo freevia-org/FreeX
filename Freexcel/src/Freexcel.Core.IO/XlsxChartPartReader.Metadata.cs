@@ -51,6 +51,11 @@ public static partial class XlsxChartPartReader
         chart.IsPivotChart = true;
         chart.PivotSourceSheetName = ExtractPivotSourceSheetName(pivotSourceName);
         chart.PivotTableName = ExtractPivotTableName(pivotSourceName);
+        chart.PivotSourceFormatId = XlsxChartScalarReader.ReadOptionalInt(chartXml.Root?
+            .Element(ChartNs + "pivotSource")?
+            .Element(ChartNs + "fmtId")?
+            .Attribute("val")?
+            .Value);
     }
 
     private static string? ExtractPivotSourceSheetName(string pivotSourceName)
