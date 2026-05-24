@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
 
@@ -73,6 +74,7 @@ public sealed class GoalSeekStatusDialog : Window
 
         stack.Children.Add(buttons);
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static string CreateMessage(GoalSeekResult result) =>
@@ -87,6 +89,11 @@ public sealed class GoalSeekStatusDialog : Window
             ? $"Goal Seek found a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}"
             : $"Goal Seek could not find a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}";
     }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        StatusDialogKeyboardFocus.FocusDefaultButton(this);
+    }
 }
 
 public sealed class WorkbookStatisticsDialog : Window
@@ -100,6 +107,7 @@ public sealed class WorkbookStatisticsDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         Content = CreateTextContent(CreateMessage(statistics));
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static string CreateMessage(WorkbookStatistics statistics) =>
@@ -117,10 +125,46 @@ public sealed class WorkbookStatisticsDialog : Window
         stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        StatusDialogKeyboardFocus.FocusDefaultButton(this);
+    }
+}
+
+internal static class StatusDialogKeyboardFocus
+{
+    public static void FocusDefaultButton(DependencyObject parent)
+    {
+        if (FindDefaultButton(parent) is not { } button)
+            return;
+
+        button.Focus();
+        Keyboard.Focus(button);
+    }
+
+    private static Button? FindDefaultButton(DependencyObject parent)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(parent))
+        {
+            if (child is Button { IsDefault: true } button)
+                return button;
+
+            if (child is DependencyObject dependencyObject &&
+                FindDefaultButton(dependencyObject) is { } nestedButton)
+            {
+                return nestedButton;
+            }
+        }
+
+        return null;
+    }
 }
 
 public sealed class AccessibilityCheckerDialog : Window
 {
+    private readonly TextBox _messageBox = new();
+
     public AccessibilityCheckerDialog(IReadOnlyList<AccessibilityIssue> issues)
     {
         Title = "Accessibility Checker";
@@ -130,6 +174,7 @@ public sealed class AccessibilityCheckerDialog : Window
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
         Content = CreateContent(CreateMessage(issues));
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static string CreateMessage(IReadOnlyList<AccessibilityIssue> issues) =>
@@ -137,20 +182,24 @@ public sealed class AccessibilityCheckerDialog : Window
             ? "No accessibility issues found."
             : AccessibilityIssueFormatter.Format(issues);
 
-    private static StackPanel CreateContent(string message)
+    private StackPanel CreateContent(string message)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBox
-        {
-            Text = message,
-            IsReadOnly = true,
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            MinHeight = 80,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
+        _messageBox.Text = message;
+        _messageBox.IsReadOnly = true;
+        _messageBox.AcceptsReturn = true;
+        _messageBox.TextWrapping = TextWrapping.Wrap;
+        _messageBox.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _messageBox.MinHeight = 80;
+        _messageBox.Margin = new Thickness(0, 0, 0, 16);
+        stack.Children.Add(_messageBox);
         stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _messageBox.Focus();
+        Keyboard.Focus(_messageBox);
     }
 }
