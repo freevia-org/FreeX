@@ -80,6 +80,18 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialogOpenedFromKeyboard_FocusesCategoryList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) =>");
+        source.Should().Contain("FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("TabList.Focus();");
+        source.Should().Contain("Keyboard.Focus(TabList);");
+    }
+
+    [Fact]
     public void OptionsDialog_ExposesExcelLikeAdvancedAndDisplayAffordances()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
