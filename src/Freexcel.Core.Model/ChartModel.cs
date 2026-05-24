@@ -140,6 +140,14 @@ public sealed class ChartExternalDataModel
     public bool? AutoUpdate { get; set; }
 }
 
+public sealed class ChartUserShapesModel
+{
+    public string? RelationshipId { get; set; }
+    public string? RelationshipType { get; set; }
+    public string? Target { get; set; }
+    public string? TargetMode { get; set; }
+}
+
 public sealed class ChartManualLayoutModel
 {
     public string? LayoutTarget { get; set; }
@@ -321,6 +329,7 @@ public sealed class ChartModel
     public int? ChartStyleId { get; set; }
     public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
     public ChartExternalDataModel? ExternalData { get; set; }
+    public ChartUserShapesModel? UserShapes { get; set; }
     public ChartManualLayoutModel? PlotAreaLayout { get; set; }
     public ChartManualLayoutModel? LegendLayout { get; set; }
     public bool RoundedCorners { get; set; }
