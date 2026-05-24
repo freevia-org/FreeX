@@ -287,6 +287,19 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("OptionsExpander.Header = \"_Options >>\"");
     }
 
+    [Fact]
+    public void DialogOpenedFromKeyboard_FocusesFindOrReplaceSearchBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
     private static XDocument LoadDialogXaml() =>
         XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml"));
 
