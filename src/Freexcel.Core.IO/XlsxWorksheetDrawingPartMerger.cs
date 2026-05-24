@@ -59,12 +59,22 @@ internal static class XlsxWorksheetDrawingPartMerger
         ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext? context)
     {
+        _ = MergeAndGetDrawingPaths(sourceArchive, targetArchive, context);
+    }
+
+    public static XlsxWorksheetDrawingPathMap MergeAndGetDrawingPaths(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context)
+    {
         if (context is null)
         {
             Merge(sourceArchive, targetArchive);
-            return;
+            return XlsxWorksheetDrawingPathMap.Empty;
         }
 
+        var sourceDrawingPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var targetDrawingPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
@@ -72,11 +82,17 @@ internal static class XlsxWorksheetDrawingPartMerger
 
             var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);
             var targetDrawingPath = GetWorksheetDrawingPath(targetArchive, targetWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);
+            if (!string.IsNullOrWhiteSpace(sourceDrawingPath))
+                sourceDrawingPaths[sheetName] = sourceDrawingPath;
+            if (!string.IsNullOrWhiteSpace(targetDrawingPath))
+                targetDrawingPaths[sheetName] = targetDrawingPath;
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
             MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, context.RelNs, context.PackageRelNs);
         }
+
+        return new XlsxWorksheetDrawingPathMap(sourceDrawingPaths, targetDrawingPaths);
     }
 
     private static string? GetWorksheetDrawingPath(
