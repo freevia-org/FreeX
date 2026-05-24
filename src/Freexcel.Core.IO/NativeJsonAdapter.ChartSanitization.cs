@@ -19,6 +19,7 @@ public sealed partial class NativeJsonAdapter
         }
         chart.PlotAreaBorderThickness = Math.Clamp(chart.PlotAreaBorderThickness, 0, 10);
         chart.LegendBorderThickness = Math.Clamp(chart.LegendBorderThickness, 0, 10);
+        chart.ChartAreaBorderThickness = ClampNullableDouble(chart.ChartAreaBorderThickness, 0, 10);
         chart.LegendFontSize = Math.Clamp(chart.LegendFontSize, 6, 72);
         chart.DoughnutHoleSize = Math.Clamp(chart.DoughnutHoleSize, 0.1, 0.9);
         chart.FirstSliceAngle = NormalizeChartAngle(chart.FirstSliceAngle);
