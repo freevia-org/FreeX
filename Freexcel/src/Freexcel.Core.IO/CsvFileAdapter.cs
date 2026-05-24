@@ -18,15 +18,23 @@ public sealed class CsvFileAdapter : IFileAdapter
     {
         if (workbook.Sheets.Count == 0) return;
         var sheet = workbook.Sheets[0];
-        var usedCells = sheet.GetUsedCells()
-            .Where(pair => IsValidCsvCellAddress(pair.Key.Row, pair.Key.Col))
-            .ToDictionary(pair => (pair.Key.Row, pair.Key.Col), pair => pair.Value);
+        var usedCells = new Dictionary<(uint Row, uint Col), Cell>();
+        var endRow = 0u;
+        var endCol = 0u;
+        foreach (var (address, cell) in sheet.EnumerateCells())
+        {
+            if (!IsValidCsvCellAddress(address.Row, address.Col))
+                continue;
+
+            usedCells[(address.Row, address.Col)] = cell;
+            endRow = Math.Max(endRow, address.Row);
+            endCol = Math.Max(endCol, address.Col);
+        }
+
         if (usedCells.Count == 0) return;
 
         var startRow = 1u;
-        var endRow = usedCells.Keys.Max(key => key.Row);
         var startCol = 1u;
-        var endCol = usedCells.Keys.Max(key => key.Col);
 
         using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
         for (uint r = startRow; r <= endRow; r++)
