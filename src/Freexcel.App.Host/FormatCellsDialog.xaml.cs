@@ -207,6 +207,9 @@ public partial class FormatCellsDialog : Window
         var fillPatternStyle = SelectedFillPatternStyle();
         bool clearFill = DlgClearFillCheck.IsChecked == true;
 
+        if (!ValidateNumberInputs())
+            return;
+
         string? numFmt = ResolveSelectedNumberFormat();
 
         double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);

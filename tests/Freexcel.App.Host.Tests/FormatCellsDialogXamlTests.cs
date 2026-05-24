@@ -684,6 +684,16 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_RejectsInvalidDecimalPlacesWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!ValidateNumberInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter decimal places from 0 to 30.\", NumberDecimalPlacesBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;");
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFontFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>

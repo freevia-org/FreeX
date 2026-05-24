@@ -347,6 +347,19 @@ public partial class FormatCellsDialog
         return Math.Clamp(decimals, 0, 30);
     }
 
+    private bool ValidateNumberInputs()
+    {
+        if (NumberDecimalPlacesBox.IsEnabled
+            && (!int.TryParse(NumberDecimalPlacesBox.Text.Trim(), out var decimals) || decimals is < 0 or > 30))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
+            ShowInvalidInputWarning("Enter decimal places from 0 to 30.", NumberDecimalPlacesBox);
+            return false;
+        }
+
+        return true;
+    }
+
     private string SelectedCurrencySymbol()
     {
         var value = NumberSymbolCombo.SelectedItem as string ?? NumberSymbolCombo.Text;
