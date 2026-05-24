@@ -752,6 +752,7 @@ internal static class XlsxCorpusFixtureFactory
             CropTop = 0.10,
             CropRight = 0.05,
             CropBottom = 0.10,
+            Title = "Corpus image title",
             AltText = "Corpus image"
         });
         sheet.Sparklines.Add(new SparklineModel
@@ -777,6 +778,7 @@ internal static class XlsxCorpusFixtureFactory
             Height = 90,
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            Title = "Corpus text box title",
             AltText = "Corpus text box"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
@@ -790,6 +792,7 @@ internal static class XlsxCorpusFixtureFactory
             GradientFillEndColor = new CellColor(189, 215, 238),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
             HasShadowEffect = true,
+            Title = "Corpus ellipse title",
             AltText = "Corpus ellipse"
         });
         return workbook;
@@ -1097,6 +1100,7 @@ internal static class XlsxCorpusFixtureFactory
             ContentType = "image/png",
             Width = 80,
             Height = 80,
+            Title = "Additional corpus image title",
             AltText = "Additional corpus image"
         });
         sheet.Sparklines.Add(new SparklineModel { DataRange = Range(sheet, "A1", "C1"), Location = Addr(sheet, "D1"), Kind = SparklineKind.Line });
