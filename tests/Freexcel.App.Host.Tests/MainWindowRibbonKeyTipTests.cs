@@ -110,7 +110,7 @@ public sealed class MainWindowRibbonKeyTipTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.OpenRibbonMenu(Key.P, Key.B);
+            harness.OpenRibbonMenu(Key.P, Key.B, Key.K);
             harness.SelectedRibbonTabHeader.Should().Be("Page Layout");
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuItemGestureText("Insert Page Break").Should().Be("I");
@@ -124,7 +124,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveMenuItemGestureText("Error Checking Options...").Should().Be("O");
             harness.HandleKeyTip(Key.Escape);
 
-            harness.OpenRibbonMenu(Key.W, Key.F);
+            harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
             harness.SelectedRibbonTabHeader.Should().Be("View");
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuItemGestureText("Freeze Panes").Should().Be("F");
