@@ -61,6 +61,7 @@ public sealed partial class NativeJsonAdapter
         chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
         if (chart.Type != ChartType.Stock)
             chart.StockSubtype = StockChartSubtype.HighLowClose;
+        chart.PivotSourceFormatId = ClampNullableInt(chart.PivotSourceFormatId, 0, int.MaxValue);
         chart.BubbleScale = Math.Clamp(chart.BubbleScale, 0, 300);
         chart.BubbleSizeRepresents = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.BubbleSizeRepresents, ChartBubbleSizeRepresents.Area);
         if (chart.Type != ChartType.Bubble)
