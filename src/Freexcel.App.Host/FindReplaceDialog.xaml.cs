@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -36,12 +37,16 @@ public sealed partial class FindReplaceDialog : Window
         if (replaceMode)
         {
             FindReplaceTabs.SelectedItem = ReplaceTab;
-            ReplaceFindBox.Focus();
         }
-        else
-        {
-            FindBox.Focus();
-        }
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();
