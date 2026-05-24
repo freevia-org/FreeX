@@ -86,44 +86,68 @@ public static partial class BuiltInFunctions
     private static ScalarValue Year(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (IsExcelFakeLeapDay(args[0])) return new NumberValue(1900);
-        if (IsExcelZeroDate(args[0])) return new NumberValue(1900);
-        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, YearScalar);
+        return YearScalar(args[0]);
     }
+
+    private static ScalarValue YearScalar(ScalarValue value) =>
+        IsExcelFakeLeapDay(value) || IsExcelZeroDate(value)
+            ? new NumberValue(1900)
+            : TryOADateToDateTime(value, out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
 
     private static ScalarValue Month(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (IsExcelFakeLeapDay(args[0])) return new NumberValue(2);
-        if (IsExcelZeroDate(args[0])) return new NumberValue(1);
-        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, MonthScalar);
+        return MonthScalar(args[0]);
     }
+
+    private static ScalarValue MonthScalar(ScalarValue value) =>
+        IsExcelFakeLeapDay(value) ? new NumberValue(2)
+        : IsExcelZeroDate(value) ? new NumberValue(1)
+        : TryOADateToDateTime(value, out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
 
     private static ScalarValue Day(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (IsExcelFakeLeapDay(args[0])) return new NumberValue(29);
-        if (IsExcelZeroDate(args[0])) return new NumberValue(0);
-        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, DayScalar);
+        return DayScalar(args[0]);
     }
+
+    private static ScalarValue DayScalar(ScalarValue value) =>
+        IsExcelFakeLeapDay(value) ? new NumberValue(29)
+        : IsExcelZeroDate(value) ? new NumberValue(0)
+        : TryOADateToDateTime(value, out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
 
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeSerialToTimeParts(args[0], out var hour, out _, out _) ? new NumberValue(hour) : ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, HourScalar);
+        return HourScalar(args[0]);
     }
+
+    private static ScalarValue HourScalar(ScalarValue value) =>
+        TryNonNegativeSerialToTimeParts(value, out var hour, out _, out _) ? new NumberValue(hour) : ErrorValue.Num;
 
     private static ScalarValue Minute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeSerialToTimeParts(args[0], out _, out var minute, out _) ? new NumberValue(minute) : ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, MinuteScalar);
+        return MinuteScalar(args[0]);
     }
+
+    private static ScalarValue MinuteScalar(ScalarValue value) =>
+        TryNonNegativeSerialToTimeParts(value, out _, out var minute, out _) ? new NumberValue(minute) : ErrorValue.Num;
 
     private static ScalarValue Second(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeSerialToTimeParts(args[0], out _, out _, out var second) ? new NumberValue(second) : ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, SecondScalar);
+        return SecondScalar(args[0]);
     }
+
+    private static ScalarValue SecondScalar(ScalarValue value) =>
+        TryNonNegativeSerialToTimeParts(value, out _, out _, out var second) ? new NumberValue(second) : ErrorValue.Num;
 
     private static ScalarValue Weekday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

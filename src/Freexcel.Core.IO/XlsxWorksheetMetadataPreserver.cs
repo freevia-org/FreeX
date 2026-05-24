@@ -95,10 +95,6 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceHyperlinks = sourceWorksheetXml.Root?.Element(workbookNs + "hyperlinks");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
-            var sourceCells = sourceSheetData?
-                .Descendants(workbookNs + "c")
-                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
-                .ToList();
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
@@ -166,11 +162,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetRowAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetCellAttributes(sourceCells, GetTargetCellsByAddress(), workbookNs))
+            if (MergeWorksheetCellAttributes(sourceSheetData, GetTargetCellsByAddress, workbookNs))
                 changed = true;
-            if (MergeWorksheetInlineStringMetadata(sourceCells, GetTargetCellsByAddress(), targetArchive, workbookNs))
+            if (MergeWorksheetInlineStringMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs))
                 changed = true;
-            if (MergeWorksheetFormulaMetadata(sourceCells, GetTargetCellsByAddress(), workbookNs))
+            if (MergeWorksheetFormulaMetadata(sourceSheetData, GetTargetCellsByAddress, workbookNs))
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
@@ -410,10 +406,6 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceHyperlinks = sourceWorksheetXml.Root?.Element(workbookNs + "hyperlinks");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
-            var sourceCells = sourceSheetData?
-                .Descendants(workbookNs + "c")
-                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
-                .ToList();
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
@@ -481,11 +473,11 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetRowAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetCellAttributes(sourceCells, GetTargetCellsByAddress(), workbookNs))
+            if (MergeWorksheetCellAttributes(sourceSheetData, GetTargetCellsByAddress, workbookNs))
                 changed = true;
-            if (MergeWorksheetInlineStringMetadata(sourceCells, GetTargetCellsByAddress(), targetArchive, workbookNs))
+            if (MergeWorksheetInlineStringMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs))
                 changed = true;
-            if (MergeWorksheetFormulaMetadata(sourceCells, GetTargetCellsByAddress(), workbookNs))
+            if (MergeWorksheetFormulaMetadata(sourceSheetData, GetTargetCellsByAddress, workbookNs))
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
