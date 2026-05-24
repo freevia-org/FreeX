@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -33,7 +34,14 @@ public partial class GoalSeekDialog : Window
         if (selectedCell.HasValue)
             SetCellBox.Text = selectedCell.Value.ToA1();
 
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
         SetCellBox.Focus();
+        SetCellBox.SelectAll();
+        Keyboard.Focus(SetCellBox);
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
