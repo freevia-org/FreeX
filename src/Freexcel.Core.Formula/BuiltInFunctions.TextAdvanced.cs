@@ -204,8 +204,12 @@ public static partial class BuiltInFunctions
     private static ScalarValue EncodeUrl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(Uri.EscapeDataString(ToText(args[0])));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, EncodeUrlScalar);
+        return EncodeUrlScalar(args[0]);
     }
+
+    private static ScalarValue EncodeUrlScalar(ScalarValue value) =>
+        TextResult(Uri.EscapeDataString(ToText(value)));
 
     private static ScalarValue FilterXml(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

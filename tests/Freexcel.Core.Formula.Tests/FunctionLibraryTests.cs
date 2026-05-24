@@ -4617,6 +4617,22 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("1234.57"));
 
     [Fact]
+    public void FixedDollarTAndEncodeUrl_RangeArgument_SpillElementwise()
+    {
+        var numbers = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.3)));
+        AssertTextColumn(_eval.Evaluate("=DOLLAR(A1:A2,1)", numbers), "$1,234.6", "($12.3)");
+        AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,1,TRUE)", numbers), "1234.6", "-12.3");
+
+        var mixed = MakeSheet(
+            (1, 1, new TextValue("a b")),
+            (2, 1, new NumberValue(42)));
+        AssertTextColumn(_eval.Evaluate("=T(A1:A2)", mixed), "a b", "");
+        AssertTextColumn(_eval.Evaluate("=ENCODEURL(A1:A2)", mixed), "a%20b", "42");
+    }
+
+    [Fact]
     public void Fixed_NegativeDecimals_RoundsLeftOfDecimal()
     {
         var sheet = MakeSheet();
