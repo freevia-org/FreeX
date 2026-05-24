@@ -174,6 +174,10 @@ internal static class XlsxChartMetadataReader
                 PaperSize = pageSetup.Attribute("paperSize")?.Value,
                 Orientation = pageSetup.Attribute("orientation")?.Value,
                 Copies = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("copies")?.Value),
+                UsePrinterDefaults = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("usePrinterDefaults")?.Value),
+                FirstPageNumber = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("firstPageNumber")?.Value),
+                HorizontalDpi = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("horizontalDpi")?.Value),
+                VerticalDpi = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("verticalDpi")?.Value),
                 BlackAndWhite = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
                 Draft = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
             }

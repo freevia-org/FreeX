@@ -125,6 +125,9 @@ internal static class PdfTextOverlayExtractor
         {
             Extract(contentChild, x, y, overlays);
         }
+
+        if (element is HeaderedContentControl { Header: UIElement headerChild })
+            Extract(headerChild, x, y, overlays);
     }
 
     private static string ExtractText(TextBlock textBlock)

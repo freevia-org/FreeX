@@ -14445,6 +14445,10 @@ public partial class FileAdapterSmokeTests
                     PaperSize = "9",
                     Orientation = "landscape",
                     Copies = 2,
+                    UsePrinterDefaults = true,
+                    FirstPageNumber = 5,
+                    HorizontalDpi = 600,
+                    VerticalDpi = 600,
                     BlackAndWhite = true,
                     Draft = false
                 }
@@ -14561,6 +14565,10 @@ public partial class FileAdapterSmokeTests
             pageSetup.Attribute("paperSize")!.Value.Should().Be("9");
             pageSetup.Attribute("orientation")!.Value.Should().Be("landscape");
             pageSetup.Attribute("copies")!.Value.Should().Be("2");
+            pageSetup.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
+            pageSetup.Attribute("firstPageNumber")!.Value.Should().Be("5");
+            pageSetup.Attribute("horizontalDpi")!.Value.Should().Be("600");
+            pageSetup.Attribute("verticalDpi")!.Value.Should().Be("600");
             pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
             pageSetup.Attribute("draft")!.Value.Should().Be("0");
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
