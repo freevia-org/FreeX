@@ -54,6 +54,31 @@ internal static class XlsxWorksheetDrawingPartMerger
         }
     }
 
+    public static void Merge(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context)
+    {
+        if (context is null)
+        {
+            Merge(sourceArchive, targetArchive);
+            return;
+        }
+
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);
+            var targetDrawingPath = GetWorksheetDrawingPath(targetArchive, targetWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);
+            if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
+                continue;
+
+            MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, context.RelNs, context.PackageRelNs);
+        }
+    }
+
     private static string? GetWorksheetDrawingPath(
         ZipArchive archive,
         string worksheetPath,

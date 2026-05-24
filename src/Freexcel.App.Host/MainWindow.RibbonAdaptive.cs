@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace Freexcel.App.Host;
@@ -122,9 +123,11 @@ public partial class MainWindow
             button.Margin = normalNarrow ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0);
             button.Padding = normalNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
 
-            var textBlocks = button.Content is StackPanel panel
-                ? panel.Children.OfType<TextBlock>()
-                : EnumerateVisualDescendants(button).OfType<TextBlock>();
+            var textBlockRoot = button.Content as DependencyObject ?? button;
+            var textBlocks = EnumerateVisualDescendants(textBlockRoot)
+                .Concat(EnumerateLogicalDescendants(textBlockRoot))
+                .OfType<TextBlock>()
+                .Distinct();
 
             foreach (var textBlock in textBlocks)
             {
@@ -262,6 +265,7 @@ public partial class MainWindow
         RibbonTooltip.SetTitle(button, groupName);
         RibbonTooltip.SetDescription(button, $"Show the {groupName} commands.");
         RibbonTooltip.SetKeyTip(button, CreateGroupKeyTip(groupName, usedKeyTips));
+        button.Loaded += (_, _) => EnsureCollapsedGroupChevronAdorner(button);
         button.Click += (_, _) =>
         {
             if (button.ContextMenu is null)
@@ -272,6 +276,18 @@ public partial class MainWindow
             button.ContextMenu.IsOpen = true;
         };
         return button;
+    }
+
+    private static void EnsureCollapsedGroupChevronAdorner(Button button)
+    {
+        var layer = AdornerLayer.GetAdornerLayer(button);
+        if (layer is null)
+            return;
+
+        if (layer.GetAdorners(button)?.Any(adorner => adorner is RibbonCollapsedGroupChevronAdorner) == true)
+            return;
+
+        layer.Add(new RibbonCollapsedGroupChevronAdorner(button));
     }
 
     private static ContextMenu CreateCollapsedRibbonGroupMenu(FrameworkElement group)
@@ -620,19 +636,68 @@ public partial class MainWindow
             .Concat(EnumerateLogicalDescendants(contentRoot))
             .OfType<StackPanel>()
             .Distinct()
-            .OrderByDescending(panel => panel.Children.OfType<Grid>().Count())
+            .Where(panel => FindVisualAncestor<Button>(panel) is not { Tag: "RibbonCollapsedGroupButton" })
+            .OrderByDescending(panel => panel.Children.OfType<Grid>().Count(IsRibbonGroupGrid))
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                     panel.Children.OfType<Grid>().Any());
+                                     panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid));
     }
 
     private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>
         tabItem.Content as DependencyObject ?? tabItem;
+
+    private static bool IsRibbonGroupGrid(Grid grid) =>
+        grid.Children.OfType<Border>().Any(border =>
+            Grid.GetRow(border) == 1 &&
+            border.Child is TextBlock groupLabel &&
+            !string.IsNullOrWhiteSpace(groupLabel.Text));
 
     private enum RibbonCompactLevel
     {
         Full,
         SmallWithLabels,
         IconOnly
+    }
+
+    private sealed class RibbonCollapsedGroupChevronAdorner : Adorner
+    {
+        private readonly VisualCollection _children;
+        private readonly TextBlock _chevron = new()
+        {
+            Text = "\uE70D",
+            Tag = "RibbonIcon",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 8,
+            Width = 8,
+            Height = 8,
+            LineHeight = 8,
+            TextAlignment = TextAlignment.Center,
+            IsHitTestVisible = false
+        };
+
+        public RibbonCollapsedGroupChevronAdorner(UIElement adornedElement)
+            : base(adornedElement)
+        {
+            _children = new VisualCollection(this) { _chevron };
+            IsHitTestVisible = false;
+        }
+
+        protected override int VisualChildrenCount => _children?.Count ?? 0;
+
+        protected override Visual GetVisualChild(int index) => _children[index];
+
+        protected override Size MeasureOverride(Size constraint)
+        {
+            _chevron.Measure(new Size(8, 8));
+            return new Size(0, 0);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            var x = Math.Max(0, (AdornedElement.RenderSize.Width - 8) / 2);
+            var y = Math.Max(0, AdornedElement.RenderSize.Height - 9);
+            _chevron.Arrange(new Rect(new Point(x, y), new Size(8, 8)));
+            return finalSize;
+        }
     }
 
     private static void SetRibbonGroupCompact(FrameworkElement group, RibbonCompactLevel level)

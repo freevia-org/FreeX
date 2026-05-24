@@ -24,22 +24,23 @@ public sealed partial class XlsxFileAdapter
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
+        var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
         if (HasAnySourcePackagePart(sourceArchive, "xl/pivotCache/", "xl/pivotTables/"))
-            XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive);
+            XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (HasSourcePackagePart(sourceArchive, "xl/tables/"))
-            XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive);
+            XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         if (HasSourcePackagePart(sourceArchive, "xl/externalLinks/"))
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (HasUnsupportedSheetPackagePart(sourceArchive))
             XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (HasSourcePackagePart(sourceArchive, "xl/drawings/"))
         {
-            XlsxWorksheetDrawingPartMerger.Merge(sourceArchive, generatedArchive);
-            XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive);
+            XlsxWorksheetDrawingPartMerger.Merge(sourceArchive, generatedArchive, context);
+            XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
         }
         if (HasSourcePackagePart(sourceArchive, "xl/printerSettings/"))
             XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
-        XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
+        XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook, context);
         XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (HasSourcePackagePart(sourceArchive, "xl/sharedStrings.xml"))
             XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
