@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -73,6 +74,7 @@ public sealed class FormatPictureDialog : Window
         _widthBox.TextChanged += (_, _) => SyncAspectFromWidth();
         _heightBox.TextChanged += (_, _) => SyncAspectFromHeight();
         Content = CreateContent(picture.Kind == PictureKind.Image);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryCreateResult(
@@ -132,6 +134,13 @@ public sealed class FormatPictureDialog : Window
 
         Result = result;
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _heightBox.Focus();
+        _heightBox.SelectAll();
+        Keyboard.Focus(_heightBox);
     }
 
     private Grid CreateContent(bool cropEnabled)
