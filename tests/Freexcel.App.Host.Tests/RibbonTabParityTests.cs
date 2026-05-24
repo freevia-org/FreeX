@@ -168,6 +168,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var reviewTab = ExtractTabXaml(xaml, "Review", "View");
+        var proofingGroup = ExtractGroupXaml(reviewTab, "Proofing");
 
         ExtractGroupLabels(reviewTab).Should().Equal(
             "Proofing",
@@ -176,6 +177,8 @@ public sealed class RibbonTabParityTests
             "Notes",
             "Protect");
 
+        proofingGroup.Should().Contain("Content=\"Workbook Statistics\"");
+        proofingGroup.Should().NotContain("Content=\"Workbook Stats\"");
         ExtractGroupXaml(reviewTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
         ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonTooltip.Title=\"New Note\"");
         ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonTooltip.Title=\"Show Notes\"");

@@ -5044,6 +5044,26 @@ public class FunctionLibraryTests
     // ── SEQUENCE ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void N_RangeArgument_SpillsElementwise()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(42)),
+            (2, 1, new TextValue("x")),
+            (3, 1, new BoolValue(true)),
+            (4, 1, date),
+            (5, 1, ErrorValue.NA));
+
+        AssertColumn(
+            _eval.Evaluate("=N(A1:A5)", sheet),
+            new NumberValue(42),
+            new NumberValue(0),
+            new NumberValue(1),
+            new NumberValue(date.Value),
+            ErrorValue.NA);
+    }
+
+    [Fact]
     public void Sequence_3Rows_ReturnsColumnVector()
     {
         var result = _eval.Evaluate("=SEQUENCE(3)", MakeSheet());
@@ -7087,6 +7107,21 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ERROR.TYPE(1)", MakeSheet()).Should().Be(ErrorValue.NA);
 
     // ── DSUM ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ErrorType_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.DivByZero),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(1)));
+
+        AssertColumn(
+            _eval.Evaluate("=ERROR.TYPE(A1:A3)", sheet),
+            new NumberValue(2),
+            new NumberValue(7),
+            ErrorValue.NA);
+    }
 
     private Sheet MakeDbSheet()
     {

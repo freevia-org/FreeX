@@ -2,6 +2,8 @@
 
 <rect width="32" height="32" fill="none"/>
 <g transform="rotate(-35 16 16)">
-<text x="15" y="15" text-anchor="middle" font-size="14" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">ab</text><path d="M7 21h18" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 18l3 3-3 3" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="13" y="12" text-anchor="middle" font-size="15.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">ab</text>
+<path d="M7 23h18" fill="none" stroke="#1f6aa5" stroke-width="1.0" stroke-linecap="square" stroke-linejoin="miter"/>
+<path d="M22 20l3 3-3 3" fill="none" stroke="#1f6aa5" stroke-width="1.0" stroke-linecap="square" stroke-linejoin="miter"/>
 </g>
 </svg>

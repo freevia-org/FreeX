@@ -1055,7 +1055,8 @@ public sealed class FormulaEvaluator
              or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
              or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH"
              or "DATEVALUE" or "TIMEVALUE"
-             or "DAYS" or "DAYS360" or "YEARFRAC";
+             or "DAYS" or "DAYS360" or "YEARFRAC"
+             or "N" or "ERROR.TYPE";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";

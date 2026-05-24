@@ -1,10 +1,8 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
-    </style>
-  </defs>
-  <text class="t" x="14.4" y="13.6" font-size="12.8" transform="rotate(-45 14.4 13.6)">ab</text>
-  <path class="r" d="M8 25.6 L25.6 8" stroke-width="1"/>
-  <polygon class="b" points="24.58 12.41 25.6 8 21.19 9.02"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Orientation">
+<rect width="32" height="32" fill="none"/>
+<g transform="rotate(-35 16 16)">
+<text x="13" y="12" text-anchor="middle" font-size="15.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">ab</text>
+<path d="M7 23h18" fill="none" stroke="#1f6aa5" stroke-width="1" stroke-linecap="square" stroke-linejoin="miter"/>
+<path d="M22 20l3 3-3 3" fill="none" stroke="#1f6aa5" stroke-width="1" stroke-linecap="square" stroke-linejoin="miter"/>
+</g>
 </svg>
