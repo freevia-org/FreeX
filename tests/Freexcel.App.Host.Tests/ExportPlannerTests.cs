@@ -978,6 +978,33 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControlHeaderElements()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHeaderElementContentControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Element Header PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForGlyphs()
     {
         StaTestRunner.Run(() =>
@@ -1316,6 +1343,29 @@ public class ExportPlannerTests
         page.Children.Add(new GroupBox
         {
             Header = "Header PDF Text",
+            Content = "",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateHeaderElementContentControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(220, 120);
+        var page = new FixedPage
+        {
+            Width = 220,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new GroupBox
+        {
+            Header = new TextBlock { Text = "Element Header PDF Text" },
             Content = "",
             Margin = new System.Windows.Thickness(12),
             Padding = new System.Windows.Thickness(0)
