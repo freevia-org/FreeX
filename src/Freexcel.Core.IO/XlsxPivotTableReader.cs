@@ -160,6 +160,7 @@ internal static partial class XlsxPivotTableReader
         var pivotFieldsElement = root.Element(workbookNs + "pivotFields");
         var nativeFieldSelections = ReadNativePivotFieldSelections(pivotFieldsElement, pivotCache, workbookNs);
         var nativeFieldGroups = ReadNativePivotFieldGroups(pivotFieldsElement, workbookNs);
+        var nativeFieldMetadata = ReadNativePivotFieldMetadata(pivotFieldsElement, workbookNs);
         var nativeFiltersElement = root.Element(workbookNs + "filters");
         var calculatedFields = ReadPivotCalculatedFields(root.Element(workbookNs + "calculatedFields"), workbookNs);
         var valueFilters = ReadPivotValueFilters(root.Element(workbookNs + "valueFilters"), workbookNs)
@@ -231,9 +232,9 @@ internal static partial class XlsxPivotTableReader
             root.Attribute("grandTotalCaption")?.Value,
             root.Attribute("missingCaption")?.Value,
             root.Attribute("errorCaption")?.Value,
-            ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
-            ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
-            ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
+            ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
+            ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
+            ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields, numberFormatCatalog),
             calculatedFields,
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
@@ -310,11 +311,34 @@ internal static partial class XlsxPivotTableReader
         return result;
     }
 
+    private static Dictionary<int, PivotFieldNativeMetadata> ReadNativePivotFieldMetadata(
+        XElement? pivotFieldsElement,
+        XNamespace workbookNs)
+    {
+        if (pivotFieldsElement is null)
+            return [];
+
+        return pivotFieldsElement
+            .Elements(workbookNs + "pivotField")
+            .Select((field, index) => new KeyValuePair<int, PivotFieldNativeMetadata>(
+                index,
+                new PivotFieldNativeMetadata(
+                    ReadOptionalBoolAttribute(field, "showAll"),
+                    ReadOptionalBoolAttribute(field, "includeNewItemsInFilter"),
+                    ReadOptionalBoolAttribute(field, "multipleItemSelectionAllowed"),
+                    ReadOptionalBoolAttribute(field, "dragToRow"),
+                    ReadOptionalBoolAttribute(field, "dragToCol"),
+                    ReadOptionalBoolAttribute(field, "dragToPage"),
+                    ReadOptionalBoolAttribute(field, "dragToData"))))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+    }
+
     private static List<PivotFieldModel> ReadPivotFieldIndexes(
         XElement? fieldsElement,
         XNamespace workbookNs,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections = null,
-        IReadOnlyDictionary<int, PivotFieldModel>? nativeFieldGroups = null)
+        IReadOnlyDictionary<int, PivotFieldModel>? nativeFieldGroups = null,
+        IReadOnlyDictionary<int, PivotFieldNativeMetadata>? nativeFieldMetadata = null)
     {
         if (fieldsElement is null)
             return [];
@@ -325,14 +349,15 @@ internal static partial class XlsxPivotTableReader
             {
                 var index = XlsxXmlAttributeReader.ReadIntAttribute(field, "x");
                 return index.HasValue
-                    ? new PivotFieldModel(
+                    ? CreatePivotFieldModel(
                         index.Value,
                         field.Attribute("name")?.Value,
                         ReadCsvAttribute(field.Attribute("selectedItems")?.Value) ?? ReadNativePivotFieldSelection(nativeFieldSelections, index.Value),
-                        Grouping: ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value, ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.Grouping ?? PivotFieldGrouping.None),
-                        GroupStart: XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupStart") ?? ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.GroupStart,
-                        GroupEnd: XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupEnd") ?? ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.GroupEnd,
-                        GroupInterval: XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupInterval") ?? ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.GroupInterval)
+                        ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value, ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.Grouping ?? PivotFieldGrouping.None),
+                        XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupStart") ?? ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.GroupStart,
+                        XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupEnd") ?? ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.GroupEnd,
+                        XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupInterval") ?? ReadNativePivotFieldGroup(nativeFieldGroups, index.Value)?.GroupInterval,
+                        ReadNativePivotFieldMetadata(nativeFieldMetadata, index.Value))
                     : null;
             })
             .Where(field => field is not null)
@@ -344,28 +369,59 @@ internal static partial class XlsxPivotTableReader
         XElement? fieldsElement,
         XNamespace workbookNs,
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections = null,
-        IReadOnlyDictionary<int, PivotFieldModel>? nativeFieldGroups = null)
+        IReadOnlyDictionary<int, PivotFieldModel>? nativeFieldGroups = null,
+        IReadOnlyDictionary<int, PivotFieldNativeMetadata>? nativeFieldMetadata = null)
     {
         if (fieldsElement is null)
             return [];
 
         var pageFields = fieldsElement
             .Elements(workbookNs + "pageField")
-            .Select(field => new PivotFieldModel(
-                XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1,
-                field.Attribute("name")?.Value,
-                ReadCsvAttribute(field.Attribute("selectedItems")?.Value) ?? ReadNativePivotFieldSelection(nativeFieldSelections, XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1),
-                ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value, ReadNativePivotFieldGroup(nativeFieldGroups, XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1)?.Grouping ?? PivotFieldGrouping.None),
-                XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupStart") ?? ReadNativePivotFieldGroup(nativeFieldGroups, XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1)?.GroupStart,
-                XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupEnd") ?? ReadNativePivotFieldGroup(nativeFieldGroups, XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1)?.GroupEnd,
-                XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupInterval") ?? ReadNativePivotFieldGroup(nativeFieldGroups, XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1)?.GroupInterval))
+            .Select(field =>
+            {
+                var fieldIndex = XlsxXmlAttributeReader.ReadIntAttribute(field, "fld") ?? -1;
+                return CreatePivotFieldModel(
+                    fieldIndex,
+                    field.Attribute("name")?.Value,
+                    ReadCsvAttribute(field.Attribute("selectedItems")?.Value) ?? ReadNativePivotFieldSelection(nativeFieldSelections, fieldIndex),
+                    ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value, ReadNativePivotFieldGroup(nativeFieldGroups, fieldIndex)?.Grouping ?? PivotFieldGrouping.None),
+                    XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupStart") ?? ReadNativePivotFieldGroup(nativeFieldGroups, fieldIndex)?.GroupStart,
+                    XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupEnd") ?? ReadNativePivotFieldGroup(nativeFieldGroups, fieldIndex)?.GroupEnd,
+                    XlsxXmlAttributeReader.ReadDoubleAttribute(field, "groupInterval") ?? ReadNativePivotFieldGroup(nativeFieldGroups, fieldIndex)?.GroupInterval,
+                    ReadNativePivotFieldMetadata(nativeFieldMetadata, fieldIndex));
+            })
             .Where(field => field.SourceFieldIndex >= 0)
             .ToList();
         if (pageFields.Count > 0)
             return pageFields;
 
-        return ReadPivotFieldIndexes(fieldsElement, workbookNs, nativeFieldSelections, nativeFieldGroups);
+        return ReadPivotFieldIndexes(fieldsElement, workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata);
     }
+
+    private static PivotFieldModel CreatePivotFieldModel(
+        int sourceFieldIndex,
+        string? selectedItem,
+        IReadOnlyList<string>? selectedItems,
+        PivotFieldGrouping grouping,
+        double? groupStart,
+        double? groupEnd,
+        double? groupInterval,
+        PivotFieldNativeMetadata? metadata) =>
+        new(
+            sourceFieldIndex,
+            selectedItem,
+            selectedItems,
+            grouping,
+            groupStart,
+            groupEnd,
+            groupInterval,
+            metadata?.ShowAll,
+            metadata?.IncludeNewItemsInFilter,
+            metadata?.MultipleItemSelectionAllowed,
+            metadata?.DragToRow,
+            metadata?.DragToColumn,
+            metadata?.DragToPage,
+            metadata?.DragToData);
 
     private static IReadOnlyList<string>? ReadNativePivotFieldSelection(
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections,
@@ -380,6 +436,30 @@ internal static partial class XlsxPivotTableReader
         nativeFieldGroups is not null && nativeFieldGroups.TryGetValue(fieldIndex, out var field)
             ? field
             : null;
+
+    private static PivotFieldNativeMetadata? ReadNativePivotFieldMetadata(
+        IReadOnlyDictionary<int, PivotFieldNativeMetadata>? metadataByField,
+        int fieldIndex) =>
+        metadataByField is not null && metadataByField.TryGetValue(fieldIndex, out var metadata)
+            ? metadata
+            : null;
+
+    private static bool? ReadOptionalBoolAttribute(XElement element, string name)
+    {
+        var value = element.Attribute(name)?.Value;
+        if (value is null)
+            return null;
+        return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record PivotFieldNativeMetadata(
+        bool? ShowAll,
+        bool? IncludeNewItemsInFilter,
+        bool? MultipleItemSelectionAllowed,
+        bool? DragToRow,
+        bool? DragToColumn,
+        bool? DragToPage,
+        bool? DragToData);
 
     private static List<PivotDataFieldModel> ReadPivotDataFields(
         XElement? dataFieldsElement,

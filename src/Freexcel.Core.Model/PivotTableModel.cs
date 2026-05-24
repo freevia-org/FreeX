@@ -149,7 +149,14 @@ public sealed record PivotFieldModel(
     PivotFieldGrouping Grouping = PivotFieldGrouping.None,
     double? GroupStart = null,
     double? GroupEnd = null,
-    double? GroupInterval = null);
+    double? GroupInterval = null,
+    bool? ShowAll = null,
+    bool? IncludeNewItemsInFilter = null,
+    bool? MultipleItemSelectionAllowed = null,
+    bool? DragToRow = null,
+    bool? DragToColumn = null,
+    bool? DragToPage = null,
+    bool? DragToData = null);
 
 public enum PivotFieldGrouping
 {
