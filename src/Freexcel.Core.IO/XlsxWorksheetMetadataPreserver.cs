@@ -162,11 +162,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetRowAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetCellAttributes(sourceSheetData, GetTargetCellsByAddress, workbookNs))
-                changed = true;
-            if (MergeWorksheetInlineStringMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs))
-                changed = true;
-            if (MergeWorksheetFormulaMetadata(sourceSheetData, GetTargetCellsByAddress, workbookNs))
+            if (MergeWorksheetCellNativeMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs))
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
@@ -473,11 +469,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetRowAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetCellAttributes(sourceSheetData, GetTargetCellsByAddress, workbookNs))
-                changed = true;
-            if (MergeWorksheetInlineStringMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs))
-                changed = true;
-            if (MergeWorksheetFormulaMetadata(sourceSheetData, GetTargetCellsByAddress, workbookNs))
+            if (MergeWorksheetCellNativeMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs))
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;

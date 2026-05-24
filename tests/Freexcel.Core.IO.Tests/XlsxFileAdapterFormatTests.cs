@@ -16,6 +16,8 @@ public sealed class XlsxFileAdapterFormatTests
         var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
         var worksheetMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
             .ReplaceLineEndings("\n");
+        var worksheetCellMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
+        var pivotReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
         var sheetXmlLayoutSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
@@ -30,6 +32,9 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");
         sanitizerSource.Should().Contain("return sourcePackage;");
         worksheetMetadataSource.Should().NotContain(".Descendants(workbookNs + \"c\")\n                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute(\"r\")?.Value))\n                .ToList();");
+        worksheetMetadataSource.Should().Contain("MergeWorksheetCellNativeMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs)");
+        worksheetCellMetadataSource.Should().Contain("private static bool MergeWorksheetCellNativeMetadata");
+        pivotReferencePreserverSource.Should().Contain("HasWorksheetPivotTableRelationships(sourceArchive, context)");
         sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
     }
 
