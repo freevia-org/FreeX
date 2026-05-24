@@ -76,6 +76,23 @@ internal static partial class XlsxChartXmlWriter
             chart.ChartAreaBorderColor,
             chart.ChartAreaBorderThickness);
 
+    private static XElement? ToChartDefaultTextPropertiesXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.ChartDefaultTextColor is null &&
+            chart.ChartDefaultTextThemeColor is null &&
+            chart.ChartDefaultFontSize == 11)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        new XAttribute("sz", Math.Clamp((int)Math.Round(chart.ChartDefaultFontSize * 100), 600, 7200)),
+                        ToTextRunPropertiesContent(chart.ChartDefaultTextThemeColor, chart.ChartDefaultTextColor, chart.ChartDefaultFontSize, drawingNs)))));
+    }
+
     private static XElement? ToPlotAreaShapeProperties(
         ChartModel chart,
         XNamespace chartNs,
@@ -162,6 +179,11 @@ internal static partial class XlsxChartXmlWriter
         return new XElement(chartNs + "legend",
             new XElement(chartNs + "legendPos",
                 new XAttribute("val", ToXlsxLegendPosition(chart.LegendPosition))),
+            chart.LegendEntries
+                .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
+                .Select(entry => new XElement(chartNs + "legendEntry",
+                    new XElement(chartNs + "idx", new XAttribute("val", entry.Index)),
+                    new XElement(chartNs + "delete", new XAttribute("val", entry.IsDeleted == true ? "1" : "0")))),
             ToManualLayoutXml(chart.LegendLayout, chartNs),
             new XElement(chartNs + "overlay",
                 new XAttribute("val", chart.LegendOverlay ? "1" : "0")),

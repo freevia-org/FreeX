@@ -51,6 +51,9 @@ public sealed partial class NativeJsonAdapter
         public bool HideYAxis { get; set; }
         public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
         public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
+        public CellColor? ChartDefaultTextColor { get; set; }
+        public ThemeColorReferenceDto? ChartDefaultTextThemeColor { get; set; }
+        public double ChartDefaultFontSize { get; set; } = 11;
         public CellColor? ChartTitleTextColor { get; set; }
         public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;
@@ -75,6 +78,7 @@ public sealed partial class NativeJsonAdapter
         public ThemeColorReferenceDto? LegendBorderThemeColor { get; set; }
         public double LegendBorderThickness { get; set; }
         public double LegendFontSize { get; set; } = 12;
+        public List<ChartLegendEntryModel>? LegendEntries { get; set; }
         public double DoughnutHoleSize { get; set; } = 0.55;
         public double FirstSliceAngle { get; set; }
         public int ExplodedSliceIndex { get; set; } = -1;

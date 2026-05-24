@@ -45,6 +45,8 @@ public enum ChartTrendlineType { Linear, Exponential, Logarithmic, Power, Moving
 
 public enum ChartLineDashStyle { Solid, Dash, Dot }
 
+public sealed record ChartLegendEntryModel(int Index, bool? IsDeleted);
+
 public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
@@ -322,6 +324,9 @@ public sealed class ChartModel
     public bool HideYAxis { get; set; }
     public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
     public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
+    public CellColor? ChartDefaultTextColor { get; set; }
+    public WorkbookThemeColorReference? ChartDefaultTextThemeColor { get; set; }
+    public double ChartDefaultFontSize { get; set; } = 11;
     public CellColor? ChartTitleTextColor { get; set; }
     public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
     public double ChartTitleFontSize { get; set; } = 16;
@@ -346,6 +351,7 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? LegendBorderThemeColor { get; set; }
     public double LegendBorderThickness { get; set; }
     public double LegendFontSize { get; set; } = 12;
+    public List<ChartLegendEntryModel> LegendEntries { get; set; } = [];
     public double DoughnutHoleSize { get; set; } = 0.55;
     public double FirstSliceAngle { get; set; }
     public int ExplodedSliceIndex { get; set; } = -1;

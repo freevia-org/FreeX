@@ -59,8 +59,17 @@ internal static class XlsxChartLevelReader
             _ => ChartLegendPosition.Right
         };
         chart.LegendOverlay = XlsxChartScalarReader.IsTrue(legend.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
+        chart.LegendEntries = ReadLegendEntries(legend);
         ApplyLegendFormatting(legend, chart);
     }
+
+    private static List<ChartLegendEntryModel> ReadLegendEntries(XElement legend) =>
+        legend.Elements(ChartNs + "legendEntry")
+            .Select(entry => new ChartLegendEntryModel(
+                XlsxChartScalarReader.ReadOptionalInt(entry.Element(ChartNs + "idx")?.Attribute("val")?.Value) ?? -1,
+                XlsxChartScalarReader.ReadOptionalBool(entry.Element(ChartNs + "delete")?.Attribute("val")?.Value)))
+            .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
+            .ToList();
 
     private static ChartDataTableModel? ReadChartDataTable(XElement? dataTable)
     {
