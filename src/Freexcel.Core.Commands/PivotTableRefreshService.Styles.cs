@@ -39,13 +39,19 @@ public static partial class PivotTableRefreshService
         var headerEndRow = bodyStart.Row + (uint)Math.Max(1, pivotTable.ColumnFields.Count) - 1;
         var subtotalRows = new HashSet<uint>();
         var grandTotalRows = new HashSet<uint>();
+        var grandTotalColumns = new HashSet<uint>();
         for (var row = materialized.Start.Row; row <= materialized.End.Row; row++)
         for (var col = materialized.Start.Col; col <= materialized.End.Col; col++)
         {
             if (sheet.GetCell(row, col)?.Value is not TextValue text)
                 continue;
             if (IsPivotGrandTotalCaption(text.Value))
-                grandTotalRows.Add(row);
+            {
+                if (row <= headerEndRow)
+                    grandTotalColumns.Add(col);
+                else
+                    grandTotalRows.Add(row);
+            }
             else if (IsPivotSubtotalCaption(text.Value))
                 subtotalRows.Add(row);
         }
@@ -67,7 +73,7 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
-            if (grandTotalRows.Contains(row))
+            if (grandTotalRows.Contains(row) || grandTotalColumns.Contains(col))
             {
                 ApplyPivotVisualStyle(workbook, cell, grandTotalStyle);
                 continue;

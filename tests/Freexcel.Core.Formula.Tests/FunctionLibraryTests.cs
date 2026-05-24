@@ -1702,6 +1702,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DateDifferenceRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 31).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=WORKDAY(A1:A2,1)", sheet),
+            new NumberValue(new DateTime(2024, 1, 2).ToOADate()),
+            new NumberValue(new DateTime(2024, 1, 3).ToOADate()));
+        AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1)", sheet), new NumberValue(5), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=DAYS(B1,A1:A2)", sheet), new NumberValue(4), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,C1)", sheet), new NumberValue(30), new NumberValue(29));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,C1,0)", sheet), new NumberValue(30.0 / 360.0), new NumberValue(29.0 / 360.0));
+    }
+
+    [Fact]
     public void Weekday_ReturnType1_SundayIs1()
     {
         // 2024-01-07 is a Sunday

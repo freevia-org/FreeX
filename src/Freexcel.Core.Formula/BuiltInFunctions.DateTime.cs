@@ -412,13 +412,19 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var current)) return ErrorValue.Num;
         double rawDays = ToNumber(args[1]);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
         int days = (int)rawDays;
         if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
             return holidayError!;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WorkdayScalar(value, days, holidays));
+        return WorkdayScalar(args[0], days, holidays);
+    }
+
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays)
+    {
+        if (!TryOADateToDateTime(startDate, out var current)) return ErrorValue.Num;
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
@@ -443,12 +449,19 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
-        var startDt = startRaw.Date;
-        var endDt   = endRaw.Date;
         if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
             return holidayError!;
+        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => NetworkdaysScalar(value, args[1], holidays));
+        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => NetworkdaysScalar(args[0], value, holidays));
+        return NetworkdaysScalar(args[0], args[1], holidays);
+    }
+
+    private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays)
+    {
+        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
+        var startDt = startRaw.Date;
+        var endDt   = endRaw.Date;
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
@@ -491,8 +504,15 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (!TryOADateToDateTime(args[0], out var endDt))   return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var startDt)) return ErrorValue.Num;
+        if (args[0] is RangeValue endRange) return MapUnaryTextRange(endRange, value => DaysScalar(value, args[1]));
+        if (args[1] is RangeValue startRange) return MapUnaryTextRange(startRange, value => DaysScalar(args[0], value));
+        return DaysScalar(args[0], args[1]);
+    }
+
+    private static ScalarValue DaysScalar(ScalarValue endDate, ScalarValue startDate)
+    {
+        if (!TryOADateToDateTime(endDate, out var endDt))   return ErrorValue.Num;
+        if (!TryOADateToDateTime(startDate, out var startDt)) return ErrorValue.Num;
         return new NumberValue(DateToSerial(endDt) - DateToSerial(startDt));
     }
 
@@ -501,11 +521,18 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
+        bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
+        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => Days360Scalar(value, args[1], european));
+        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => Days360Scalar(args[0], value, european));
+        return Days360Scalar(args[0], args[1], european);
+    }
+
+    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, bool european)
+    {
+        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
         double days = european ? Days30E360(startDt, endDt) : Days30US360(startDt, endDt);
         return new NumberValue(Math.Truncate(days));
     }
@@ -515,14 +542,21 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
-        var startDt = startRaw.Date;
-        var endDt   = endRaw.Date;
         double rawBasis = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
         if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
         int basis = (int)rawBasis;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
+        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => YearfracScalar(value, args[1], basis));
+        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => YearfracScalar(args[0], value, basis));
+        return YearfracScalar(args[0], args[1], basis);
+    }
+
+    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, int basis)
+    {
+        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
+        var startDt = startRaw.Date;
+        var endDt   = endRaw.Date;
         double totalDays = DateToSerial(endDt) - DateToSerial(startDt);
         double result = basis switch
         {
