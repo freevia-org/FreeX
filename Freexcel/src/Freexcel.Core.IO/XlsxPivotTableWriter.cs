@@ -178,9 +178,12 @@ internal static class XlsxPivotTableWriter
             new XAttribute("enableRefresh", cache.EnableRefresh ? "1" : "0"),
             new XAttribute("preserveSourceSortFilter", cache.PreserveSourceSortFilter ? "1" : "0"),
             cache.MissingItemsLimit is { } missingItemsLimit ? new XAttribute("missingItemsLimit", missingItemsLimit.ToString(CultureInfo.InvariantCulture)) : null,
+            cache.CreatedVersion is { } createdVersion ? new XAttribute("createdVersion", createdVersion.ToString(CultureInfo.InvariantCulture)) : null,
+            cache.MinRefreshableVersion is { } minRefreshableVersion ? new XAttribute("minRefreshableVersion", minRefreshableVersion.ToString(CultureInfo.InvariantCulture)) : null,
             cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
-            new XAttribute("recordCount", "0"),
+            !string.IsNullOrWhiteSpace(cache.RefreshedDateIso) ? new XAttribute("refreshedDateIso", cache.RefreshedDateIso) : null,
+            new XAttribute("recordCount", (cache.RecordCount ?? 0).ToString(CultureInfo.InvariantCulture)),
             cacheSource,
             new XElement(
                 workbookNs + "cacheFields",
