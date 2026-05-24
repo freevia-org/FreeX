@@ -227,7 +227,8 @@ public sealed partial class NativeJsonAdapter
         Left = chart.Left,
         Top = chart.Top,
         Width = chart.Width,
-        Height = chart.Height
+        Height = chart.Height,
+        DrawingAnchorKind = chart.DrawingAnchorKind
     };
 
     private static ChartSurfaceFormatDto? FromChartSurfaceFormat(ChartSurfaceFormatModel? format) =>

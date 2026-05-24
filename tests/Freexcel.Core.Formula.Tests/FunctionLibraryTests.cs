@@ -4366,6 +4366,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Textjoin_DelimiterRange_CyclesDelimitersBetweenTextItems()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("-")),
+            (1, 2, new TextValue("|")));
+
+        _eval.Evaluate("=TEXTJOIN(A1:B1,TRUE,\"x\",\"y\",\"z\")", sheet)
+            .Should().Be(new TextValue("x-y|z"));
+    }
+
+    [Fact]
     public void Textjoin_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet(

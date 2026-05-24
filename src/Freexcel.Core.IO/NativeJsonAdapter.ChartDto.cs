@@ -228,6 +228,7 @@ public sealed partial class NativeJsonAdapter
         public double Top { get; set; } = 50;
         public double Width { get; set; } = 400;
         public double Height { get; set; } = 300;
+        public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
     }
 
     private sealed class ChartSurfaceFormatDto

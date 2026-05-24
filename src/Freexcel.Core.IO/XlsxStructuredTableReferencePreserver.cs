@@ -106,4 +106,82 @@ internal static class XlsxStructuredTableReferencePreserver
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
+
+    public static void Preserve(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context)
+    {
+        if (context is null)
+        {
+            Preserve(sourceArchive, targetArchive);
+            return;
+        }
+
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+                continue;
+
+            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
+            var sourceTableParts = sourceWorksheetXml.Root?
+                .Element(context.WorkbookNs + "tableParts")?
+                .Elements(context.WorkbookNs + "tablePart")
+                .ToList() ?? [];
+            if (sourceTableParts.Count == 0)
+                continue;
+
+            var sourceWorksheetRels = XlsxRelationshipReader.LoadTargets(
+                sourceArchive,
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                context.PackageRelNs);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
+            var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
+                : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+
+            var preservedTableParts = new List<XElement>();
+            foreach (var sourceTablePart in sourceTableParts)
+            {
+                var sourceRelId = sourceTablePart.Attribute(context.RelNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(sourceRelId) ||
+                    !sourceWorksheetRels.TryGetValue(sourceRelId, out var tablePath))
+                {
+                    continue;
+                }
+
+                var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+                    targetWorksheetRelsXml,
+                    context.PackageRelNs,
+                    targetWorksheetPath,
+                    tablePath,
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table");
+                preservedTableParts.Add(new XElement(context.WorkbookNs + "tablePart", new XAttribute(context.RelNs + "id", targetRelId)));
+            }
+
+            if (preservedTableParts.Count == 0)
+                continue;
+
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+
+            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null)
+                continue;
+
+            targetRoot.Elements(context.WorkbookNs + "tableParts").Remove();
+            targetRoot.Add(new XElement(
+                context.WorkbookNs + "tableParts",
+                new XAttribute("count", preservedTableParts.Count.ToString(CultureInfo.InvariantCulture)),
+                preservedTableParts));
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
 }

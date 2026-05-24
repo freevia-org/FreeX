@@ -15,6 +15,21 @@ internal static class XlsxPivotXmlReferencePreserver
         PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, workbookNs, relNs, packageRelNs);
     }
 
+    public static void Preserve(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context)
+    {
+        if (context is null)
+        {
+            Preserve(sourceArchive, targetArchive);
+            return;
+        }
+
+        PreserveWorkbookPivotCaches(targetArchive, context);
+        PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context);
+    }
+
     private static void PreserveWorkbookPivotCaches(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
@@ -42,6 +57,27 @@ internal static class XlsxPivotXmlReferencePreserver
             targetRoot.Add(new XElement(sourcePivotCaches));
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetXml);
+    }
+
+    private static void PreserveWorkbookPivotCaches(
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context)
+    {
+        var sourcePivotCaches = context.SourceWorkbookXml.Root?.Element(context.WorkbookNs + "pivotCaches");
+        if (sourcePivotCaches is null)
+            return;
+
+        var targetRoot = context.TargetWorkbookXml.Root;
+        if (targetRoot is null || targetRoot.Element(context.WorkbookNs + "pivotCaches") is not null)
+            return;
+
+        var sheetsElement = targetRoot.Element(context.WorkbookNs + "sheets");
+        if (sheetsElement is not null)
+            sheetsElement.AddBeforeSelf(new XElement(sourcePivotCaches));
+        else
+            targetRoot.Add(new XElement(sourcePivotCaches));
+
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", context.TargetWorkbookXml);
     }
 
     private static void PreserveWorksheetPivotTableDefinitions(
@@ -99,6 +135,40 @@ internal static class XlsxPivotXmlReferencePreserver
             var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
             var targetRoot = targetWorksheetXml.Root;
             if (targetRoot is null || targetRoot.Elements(workbookNs + "pivotTableDefinition").Any())
+                continue;
+
+            foreach (var pivotDefinition in sourcePivotDefinitions)
+                targetRoot.Add(new XElement(pivotDefinition));
+
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
+
+    private static void PreserveWorksheetPivotTableDefinitions(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context)
+    {
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+                continue;
+
+            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
+            var sourcePivotDefinitions = sourceWorksheetXml.Root?
+                .Elements(context.WorkbookNs + "pivotTableDefinition")
+                .ToList() ?? [];
+            if (sourcePivotDefinitions.Count == 0)
+                continue;
+
+            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null || targetRoot.Elements(context.WorkbookNs + "pivotTableDefinition").Any())
                 continue;
 
             foreach (var pivotDefinition in sourcePivotDefinitions)

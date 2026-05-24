@@ -234,7 +234,8 @@ public sealed partial class NativeJsonAdapter
                 Left = chartDto.Left,
                 Top = chartDto.Top,
                 Width = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Width, 400),
-                Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Height, 300)
+                Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Height, 300),
+                DrawingAnchorKind = chartDto.DrawingAnchorKind
             };
             SanitizeLoadedChart(chart);
             return chart;

@@ -9,6 +9,7 @@ internal static class XlsxDrawingAnchorApplier
         if (anchor is null)
             return;
 
+        chart.DrawingAnchorKind = anchor.Kind;
         chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, anchor.FromColumnZeroBased) + anchor.FromColumnOffset);
         chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, anchor.FromRowZeroBased) + anchor.FromRowOffset);
 
