@@ -2806,16 +2806,16 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button Content="Side by Side" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Side by Side"
+                                <Button Content="View Side by Side" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="View Side by Side"
                                         local:RibbonTooltip.KeyTip="B"
                                         local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
-                                <Button Content="Sync Scrolling" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Sync Scrolling"
+                                <Button Content="Synchronous Scrolling" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Synchronous Scrolling"
                                         local:RibbonTooltip.KeyTip="SS"
                                         local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
-                                <Button Content="Reset Position" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                        local:RibbonTooltip.Title="Reset Position"
+                                <Button Content="Reset Window Position" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Reset Window Position"
                                         local:RibbonTooltip.KeyTip="RP"
                                         local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
                                 <Button Content="Switch Windows" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
