@@ -190,6 +190,7 @@ internal static class XlsxChartAxisReader
         var minorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
         var showLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
         var axisLine = ReadAxisLine(axisElement.Element(ChartNs + "spPr"));
+        var crossing = ReadAxisCrossing(axisElement);
 
         if (useXAxis)
         {
@@ -204,6 +205,9 @@ internal static class XlsxChartAxisReader
             chart.XAxisMinorTickStyle = minorTickStyle;
             chart.ShowXAxisLabels = showLabels;
             ApplyXAxisLineProperties(chart, axisLine);
+            chart.XAxisCrosses = crossing.Crosses;
+            chart.XAxisCrossesAt = crossing.CrossesAt;
+            chart.XAxisCrossBetween = crossing.CrossBetween;
             return;
         }
 
@@ -218,6 +222,9 @@ internal static class XlsxChartAxisReader
         chart.YAxisMinorTickStyle = minorTickStyle;
         chart.ShowYAxisLabels = showLabels;
         ApplyYAxisLineProperties(chart, axisLine);
+        chart.YAxisCrosses = crossing.Crosses;
+        chart.YAxisCrossesAt = crossing.CrossesAt;
+        chart.YAxisCrossBetween = crossing.CrossBetween;
     }
 
     private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart)
@@ -235,6 +242,14 @@ internal static class XlsxChartAxisReader
         chart.XAxisLabelSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickLblSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
+        chart.XAxisNoMultiLevelLabels = ReadBool(axisElement.Element(ChartNs + "noMultiLvlLbl")?.Attribute("val")?.Value);
+        chart.XAxisLabelAlignment = FromXlsxAxisLabelAlignment(axisElement.Element(ChartNs + "lblAlgn")?.Attribute("val")?.Value);
+        if (axisElement.Name == ChartNs + "dateAx")
+        {
+            chart.XAxisBaseTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "baseTimeUnit")?.Attribute("val")?.Value);
+            chart.XAxisMajorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "majorTimeUnit")?.Attribute("val")?.Value);
+            chart.XAxisMinorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "minorTimeUnit")?.Attribute("val")?.Value);
+        }
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
     }
 
@@ -293,6 +308,21 @@ internal static class XlsxChartAxisReader
 
     private readonly record struct AxisGridlineProperties(bool Visible, CellColor? Color, double? Thickness);
 
+    private static AxisCrossingProperties ReadAxisCrossing(XElement axisElement)
+    {
+        var crossesAt = ReadDouble(axisElement.Element(ChartNs + "crossesAt")?.Attribute("val")?.Value);
+        var crosses = crossesAt is not null
+            ? ChartAxisCrosses.Custom
+            : FromXlsxAxisCrosses(axisElement.Element(ChartNs + "crosses")?.Attribute("val")?.Value);
+        var crossBetween = FromXlsxAxisCrossBetween(axisElement.Element(ChartNs + "crossBetween")?.Attribute("val")?.Value);
+        return new AxisCrossingProperties(crosses, crossesAt, crossBetween);
+    }
+
+    private readonly record struct AxisCrossingProperties(
+        ChartAxisCrosses Crosses,
+        double? CrossesAt,
+        ChartAxisCrossBetween? CrossBetween);
+
     private static void ApplyXAxisLineProperties(ChartModel chart, AxisLineProperties axisLine)
     {
         if (axisLine.Color is { } color)
@@ -336,6 +366,39 @@ internal static class XlsxChartAxisReader
             _ => fallback
         };
 
+    private static ChartAxisCrosses FromXlsxAxisCrosses(string? value) =>
+        value switch
+        {
+            "min" => ChartAxisCrosses.Minimum,
+            "max" => ChartAxisCrosses.Maximum,
+            _ => ChartAxisCrosses.AutoZero
+        };
+
+    private static ChartAxisCrossBetween? FromXlsxAxisCrossBetween(string? value) =>
+        value switch
+        {
+            "between" => ChartAxisCrossBetween.Between,
+            "midCat" => ChartAxisCrossBetween.MidCategory,
+            _ => null
+        };
+
+    private static ChartAxisLabelAlignment FromXlsxAxisLabelAlignment(string? value) =>
+        value switch
+        {
+            "l" => ChartAxisLabelAlignment.Left,
+            "r" => ChartAxisLabelAlignment.Right,
+            _ => ChartAxisLabelAlignment.Center
+        };
+
+    private static ChartDateAxisUnit? FromXlsxDateAxisUnit(string? value) =>
+        value switch
+        {
+            "days" => ChartDateAxisUnit.Days,
+            "months" => ChartDateAxisUnit.Months,
+            "years" => ChartDateAxisUnit.Years,
+            _ => null
+        };
+
     private readonly record struct AxisLineProperties(CellColor? Color, double? Thickness);
 
     private static double? ReadDouble(string? value) =>
@@ -343,4 +406,7 @@ internal static class XlsxChartAxisReader
 
     private static int? ReadInt(string? value) =>
         int.TryParse(value, out var result) ? result : null;
+
+    private static bool ReadBool(string? value) =>
+        value is "1" or "true";
 }

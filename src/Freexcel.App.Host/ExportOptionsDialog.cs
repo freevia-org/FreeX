@@ -13,6 +13,7 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
     private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks using sheet names" };
+    private readonly CheckBox _bitmapTextBox = new() { Content = "_Bitmap text when fonts may not be embedded" };
     private readonly ComboBox _bookmarkModeBox = new() { Width = 180, IsEnabled = false };
     private readonly ComboBox _initialViewBox = new() { Width = 180 };
     private readonly ComboBox _openModeBox = new() { Width = 180 };
@@ -29,7 +30,7 @@ internal sealed class ExportOptionsDialog : Window
     {
         Title = "Export Options";
         Width = 430;
-        Height = 354;
+        Height = 376;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -88,6 +89,7 @@ internal sealed class ExportOptionsDialog : Window
         openModePanel.Children.Add(new Label { Content = "Open _mode:", Target = _openModeBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         openModePanel.Children.Add(_openModeBox);
         stack.Children.Add(openModePanel);
+        stack.Children.Add(_bitmapTextBox);
         stack.Children.Add(_standardQualityButton);
         stack.Children.Add(_minimumSizeButton);
 
@@ -125,7 +127,8 @@ internal sealed class ExportOptionsDialog : Window
                 _bookmarksBox.IsChecked == true,
                 GetSelectedBookmarkMode(),
                 GetSelectedInitialView(),
-                GetSelectedOpenMode());
+                GetSelectedOpenMode(),
+                _bitmapTextBox.IsChecked == true);
             DialogResult = true;
         };
         buttons.Children.Add(ok);
@@ -167,7 +170,8 @@ internal sealed class ExportOptionsDialog : Window
         bool createBookmarks = false,
         PdfBookmarkMode bookmarkMode = PdfBookmarkMode.None,
         PdfInitialView initialView = PdfInitialView.SinglePage,
-        PdfOpenMode openMode = PdfOpenMode.Normal) =>
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool bitmapTextWhenFontsMayNotBeEmbedded = false) =>
         new(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
@@ -182,7 +186,8 @@ internal sealed class ExportOptionsDialog : Window
                     ? PdfBookmarkMode.SheetNames
                     : PdfBookmarkMode.None,
             Enum.IsDefined(initialView) ? initialView : PdfInitialView.SinglePage,
-            Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal);
+            Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal,
+            bitmapTextWhenFontsMayNotBeEmbedded);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
         _bookmarkModeBox.SelectedIndex switch

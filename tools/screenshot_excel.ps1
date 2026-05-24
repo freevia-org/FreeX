@@ -47,7 +47,7 @@ public class Win32e {
 }
 "@
 
-$outDir = "E:\Users\quinn\Documents\Claude\Freexcel\tools\screenshots_excel"
+$outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Get-ChildItem $outDir -Filter "*.png" | Remove-Item -Force
 

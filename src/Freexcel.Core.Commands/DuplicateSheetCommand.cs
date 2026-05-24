@@ -193,8 +193,16 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             XAxisLabelSkip = chart.XAxisLabelSkip,
             XAxisTickMarkSkip = chart.XAxisTickMarkSkip,
             XAxisLabelOffset = chart.XAxisLabelOffset,
+            XAxisNoMultiLevelLabels = chart.XAxisNoMultiLevelLabels,
+            XAxisLabelAlignment = chart.XAxisLabelAlignment,
+            XAxisBaseTimeUnit = chart.XAxisBaseTimeUnit,
+            XAxisMajorTimeUnit = chart.XAxisMajorTimeUnit,
+            XAxisMinorTimeUnit = chart.XAxisMinorTimeUnit,
             XAxisLineColor = chart.XAxisLineColor,
             XAxisLineThickness = chart.XAxisLineThickness,
+            XAxisCrosses = chart.XAxisCrosses,
+            XAxisCrossesAt = chart.XAxisCrossesAt,
+            XAxisCrossBetween = chart.XAxisCrossBetween,
             YAxisMinimum = chart.YAxisMinimum,
             YAxisMaximum = chart.YAxisMaximum,
             YAxisMajorUnit = chart.YAxisMajorUnit,
@@ -215,6 +223,9 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             YAxisLabelAngle = chart.YAxisLabelAngle,
             YAxisLineColor = chart.YAxisLineColor,
             YAxisLineThickness = chart.YAxisLineThickness,
+            YAxisCrosses = chart.YAxisCrosses,
+            YAxisCrossesAt = chart.YAxisCrossesAt,
+            YAxisCrossBetween = chart.YAxisCrossBetween,
             DataTable = chart.DataTable is null
                 ? null
                 : new ChartDataTableModel

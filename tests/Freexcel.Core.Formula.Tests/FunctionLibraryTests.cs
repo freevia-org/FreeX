@@ -4413,6 +4413,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Hyperlink_OmittedFriendlyNameSlot_ReturnsLinkLocation()
+    {
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\",)", MakeSheet())
+            .Should().Be(new TextValue("https://example.com"));
+    }
+
+    [Fact]
     public void Hyperlink_PropagatesLinkAndFriendlyNameErrors()
     {
         _eval.Evaluate("=HYPERLINK(NA(),\"Example\")", MakeSheet()).Should().Be(ErrorValue.NA);
@@ -4491,10 +4498,30 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("$1,234.50"));
 
     [Fact]
+    public void Dollar_NegativeNumber_UsesAccountingParentheses()
+    {
+        _eval.Evaluate("=DOLLAR(-1234.5,2)", MakeSheet())
+            .Should().Be(new TextValue("($1,234.50)"));
+    }
+
+    [Fact]
+    public void Dollar_BlankDecimalsSlot_UsesZeroDecimals()
+    {
+        _eval.Evaluate("=DOLLAR(1234.5,)", MakeSheet())
+            .Should().Be(new TextValue("$1,235"));
+    }
+
+    [Fact]
     public void Dollar_NegativeDecimals_RoundsLeftOfDecimal()
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=DOLLAR(1234.567,-1)", sheet).Should().Be(new TextValue("$1,230"));
+    }
+
+    [Fact]
+    public void Dollar_NegativeDecimalsRoundedToZero_FormatsWithoutParentheses()
+    {
+        _eval.Evaluate("=DOLLAR(-1,-1)", MakeSheet()).Should().Be(new TextValue("$0"));
     }
 
     [Fact]
@@ -6179,6 +6206,12 @@ public class FunctionLibraryTests
     [Fact]
     public void Unichar_BasicAscii_ReturnsLetter() =>
         _eval.Evaluate("=UNICHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
+
+    [Fact]
+    public void Unichar_TruncatesFractionalCodePoint()
+    {
+        _eval.Evaluate("=UNICHAR(65.9)", MakeSheet()).Should().Be(new TextValue("A"));
+    }
 
     [Fact]
     public void Unichar_Zero_ReturnsValueError() =>

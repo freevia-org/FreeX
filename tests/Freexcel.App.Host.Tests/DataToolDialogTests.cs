@@ -1138,6 +1138,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialogInvalidInput_RefocusesInvalidCellEntry()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("FocusInvalidInput(error);");
+        source.Should().Contain("private void FocusInvalidInput(string? error)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
@@ -1209,6 +1221,17 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_rangeBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
+    public void CreateTableDialogInvalidRange_RefocusesAndSelectsRangeBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("FocusRangeBox();");
+        source.Should().Contain("private void FocusRangeBox()");
+        source.Should().Contain("_rangeBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_rangeBox);");
     }
 

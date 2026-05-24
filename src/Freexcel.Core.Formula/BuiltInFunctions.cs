@@ -1253,7 +1253,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
 
-        var display = args.Count > 1 ? ToText(args[1]) : ToText(args[0]);
+        var display = args.Count > 1 && args[1] is not BlankValue ? ToText(args[1]) : ToText(args[0]);
         return TextResult(display);
     }
 
@@ -1289,13 +1289,19 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         double n = ToNumber(args[0]);
         int dec = 2;
-        if (args.Count > 1 && args[1] is not BlankValue)
+        if (args.Count > 1 && args[1] is BlankValue)
+        {
+            dec = 0;
+        }
+        else if (args.Count > 1)
         {
             double rawDec = ToNumber(args[1]);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        return TextResult("$" + FormatRoundedNumber(n, dec, useCommas: true));
+        var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
+        var formatted = "$" + numberText;
+        return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
     }
 
     private static string FormatRoundedNumber(double value, int decimals, bool useCommas)
