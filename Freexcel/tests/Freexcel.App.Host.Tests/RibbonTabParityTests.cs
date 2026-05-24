@@ -7,6 +7,28 @@ namespace Freexcel.App.Host.Tests;
 public sealed class RibbonTabParityTests
 {
     [Fact]
+    public void HomeTab_UsesExcelLikeGroupOrderAndFontColorPlacement()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var homeTab = ExtractTabXaml(xaml, "Home", "Insert");
+        var fontGroup = ExtractGroupXaml(homeTab, "Font");
+
+        ExtractGroupLabels(homeTab).Should().Equal(
+            "Clipboard",
+            "Font",
+            "Alignment",
+            "Number",
+            "Styles",
+            "Cells",
+            "Editing");
+
+        ExtractTooltipTitles(fontGroup).Should().ContainInOrder(
+            "Borders",
+            "Fill Color",
+            "Font Color");
+    }
+
+    [Fact]
     public void InsertTab_UsesExcelLikeGroupOrderAndCommandPlacement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
