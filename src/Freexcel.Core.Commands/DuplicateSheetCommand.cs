@@ -146,6 +146,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             Title = chart.Title,
             XAxisTitle = chart.XAxisTitle,
             YAxisTitle = chart.YAxisTitle,
+            HideXAxis = chart.HideXAxis,
+            HideYAxis = chart.HideYAxis,
             ChartTitleTextColor = chart.ChartTitleTextColor,
             ChartTitleTextThemeColor = chart.ChartTitleTextThemeColor,
             ChartTitleFontSize = chart.ChartTitleFontSize,
