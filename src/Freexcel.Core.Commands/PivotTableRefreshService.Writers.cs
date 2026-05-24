@@ -422,6 +422,12 @@ public static partial class PivotTableRefreshService
             }
             previousRowKey = rowGroup.Key;
             outputRow++;
+            if (pivotTable.BlankLineAfterItems &&
+                rowFields.Count > 1 &&
+                IsEndOfOuterItem(rowGroups, rowGroup, rowFields.Count))
+            {
+                outputRow++;
+            }
         }
 
         if (pivotTable.ShowColumnGrandTotals)
