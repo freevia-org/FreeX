@@ -734,6 +734,14 @@ public partial class MainWindow
 
     private static void SetRibbonButtonCompact(ButtonBase button, RibbonCompactLevel level)
     {
+        if (button is CheckBox or RadioButton)
+        {
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+            if (button.Content is FrameworkElement content)
+                content.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            return;
+        }
+
         foreach (var textBlock in EnumerateVisualDescendants(button).OfType<TextBlock>())
         {
             if (IsRibbonButtonLabel(textBlock))
