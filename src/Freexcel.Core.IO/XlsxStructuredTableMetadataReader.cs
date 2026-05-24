@@ -117,6 +117,12 @@ internal static class XlsxStructuredTableMetadataReader
             rangeReference,
             autoFilter is not null,
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "totalsRowShown"),
+            XlsxXmlAttributeReader.ReadIntAttribute(root, "headerRowCount"),
+            XlsxXmlAttributeReader.ReadIntAttribute(root, "totalsRowCount"),
+            ReadOptionalBoolAttribute(root, "insertRow"),
+            ReadOptionalBoolAttribute(root, "insertRowShift"),
+            ReadOptionalBoolAttribute(root, "published"),
+            root.Attribute("comment")?.Value,
             style?.Attribute("name")?.Value,
             XlsxXmlAttributeReader.ReadBoolAttribute(style, "showFirstColumn"),
             XlsxXmlAttributeReader.ReadBoolAttribute(style, "showLastColumn"),
@@ -273,11 +279,35 @@ internal static class XlsxStructuredTableMetadataReader
 
     private static Dictionary<string, string>? ReadNativeTableAttributes(XElement table)
     {
-        string[] modeledAttributes = ["id", "name", "displayName", "ref", "totalsRowShown"];
+        string[] modeledAttributes =
+        [
+            "id",
+            "name",
+            "displayName",
+            "ref",
+            "totalsRowShown",
+            "headerRowCount",
+            "totalsRowCount",
+            "insertRow",
+            "insertRowShift",
+            "published",
+            "comment"
+        ];
         var attributes = table.Attributes()
             .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
             .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
         return attributes.Count == 0 ? null : attributes;
+    }
+
+    private static bool? ReadOptionalBoolAttribute(XElement element, string name)
+    {
+        var value = element.Attribute(name)?.Value;
+        return value switch
+        {
+            "1" or "true" => true,
+            "0" or "false" => false,
+            _ => null
+        };
     }
 
     private static List<string>? ReadNativeTableChildXmls(XElement table, XNamespace workbookNs)
@@ -377,6 +407,12 @@ internal sealed record PendingStructuredTableModel(
     string RangeReference,
     bool HasAutoFilter,
     bool TotalsRowShown,
+    int? HeaderRowCount,
+    int? TotalsRowCount,
+    bool? InsertRow,
+    bool? InsertRowShift,
+    bool? Published,
+    string? Comment,
     string? StyleName,
     bool ShowFirstColumn,
     bool ShowLastColumn,
@@ -400,6 +436,12 @@ internal sealed record PendingStructuredTableModel(
         "",
         false,
         false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
         null,
         false,
         false,

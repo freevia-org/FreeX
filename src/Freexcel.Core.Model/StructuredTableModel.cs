@@ -9,6 +9,12 @@ public sealed class StructuredTableModel
     public GridRange Range { get; init; }
     public bool HasAutoFilter { get; init; }
     public bool TotalsRowShown { get; init; }
+    public int? HeaderRowCount { get; init; }
+    public int? TotalsRowCount { get; init; }
+    public bool? InsertRow { get; init; }
+    public bool? InsertRowShift { get; init; }
+    public bool? Published { get; init; }
+    public string? Comment { get; init; }
     public string? StyleName { get; init; }
     public bool ShowFirstColumn { get; init; }
     public bool ShowLastColumn { get; init; }
