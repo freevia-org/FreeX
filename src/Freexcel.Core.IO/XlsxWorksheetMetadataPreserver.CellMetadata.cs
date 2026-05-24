@@ -155,33 +155,25 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return changed;
     }
 
-    private static bool MergeWorksheetCellAttributes(XElement? sourceSheetData, XElement targetRoot, XNamespace workbookNs)
-    {
-        var sourceCells = sourceSheetData?
-            .Descendants(workbookNs + "c")
-            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
-            .ToList();
-        if (sourceCells is null || sourceCells.Count == 0)
-            return false;
-
-        return MergeWorksheetCellAttributes(
-            sourceCells,
-            BuildCellLookup(targetRoot.Element(workbookNs + "sheetData"), workbookNs),
-            workbookNs);
-    }
-
     private static bool MergeWorksheetCellAttributes(
-        IReadOnlyList<XElement>? sourceCells,
-        IReadOnlyDictionary<string, XElement> targetCellsByAddress,
+        XElement? sourceSheetData,
+        Func<IReadOnlyDictionary<string, XElement>> getTargetCellsByAddress,
         XNamespace workbookNs)
     {
-        if (sourceCells is null || sourceCells.Count == 0 || targetCellsByAddress.Count == 0)
+        if (sourceSheetData is null)
             return false;
 
         var changed = false;
-        foreach (var sourceCell in sourceCells)
+        IReadOnlyDictionary<string, XElement>? targetCellsByAddress = null;
+        foreach (var sourceCell in sourceSheetData
+                     .Descendants(workbookNs + "c")
+                     .Where(cell => HasCellAddress(cell) && HasPreservableCellNativeMetadata(cell, workbookNs)))
         {
             var address = sourceCell.Attribute("r")?.Value;
+            targetCellsByAddress ??= getTargetCellsByAddress();
+            if (targetCellsByAddress.Count == 0)
+                return false;
+
             if (!targetCellsByAddress.TryGetValue(address!, out var targetCell))
             {
                 continue;
@@ -217,54 +209,36 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
     private static bool MergeWorksheetInlineStringMetadata(
         XElement? sourceSheetData,
-        XElement targetRoot,
+        Func<IReadOnlyDictionary<string, XElement>> getTargetCellsByAddress,
         ZipArchive targetArchive,
         XNamespace workbookNs)
     {
-        var sourceCells = sourceSheetData?
-            .Descendants(workbookNs + "c")
-            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
-            .ToList();
-        if (sourceCells is null || sourceCells.Count == 0)
+        if (sourceSheetData is null)
             return false;
-
-        return MergeWorksheetInlineStringMetadata(
-            sourceCells,
-            BuildCellLookup(targetRoot.Element(workbookNs + "sheetData"), workbookNs),
-            targetArchive,
-            workbookNs);
-    }
-
-    private static bool MergeWorksheetInlineStringMetadata(
-        IReadOnlyList<XElement>? sourceCells,
-        IReadOnlyDictionary<string, XElement> targetCellsByAddress,
-        ZipArchive targetArchive,
-        XNamespace workbookNs)
-    {
-        if (sourceCells is null || sourceCells.Count == 0 || targetCellsByAddress.Count == 0)
-            return false;
-
-        var sourceInlineStrings = sourceCells
-            .Where(cell =>
-                string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.OrdinalIgnoreCase) &&
-                cell.Element(workbookNs + "is") is { } inlineString &&
-                HasRichInlineStringMetadata(inlineString, workbookNs))
-            .ToList();
-        if (sourceInlineStrings.Count == 0)
-            return false;
-
-        var targetSharedStrings = LoadSharedStringPlainText(targetArchive, workbookNs);
 
         var changed = false;
-        foreach (var sourceCell in sourceInlineStrings)
+        IReadOnlyDictionary<string, XElement>? targetCellsByAddress = null;
+        IReadOnlyList<string>? targetSharedStrings = null;
+        foreach (var sourceCell in sourceSheetData
+                     .Descendants(workbookNs + "c")
+                     .Where(cell =>
+                         HasCellAddress(cell) &&
+                         string.Equals(cell.Attribute("t")?.Value, "inlineStr", StringComparison.OrdinalIgnoreCase) &&
+                         cell.Element(workbookNs + "is") is { } inlineString &&
+                         HasRichInlineStringMetadata(inlineString, workbookNs)))
         {
             var address = sourceCell.Attribute("r")!.Value;
+            targetCellsByAddress ??= getTargetCellsByAddress();
+            if (targetCellsByAddress.Count == 0)
+                return false;
+
             if (!targetCellsByAddress.TryGetValue(address, out var targetCell) ||
                 targetCell.Element(workbookNs + "f") is not null)
             {
                 continue;
             }
 
+            targetSharedStrings ??= LoadSharedStringPlainText(targetArchive, workbookNs);
             var sourceInlineString = sourceCell.Element(workbookNs + "is")!;
             var sourcePlainText = ReadInlineStringPlainText(sourceInlineString, workbookNs);
             if (string.IsNullOrEmpty(sourcePlainText) ||
@@ -285,41 +259,23 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
     private static bool MergeWorksheetFormulaMetadata(
         XElement? sourceSheetData,
-        XElement targetRoot,
+        Func<IReadOnlyDictionary<string, XElement>> getTargetCellsByAddress,
         XNamespace workbookNs)
     {
-        var sourceCells = sourceSheetData?
-            .Descendants(workbookNs + "c")
-            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
-            .ToList();
-        if (sourceCells is null || sourceCells.Count == 0)
-            return false;
-
-        return MergeWorksheetFormulaMetadata(
-            sourceCells,
-            BuildCellLookup(targetRoot.Element(workbookNs + "sheetData"), workbookNs),
-            workbookNs);
-    }
-
-    private static bool MergeWorksheetFormulaMetadata(
-        IReadOnlyList<XElement>? sourceCells,
-        IReadOnlyDictionary<string, XElement> targetCellsByAddress,
-        XNamespace workbookNs)
-    {
-        if (sourceCells is null || sourceCells.Count == 0 || targetCellsByAddress.Count == 0)
-            return false;
-
-        var sourceFormulaCells = sourceCells
-            .Where(cell =>
-                cell.Element(workbookNs + "f")?.HasAttributes == true)
-            .ToList();
-        if (sourceFormulaCells.Count == 0)
+        if (sourceSheetData is null)
             return false;
 
         var changed = false;
-        foreach (var sourceCell in sourceFormulaCells)
+        IReadOnlyDictionary<string, XElement>? targetCellsByAddress = null;
+        foreach (var sourceCell in sourceSheetData
+                     .Descendants(workbookNs + "c")
+                     .Where(cell => HasCellAddress(cell) && cell.Element(workbookNs + "f")?.HasAttributes == true))
         {
             var address = sourceCell.Attribute("r")!.Value;
+            targetCellsByAddress ??= getTargetCellsByAddress();
+            if (targetCellsByAddress.Count == 0)
+                return false;
+
             if (!targetCellsByAddress.TryGetValue(address, out var targetCell))
                 continue;
 
@@ -350,6 +306,24 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         return changed;
     }
+
+    private static bool HasCellAddress(XElement cell) =>
+        !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value);
+
+    private static bool HasPreservableCellNativeMetadata(XElement cell, XNamespace workbookNs) =>
+        cell.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration && !IsModeledCellAttribute(attribute)) ||
+        cell.Element(workbookNs + "extLst") is not null ||
+        cell.Elements().Any(child =>
+            child.Name != workbookNs + "f" &&
+            child.Name != workbookNs + "v" &&
+            child.Name != workbookNs + "is" &&
+            child.Name != workbookNs + "extLst");
+
+    private static bool IsModeledCellAttribute(XAttribute attribute) =>
+        attribute.Name.NamespaceName.Length == 0 &&
+        (attribute.Name.LocalName == "r" ||
+         attribute.Name.LocalName == "s" ||
+         attribute.Name.LocalName == "t");
 
     private static Dictionary<string, XElement> BuildCellLookup(XElement? sheetData, XNamespace workbookNs)
     {

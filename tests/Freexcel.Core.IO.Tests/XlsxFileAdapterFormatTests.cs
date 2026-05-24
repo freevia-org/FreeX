@@ -14,6 +14,8 @@ public sealed class XlsxFileAdapterFormatTests
         var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
         var diagnosticsSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetDiagnosticsMapper.cs"));
         var sanitizerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlLoadPackageSanitizer.cs"));
+        var worksheetMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
+            .ReplaceLineEndings("\n");
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
@@ -25,6 +27,7 @@ public sealed class XlsxFileAdapterFormatTests
         adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream)");
         sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");
         sanitizerSource.Should().Contain("return sourcePackage;");
+        worksheetMetadataSource.Should().NotContain(".Descendants(workbookNs + \"c\")\n                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute(\"r\")?.Value))\n                .ToList();");
     }
 
     [Fact]
