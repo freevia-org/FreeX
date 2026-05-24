@@ -45,6 +45,15 @@ internal sealed record XlsxShapePackagePart(
     WorkbookThemeColorReference? OutlineThemeColor,
     bool HasShadowEffect);
 
+internal sealed record XlsxWorksheetDrawingPackageParts(
+    IReadOnlyList<XlsxChartPackagePart> ChartParts,
+    IReadOnlyList<XlsxPicturePackagePart> PictureParts,
+    IReadOnlyList<XlsxTextBoxPackagePart> TextBoxParts,
+    IReadOnlyList<XlsxShapePackagePart> ShapeParts)
+{
+    public static XlsxWorksheetDrawingPackageParts Empty { get; } = new([], [], [], []);
+}
+
 internal sealed record XlsxDrawingAnchor(
     ChartDrawingAnchorKind Kind,
     uint FromRowZeroBased,
@@ -205,6 +214,208 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return (textBoxes, shapes);
 
         foreach (var shapeElement in drawingContext.Value.DrawingXml.Descendants(spreadsheetDrawingNs + "sp"))
+        {
+            var name = ReadNonVisualName(shapeElement);
+            var title = ReadNonVisualTitle(shapeElement);
+            var altText = ReadNonVisualDescription(shapeElement);
+            var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
+            var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
+            var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
+            var solidFill = spPr?.Element(drawingNs + "solidFill");
+            var outlineFill = spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill");
+            var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
+            var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
+            var fillThemeColor = solidFill is not null &&
+                                 XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, drawingNs, out var readFillThemeColor)
+                ? readFillThemeColor
+                : (WorkbookThemeColorReference?)null;
+            var outlineThemeColor = outlineFill is not null &&
+                                    XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
+                ? readOutlineThemeColor
+                : (WorkbookThemeColorReference?)null;
+            var hasShadowEffect = spPr?
+                .Element(drawingNs + "effectLst")?
+                .Element(drawingNs + "outerShdw") is not null;
+            var text = string.Concat(shapeElement
+                .Element(spreadsheetDrawingNs + "txBody")?
+                .Descendants(drawingNs + "t")
+                .Select(t => t.Value) ?? []);
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                textBoxes.Add(new XlsxTextBoxPackagePart(
+                    text,
+                    name,
+                    title,
+                    altText,
+                    ReadNearestAnchor(shapeElement),
+                    rotation,
+                    fillThemeColor is null ? fillColor : null,
+                    outlineThemeColor is null ? outlineColor : null,
+                    fillThemeColor,
+                    outlineThemeColor));
+                continue;
+            }
+
+            var preset = spPr?
+                .Element(drawingNs + "prstGeom")?
+                .Attribute("prst")?
+                .Value;
+            if (ToDrawingShapeKind(preset) is { } kind)
+                shapes.Add(new XlsxShapePackagePart(
+                    kind,
+                    name,
+                    title,
+                    altText,
+                    ReadNearestAnchor(shapeElement),
+                    rotation,
+                    fillThemeColor is null ? fillColor : null,
+                    outlineThemeColor is null ? outlineColor : null,
+                    gradientFill.EndColor,
+                    fillThemeColor,
+                    outlineThemeColor,
+                    hasShadowEffect));
+        }
+
+        return (textBoxes, shapes);
+    }
+
+    public static XlsxWorksheetDrawingPackageParts ReadParts(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml)
+    {
+        var drawingContext = ReadDrawingContext(archive, worksheetPath, worksheetXml);
+        if (drawingContext is null)
+            return XlsxWorksheetDrawingPackageParts.Empty;
+
+        var (drawingPath, drawingXml) = drawingContext.Value;
+        var drawingRelsXml = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(drawingPath)) is { } drawingRelsEntry
+            ? XlsxPackageXmlEditor.LoadXml(drawingRelsEntry)
+            : null;
+
+        var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml);
+        var pictures = ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXml);
+        var (textBoxes, shapes) = ReadShapeParts(drawingXml);
+        return new XlsxWorksheetDrawingPackageParts(charts, pictures, textBoxes, shapes);
+    }
+
+    private static IReadOnlyList<XlsxChartPackagePart> ReadChartParts(
+        ZipArchive archive,
+        string drawingPath,
+        XDocument drawingXml,
+        XDocument? drawingRelsXml)
+    {
+        var charts = new List<XlsxChartPackagePart>();
+        if (drawingRelsXml?.Root is null)
+            return charts;
+
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        foreach (var chartElement in drawingXml.Descendants(chartNs + "chart"))
+        {
+            var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(chartRelId))
+                continue;
+
+            var chartTarget = drawingRelsXml.Root
+                .Elements(packageRelNs + "Relationship")
+                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, chartRelId, StringComparison.Ordinal))?
+                .Attribute("Target")?
+                .Value;
+            if (string.IsNullOrWhiteSpace(chartTarget))
+                continue;
+
+            var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
+            var chartEntry = archive.GetEntry(chartPath);
+            if (chartEntry is null)
+                continue;
+            var chartRelationships = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(chartPath)) is { } chartRelsEntry
+                ? XlsxPackageXmlEditor.LoadXml(chartRelsEntry)
+                : null;
+
+            charts.Add(new XlsxChartPackagePart(
+                XlsxPackageXmlEditor.LoadXml(chartEntry),
+                chartRelationships,
+                ReadNonVisualName(chartElement),
+                ReadNearestAnchor(chartElement)));
+        }
+
+        return charts;
+    }
+
+    private static IReadOnlyList<XlsxPicturePackagePart> ReadPictureParts(
+        ZipArchive archive,
+        string drawingPath,
+        XDocument drawingXml,
+        XDocument? drawingRelsXml)
+    {
+        var pictures = new List<XlsxPicturePackagePart>();
+        if (drawingRelsXml?.Root is null)
+            return pictures;
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+        foreach (var pictureElement in drawingXml.Descendants(spreadsheetDrawingNs + "pic"))
+        {
+            var imageRelId = pictureElement
+                .Descendants(drawingNs + "blip")
+                .Select(element => element.Attribute(relNs + "embed")?.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            if (string.IsNullOrWhiteSpace(imageRelId))
+                continue;
+
+            var imageTarget = drawingRelsXml.Root
+                .Elements(packageRelNs + "Relationship")
+                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, imageRelId, StringComparison.Ordinal))?
+                .Attribute("Target")?
+                .Value;
+            if (string.IsNullOrWhiteSpace(imageTarget))
+                continue;
+
+            var imagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, imageTarget);
+            var imageEntry = archive.GetEntry(imagePath);
+            if (imageEntry is null)
+                continue;
+
+            using var imageStream = imageEntry.Open();
+            using var ms = new MemoryStream();
+            imageStream.CopyTo(ms);
+
+            var sourceRectangle = pictureElement
+                .Element(spreadsheetDrawingNs + "blipFill")?
+                .Element(drawingNs + "srcRect");
+
+            pictures.Add(new XlsxPicturePackagePart(
+                ms.ToArray(),
+                XlsxPackagePath.GetImageContentType(imagePath),
+                ReadNonVisualName(pictureElement),
+                ReadNonVisualTitle(pictureElement),
+                ReadNonVisualDescription(pictureElement),
+                ReadNearestAnchor(pictureElement),
+                ReadSourceRectangleRatio(sourceRectangle, "l"),
+                ReadSourceRectangleRatio(sourceRectangle, "t"),
+                ReadSourceRectangleRatio(sourceRectangle, "r"),
+                ReadSourceRectangleRatio(sourceRectangle, "b")));
+        }
+
+        return pictures;
+    }
+
+    private static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadShapeParts(
+        XDocument drawingXml)
+    {
+        var textBoxes = new List<XlsxTextBoxPackagePart>();
+        var shapes = new List<XlsxShapePackagePart>();
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+        foreach (var shapeElement in drawingXml.Descendants(spreadsheetDrawingNs + "sp"))
         {
             var name = ReadNonVisualName(shapeElement);
             var title = ReadNonVisualTitle(shapeElement);

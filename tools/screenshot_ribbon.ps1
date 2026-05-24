@@ -81,8 +81,12 @@ $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
 
 function Screenshot-Tab($tabName) {
-    $tabCond = New-Object System.Windows.Automation.PropertyCondition(
-                   [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
+    $nameCond = New-Object System.Windows.Automation.PropertyCondition(
+                    [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
+    $tabItemCond = New-Object System.Windows.Automation.PropertyCondition(
+                       [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                       [System.Windows.Automation.ControlType]::TabItem)
+    $tabCond = New-Object System.Windows.Automation.AndCondition($nameCond, $tabItemCond)
     $tabEl   = $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
     if ($tabEl -eq $null) { Write-Warning "Tab '$tabName' not found"; return }
 
