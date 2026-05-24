@@ -313,15 +313,39 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue startError) return startError;
         if (args[2] is ErrorValue lengthError) return lengthError;
-        var text    = ToText(args[0]);
         double rawStart = ToNumber(args[1]);
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
         if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        if (args[0] is RangeValue range) return MapMidRange(range, (int)rawStart, (int)rawLen);
+        var text    = ToText(args[0]);
         if (ContainsSurrogatePair(text))
             return MidTextWithSurrogatePairs(text, (int)rawStart, (int)rawLen);
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
+        if (start >= text.Length) return new TextValue("");
+        int actualLen = Math.Min(numChars, text.Length - start);
+        return TextResult(text.Substring(start, actualLen));
+    }
+
+    private static RangeValue MapMidRange(RangeValue range, int startNum, int numChars)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : MidText(ToText(value), startNum, numChars);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue MidText(string text, int startNum, int numChars)
+    {
+        if (ContainsSurrogatePair(text))
+            return MidTextWithSurrogatePairs(text, startNum, numChars);
+        int start = startNum - 1;
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
         return TextResult(text.Substring(start, actualLen));

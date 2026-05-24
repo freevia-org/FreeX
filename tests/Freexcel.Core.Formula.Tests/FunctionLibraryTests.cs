@@ -1280,6 +1280,22 @@ public class FunctionLibraryTests
         _eval.Evaluate("=MID(\"hello\",3,100)", sheet).Should().Be(new TextValue("llo"));
     }
 
+    [Fact]
+    public void Mid_RangeTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=MID(A1:A2,2,2)", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new TextValue("pp"));
+        range.At(2, 1).Should().Be(new TextValue("an"));
+    }
+
     // ── REPT ──────────────────────────────────────────────────────────────────
 
     [Fact]
