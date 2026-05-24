@@ -1,6 +1,12 @@
 namespace Freexcel.Core.Model;
 
-public sealed record ThreadedComment(string Text, string Author = "Freexcel");
+public sealed record CommentReply(string Text, string Author = "Freexcel");
+
+public sealed record ThreadedComment(string Text, string Author = "Freexcel")
+{
+    public IReadOnlyList<CommentReply> Replies { get; init; } = [];
+    public bool IsResolved { get; init; } = false;
+}
 
 public enum HyperlinkTargetKind
 {
