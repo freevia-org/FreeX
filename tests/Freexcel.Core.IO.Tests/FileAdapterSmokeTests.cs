@@ -8199,6 +8199,62 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesEmbeddedChartLegendEntryDeletePackagePart()
+    {
+        var workbook = new Workbook("ChartLegendEntryDeletePackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$2</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$2</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+                <c:legend>
+                  <c:legendPos val="r"/>
+                  <c:legendEntry>
+                    <c:idx val="0"/>
+                    <c:delete val="1"/>
+                  </c:legendEntry>
+                  <c:overlay val="0"/>
+                </c:legend>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.LegendEntries.Should().ContainSingle().Which.Should().Be(new ChartLegendEntryModel(0, true));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var legendEntry = chartXml.Descendants(chartNs + "legendEntry").Should().ContainSingle().Subject;
+        legendEntry.Element(chartNs + "idx")!.Attribute("val")!.Value.Should().Be("0");
+        legendEntry.Element(chartNs + "delete")!.Attribute("val")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartDataLabelPackagePart()
     {
         var workbook = new Workbook("ChartDataLabelPackageSave");

@@ -262,6 +262,7 @@ public sealed partial class SetChartLayoutCommand
         chart.LegendBorderThemeColor = snapshot.LegendBorderThemeColor;
         chart.LegendBorderThickness = snapshot.LegendBorderThickness ?? 0;
         chart.LegendFontSize = snapshot.LegendFontSize ?? 12;
+        chart.LegendEntries = snapshot.LegendEntries?.ToList() ?? [];
         chart.DoughnutHoleSize = snapshot.DoughnutHoleSize ?? 0.55;
         chart.FirstSliceAngle = snapshot.FirstSliceAngle ?? 0;
         chart.ExplodedSliceIndex = snapshot.ExplodedSliceIndex ?? -1;
