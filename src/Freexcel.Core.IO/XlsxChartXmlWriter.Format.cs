@@ -251,7 +251,23 @@ internal static partial class XlsxChartXmlWriter
                     ? new XAttribute(XNamespace.Xml + "space", "preserve")
                     : null,
                 ToXlsxDataLabelSeparator(chart.DataLabelSeparator)),
-            new XElement(chartNs + "showLeaderLines", new XAttribute("val", chart.ShowDataLabelCallouts ? "1" : "0")));
+            new XElement(chartNs + "showLeaderLines", new XAttribute("val", chart.ShowDataLabelCallouts ? "1" : "0")),
+            ToDataLabelLeaderLinesXml(chart, chartNs, drawingNs));
+    }
+
+    private static XElement? ToDataLabelLeaderLinesXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        var shapeProperties = ToChartGuideLineShapeProperties(
+            chart.DataLabelLeaderLineThemeColor,
+            chart.DataLabelLeaderLineColor,
+            chart.DataLabelLeaderLineThickness,
+            chart.DataLabelLeaderLineDashStyle,
+            chartNs,
+            drawingNs);
+
+        return shapeProperties is null
+            ? null
+            : new XElement(chartNs + "leaderLines", shapeProperties);
     }
 
     private static XElement? ToDataLabelTextProperties(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
