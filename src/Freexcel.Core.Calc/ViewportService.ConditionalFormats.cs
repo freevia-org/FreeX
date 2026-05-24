@@ -16,6 +16,34 @@ public sealed partial class ViewportService
         IReadOnlySet<CellAddress>? TopBottomMatches = null,
         IReadOnlyDictionary<string, int>? ValueCounts = null);
 
+    private sealed record CfEvaluationContext(
+        IReadOnlyList<ConditionalFormat> RulesByPriority,
+        IReadOnlyList<ConditionalFormat> IconRulesByPriority,
+        Dictionary<ConditionalFormat, CfAggregateCache> Aggregates);
+
+    private static CfEvaluationContext BuildConditionalFormatContext(Sheet sheet)
+    {
+        if (sheet.ConditionalFormats.Count == 0)
+        {
+            return new CfEvaluationContext(
+                [],
+                [],
+                new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance));
+        }
+
+        var rulesByPriority = sheet.ConditionalFormats
+            .OrderBy(cf => cf.Priority)
+            .ToArray();
+        var iconRulesByPriority = rulesByPriority
+            .Where(cf => cf.RuleType == CfRuleType.IconSet)
+            .ToArray();
+
+        return new CfEvaluationContext(
+            rulesByPriority,
+            iconRulesByPriority,
+            PrecomputeCfAggregates(sheet));
+    }
+
     /// <summary>
     /// Scans every AboveAverage and ColorScale CF rule once and stores the
     /// aggregate statistics (average, min, max) keyed by rule identity.
@@ -107,31 +135,30 @@ public sealed partial class ViewportService
 
     private static CellStyle? EvaluateConditionalFormats(
         Sheet sheet, CellAddress addr, ScalarValue value, Workbook workbook,
-        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
+        CfEvaluationContext cfContext)
     {
-        if (sheet.ConditionalFormats.Count == 0)
+        if (cfContext.RulesByPriority.Count == 0)
             return null;
 
-        var rules = sheet.ConditionalFormats
-            .Where(cf => cf.AppliesTo.Contains(addr))
-            .OrderBy(cf => cf.Priority);
-
-        foreach (var cf in rules)
+        foreach (var cf in cfContext.RulesByPriority)
         {
+            if (!cf.AppliesTo.Contains(addr))
+                continue;
+
             // ColorScale and DataBar always apply when in range — return immediately.
             if (cf.RuleType == CfRuleType.ColorScale)
-                return ComputeColorScaleStyle(cf, addr, value, cfCache);
+                return ComputeColorScaleStyle(cf, addr, value, cfContext.Aggregates);
             if (cf.RuleType == CfRuleType.DataBar)
                 return new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
 
             bool conditionMet = cf.RuleType switch
             {
                 CfRuleType.CellValue    => MatchesCellValue(cf, value),
-                CfRuleType.AboveAverage => MatchesAboveAverage(cf, addr, value, cfCache),
+                CfRuleType.AboveAverage => MatchesAboveAverage(cf, addr, value, cfContext.Aggregates),
                 CfRuleType.Formula      => MatchesFormula(cf, sheet, addr, workbook),
-                CfRuleType.Top10        => MatchesTopBottom(cf, addr, cfCache),
-                CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfCache, duplicate: true),
-                CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfCache, duplicate: false),
+                CfRuleType.Top10        => MatchesTopBottom(cf, addr, cfContext.Aggregates),
+                CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: true),
+                CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: false),
                 CfRuleType.ContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.Contains),
                 CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
                 CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
@@ -158,22 +185,25 @@ public sealed partial class ViewportService
         Sheet sheet,
         CellAddress addr,
         ScalarValue value,
-        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
+        CfEvaluationContext cfContext)
     {
-        var rule = sheet.ConditionalFormats
-            .Where(cf => cf.RuleType == CfRuleType.IconSet && cf.AppliesTo.Contains(addr))
-            .OrderBy(cf => cf.Priority)
-            .FirstOrDefault();
-        if (rule is null || !TryGetDouble(value, out var cellValue) || !cfCache.TryGetValue(rule, out var cache))
-            return null;
+        foreach (var rule in cfContext.IconRulesByPriority)
+        {
+            if (!rule.AppliesTo.Contains(addr))
+                continue;
+            if (!TryGetDouble(value, out var cellValue) || !cfContext.Aggregates.TryGetValue(rule, out var cache))
+                return null;
 
-        var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
-        var iconCount = GetIconSetCount(style);
-        var iconIndex = ResolveIconSetIndex(rule, cellValue, cache.Min, cache.Max, iconCount);
-        if (rule.IconSetReverse)
-            iconIndex = iconCount - 1 - iconIndex;
+            var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
+            var iconCount = GetIconSetCount(style);
+            var iconIndex = ResolveIconSetIndex(rule, cellValue, cache.Min, cache.Max, iconCount);
+            if (rule.IconSetReverse)
+                iconIndex = iconCount - 1 - iconIndex;
 
-        return new ConditionalFormatIcon(style, iconIndex, iconCount, rule.IconSetShowValue);
+            return new ConditionalFormatIcon(style, iconIndex, iconCount, rule.IconSetShowValue);
+        }
+
+        return null;
     }
 
     private static int ResolveIconSetIndex(ConditionalFormat rule, double value, double min, double max, int iconCount)
