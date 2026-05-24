@@ -279,6 +279,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             ShowDataLabelPercentage = chart.ShowDataLabelPercentage,
             DataLabelSeparator = chart.DataLabelSeparator,
             DataLabelNumberFormat = chart.DataLabelNumberFormat,
+            DataLabelNumberFormatCode = chart.DataLabelNumberFormatCode,
+            DataLabelNumberFormatSourceLinked = chart.DataLabelNumberFormatSourceLinked,
             ShowDataLabelCallouts = chart.ShowDataLabelCallouts,
             DataLabelFillColor = chart.DataLabelFillColor,
             DataLabelFillThemeColor = chart.DataLabelFillThemeColor,

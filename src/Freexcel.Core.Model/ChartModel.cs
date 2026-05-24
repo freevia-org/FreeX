@@ -391,6 +391,8 @@ public sealed class ChartModel
     public bool ShowDataLabelPercentage { get; set; }
     public ChartDataLabelSeparator DataLabelSeparator { get; set; } = ChartDataLabelSeparator.Comma;
     public ChartDataLabelNumberFormat DataLabelNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? DataLabelNumberFormatCode { get; set; }
+    public bool? DataLabelNumberFormatSourceLinked { get; set; }
     public bool ShowDataLabelCallouts { get; set; }
     public CellColor? DataLabelFillColor { get; set; }
     public WorkbookThemeColorReference? DataLabelFillThemeColor { get; set; }
