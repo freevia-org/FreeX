@@ -4,6 +4,20 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
+    private static WorksheetAutoFilterModel? ToWorksheetAutoFilter(WorksheetAutoFilterDto? dto) =>
+        dto is null || (string.IsNullOrWhiteSpace(dto.Reference) && string.IsNullOrWhiteSpace(dto.NativeXml))
+            ? null
+            : new WorksheetAutoFilterModel(dto.Reference, dto.NativeXml);
+
+    private static WorksheetAutoFilterDto? ToWorksheetAutoFilterDto(WorksheetAutoFilterModel? autoFilter) =>
+        autoFilter is null
+            ? null
+            : new WorksheetAutoFilterDto
+            {
+                Reference = autoFilter.Reference,
+                NativeXml = autoFilter.NativeXml
+            };
+
     private static WorksheetCustomViewState ToWorksheetCustomViewState(CustomViewSheetDto sheetDto)
     {
         var frozenRows = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(sheetDto.FrozenRows);

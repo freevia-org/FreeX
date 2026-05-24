@@ -43,6 +43,7 @@ public sealed partial class XlsxFileAdapter
         sheet.EvenPageHeaderPictures = layout.HeaderFooterPictures.EvenPageHeader;
         sheet.EvenPageFooterPictures = layout.HeaderFooterPictures.EvenPageFooter;
         sheet.CodeName = layout.CodeName;
+        sheet.AutoFilter = layout.AutoFilter;
         sheet.UsePrinterDefaults = layout.UsePrinterDefaults;
         sheet.PrintCopies = layout.PrintCopies;
         sheet.FitToPage = layout.FitToPage;
