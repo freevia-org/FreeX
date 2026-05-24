@@ -243,6 +243,7 @@ internal static class XlsxChartAxisReader
         chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisNoMultiLevelLabels = ReadBool(axisElement.Element(ChartNs + "noMultiLvlLbl")?.Attribute("val")?.Value);
+        chart.XAxisLabelAlignment = FromXlsxAxisLabelAlignment(axisElement.Element(ChartNs + "lblAlgn")?.Attribute("val")?.Value);
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
     }
 
@@ -373,6 +374,14 @@ internal static class XlsxChartAxisReader
             "between" => ChartAxisCrossBetween.Between,
             "midCat" => ChartAxisCrossBetween.MidCategory,
             _ => null
+        };
+
+    private static ChartAxisLabelAlignment FromXlsxAxisLabelAlignment(string? value) =>
+        value switch
+        {
+            "l" => ChartAxisLabelAlignment.Left,
+            "r" => ChartAxisLabelAlignment.Right,
+            _ => ChartAxisLabelAlignment.Center
         };
 
     private readonly record struct AxisLineProperties(CellColor? Color, double? Thickness);

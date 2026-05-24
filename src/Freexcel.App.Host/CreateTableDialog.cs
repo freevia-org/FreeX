@@ -77,7 +77,13 @@ public sealed class CreateTableDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        FocusRangeBox();
+    }
+
+    private void FocusRangeBox()
+    {
         _rangeBox.Focus();
+        _rangeBox.SelectAll();
         Keyboard.Focus(_rangeBox);
     }
 
@@ -86,6 +92,7 @@ public sealed class CreateTableDialog : Window
         if (!TryParse(_sheetId, _rangeBox.Text, _headersBox.IsChecked == true, _tableStyleName, out var result, out var error))
         {
             MessageBox.Show(this, error ?? "Enter a valid table range.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusRangeBox();
             return;
         }
 

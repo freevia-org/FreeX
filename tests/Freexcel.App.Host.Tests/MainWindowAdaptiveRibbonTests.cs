@@ -328,6 +328,26 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupKeyTips_AreUniqueWithinSelectedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 220);
+
+                harness.CollapsedActiveRibbonGroupKeyTips
+                    .GroupBy(pair => pair.KeyTip, StringComparer.OrdinalIgnoreCase)
+                    .Where(group => group.Count() > 1)
+                    .Should()
+                    .BeEmpty($"{tab} collapsed group keytips should remain routable without duplicate generated group badges");
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonScrollViewers_DefaultToHiddenHorizontalScrollBarsInXaml()
     {
         var xaml = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -364,6 +384,14 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
                 .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
+        public IReadOnlyList<CollapsedGroupKeyTip> CollapsedActiveRibbonGroupKeyTips =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Select(button => new CollapsedGroupKeyTip(RibbonTooltip.GetTitle(button) ?? "", RibbonTooltip.GetKeyTip(button) ?? ""))
+                .Where(pair => !string.IsNullOrWhiteSpace(pair.GroupName) && !string.IsNullOrWhiteSpace(pair.KeyTip))
                 .ToList();
 
         public IReadOnlyList<ContextMenu> CollapsedRibbonGroupMenus =>
@@ -720,6 +748,8 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     public sealed record RibbonIconStackOffsets(IReadOnlyList<string> Labels, IReadOnlyList<double> Offsets);
+
+    public sealed record CollapsedGroupKeyTip(string GroupName, string KeyTip);
 
     private static void PumpDispatcher()
     {

@@ -184,9 +184,10 @@ public partial class MainWindow
     private static List<Button> InsertRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
     {
         var buttons = new List<Button>(groups.Count);
+        var keyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in groups)
         {
-            var button = CreateRibbonCollapsedGroupButton(group);
+            var button = CreateRibbonCollapsedGroupButton(group, keyTips);
             var index = panel.Children.IndexOf(group);
             panel.Children.Insert(index + 1, button);
             buttons.Add(button);
@@ -207,7 +208,7 @@ public partial class MainWindow
     private static bool IsRibbonCollapsedGroupButton(FrameworkElement element) =>
         element.Tag is string tag && string.Equals(tag, "RibbonCollapsedGroupButton", StringComparison.Ordinal);
 
-    private static Button CreateRibbonCollapsedGroupButton(FrameworkElement group)
+    private static Button CreateRibbonCollapsedGroupButton(FrameworkElement group, ISet<string>? usedKeyTips = null)
     {
         var groupName = GetRibbonGroupName(group);
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
@@ -260,7 +261,7 @@ public partial class MainWindow
         button.SetResourceReference(StyleProperty, "RibbonTallButton");
         RibbonTooltip.SetTitle(button, groupName);
         RibbonTooltip.SetDescription(button, $"Show the {groupName} commands.");
-        RibbonTooltip.SetKeyTip(button, CreateGroupKeyTip(groupName));
+        RibbonTooltip.SetKeyTip(button, CreateGroupKeyTip(groupName, usedKeyTips));
         button.Click += (_, _) =>
         {
             if (button.ContextMenu is null)
@@ -573,10 +574,34 @@ public partial class MainWindow
         return string.IsNullOrWhiteSpace(label?.Text) ? "Commands" : label.Text.Trim();
     }
 
-    private static string CreateGroupKeyTip(string groupName)
+    private static string CreateGroupKeyTip(string groupName, ISet<string>? usedKeyTips = null)
     {
-        var letters = new string(groupName.Where(char.IsLetterOrDigit).Take(2).ToArray());
-        return string.IsNullOrWhiteSpace(letters) ? "G" : letters.ToUpperInvariant();
+        var letters = groupName.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray();
+        var candidates = new List<string>();
+        if (letters.Length >= 2)
+        {
+            candidates.Add(new string([letters[0], letters[1]]));
+            for (var i = 2; i < letters.Length; i++)
+                candidates.Add(new string([letters[0], letters[i]]));
+        }
+        else if (letters.Length == 1)
+        {
+            candidates.Add(new string([letters[0]]));
+        }
+
+        candidates.Add("G");
+        for (var index = 1; index <= 9; index++)
+            candidates.Add($"G{index}");
+
+        foreach (var candidate in candidates)
+        {
+            if (usedKeyTips is not null && !usedKeyTips.Add(candidate))
+                continue;
+
+            return candidate;
+        }
+
+        return "G";
     }
 
     private StackPanel? GetActiveRibbonPanel()
