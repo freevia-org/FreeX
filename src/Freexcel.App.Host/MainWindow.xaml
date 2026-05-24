@@ -2845,7 +2845,7 @@
                                             local:RibbonTooltip.Description="Clearing PivotTable fields from the ribbon is deferred in Freexcel."/>
                                     <Button Content="Select" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="Select"
-                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.KeyTip="SE"
                                             local:RibbonTooltip.Description="PivotTable selection shortcuts are deferred in Freexcel."/>
                                     <Button Content="Move PivotTable" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="Move PivotTable"
@@ -2875,7 +2875,7 @@
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
                                             local:RibbonTooltip.Title="PivotChart"
-                                            local:RibbonTooltip.KeyTip="C"
+                                            local:RibbonTooltip.KeyTip="PC"
                                             local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
                                     <Button Content="Change Chart" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartChangeTypeBtn_Click"
                                             local:RibbonTooltip.Title="Change Chart Type"
