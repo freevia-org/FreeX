@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -113,6 +114,7 @@ public partial class PageSetupDialog : Window
         ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument;
         AlignHeaderFooterWithMargins = sheet.HeaderFooterAlignWithMargins;
         PopulateFields();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private void PopulateFields()
@@ -183,6 +185,12 @@ public partial class PageSetupDialog : Window
     }
 
     private void ScalingMode_Changed(object sender, RoutedEventArgs e) => UpdateScalingInputState();
+
+    private void FocusInitialKeyboardTarget()
+    {
+        OrientationBox.Focus();
+        Keyboard.Focus(OrientationBox);
+    }
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {
