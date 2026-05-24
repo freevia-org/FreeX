@@ -75,4 +75,19 @@ public sealed class ClipboardPastePlannerTests
             .Should()
             .BeFalse("the transposed 2x3 paste footprint overlaps the original cut range");
     }
+
+    [Theory]
+    [InlineData("Freexcel copy", "Freexcel copy", true)]
+    [InlineData("Freexcel copy", "External app copy", false)]
+    [InlineData("Freexcel copy", "", false)]
+    [InlineData("Freexcel copy", null, true)]
+    public void ShouldUseInternalClipboard_RejectsStaleInternalCopyWhenSystemClipboardChanged(
+        string internalText,
+        string? currentClipboardText,
+        bool expected)
+    {
+        ClipboardPastePlanner.ShouldUseInternalClipboard(internalText, currentClipboardText)
+            .Should()
+            .Be(expected);
+    }
 }

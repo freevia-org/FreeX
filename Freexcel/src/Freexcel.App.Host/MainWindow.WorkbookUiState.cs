@@ -131,6 +131,7 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        RefreshToolbar();
         RefreshStatusBar();
     }
 
