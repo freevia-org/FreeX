@@ -9,6 +9,9 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Column Chart", "Column Chart", RibbonCommandLayoutKind.Small)]
     [InlineData("Bold", "Bold", RibbonCommandLayoutKind.Small)]
     [InlineData("Excluded Share", "Share", RibbonCommandLayoutKind.Large)]
+    [InlineData("Contact Support", "Contact Support", RibbonCommandLayoutKind.Large)]
+    [InlineData("Show Training", "Show Training", RibbonCommandLayoutKind.Large)]
+    [InlineData("What's New", "What's New", RibbonCommandLayoutKind.Large)]
     public void GetLayoutKind_ClassifiesRibbonCommands(string commandName, string label, RibbonCommandLayoutKind expected)
     {
         RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label).Should().Be(expected);
