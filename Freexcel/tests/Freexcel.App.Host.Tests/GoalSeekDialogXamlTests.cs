@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -58,6 +59,18 @@ public sealed class GoalSeekDialogXamlTests
                 GoalSeekRangeSelectionTarget.ChangingCell,
                 "$B$2",
                 CollapseDialog: true));
+    }
+
+    [Fact]
+    public void DialogOpenedFromKeyboard_FocusesSetCellBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("SetCellBox.Focus();");
+        source.Should().Contain("SetCellBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(SetCellBox);");
     }
 
     [Theory]
