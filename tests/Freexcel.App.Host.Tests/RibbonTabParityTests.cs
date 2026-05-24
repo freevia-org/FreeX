@@ -215,6 +215,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var analyzeTab = ExtractTabXaml(xaml, "PivotTable Analyze", "Design");
+        var dataGroup = ExtractGroupXaml(analyzeTab, "Data");
 
         ExtractGroupLabels(analyzeTab).Should().Equal(
             "PivotTable",
@@ -229,7 +230,9 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonTooltip.Title=\"Group Field\"");
         ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
-        ExtractGroupXaml(analyzeTab, "Data").Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
+        dataGroup.Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
+        dataGroup.Should().Contain("Content=\"Change Data Source\"");
+        dataGroup.Should().NotContain("Content=\"Change Source\"");
         ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonTooltip.Title=\"Calculated Field\"");
         ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonTooltip.Title=\"PivotChart\"");
         ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonTooltip.Title=\"Field List\"");

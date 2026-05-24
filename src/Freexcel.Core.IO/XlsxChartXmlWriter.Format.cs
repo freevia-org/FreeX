@@ -76,6 +76,23 @@ internal static partial class XlsxChartXmlWriter
             chart.ChartAreaBorderColor,
             chart.ChartAreaBorderThickness);
 
+    private static XElement? ToChartDefaultTextPropertiesXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.ChartDefaultTextColor is null &&
+            chart.ChartDefaultTextThemeColor is null &&
+            chart.ChartDefaultFontSize == 11)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        new XAttribute("sz", Math.Clamp((int)Math.Round(chart.ChartDefaultFontSize * 100), 600, 7200)),
+                        ToTextRunPropertiesContent(chart.ChartDefaultTextThemeColor, chart.ChartDefaultTextColor, chart.ChartDefaultFontSize, drawingNs)))));
+    }
+
     private static XElement? ToPlotAreaShapeProperties(
         ChartModel chart,
         XNamespace chartNs,

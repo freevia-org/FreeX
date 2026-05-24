@@ -32,6 +32,7 @@ internal static partial class XlsxChartXmlWriter
                     ToChartProtectionXml(chart, chartNs),
                     ToChartExternalDataXml(chart, chartNs, relNs),
                     ToChartPrintSettingsXml(chart, chartNs),
+                    ToChartDefaultTextPropertiesXml(chart, chartNs, drawingNs),
                     ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",

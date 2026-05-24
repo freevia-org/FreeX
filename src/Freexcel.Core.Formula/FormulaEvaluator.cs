@@ -1058,7 +1058,11 @@ public sealed class FormulaEvaluator
              or "DAYS" or "DAYS360" or "YEARFRAC"
              or "N" or "ERROR.TYPE"
              or "COMBIN" or "PERMUT"
-             or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT";
+             or "BITAND" or "BITOR" or "BITXOR" or "BITLSHIFT" or "BITRSHIFT"
+             or "BIN2DEC" or "HEX2DEC" or "OCT2DEC"
+             or "DEC2BIN" or "DEC2HEX" or "DEC2OCT"
+             or "BIN2HEX" or "BIN2OCT" or "HEX2BIN" or "HEX2OCT" or "OCT2BIN" or "OCT2HEX"
+             or "CONVERT";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";

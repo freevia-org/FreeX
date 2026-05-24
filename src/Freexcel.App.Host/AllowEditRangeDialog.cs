@@ -124,6 +124,7 @@ public sealed class AllowEditRangeDialog : Window
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         _rangeBox.Focus();
         _rangeBox.SelectAll();
+        Keyboard.Focus(_rangeBox);
     }
 
     public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
