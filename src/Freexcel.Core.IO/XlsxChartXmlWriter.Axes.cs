@@ -15,7 +15,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisTitle,
                 CategoryAxisId,
                 ValueAxisId,
-                "b",
+                ToXlsxAxisPosition(chart.XAxisPosition, "b"),
                 chart.HideXAxis,
                 chart.XAxisMinimum,
                 chart.XAxisMaximum,
@@ -52,7 +52,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisTitle,
                 ValueAxisId,
                 CategoryAxisId,
-                "l",
+                ToXlsxAxisPosition(chart.YAxisPosition, "l"),
                 chart.HideYAxis,
                 chart.YAxisMinimum,
                 chart.YAxisMaximum,
@@ -134,7 +134,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisTitle,
             ValueAxisId,
             CategoryAxisId,
-            "l",
+            ToXlsxAxisPosition(chart.YAxisPosition, "l"),
             chart.HideYAxis,
             chart.YAxisMinimum,
             chart.YAxisMaximum,
@@ -220,7 +220,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
-            new XElement(chartNs + "axPos", new XAttribute("val", "b")),
+            new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxAxisPosition(chart.XAxisPosition, "b"))),
             ToAxisTitleXml(chart.XAxisTitle, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
@@ -364,6 +364,16 @@ internal static partial class XlsxChartXmlWriter
 
     private static string ToXlsxAxisOrientation(bool reverseOrder) =>
         reverseOrder ? "maxMin" : "minMax";
+
+    private static string ToXlsxAxisPosition(ChartAxisPosition position, string fallback) =>
+        position switch
+        {
+            ChartAxisPosition.Bottom => "b",
+            ChartAxisPosition.Top => "t",
+            ChartAxisPosition.Left => "l",
+            ChartAxisPosition.Right => "r",
+            _ => fallback
+        };
 
     private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
     {
