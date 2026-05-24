@@ -75,6 +75,7 @@ public sealed partial class NativeJsonAdapter
         LegendBorderThemeColor = FromThemeColorReference(chart.LegendBorderThemeColor),
         LegendBorderThickness = chart.LegendBorderThickness,
         LegendFontSize = chart.LegendFontSize,
+        LegendEntries = chart.LegendEntries.ToList(),
         DoughnutHoleSize = chart.DoughnutHoleSize,
         FirstSliceAngle = chart.FirstSliceAngle,
         ExplodedSliceIndex = chart.ExplodedSliceIndex,

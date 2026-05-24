@@ -75,6 +75,7 @@ public sealed partial class NativeJsonAdapter
         public ThemeColorReferenceDto? LegendBorderThemeColor { get; set; }
         public double LegendBorderThickness { get; set; }
         public double LegendFontSize { get; set; } = 12;
+        public List<ChartLegendEntryModel>? LegendEntries { get; set; }
         public double DoughnutHoleSize { get; set; } = 0.55;
         public double FirstSliceAngle { get; set; }
         public int ExplodedSliceIndex { get; set; } = -1;
