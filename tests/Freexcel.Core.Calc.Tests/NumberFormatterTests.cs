@@ -52,6 +52,20 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("0*-", 12, 6, "12----")]
+    [InlineData("$* #,##0.00", 1234.5, 14, "$     1,234.50")]
+    public void CustomNumberSubset_ExpandsFillDirectiveToRequestedCharacterWidth(
+        string format,
+        double value,
+        int targetWidthCharacters,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format, targetWidthCharacters);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]
     [InlineData("# ??/??", 1.25, "1  1/4 ")]
