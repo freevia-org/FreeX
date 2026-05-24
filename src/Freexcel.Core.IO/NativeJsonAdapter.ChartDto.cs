@@ -13,6 +13,7 @@ public sealed partial class NativeJsonAdapter
         public bool IsPivotChart { get; set; }
         public string? PivotSourceSheetName { get; set; }
         public string? PivotTableName { get; set; }
+        public int? PivotSourceFormatId { get; set; }
         public int? PivotCacheId { get; set; }
         public int? ChartStyleId { get; set; }
         public string? PivotFormatsXml { get; set; }
