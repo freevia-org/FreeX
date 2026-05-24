@@ -192,6 +192,12 @@ public sealed partial class SetChartLayoutCommand
             chart.ShowDataLabels = options.ShowDataLabels.Value;
         if (options.DataLabelPosition is not null)
             chart.DataLabelPosition = ValidEnumOrDefault(options.DataLabelPosition.Value, ChartDataLabelPosition.BestFit);
+        if (options.ShowDataLabelValue is not null)
+            chart.ShowDataLabelValue = options.ShowDataLabelValue.Value;
+        if (options.ShowDataLabelLegendKey is not null)
+            chart.ShowDataLabelLegendKey = options.ShowDataLabelLegendKey.Value;
+        if (options.ShowDataLabelBubbleSize is not null)
+            chart.ShowDataLabelBubbleSize = options.ShowDataLabelBubbleSize.Value;
         if (options.ShowDataLabelCategoryName is not null)
             chart.ShowDataLabelCategoryName = options.ShowDataLabelCategoryName.Value;
         if (options.ShowDataLabelSeriesName is not null)
