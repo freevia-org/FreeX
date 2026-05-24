@@ -182,7 +182,7 @@ public partial class MainWindow
 
     private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)
     {
-        if (!options.CreateBookmarks)
+        if (options.EffectiveBookmarkMode == PdfBookmarkMode.None)
             return null;
 
         var result = new List<PdfBookmark>();
@@ -205,11 +205,37 @@ public partial class MainWindow
                 range,
                 options.IgnorePrintAreas);
             if (document.Pages.Count > 0)
-                result.Add(new PdfBookmark(sheet.Name, pageIndex));
+            {
+                if (options.EffectiveBookmarkMode == PdfBookmarkMode.PageNumbers)
+                {
+                    for (var offset = 0; offset < document.Pages.Count; offset++)
+                        result.Add(new PdfBookmark($"Page {pageIndex + 1 + offset}", pageIndex + offset));
+                }
+                else
+                {
+                    var title = options.EffectiveBookmarkMode == PdfBookmarkMode.PrintTitles
+                        ? BuildPrintTitleBookmark(sheet)
+                        : sheet.Name;
+                    result.Add(new PdfBookmark(title, pageIndex));
+                }
+            }
             pageIndex += document.Pages.Count;
         }
 
         return result;
+    }
+
+    private static string BuildPrintTitleBookmark(Sheet sheet)
+    {
+        var parts = new List<string>();
+        if (sheet.PrintTitleRows is { } rows)
+            parts.Add(rows.Start == rows.End ? $"Rows {rows.Start}" : $"Rows {rows.Start}-{rows.End}");
+        if (sheet.PrintTitleColumns is { } columns)
+            parts.Add(columns.Start == columns.End ? $"Columns {columns.Start}" : $"Columns {columns.Start}-{columns.End}");
+
+        return parts.Count == 0
+            ? sheet.Name
+            : $"{sheet.Name} ({string.Join(", ", parts)})";
     }
 
     private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options)

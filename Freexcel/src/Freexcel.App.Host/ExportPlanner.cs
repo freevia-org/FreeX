@@ -22,6 +22,14 @@ internal enum ExportQuality
     MinimumSize
 }
 
+internal enum PdfBookmarkMode
+{
+    None,
+    SheetNames,
+    PrintTitles,
+    PageNumbers
+}
+
 internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
@@ -37,10 +45,18 @@ internal sealed record ExportOptions(
     bool IgnorePrintAreas = false,
     ExportPageRange? PageRange = null,
     ExportQuality Quality = ExportQuality.Standard,
-    bool CreateBookmarks = false)
+    bool CreateBookmarks = false,
+    PdfBookmarkMode BookmarkMode = PdfBookmarkMode.None)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
+
+    public PdfBookmarkMode EffectiveBookmarkMode =>
+        BookmarkMode != PdfBookmarkMode.None
+            ? BookmarkMode
+            : CreateBookmarks
+                ? PdfBookmarkMode.SheetNames
+                : PdfBookmarkMode.None;
 }
 
 internal sealed record ExportRequest(
@@ -109,9 +125,7 @@ internal static class ExportPlanner
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
-        var bookmarks = options.CreateBookmarks
-            ? "bookmarks use sheet names"
-            : null;
+        var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, ExportFormat.Pdf);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
@@ -152,11 +166,7 @@ internal static class ExportPlanner
             (true, ExportFormat.Xps) => "document properties are included",
             _ => "document properties are not included"
         };
-        var bookmarks = options.CreateBookmarks
-            ? format == ExportFormat.Pdf
-                ? "bookmarks use sheet names"
-                : "bookmarks are PDF-only"
-            : null;
+        var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, format);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
@@ -226,4 +236,20 @@ internal static class ExportPlanner
         quality == ExportQuality.MinimumSize && format == ExportFormat.Xps
             ? "minimum size is PDF-only"
             : DescribeQuality(quality);
+
+    private static string? DescribeBookmarkMode(PdfBookmarkMode bookmarkMode, ExportFormat format)
+    {
+        if (bookmarkMode == PdfBookmarkMode.None)
+            return null;
+
+        if (format == ExportFormat.Xps)
+            return "bookmarks are PDF-only";
+
+        return bookmarkMode switch
+        {
+            PdfBookmarkMode.PrintTitles => "bookmarks use print titles",
+            PdfBookmarkMode.PageNumbers => "bookmarks use page numbers",
+            _ => "bookmarks use sheet names"
+        };
+    }
 }
