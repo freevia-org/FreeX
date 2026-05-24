@@ -1800,6 +1800,23 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Convert ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Ink to Shape" Width="96" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Ink to Shape"
+                                        local:RibbonTooltip.KeyTip="IS"
+                                        local:RibbonTooltip.Description="Convert drawn ink into an Office shape. Ink conversion is not yet implemented in Freexcel."/>
+                                <Button Content="Ink to Math" Width="88" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Ink to Math"
+                                        local:RibbonTooltip.KeyTip="IM"
+                                        local:RibbonTooltip.Description="Convert handwritten math into typed notation. Ink conversion is not yet implemented in Freexcel."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Convert" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Arrange ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -3045,6 +3062,22 @@
                                         local:RibbonTooltip.Title="Help Online"
                                         local:RibbonTooltip.KeyTip="HO"
                                         local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
+                                <Button Content="Contact Support" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Contact Support"
+                                        local:RibbonTooltip.KeyTip="CS"
+                                        local:RibbonTooltip.Description="Contact support for Freexcel. In-app support is not yet implemented."/>
+                                <Button Content="Send Feedback"  Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                        local:RibbonTooltip.Title="Send Feedback"
+                                        local:RibbonTooltip.KeyTip="FE"
+                                        local:RibbonTooltip.Description="Send suggestions or report issues with Freexcel."/>
+                                <Button Content="Show Training" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="Show Training"
+                                        local:RibbonTooltip.KeyTip="TR"
+                                        local:RibbonTooltip.Description="Open Freexcel training content. Training content is not yet implemented."/>
+                                <Button Content="What's New" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                        local:RibbonTooltip.Title="What's New"
+                                        local:RibbonTooltip.KeyTip="WN"
+                                        local:RibbonTooltip.Description="Show recent Freexcel updates. What's New content is not yet implemented."/>
                                 <local:AutomationInvokeButton x:Name="HelpAboutFreexcelButton"
                                                               Content="About Freexcel" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
                                                               AutomationProperties.Name="About Freexcel"
@@ -3052,10 +3085,6 @@
                                                               local:RibbonTooltip.Title="About Freexcel"
                                                               local:RibbonTooltip.KeyTip="AB"
                                                               local:RibbonTooltip.Description="View version and license information about Freexcel."/>
-                                <Button Content="Send Feedback"  Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                        local:RibbonTooltip.Title="Send Feedback"
-                                        local:RibbonTooltip.KeyTip="FE"
-                                        local:RibbonTooltip.Description="Send suggestions or report issues with Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Help" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

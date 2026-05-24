@@ -13083,6 +13083,12 @@ public partial class FileAdapterSmokeTests
             PreserveFormattingOnUpdate = false,
             PrintTitles = true,
             PrintExpandCollapseButtons = true,
+            EnableDrill = false,
+            AsteriskTotals = true,
+            MultipleFieldFilters = false,
+            EnableFieldDialog = false,
+            EnableFieldProperties = false,
+            EnableDataValueEditing = true,
             AltTextTitle = "Sales pivot",
             AltTextDescription = "Pivot summary for sales",
             DataCaption = "Values",
@@ -13123,6 +13129,12 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("applyWidthHeightFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("preserveFormatting")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("enableDrill")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("asteriskTotals")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("multipleFieldFilters")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("enableFieldDialog")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("enableFieldProperties")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("enableDataValueEditing")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("indent")!.Value.Should().Be("4");
             pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
             pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
@@ -13151,6 +13163,12 @@ public partial class FileAdapterSmokeTests
         loadedPivot.PreserveFormattingOnUpdate.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
         loadedPivot.PrintExpandCollapseButtons.Should().BeTrue();
+        loadedPivot.EnableDrill.Should().BeFalse();
+        loadedPivot.AsteriskTotals.Should().BeTrue();
+        loadedPivot.MultipleFieldFilters.Should().BeFalse();
+        loadedPivot.EnableFieldDialog.Should().BeFalse();
+        loadedPivot.EnableFieldProperties.Should().BeFalse();
+        loadedPivot.EnableDataValueEditing.Should().BeTrue();
         loadedPivot.AltTextTitle.Should().Be("Sales pivot");
         loadedPivot.AltTextDescription.Should().Be("Pivot summary for sales");
         loadedPivot.DataCaption.Should().Be("Values");
