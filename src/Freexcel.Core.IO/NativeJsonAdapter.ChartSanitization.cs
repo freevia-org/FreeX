@@ -98,6 +98,8 @@ public sealed partial class NativeJsonAdapter
         chart.DataLabelBorderThickness = Math.Clamp(chart.DataLabelBorderThickness, 0, 10);
         chart.DataLabelFontSize = Math.Clamp(chart.DataLabelFontSize, 6, 72);
         chart.DataLabelAngle = Math.Clamp(chart.DataLabelAngle, -90, 90);
+        chart.DataLabelLeaderLineThickness = Math.Clamp(chart.DataLabelLeaderLineThickness, 0.5, 10);
+        chart.DataLabelLeaderLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelLeaderLineDashStyle, ChartLineDashStyle.Solid);
         if (!ChartTypeSupport.SupportsPercentageDataLabels(chart.Type))
             chart.ShowDataLabelPercentage = false;
         chart.TrendlineType = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineType, ChartTrendlineType.Linear);
