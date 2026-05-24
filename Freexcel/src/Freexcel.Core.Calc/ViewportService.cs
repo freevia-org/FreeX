@@ -44,7 +44,7 @@ public sealed partial class ViewportService : IViewportService
                     var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfContext);
                     var displayText = cfIcon?.ShowValue == false
                         ? ""
-                        : GetDisplayText(sheet, cell, style);
+                        : GetDisplayText(sheet, cell, style, EstimateCharacterWidth(colMetric.Width));
 
                     cells.Add(new DisplayCell(
                         rowMetric.Row, colMetric.Col,
@@ -406,15 +406,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfContext);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfContext);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfContext);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext);
         }
 
         return cells;
@@ -428,6 +428,7 @@ public sealed partial class ViewportService : IViewportService
         SheetId sheetId,
         uint row,
         uint col,
+        int targetWidthCharacters,
         bool includeFormulas,
         CfEvaluationContext cfContext)
     {
@@ -471,7 +472,7 @@ public sealed partial class ViewportService : IViewportService
         var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfContext);
         var displayText = cfIcon?.ShowValue == false
             ? ""
-            : GetDisplayText(sheet, cell, style);
+            : GetDisplayText(sheet, cell, style, targetWidthCharacters);
 
         cells.Add(new DisplayCell(
             row,
@@ -498,9 +499,12 @@ public sealed partial class ViewportService : IViewportService
     /// Priority ascending = highest precedence first). Returns the first matching rule's style,
     /// or null when no rule fires.
     /// </summary>
-    private static string GetDisplayText(Sheet sheet, Cell cell, CellStyle style) =>
+    private static string GetDisplayText(Sheet sheet, Cell cell, CellStyle style, int targetWidthCharacters) =>
         sheet.ShowFormulas && cell.FormulaText is not null
             ? "=" + cell.FormulaText
-            : NumberFormatter.Format(cell.Value, style.NumberFormat);
+            : NumberFormatter.Format(cell.Value, style.NumberFormat, targetWidthCharacters);
+
+    private static int EstimateCharacterWidth(double pixelWidth) =>
+        Math.Max(1, (int)Math.Round(pixelWidth / 8.0, MidpointRounding.AwayFromZero));
 
 }
