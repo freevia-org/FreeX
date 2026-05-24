@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -31,7 +32,8 @@ internal static class PdfDocumentExporter
         ExportQuality quality = ExportQuality.Standard,
         IReadOnlyList<PdfBookmark>? bookmarks = null,
         PdfInitialView initialView = PdfInitialView.SinglePage,
-        PdfOpenMode openMode = PdfOpenMode.Normal)
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool includeSelectableText = false)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -41,7 +43,7 @@ internal static class PdfDocumentExporter
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
         var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
-        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode);
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode, includeSelectableText);
     }
 
     internal static double ResolveRasterDpi(ExportQuality quality) =>
@@ -58,7 +60,8 @@ internal static class PdfDocumentExporter
         double dpi = StandardDpi,
         IReadOnlyList<PdfBookmark>? bookmarks = null,
         PdfInitialView initialView = PdfInitialView.SinglePage,
-        PdfOpenMode openMode = PdfOpenMode.Normal)
+        PdfOpenMode openMode = PdfOpenMode.Normal,
+        bool includeSelectableText = false)
     {
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
@@ -68,6 +71,8 @@ internal static class PdfDocumentExporter
             Directory.CreateDirectory(directory);
 
         using var pdf = new PdfDocument();
+        if (includeSelectableText)
+            pdf.Options.CompressContentStreams = false;
         pdf.Info.Creator = "Freexcel";
         ApplyDefaultCatalogMetadata(pdf);
         ApplyDefaultViewerPreferences(pdf, initialView);
@@ -89,6 +94,8 @@ internal static class PdfDocumentExporter
             using var gfx = XGraphics.FromPdfPage(page);
             using var image = XImage.FromBitmapSource(bitmap);
             gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
+            if (includeSelectableText)
+                DrawTextOverlay(gfx, fixedPage);
         }
 
         var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
@@ -245,5 +252,27 @@ internal static class PdfDocumentExporter
         target.Render(page);
         target.Freeze();
         return target;
+    }
+
+    private static void DrawTextOverlay(XGraphics gfx, FixedPage page)
+    {
+        foreach (var overlay in PdfTextOverlayExtractor.Extract(page))
+        {
+            var style = XFontStyleEx.Regular;
+            if (overlay.Bold && overlay.Italic)
+                style = XFontStyleEx.BoldItalic;
+            else if (overlay.Bold)
+                style = XFontStyleEx.Bold;
+            else if (overlay.Italic)
+                style = XFontStyleEx.Italic;
+
+            var font = new XFont(overlay.FontFamily, overlay.FontSize * 72.0 / StandardDpi, style);
+            var brush = new XSolidBrush(XColor.FromArgb(overlay.Color.A, overlay.Color.R, overlay.Color.G, overlay.Color.B));
+            gfx.DrawString(
+                overlay.Text,
+                font,
+                brush,
+                new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi));
+        }
     }
 }
