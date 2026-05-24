@@ -75,7 +75,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="_Margins">
+            <TabItem x:Name="MarginsTab" Header="_Margins">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

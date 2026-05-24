@@ -239,6 +239,23 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupDialogInvalidMargin_SelectsMarginsTabInvalidBox()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+
+        xaml.Should().Contain("x:Name=\"MarginsTab\"");
+        source.Should().Contain("FocusInvalidMarginInput();");
+        source.Should().Contain("FocusInvalidHeaderFooterMargin();");
+        source.Should().Contain("private void FocusInvalidMarginInput()");
+        source.Should().Contain("private void FocusMarginsTabTextBox(TextBox target)");
+        source.Should().Contain("PageSetupTabs.SelectedItem = MarginsTab;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
