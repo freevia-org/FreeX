@@ -1039,6 +1039,7 @@ public sealed class FormulaEvaluator
              or "PMT" or "PV" or "FV" or "NPER" or "RATE" or "IPMT" or "PPMT"
              or "CUMIPMT" or "CUMPRINC"
              or "EFFECT" or "NOMINAL" or "RRI" or "PDURATION"
+             or "SLN" or "SYD" or "DB" or "DDB" or "VDB" or "AMORDEGRC" or "AMORLINC"
              or "DOLLARDE" or "DOLLARFR"
              or "DISC" or "INTRATE" or "RECEIVED"
              or "TBILLEQ" or "TBILLPRICE" or "TBILLYIELD"

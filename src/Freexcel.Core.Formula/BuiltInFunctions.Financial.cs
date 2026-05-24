@@ -460,8 +460,14 @@ public static partial class BuiltInFunctions
         double cost    = ToNumber(args[0]);
         double salvage = ToNumber(args[1]);
         double life    = ToNumber(args[2]);
-        double period  = ToNumber(args[3]);
         double month   = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 12;
+        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => DbScalar(cost, salvage, life, value, month));
+        return DbScalar(cost, salvage, life, args[3], month);
+    }
+
+    private static ScalarValue DbScalar(double cost, double salvage, double life, ScalarValue periodValue, double month)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(period) || !double.IsFinite(month))
             return ErrorValue.Num;
@@ -493,8 +499,14 @@ public static partial class BuiltInFunctions
         double cost    = ToNumber(args[0]);
         double salvage = ToNumber(args[1]);
         double life    = ToNumber(args[2]);
-        double period  = ToNumber(args[3]);
         double factor  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 2.0;
+        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => DdbScalar(cost, salvage, life, value, factor));
+        return DdbScalar(cost, salvage, life, args[3], factor);
+    }
+
+    private static ScalarValue DdbScalar(double cost, double salvage, double life, ScalarValue periodValue, double factor)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(period) || !double.IsFinite(factor))
             return ErrorValue.Num;
@@ -519,9 +531,15 @@ public static partial class BuiltInFunctions
         double salvage     = ToNumber(args[1]);
         double life        = ToNumber(args[2]);
         double startPeriod = ToNumber(args[3]);
-        double endPeriod   = ToNumber(args[4]);
         double factor      = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 2.0;
         bool noSwitch      = args.Count > 6 && args[6] is not BlankValue && ToBool(args[6]);
+        if (args[4] is RangeValue endPeriodRange) return MapUnaryTextRange(endPeriodRange, value => VdbScalar(cost, salvage, life, startPeriod, value, factor, noSwitch));
+        return VdbScalar(cost, salvage, life, startPeriod, args[4], factor, noSwitch);
+    }
+
+    private static ScalarValue VdbScalar(double cost, double salvage, double life, double startPeriod, ScalarValue endPeriodValue, double factor, bool noSwitch)
+    {
+        double endPeriod = ToNumber(endPeriodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(startPeriod) || !double.IsFinite(endPeriod) || !double.IsFinite(factor))
             return ErrorValue.Num;
@@ -561,7 +579,13 @@ public static partial class BuiltInFunctions
         double cost    = ToNumber(args[0]);
         double salvage = ToNumber(args[1]);
         double life    = ToNumber(args[2]);
-        double per     = ToNumber(args[3]);
+        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => SydScalar(cost, salvage, life, value));
+        return SydScalar(cost, salvage, life, args[3]);
+    }
+
+    private static ScalarValue SydScalar(double cost, double salvage, double life, ScalarValue periodValue)
+    {
+        double per = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) || !double.IsFinite(per))
             return ErrorValue.Num;
         if (life <= 0 || per <= 0 || per > life) return ErrorValue.Num;
@@ -576,11 +600,17 @@ public static partial class BuiltInFunctions
         double datePurchased = ToNumber(args[1]);
         double firstPeriod   = ToNumber(args[2]);
         double salvage       = ToNumber(args[3]);
-        double period        = ToNumber(args[4]);
         double rate          = ToNumber(args[5]);
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (args[4] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => AmordegrcScalar(cost, datePurchased, firstPeriod, salvage, value, rate, basis));
+        return AmordegrcScalar(cost, datePurchased, firstPeriod, salvage, args[4], rate, basis);
+    }
+
+    private static ScalarValue AmordegrcScalar(double cost, double datePurchased, double firstPeriod, double salvage, ScalarValue periodValue, double rate, int basis)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
         // Compute life in years
         double life = 1.0 / rate;
@@ -620,11 +650,17 @@ public static partial class BuiltInFunctions
         double datePurchased = ToNumber(args[1]);
         double firstPeriod   = ToNumber(args[2]);
         double salvage       = ToNumber(args[3]);
-        double period        = ToNumber(args[4]);
         double rate          = ToNumber(args[5]);
+        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (args[4] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => AmorlincScalar(cost, datePurchased, firstPeriod, salvage, value, rate, basis));
+        return AmorlincScalar(cost, datePurchased, firstPeriod, salvage, args[4], rate, basis);
+    }
+
+    private static ScalarValue AmorlincScalar(double cost, double datePurchased, double firstPeriod, double salvage, ScalarValue periodValue, double rate, int basis)
+    {
+        double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
         if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(datePurchased, out DateTime dp) ||
             !TryGetFinancialDate(firstPeriod, out DateTime fp)) return ErrorValue.Num;
@@ -1664,7 +1700,13 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         double cost    = ToNumber(args[0]);
         double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
+        if (args[2] is RangeValue lifeRange) return MapUnaryTextRange(lifeRange, value => SlnScalar(cost, salvage, value));
+        return SlnScalar(cost, salvage, args[2]);
+    }
+
+    private static ScalarValue SlnScalar(double cost, double salvage, ScalarValue lifeValue)
+    {
+        double life = ToNumber(lifeValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life))
             return ErrorValue.Num;
         if (life == 0) return ErrorValue.DivByZero;
