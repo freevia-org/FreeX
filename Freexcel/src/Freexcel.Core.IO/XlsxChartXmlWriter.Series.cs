@@ -39,6 +39,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
                     ? ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs)
                     : null,
+                ToSeriesInvertIfNegativeXml(chart, seriesIndex, chartNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
@@ -64,6 +65,17 @@ internal static partial class XlsxChartXmlWriter
         GetSeriesFormat(chart, seriesIndex)?.Smooth is { } smooth
             ? new XElement(chartNs + "smooth", new XAttribute("val", smooth ? "1" : "0"))
             : null;
+
+    private static XElement? ToSeriesInvertIfNegativeXml(ChartModel chart, int seriesIndex, XNamespace chartNs)
+    {
+        if (!ChartTypeSupport.SupportsInvertIfNegative(chart.Type) ||
+            GetSeriesFormat(chart, seriesIndex)?.InvertIfNegative is not { } invertIfNegative)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "invertIfNegative", new XAttribute("val", invertIfNegative ? "1" : "0"));
+    }
 
     private static IEnumerable<XElement> BuildScatterChartSeries(
         ChartModel chart,

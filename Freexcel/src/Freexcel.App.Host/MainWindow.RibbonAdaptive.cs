@@ -53,7 +53,7 @@ public partial class MainWindow
         SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
-               CollapseOneMoreRibbonGroup(plannedStates))
+               CollapseOneMoreRibbonGroup(plannedStates, preserveFirstGroup: availableWidth.Value > 760))
         {
             ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
@@ -98,9 +98,10 @@ public partial class MainWindow
         return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
     }
 
-    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states)
+    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states, bool preserveFirstGroup)
     {
-        for (var i = states.Length - 1; i >= 0; i--)
+        var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
+        for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
         {
             if (states[i] == RibbonAdaptiveGroupState.Collapsed)
                 continue;
