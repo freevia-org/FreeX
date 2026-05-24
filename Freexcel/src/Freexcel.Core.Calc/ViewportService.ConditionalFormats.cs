@@ -39,9 +39,8 @@ public sealed partial class ViewportService
             int count = 0;
             var rankedValues = new List<(CellAddress Address, double Value)>();
             var valueCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var a in cf.AppliesTo.AllCells())
+            foreach (var (a, v) in EnumerateConditionalFormatAggregateValues(sheet, cf.AppliesTo))
             {
-                var v = sheet.GetValue(a);
                 if (cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues)
                 {
                     var key = NormalizeCfDisplayValue(v);
@@ -85,6 +84,25 @@ public sealed partial class ViewportService
                     valueCounts.Count > 0 ? valueCounts : null);
         }
         return result;
+    }
+
+    private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateConditionalFormatAggregateValues(
+        Sheet sheet,
+        GridRange range)
+    {
+        const long denseScanLimit = 10_000;
+        if (range.CellCount <= denseScanLimit)
+        {
+            foreach (var address in range.AllCells())
+                yield return (address, sheet.GetValue(address));
+            yield break;
+        }
+
+        foreach (var (address, cell) in sheet.EnumerateCells())
+        {
+            if (range.Contains(address))
+                yield return (address, cell.Value);
+        }
     }
 
     private static CellStyle? EvaluateConditionalFormats(
