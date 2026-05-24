@@ -183,11 +183,22 @@ public sealed class DataTableDialog : Window
         Keyboard.Focus(_rowInputBox);
     }
 
+    private void FocusInvalidInput(string? error)
+    {
+        var target = string.Equals(error, "Enter a valid column input cell.", StringComparison.Ordinal)
+            ? _columnInputBox
+            : _rowInputBox;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
     private void Accept()
     {
         if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
         {
             MessageBox.Show(this, error ?? "Enter valid data table cells.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidInput(error);
             return;
         }
 
