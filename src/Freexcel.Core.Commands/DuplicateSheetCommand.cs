@@ -301,6 +301,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             TrendlineIntercept = chart.TrendlineIntercept,
             ShowTrendlineEquation = chart.ShowTrendlineEquation,
             ShowTrendlineRSquared = chart.ShowTrendlineRSquared,
+            TrendlineLabelNumberFormatCode = chart.TrendlineLabelNumberFormatCode,
+            TrendlineLabelNumberFormatSourceLinked = chart.TrendlineLabelNumberFormatSourceLinked,
             TrendlineColor = chart.TrendlineColor,
             TrendlineThemeColor = chart.TrendlineThemeColor,
             TrendlineThickness = chart.TrendlineThickness,
