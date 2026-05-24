@@ -1661,6 +1661,47 @@ public class FunctionLibraryTests
     // ── WEEKDAY ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void DateTimeScalarRangeArguments_SpillElementwise()
+    {
+        var dates = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 7).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 8).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=WEEKDAY(A1:A2,2)", dates), new NumberValue(7), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=WEEKNUM(A1:A2,2)", dates), new NumberValue(1), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=ISOWEEKNUM(A1:A2)", dates), new NumberValue(1), new NumberValue(2));
+
+        var monthEnds = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(A1:A2,1)", monthEnds),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 29).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(A1:A2,1)", monthEnds),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+
+        var textDates = MakeSheet(
+            (1, 1, new TextValue("2024-01-07")),
+            (2, 1, new TextValue("not a date")));
+        AssertColumn(
+            _eval.Evaluate("=DATEVALUE(A1:A2)", textDates),
+            new NumberValue(new DateTime(2024, 1, 7).ToOADate()),
+            ErrorValue.Value);
+
+        var textTimes = MakeSheet(
+            (1, 1, new TextValue("01:02:03")),
+            (2, 1, new TextValue("not a time")));
+        AssertColumn(
+            _eval.Evaluate("=TIMEVALUE(A1:A2)", textTimes),
+            new NumberValue(new TimeSpan(1, 2, 3).TotalDays),
+            ErrorValue.Value);
+    }
+
+    [Fact]
     public void Weekday_ReturnType1_SundayIs1()
     {
         // 2024-01-07 is a Sunday

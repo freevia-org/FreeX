@@ -153,11 +153,17 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
-        double rawSerial = ToNumber(args[0]);
-        if (!double.IsFinite(rawSerial) || rawSerial < 0 || rawSerial >= 2958466.0) return ErrorValue.Num;
         double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeekdayScalar(value, returnType));
+        return WeekdayScalar(args[0], returnType);
+    }
+
+    private static ScalarValue WeekdayScalar(ScalarValue value, int returnType)
+    {
+        double rawSerial = ToNumber(value);
+        if (!double.IsFinite(rawSerial) || rawSerial < 0 || rawSerial >= 2958466.0) return ErrorValue.Num;
         int daySerial = (int)Math.Floor(rawSerial);
         int dow = ((daySerial - 1) % 7 + 7) % 7; // 0=Sunday...6=Saturday in Excel's 1900 date system
         return returnType switch
@@ -174,10 +180,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         double rawMonths = ToNumber(args[1]);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue || rawMonths < int.MinValue) return ErrorValue.Num;
         int months = (int)rawMonths;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => EdateScalar(value, months));
+        return EdateScalar(args[0], months);
+    }
+
+    private static ScalarValue EdateScalar(ScalarValue value, int months)
+    {
+        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
         try
         {
             var result = dt.AddMonths(months);
@@ -272,7 +284,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Timevalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, TimevalueScalar);
+        return TimevalueScalar(args[0]);
+    }
+
+    private static ScalarValue TimevalueScalar(ScalarValue value)
+    {
+        var text = ToText(value);
         if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
@@ -284,7 +302,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Datevalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, DatevalueScalar);
+        return DatevalueScalar(args[0]);
+    }
+
+    private static ScalarValue DatevalueScalar(ScalarValue value)
+    {
+        var text = ToText(value);
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
@@ -314,10 +338,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         double rawMonths = ToNumber(args[1]);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue - 1 || rawMonths < int.MinValue) return ErrorValue.Num;
         int months = (int)rawMonths;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => EomonthScalar(value, months));
+        return EomonthScalar(args[0], months);
+    }
+
+    private static ScalarValue EomonthScalar(ScalarValue value, int months)
+    {
+        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
         try
         {
             var target = dt.AddMonths(months + 1);
@@ -331,11 +361,17 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
-        if (Math.Floor(ToNumber(args[0])) == 0)
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeeknumScalar(value, returnType));
+        return WeeknumScalar(args[0], returnType);
+    }
+
+    private static ScalarValue WeeknumScalar(ScalarValue value, int returnType)
+    {
+        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
+        if (Math.Floor(ToNumber(value)) == 0)
             return new NumberValue(0);
         if (returnType == 21)
             return new NumberValue(ExcelIsoWeeknum(dt));
@@ -361,7 +397,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Isoweeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsoweeknumScalar);
+        return IsoweeknumScalar(args[0]);
+    }
+
+    private static ScalarValue IsoweeknumScalar(ScalarValue value)
+    {
+        if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
         return new NumberValue(ExcelIsoWeeknum(dt));
     }
 
