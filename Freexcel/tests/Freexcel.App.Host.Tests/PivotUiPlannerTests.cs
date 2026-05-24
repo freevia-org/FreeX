@@ -61,6 +61,28 @@ public sealed class PivotUiPlannerTests
     }
 
     [Fact]
+    public void FindPivotTableContainingSelection_ReturnsOnlyIntersectingPivot()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var first = CreatePivot("First", 2, sheet.Id);
+        var second = CreatePivot("Second", 10, sheet.Id);
+        sheet.PivotTables.Add(first);
+        sheet.PivotTables.Add(second);
+
+        PivotUiPlanner.FindPivotTableContainingSelection(
+                sheet,
+                new GridRange(new CellAddress(sheet.Id, 10, 2), new CellAddress(sheet.Id, 10, 2)))
+            .Should()
+            .BeSameAs(second);
+
+        PivotUiPlanner.FindPivotTableContainingSelection(
+                sheet,
+                new GridRange(new CellAddress(sheet.Id, 100, 2), new CellAddress(sheet.Id, 100, 2)))
+            .Should()
+            .BeNull("Excel hides contextual PivotTable tabs when selection leaves the PivotTable body");
+    }
+
+    [Fact]
     public void ChooseDefaultDataField_UsesFirstNumericOrDateColumnAfterHeader()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
