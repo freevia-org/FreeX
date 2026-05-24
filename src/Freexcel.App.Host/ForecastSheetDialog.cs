@@ -29,6 +29,11 @@ public sealed class ForecastSheetDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        FocusInvalidPeriodsInput();
+    }
+
+    private void FocusInvalidPeriodsInput()
+    {
         _periodsBox.Focus();
         _periodsBox.SelectAll();
         Keyboard.Focus(_periodsBox);
@@ -50,8 +55,18 @@ public sealed class ForecastSheetDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_periodsBox.Text, out var result, out _))
+        if (!TryCreateResult(_periodsBox.Text, out var result, out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Enter a positive whole number of forecast periods.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidPeriodsInput();
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }

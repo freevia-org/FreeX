@@ -558,6 +558,23 @@ public class PhaseCFinancialTests
     // ── COUPNUM ───────────────────────────────────────────────────────────
 
     [Fact]
+    public void TreasuryBillFunctions_RangeValueArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("TBILLEQ(43831,43921,A1:A2)", (1, 1, 0.05), (2, 1, 0.04)),
+            Calc("TBILLEQ(43831,43921,0.05)"),
+            Calc("TBILLEQ(43831,43921,0.04)"));
+        AssertApproxColumn(
+            EvalWithData("TBILLPRICE(43831,43921,A1:A2)", (1, 1, 0.05), (2, 1, 0.04)),
+            Calc("TBILLPRICE(43831,43921,0.05)"),
+            Calc("TBILLPRICE(43831,43921,0.04)"));
+        AssertApproxColumn(
+            EvalWithData("TBILLYIELD(43831,43921,A1:A2)", (1, 1, 98.75), (2, 1, 99.0)),
+            Calc("TBILLYIELD(43831,43921,98.75)"),
+            Calc("TBILLYIELD(43831,43921,99)"));
+    }
+
+    [Fact]
     public void Coupnum_SemiAnnual_FiveYearBond()
     {
         // Settlement ~2020-01-15 (43845), Maturity ~2025-01-15 (45672), freq=2

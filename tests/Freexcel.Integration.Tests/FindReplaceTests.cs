@@ -210,6 +210,22 @@ public class FindReplaceTests
         replacedStyle.FillColor.Should().Be(new CellColor(255, 255, 0));
         wb.GetStyle(sheet.GetCell(a2)!.StyleId).Bold.Should().BeFalse();
     }
+
+    [Fact]
+    public void TryReplaceAll_ReturnsCommandFailureInsteadOfCountingRejectedEdits()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo"));
+        var commandBus = new RejectingCommandBus("The sheet is protected.");
+
+        var result = FindReplaceService.TryReplaceAll(workbook, commandBus, "foo", "bar");
+
+        result.ReplacedCount.Should().Be(0);
+        result.Failure.Should().Be(new CommandOutcome(false, "The sheet is protected."));
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo"));
+    }
 }
 
 /// <summary>Minimal ICommandContext for tests.</summary>
@@ -221,4 +237,16 @@ file sealed class SimpleCommandContext : ICommandContext
 
     public Sheet GetSheet(SheetId sheetId) =>
         Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
+}
+
+file sealed class RejectingCommandBus(string message) : ICommandBus
+{
+    public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command) => new(false, message);
+    public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory) => new(false, message);
+    public CommandOutcome Undo(WorkbookId workbookId) => new(false, message);
+    public CommandOutcome Redo(WorkbookId workbookId) => new(false, message);
+    public bool CanUndo(WorkbookId workbookId) => false;
+    public bool CanRedo(WorkbookId workbookId) => false;
+    public CommandOutcome RepeatLast(WorkbookId workbookId) => new(false, message);
+    public bool CanRepeat(WorkbookId workbookId) => false;
 }

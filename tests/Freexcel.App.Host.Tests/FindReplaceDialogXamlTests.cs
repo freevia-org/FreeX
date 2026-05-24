@@ -172,6 +172,29 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void TryReplaceSingleMatch_ReturnsCommandFailureInsteadOfReportingReplacement()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var commandBus = new RejectingCommandBus("The sheet is protected.");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foo"));
+
+        var result = FindReplaceDialogPlanner.TryReplaceSingleMatch(
+            workbook,
+            commandBus,
+            new FindResult(a1, "foo"),
+            "foo",
+            "bar",
+            matchCase: false,
+            matchEntireCell: false);
+
+        result.Replaced.Should().BeFalse();
+        result.Failure.Should().Be(new CommandOutcome(false, "The sheet is protected."));
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("foo"));
+    }
+
+    [Fact]
     public void BuildFindResultRows_ProjectsWorkbookSheetNameCellValueAndFormula()
     {
         var workbook = new Workbook("Book1");
@@ -419,4 +442,16 @@ file sealed class SimpleCommandContext : ICommandContext
 
     public Sheet GetSheet(SheetId sheetId) =>
         Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
+}
+
+file sealed class RejectingCommandBus(string message) : ICommandBus
+{
+    public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command) => new(false, message);
+    public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory) => new(false, message);
+    public CommandOutcome Undo(WorkbookId workbookId) => new(false, message);
+    public CommandOutcome Redo(WorkbookId workbookId) => new(false, message);
+    public bool CanUndo(WorkbookId workbookId) => false;
+    public bool CanRedo(WorkbookId workbookId) => false;
+    public CommandOutcome RepeatLast(WorkbookId workbookId) => new(false, message);
+    public bool CanRepeat(WorkbookId workbookId) => false;
 }

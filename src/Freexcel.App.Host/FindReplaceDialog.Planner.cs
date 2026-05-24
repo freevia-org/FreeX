@@ -52,18 +52,37 @@ internal static class FindReplaceDialogPlanner
         bool matchCase,
         bool matchEntireCell,
         StyleDiff? replacementFormat = null)
+        => TryReplaceSingleMatch(
+            workbook,
+            commandBus,
+            match,
+            searchText,
+            replaceText,
+            matchCase,
+            matchEntireCell,
+            replacementFormat).Replaced;
+
+    public static ReplaceSingleMatchResult TryReplaceSingleMatch(
+        Workbook workbook,
+        ICommandBus commandBus,
+        FindResult match,
+        string searchText,
+        string replaceText,
+        bool matchCase,
+        bool matchEntireCell,
+        StyleDiff? replacementFormat = null)
     {
         if (string.IsNullOrEmpty(searchText))
-            return false;
+            return new ReplaceSingleMatchResult(false, null);
 
         var sheet = workbook.GetSheet(match.Address.Sheet);
         var cell = sheet?.GetCell(match.Address);
         if (cell is null || cell.HasFormula)
-            return false;
+            return new ReplaceSingleMatchResult(false, null);
 
         var currentText = GetDisplayText(cell.Value);
         if (currentText is null)
-            return false;
+            return new ReplaceSingleMatchResult(false, null);
 
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         var isMatch = matchEntireCell
@@ -71,7 +90,7 @@ internal static class FindReplaceDialogPlanner
             : currentText.Contains(searchText, comparison);
 
         if (!isMatch)
-            return false;
+            return new ReplaceSingleMatchResult(false, null);
 
         var newText = matchEntireCell
             ? replaceText
@@ -95,8 +114,10 @@ internal static class FindReplaceDialogPlanner
                 ]);
         }
 
-        commandBus.Execute(workbook.Id, command);
-        return true;
+        var outcome = commandBus.Execute(workbook.Id, command);
+        return outcome.Success
+            ? new ReplaceSingleMatchResult(true, null)
+            : new ReplaceSingleMatchResult(false, outcome);
     }
 
     private static string? GetDisplayText(ScalarValue value) => value switch
@@ -119,3 +140,5 @@ internal sealed record FindResultRow(
     string Cell,
     string Value,
     string Formula);
+
+internal sealed record ReplaceSingleMatchResult(bool Replaced, CommandOutcome? Failure);
