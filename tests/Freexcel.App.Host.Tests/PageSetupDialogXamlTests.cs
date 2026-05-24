@@ -256,6 +256,22 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupDialogInvalidScaling_SelectsPageTabActiveScalingBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+
+        source.Should().Contain("FocusInvalidScalingInput();");
+        source.Should().Contain("private void FocusInvalidScalingInput()");
+        source.Should().Contain("PageSetupTabs.SelectedItem = PageTab;");
+        source.Should().Contain("ScalePercentBox");
+        source.Should().Contain("FitPagesWideBox");
+        source.Should().Contain("FitPagesTallBox");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));

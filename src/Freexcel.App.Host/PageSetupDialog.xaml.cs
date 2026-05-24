@@ -282,6 +282,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter scaling as percent 10-400 or pages wide x tall, for example 1x1.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidScalingInput();
             return;
         }
 
@@ -389,6 +390,26 @@ public partial class PageSetupDialog : Window
 
     private void FocusInvalidPageTabNumber(TextBox target)
     {
+        PageSetupTabs.SelectedItem = PageTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private void FocusInvalidScalingInput()
+    {
+        TextBox target;
+        if (FitToRadioButton.IsChecked == true)
+        {
+            target = int.TryParse(FitPagesWideBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) && wide > 0
+                ? FitPagesTallBox
+                : FitPagesWideBox;
+        }
+        else
+        {
+            target = ScalePercentBox;
+        }
+
         PageSetupTabs.SelectedItem = PageTab;
         target.Focus();
         target.SelectAll();
