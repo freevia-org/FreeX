@@ -361,6 +361,11 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? HighLowLineThemeColor { get; set; }
     public double HighLowLineThickness { get; set; } = 1;
     public ChartLineDashStyle HighLowLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
+    public bool ShowSeriesLines { get; set; }
+    public CellColor? SeriesLineColor { get; set; }
+    public WorkbookThemeColorReference? SeriesLineThemeColor { get; set; }
+    public double SeriesLineThickness { get; set; } = 1;
+    public ChartLineDashStyle SeriesLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
     public bool ShowUpDownBars { get; set; }
     public int? UpDownBarGapWidth { get; set; }
     public CellColor? UpBarFillColor { get; set; }
