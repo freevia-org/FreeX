@@ -8706,6 +8706,72 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartTrendlineLabelNumberFormatPackagePart()
+    {
+        var workbook = new Workbook("ChartTrendlineLabelPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                      <c:trendline>
+                        <c:trendlineType val="linear"/>
+                        <c:dispEq val="1"/>
+                        <c:dispRSqr val="1"/>
+                        <c:trendlineLbl>
+                          <c:numFmt formatCode="0.000E+00" sourceLinked="0"/>
+                        </c:trendlineLbl>
+                      </c:trendline>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.TrendlineLabelNumberFormatCode.Should().Be("0.000E+00");
+        loadedChart.TrendlineLabelNumberFormatSourceLinked.Should().BeFalse();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var numberFormat = chartXml.Descendants(chartNs + "trendlineLbl")
+            .Should()
+            .ContainSingle()
+            .Subject
+            .Element(chartNs + "numFmt")!;
+        numberFormat.Attribute("formatCode")!.Value.Should().Be("0.000E+00");
+        numberFormat.Attribute("sourceLinked")!.Value.Should().Be("0");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_ClampsEmbeddedChartTrendlineThicknessPackagePart()
     {
         var workbook = new Workbook("ChartTrendlineThicknessPackageSave");

@@ -31,6 +31,11 @@ internal static class XlsxChartTrendlineErrorBarReader
 
         chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
         chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
+        var trendlineLabelNumberFormat = trendline
+            .Element(ChartNs + "trendlineLbl")?
+            .Element(ChartNs + "numFmt");
+        chart.TrendlineLabelNumberFormatCode = trendlineLabelNumberFormat?.Attribute("formatCode")?.Value;
+        chart.TrendlineLabelNumberFormatSourceLinked = ReadNullableBool(trendlineLabelNumberFormat?.Attribute("sourceLinked")?.Value);
         ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
     }
 
@@ -294,6 +299,14 @@ internal static class XlsxChartTrendlineErrorBarReader
 
     private static double? ReadOptionalDouble(string? value) =>
         XlsxChartScalarReader.ReadOptionalDouble(value);
+
+    private static bool? ReadNullableBool(string? value) =>
+        value switch
+        {
+            "1" or "true" => true,
+            "0" or "false" => false,
+            _ => null
+        };
 
     private static string? ReadErrorBarRangeFormula(XElement? element) =>
         element?

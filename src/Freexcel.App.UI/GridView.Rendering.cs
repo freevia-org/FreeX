@@ -47,6 +47,7 @@ public partial class GridView
         if (Viewport?.SplitPanes?.Cells is not { Count: > 0 }) return;
 
         var clips = CalculateSplitPaneClipRects(Viewport, ActualWidth, ActualHeight);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
         {
             var cell = layout.Cell;
@@ -111,7 +112,7 @@ public partial class GridView
                         typeface,
                         size,
                         textBrush,
-                        VisualTreeHelper.GetDpi(this).PixelsPerDip).Width,
+                        pixelsPerDip).Width,
                     ToDisplayFontSize(6));
             }
 
@@ -122,7 +123,7 @@ public partial class GridView
                 typeface,
                 fontSize,
                 textBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             if (BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
@@ -163,6 +164,7 @@ public partial class GridView
 
         var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
 
         // Pass 1: backgrounds
@@ -205,9 +207,8 @@ public partial class GridView
         foreach (var cell in Viewport.Cells)
         {
             if (cell.Style == null) continue;
-            var rowMetric = Viewport.RowMetrics.FirstOrDefault(r => r.Row == cell.Row);
-            var colMetric = Viewport.ColMetrics.FirstOrDefault(c => c.Col == cell.Col);
-            if (rowMetric is null || colMetric is null) continue;
+            if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
+            if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
             double x = colMetric.LeftOffset + ActualRowHeaderWidth;
             double y = rowMetric.TopOffset   + EffectiveColHeaderHeight;
@@ -318,7 +319,7 @@ public partial class GridView
                         typeface,
                         size,
                         textBrush,
-                        VisualTreeHelper.GetDpi(this).PixelsPerDip).Width,
+                        pixelsPerDip).Width,
                     ToDisplayFontSize(6));
             }
 
@@ -327,7 +328,7 @@ public partial class GridView
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 typeface, fontSize, textBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                pixelsPerDip);
 
             if (BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);

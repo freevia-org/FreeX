@@ -25,6 +25,15 @@ public class FunctionLibraryTests
         return sheet;
     }
 
+    private static void AssertTextColumn(ScalarValue value, params string[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.At(row + 1, 1).Should().Be(new TextValue(expected[row]));
+    }
+
     // ── IFERROR ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1041,6 +1050,20 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
 
         _eval.Evaluate("=PROPER(A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void TextCaseAndCleanup_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue(" apple ")),
+            (2, 1, new TextValue("BANANA")));
+
+        AssertTextColumn(_eval.Evaluate("=UPPER(A1:A2)", sheet), " APPLE ", "BANANA");
+        AssertTextColumn(_eval.Evaluate("=LOWER(A1:A2)", sheet), " apple ", "banana");
+        AssertTextColumn(_eval.Evaluate("=PROPER(A1:A2)", sheet), " Apple ", "Banana");
+        AssertTextColumn(_eval.Evaluate("=TRIM(A1:A2)", sheet), "apple", "BANANA");
+        AssertTextColumn(_eval.Evaluate("=CLEAN(A1:A2)", sheet), " apple ", "BANANA");
     }
 
     // ── SUBSTITUTE ─────────────────────────────────────────────────────────────
