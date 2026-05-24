@@ -102,6 +102,7 @@ public sealed class PivotTableModel
     public bool AutofitColumnsOnUpdate { get; set; } = true;
     public bool PreserveFormattingOnUpdate { get; set; } = true;
     public bool ShowExpandCollapseButtons { get; set; } = true;
+    public bool EnableDrill { get; set; } = true;
     public bool PrintTitles { get; set; }
     public bool PrintExpandCollapseButtons { get; set; }
     public string? AltTextTitle { get; set; }
