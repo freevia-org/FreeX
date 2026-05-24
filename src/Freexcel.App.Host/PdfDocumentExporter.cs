@@ -65,6 +65,7 @@ internal static class PdfDocumentExporter
 
         using var pdf = new PdfDocument();
         pdf.Info.Creator = "Freexcel";
+        ApplyDefaultCatalogMetadata(pdf);
         ApplyDefaultViewerPreferences(pdf);
         ApplyProperties(pdf, properties);
 
@@ -142,6 +143,11 @@ internal static class PdfDocumentExporter
 
     private static string? NormalizeProperty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void ApplyDefaultCatalogMetadata(PdfDocument pdf)
+    {
+        pdf.Internals.Catalog.Elements.SetString("/Lang", "en-US");
+    }
 
     private static void SetDisplayDocumentTitlePreference(PdfDocument pdf)
     {

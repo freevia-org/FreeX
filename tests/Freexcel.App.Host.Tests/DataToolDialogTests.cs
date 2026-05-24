@@ -204,6 +204,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogOpenedFromKeyboard_FocusesOriginalDataTypeChoice()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_delimitedButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_delimitedButton);");
+    }
+
+    [Fact]
     public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
     {
         TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
@@ -1298,6 +1309,17 @@ public sealed class DataToolDialogTests
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialogOpenedFromKeyboard_FocusesHeaderChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_hasHeadersBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_hasHeadersBox);");
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
