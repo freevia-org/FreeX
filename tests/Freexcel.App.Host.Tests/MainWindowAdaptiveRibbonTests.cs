@@ -310,6 +310,27 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void ViewRibbon_ShowCheckBoxLabelsShareLeftEdge()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 1465);
+
+            harness.ViewShowCheckBoxLabelOffsets
+                .Select(offset => Math.Round(offset.Offset, 1))
+                .Distinct()
+                .Should()
+                .HaveCount(1, "Excel keeps View tab checkbox labels in one tidy left-aligned column after the checkbox glyphs");
+
+            harness.ViewShowCheckBoxContentAlignments.Should().OnlyContain(
+                alignment => alignment == System.Windows.HorizontalAlignment.Left,
+                "ribbon checkbox rows should not center short labels inside the widest checkbox row");
+        });
+    }
+
+    [Fact]
     public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
     {
         StaTestRunner.Run(() =>
@@ -543,6 +564,18 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .SelectMany(GetDirectVerticalButtonStacks)
                 .ToList();
 
+        public IReadOnlyList<CheckBoxLabelOffset> ViewShowCheckBoxLabelOffsets =>
+            ViewShowCheckBoxes
+                .Select(checkBox => new CheckBoxLabelOffset(
+                    checkBox.Name,
+                    GetCheckBoxLabelOffset(checkBox)))
+                .ToList();
+
+        public IReadOnlyList<System.Windows.HorizontalAlignment> ViewShowCheckBoxContentAlignments =>
+            ViewShowCheckBoxes
+                .Select(checkBox => checkBox.HorizontalContentAlignment)
+                .ToList();
+
         public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
             _window.FindName("RibbonTabs") is TabControl tabs
                 ? EnumerateSelfAndVisualDescendants(tabs)
@@ -559,6 +592,13 @@ public sealed class MainWindowAdaptiveRibbonTests
             SelectedRibbonTab?.Content as DependencyObject ??
             (DependencyObject?)SelectedRibbonTab ??
             _window;
+
+        private IReadOnlyList<CheckBox> ViewShowCheckBoxes =>
+            new[] { "ViewGridlinesChk", "ViewHeadersChk", "ViewRulerChk", "ViewFormulaBarChk" }
+                .Select(name => _window.FindName(name))
+                .OfType<CheckBox>()
+                .Where(IsEffectivelyVisible)
+                .ToList();
 
         private StackPanel? ActiveRibbonPanel =>
             SelectedRibbonTab is { } tabItem
@@ -760,6 +800,19 @@ public sealed class MainWindowAdaptiveRibbonTests
             return true;
         }
 
+        private static double GetCheckBoxLabelOffset(CheckBox checkBox)
+        {
+            var presenter = EnumerateSelfAndVisualDescendants(checkBox)
+                .OfType<ContentPresenter>()
+                .FirstOrDefault(contentPresenter => Equals(contentPresenter.Content, checkBox.Content));
+            presenter.Should().NotBeNull($"the {checkBox.Name} checkbox should expose a content presenter for its label");
+
+            var stack = FindVisualAncestor<StackPanel>(checkBox);
+            stack.Should().NotBeNull($"the {checkBox.Name} checkbox should be hosted in the View tab Show stack");
+
+            return presenter!.TransformToAncestor(stack!).Transform(new Point(0, 0)).X;
+        }
+
         private static T? FindVisualAncestor<T>(DependencyObject element)
             where T : DependencyObject
         {
@@ -797,6 +850,8 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     public sealed record RibbonIconStackOffsets(IReadOnlyList<string> Labels, IReadOnlyList<double> Offsets);
+
+    public sealed record CheckBoxLabelOffset(string Name, double Offset);
 
     public sealed record CollapsedGroupKeyTip(string GroupName, string KeyTip);
 
