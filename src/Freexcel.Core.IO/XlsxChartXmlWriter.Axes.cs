@@ -22,6 +22,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisMajorUnit,
                 chart.XAxisMinorUnit,
                 chart.XAxisLogScale,
+                chart.XAxisLogBase,
                 chart.XAxisReverseOrder,
                 chart.XAxisNumberFormat,
                 chart.ShowXAxisMajorGridlines,
@@ -59,6 +60,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
+                chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
                 chart.ShowYAxisMajorGridlines,
@@ -99,6 +101,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisMajorUnit,
                     chart.YAxisMinorUnit,
                     chart.YAxisLogScale,
+                    chart.YAxisLogBase,
                     chart.YAxisReverseOrder,
                     chart.YAxisNumberFormat,
                     false,
@@ -141,6 +144,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisMajorUnit,
             chart.YAxisMinorUnit,
             chart.YAxisLogScale,
+            chart.YAxisLogBase,
             chart.YAxisReverseOrder,
             chart.YAxisNumberFormat,
             chart.ShowYAxisMajorGridlines,
@@ -182,6 +186,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
+                chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
                 false,
@@ -251,6 +256,7 @@ internal static partial class XlsxChartXmlWriter
         double? majorUnit,
         double? minorUnit,
         bool logScale,
+        double? logBase,
         bool reverseOrder,
         ChartDataLabelNumberFormat numberFormat,
         bool showMajorGridlines,
@@ -280,7 +286,7 @@ internal static partial class XlsxChartXmlWriter
         new(chartNs + "valAx",
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
-                logScale ? new XElement(chartNs + "logBase", new XAttribute("val", "10")) : null,
+                logScale ? new XElement(chartNs + "logBase", new XAttribute("val", ToXlsxLogBase(logBase))) : null,
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(reverseOrder))),
                 ToAxisBoundXml("max", maximum, chartNs),
                 ToAxisBoundXml("min", minimum, chartNs)),
@@ -441,6 +447,14 @@ internal static partial class XlsxChartXmlWriter
         value is { } numeric && double.IsFinite(numeric)
             ? new XElement(chartNs + elementName, new XAttribute("val", Math.Max(numeric, double.Epsilon).ToString(CultureInfo.InvariantCulture)))
             : null;
+
+    private static string ToXlsxLogBase(double? value)
+    {
+        var numeric = value is { } candidate && double.IsFinite(candidate)
+            ? Math.Clamp(candidate, 2, 1000)
+            : 10;
+        return numeric.ToString(CultureInfo.InvariantCulture);
+    }
 
     private static XElement? ToUnsignedAxisValueXml(string elementName, int value, XNamespace chartNs) =>
         value > 0
