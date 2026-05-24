@@ -3351,6 +3351,25 @@ public class FunctionLibraryTests
             .Should().BeApproximately(Math.PI / 4, 1e-10);
 
     [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=ATAN2(1,A1:A2)", sheet), new NumberValue(Math.Atan2(2, 1)), new NumberValue(Math.Atan2(3, 1)));
+        AssertColumn(_eval.Evaluate("=ATAN2(A1:A2,1)", sheet), new NumberValue(Math.Atan2(1, 2)), new NumberValue(Math.Atan2(1, 3)));
+        AssertColumn(_eval.Evaluate("=COMBIN(5,A1:A2)", sheet), new NumberValue(10), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=PERMUT(5,A1:A2)", sheet), new NumberValue(20), new NumberValue(60));
+
+        var numbers = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(6)));
+        AssertColumn(_eval.Evaluate("=COMBIN(A1:A2,2)", numbers), new NumberValue(10), new NumberValue(15));
+        AssertColumn(_eval.Evaluate("=PERMUT(A1:A2,2)", numbers), new NumberValue(20), new NumberValue(30));
+    }
+
+    [Fact]
     public void Atan2_NonFiniteInput_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
