@@ -334,8 +334,15 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double x = ToNumber(args[0]), mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
+        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
         bool cum = ToBool(args[3]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormDistScalar(value, mean, stdev, cum));
+        return NormDistScalar(args[0], mean, stdev, cum);
+    }
+
+    private static ScalarValue NormDistScalar(ScalarValue xValue, double mean, double stdev, bool cum)
+    {
+        double x = ToNumber(xValue);
         if (stdev <= 0) return ErrorValue.Num;
         double z = (x - mean) / stdev;
         return cum ? NumberResult(NormSCdf(z)) : NumberResult(NormSPdf(z) / stdev);
@@ -346,7 +353,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double prob = ToNumber(args[0]), mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
+        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormInvScalar(value, mean, stdev));
+        return NormInvScalar(args[0], mean, stdev);
+    }
+
+    private static ScalarValue NormInvScalar(ScalarValue probabilityValue, double mean, double stdev)
+    {
+        double prob = ToNumber(probabilityValue);
         if (stdev <= 0 || prob <= 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(NormSInv(prob) * stdev + mean);
     }
@@ -355,15 +369,27 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double z = ToNumber(args[0]);
         bool cum = ToBool(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormSDistScalar(value, cum));
+        return NormSDistScalar(args[0], cum);
+    }
+
+    private static ScalarValue NormSDistScalar(ScalarValue zValue, bool cum)
+    {
+        double z = ToNumber(zValue);
         return cum ? NumberResult(NormSCdf(z)) : NumberResult(NormSPdf(z));
     }
 
     private static ScalarValue NormSInvFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        double prob = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, NormSInvScalar);
+        return NormSInvScalar(args[0]);
+    }
+
+    private static ScalarValue NormSInvScalar(ScalarValue probabilityValue)
+    {
+        double prob = ToNumber(probabilityValue);
         if (prob <= 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(NormSInv(prob));
     }
@@ -373,7 +399,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double x = ToNumber(args[0]), mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
+        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => StandardizeScalar(value, mean, stdev));
+        return StandardizeScalar(args[0], mean, stdev);
+    }
+
+    private static ScalarValue StandardizeScalar(ScalarValue xValue, double mean, double stdev)
+    {
+        double x = ToNumber(xValue);
         if (stdev <= 0) return ErrorValue.Num;
         return NumberResult((x - mean) / stdev);
     }
