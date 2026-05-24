@@ -211,10 +211,29 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonTooltip.Title=\"PivotTable Styles\"");
     }
 
+    [Fact]
+    public void HelpTab_ExposesExcelLikeSupportTrainingAndWhatsNewCommands()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var helpTab = ExtractTabXaml(xaml, "Help", "</TabControl>");
+        var helpGroup = ExtractGroupXaml(helpTab, "Help");
+
+        ExtractGroupLabels(helpTab).Should().Equal("Help");
+        ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
+            "Help Online",
+            "Contact Support",
+            "Send Feedback",
+            "Show Training",
+            "What's New",
+            "About Freexcel");
+    }
+
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)
     {
         var start = FindTabStart(xaml, header, 0);
-        var end = FindTabStart(xaml, nextHeader, start + 1);
+        var end = nextHeader.StartsWith("</", StringComparison.Ordinal)
+            ? xaml.IndexOf(nextHeader, start + 1, StringComparison.Ordinal)
+            : FindTabStart(xaml, nextHeader, start + 1);
 
         start.Should().BeGreaterThanOrEqualTo(0);
         end.Should().BeGreaterThan(start);
