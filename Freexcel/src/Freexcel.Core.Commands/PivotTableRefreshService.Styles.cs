@@ -7,7 +7,7 @@ public static partial class PivotTableRefreshService
     private static void ApplyPivotTableStyle(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
     {
         var materialized = GetMaterializedOutputRange(sheet, pivotTable);
-        var palette = PivotStylePaletteResolver.Resolve(pivotTable.StyleName);
+        var palette = PivotStylePaletteResolver.Resolve(pivotTable.StyleName, workbook.Theme);
         var headerStyle = workbook.RegisterStyle(new CellStyle
         {
             Bold = true,

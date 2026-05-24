@@ -63,6 +63,10 @@ public sealed class PivotTableModel
     public GridRange SourceRange { get; set; }
     public GridRange TargetRange { get; init; }
     public string PackagePart { get; init; } = "";
+    public bool DataOnRows { get; set; } = true;
+    public int FirstHeaderRow { get; set; } = 1;
+    public int FirstDataRow { get; set; } = 1;
+    public int FirstDataColumn { get; set; } = 1;
     public bool ShowSubtotals { get; set; }
     public PivotSubtotalPlacement SubtotalPlacement { get; set; } = PivotSubtotalPlacement.Bottom;
     public bool ShowGrandTotals

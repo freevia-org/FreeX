@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, true, 1, 1, 1, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -119,7 +119,8 @@ internal static partial class XlsxPivotTableReader
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var name = root.Attribute("name")?.Value ?? "";
         var cacheId = XlsxXmlAttributeReader.ReadIntAttribute(root, "cacheId") ?? 0;
-        var targetReference = root.Element(workbookNs + "location")?.Attribute("ref")?.Value ?? "";
+        var location = root.Element(workbookNs + "location");
+        var targetReference = location?.Attribute("ref")?.Value ?? "";
         if (string.IsNullOrWhiteSpace(name) || cacheId <= 0 || string.IsNullOrWhiteSpace(targetReference))
             return false;
 
@@ -145,6 +146,10 @@ internal static partial class XlsxPivotTableReader
             targetReference,
             pivotCache?.SourceReference ?? "",
             pivotPath,
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "dataOnRows", defaultValue: true),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstHeaderRow") ?? 1),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataRow") ?? 1),
+            Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(location!, "firstDataCol") ?? 1),
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "defaultSubtotal"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "subtotalTop")
                 ? PivotSubtotalPlacement.Top
@@ -379,76 +384,6 @@ internal static partial class XlsxPivotTableReader
         string.IsNullOrWhiteSpace(value)
             ? null
             : value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-
-    private static PivotFieldGrouping ReadPivotFieldGrouping(string? value, PivotFieldGrouping defaultValue = PivotFieldGrouping.None) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "years" or "year" => PivotFieldGrouping.Year,
-            "quarters" or "quarter" => PivotFieldGrouping.Quarter,
-            "months" or "month" => PivotFieldGrouping.Month,
-            "days" or "day" => PivotFieldGrouping.Day,
-            "range" or "numberrange" or "number-range" or "number" => PivotFieldGrouping.NumberRange,
-            _ => defaultValue
-        };
-
-    private static PivotReportLayout ReadPivotReportLayout(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "compact" or "compactform" or "compact-form" => PivotReportLayout.Compact,
-            "outline" or "outlineform" or "outline-form" => PivotReportLayout.Outline,
-            _ => PivotReportLayout.Tabular
-        };
-
-    private static PivotShowValuesAs ReadPivotShowValuesAs(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "percentofgrandtotal" or "percent-grand-total" => PivotShowValuesAs.PercentOfGrandTotal,
-            "percentofrowtotal" or "percent-row-total" => PivotShowValuesAs.PercentOfRowTotal,
-            "percentofcolumntotal" or "percentofcoltotal" or "percent-column-total" or "percent-col-total" => PivotShowValuesAs.PercentOfColumnTotal,
-            "runningtotalin" or "running-total-in" => PivotShowValuesAs.RunningTotalIn,
-            "differencefrom" or "difference-from" => PivotShowValuesAs.DifferenceFrom,
-            "percentdifferencefrom" or "percent-difference-from" => PivotShowValuesAs.PercentDifferenceFrom,
-            "ranksmallest" or "rank-smallest" => PivotShowValuesAs.RankSmallest,
-            "ranklargest" or "rank-largest" => PivotShowValuesAs.RankLargest,
-            "index" => PivotShowValuesAs.Index,
-            "percentofparentrowtotal" or "percent-parent-row-total" => PivotShowValuesAs.PercentOfParentRowTotal,
-            "percentofparentcolumntotal" or "percentofparentcoltotal" or "percent-parent-column-total" or "percent-parent-col-total" => PivotShowValuesAs.PercentOfParentColumnTotal,
-            "percentofparenttotal" or "percent-parent-total" => PivotShowValuesAs.PercentOfParentTotal,
-            _ => PivotShowValuesAs.None
-        };
-
-    private static PivotValueFilterKind ReadPivotValueFilterKind(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "bottom" => PivotValueFilterKind.Bottom,
-            "greaterthan" or "greater_than" => PivotValueFilterKind.GreaterThan,
-            "greaterthanorequal" or "greater_than_or_equal" => PivotValueFilterKind.GreaterThanOrEqual,
-            "lessthan" or "less_than" => PivotValueFilterKind.LessThan,
-            "lessthanorequal" or "less_than_or_equal" => PivotValueFilterKind.LessThanOrEqual,
-            "equals" or "equal" => PivotValueFilterKind.Equals,
-            "doesnotequal" or "not_equal" => PivotValueFilterKind.DoesNotEqual,
-            "between" => PivotValueFilterKind.Between,
-            "notbetween" or "not_between" => PivotValueFilterKind.NotBetween,
-            "aboveaverage" or "above_average" => PivotValueFilterKind.AboveAverage,
-            "belowaverage" or "below_average" => PivotValueFilterKind.BelowAverage,
-            _ => PivotValueFilterKind.Top
-        };
-
-    private static PivotLabelFilterKind ReadPivotLabelFilterKind(string? value) =>
-        value?.Trim().ToLowerInvariant() switch
-        {
-            "doesnotequal" or "not_equal" => PivotLabelFilterKind.DoesNotEqual,
-            "beginswith" or "begins_with" => PivotLabelFilterKind.BeginsWith,
-            "endswith" or "ends_with" => PivotLabelFilterKind.EndsWith,
-            "contains" => PivotLabelFilterKind.Contains,
-            "doesnotcontain" or "does_not_contain" => PivotLabelFilterKind.DoesNotContain,
-            "greaterthan" or "greater_than" => PivotLabelFilterKind.GreaterThan,
-            "greaterthanorequal" or "greater_than_or_equal" => PivotLabelFilterKind.GreaterThanOrEqual,
-            "lessthan" or "less_than" => PivotLabelFilterKind.LessThan,
-            "lessthanorequal" or "less_than_or_equal" => PivotLabelFilterKind.LessThanOrEqual,
-            "between" => PivotLabelFilterKind.Between,
-            _ => PivotLabelFilterKind.Equals
-        };
 
     private static List<PivotCalculatedFieldModel> ReadPivotCalculatedFields(XElement? calculatedFieldsElement, XNamespace workbookNs)
     {
