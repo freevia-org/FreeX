@@ -4877,6 +4877,19 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Hyperlink_RangeArgument_SpillsDisplayTextElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("https://example.com/a")),
+            (2, 1, new TextValue("https://example.com/b")),
+            (1, 2, new TextValue("A")),
+            (2, 2, new TextValue("B")));
+
+        AssertTextColumn(_eval.Evaluate("=HYPERLINK(A1:A2)", sheet), "https://example.com/a", "https://example.com/b");
+        AssertTextColumn(_eval.Evaluate("=HYPERLINK(\"https://example.com\",B1:B2)", sheet), "A", "B");
+    }
+
+    [Fact]
     public void T_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -6956,6 +6969,16 @@ public class FunctionLibraryTests
     }
 
     // ── NUMBERVALUE edge cases ───────────────────────────────────────────────
+
+    [Fact]
+    public void Filterxml_RangeXmlArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")));
+
+        AssertTextColumn(_eval.Evaluate("=FILTERXML(A1:A2,\"/root/item\")", sheet), "A", "B");
+    }
 
     [Fact]
     public void Numbervalue_DefaultSeparators_ParsesPlainNumber() =>

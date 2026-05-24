@@ -1052,7 +1052,7 @@ public sealed class FormulaEvaluator
              or "TRIM" or "UPPER" or "LOWER" or "PROPER" or "CLEAN"
              or "TEXT" or "VALUE"
              or "SUBSTITUTE" or "REPT" or "CONCATENATE"
-             or "FIXED" or "DOLLAR" or "T" or "ENCODEURL" or "BAHTTEXT"
+             or "FIXED" or "DOLLAR" or "T" or "HYPERLINK" or "ENCODEURL" or "FILTERXML" or "BAHTTEXT"
              or "ASC" or "DBCS"
              or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
              or "ABS" or "SQRT" or "INT" or "SIGN"
