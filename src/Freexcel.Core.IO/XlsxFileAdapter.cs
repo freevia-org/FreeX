@@ -85,6 +85,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         var loadedScenarioNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);
+        var explicitStyleOnlyStyleIdsByXlsxStyleIndex = new Dictionary<int, StyleId?>();
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
@@ -133,15 +134,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
-            foreach (var (row, col) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
+            foreach (var (row, col, styleIndex) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {
                 if (sheet.GetCell(row, col) is not null)
                     continue;
 
-                var xlCell = xlSheet.Cell((int)row, (int)col);
-                var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
-                if (!style.Equals(CellStyle.Default))
-                    sheet.SetStyleOnly(row, col, workbook.RegisterStyle(style));
+                if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
+                {
+                    var xlCell = xlSheet.Cell((int)row, (int)col);
+                    var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
+                    styleId = style.Equals(CellStyle.Default)
+                        ? null
+                        : workbook.RegisterStyle(style);
+                    explicitStyleOnlyStyleIdsByXlsxStyleIndex[styleIndex] = styleId;
+                }
+
+                if (styleId is { } nonDefaultStyleId)
+                    sheet.SetStyleOnly(row, col, nonDefaultStyleId);
             }
 
             foreach (var hyperlink in xlSheet.Hyperlinks)
