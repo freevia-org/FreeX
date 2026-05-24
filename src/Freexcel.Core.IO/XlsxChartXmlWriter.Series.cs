@@ -287,8 +287,15 @@ internal static partial class XlsxChartXmlWriter
         if (format is null)
             return null;
 
-        var fill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
-        if (format.MarkerStyle is null && format.MarkerSize is null && fill is null)
+        var shapeProperties = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            format.FillThemeColor,
+            format.FillColor,
+            format.MarkerBorderThemeColor,
+            format.MarkerBorderColor,
+            format.MarkerBorderThickness);
+        if (format.MarkerStyle is null && format.MarkerSize is null && shapeProperties is null)
             return null;
 
         return new XElement(chartNs + "marker",
@@ -298,9 +305,7 @@ internal static partial class XlsxChartXmlWriter
             format.MarkerSize is { } markerSize
                 ? new XElement(chartNs + "size", new XAttribute("val", Math.Clamp((int)Math.Round(markerSize), 1, 30)))
                 : null,
-            fill is not null
-                ? new XElement(chartNs + "spPr", fill)
-                : null);
+            shapeProperties);
     }
 
     private static XElement? ToSeriesShapeProperties(
