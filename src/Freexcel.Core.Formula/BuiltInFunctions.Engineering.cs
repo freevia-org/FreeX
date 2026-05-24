@@ -277,6 +277,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue BaseToDecimal(ScalarValue arg, int fromBase, int maxDigits, long signThreshold, long modulus)
     {
         if (arg is ErrorValue error) return error;
+        if (arg is RangeValue range)
+            return MapUnaryTextRange(range, value => BaseToDecimal(value, fromBase, maxDigits, signThreshold, modulus));
         return TryParseBaseNumber(arg, fromBase, maxDigits, signThreshold, modulus, out var value)
             ? new NumberValue(value)
             : ErrorValue.Num;
@@ -285,18 +287,40 @@ public static partial class BuiltInFunctions
     private static ScalarValue BaseToBase(IReadOnlyList<ScalarValue> args, int fromBase, int maxDigits, long signThreshold, long modulus, int toBase, bool upper)
     {
         if (args[0] is ErrorValue error) return error;
-        if (!TryParseBaseNumber(args[0], fromBase, maxDigits, signThreshold, modulus, out var value)) return ErrorValue.Num;
+        if (args.Count > 1 && args[1] is ErrorValue placesError) return placesError;
+        if (args.Count > 1 && args[1] is RangeValue placesRange)
+            return MapUnaryTextRange(placesRange, value => BaseToBaseScalar(args[0], value, fromBase, maxDigits, signThreshold, modulus, toBase, upper));
+        if (args[0] is RangeValue range)
+            return MapUnaryTextRange(range, value => BaseToBaseScalar(value, args.Count > 1 ? args[1] : null, fromBase, maxDigits, signThreshold, modulus, toBase, upper));
+        return BaseToBaseScalar(args[0], args.Count > 1 ? args[1] : null, fromBase, maxDigits, signThreshold, modulus, toBase, upper);
+    }
+
+    private static ScalarValue BaseToBaseScalar(ScalarValue number, ScalarValue? places, int fromBase, int maxDigits, long signThreshold, long modulus, int toBase, bool upper)
+    {
+        if (number is ErrorValue error) return error;
+        if (!TryParseBaseNumber(number, fromBase, maxDigits, signThreshold, modulus, out var value)) return ErrorValue.Num;
         if (value < 0) return DecimalToBaseText(value, toBase, NegativeModulusForBase(toBase), 10, upper);
-        return FormatBaseText(value, toBase, args.Count > 1 ? args[1] : null, upper);
+        return FormatBaseText(value, toBase, places, upper);
     }
 
     private static ScalarValue DecimalToBase(IReadOnlyList<ScalarValue> args, int toBase, long min, long max, long modulus, int negativeWidth, bool upper)
     {
         if (args[0] is ErrorValue error) return error;
-        if (!TryGetEngineeringTruncatedInteger(args[0], out var value)) return ErrorValue.Num;
+        if (args.Count > 1 && args[1] is ErrorValue placesError) return placesError;
+        if (args.Count > 1 && args[1] is RangeValue placesRange)
+            return MapUnaryTextRange(placesRange, value => DecimalToBaseScalar(args[0], value, toBase, min, max, modulus, negativeWidth, upper));
+        if (args[0] is RangeValue range)
+            return MapUnaryTextRange(range, value => DecimalToBaseScalar(value, args.Count > 1 ? args[1] : null, toBase, min, max, modulus, negativeWidth, upper));
+        return DecimalToBaseScalar(args[0], args.Count > 1 ? args[1] : null, toBase, min, max, modulus, negativeWidth, upper);
+    }
+
+    private static ScalarValue DecimalToBaseScalar(ScalarValue number, ScalarValue? places, int toBase, long min, long max, long modulus, int negativeWidth, bool upper)
+    {
+        if (number is ErrorValue error) return error;
+        if (!TryGetEngineeringTruncatedInteger(number, out var value)) return ErrorValue.Num;
         if (value < min || value > max) return ErrorValue.Num;
         if (value < 0) return DecimalToBaseText(value, toBase, modulus, negativeWidth, upper);
-        return FormatBaseText(value, toBase, args.Count > 1 ? args[1] : null, upper);
+        return FormatBaseText(value, toBase, places, upper);
     }
 
     private static ScalarValue DecimalToBaseText(long value, int toBase, long modulus, int width, bool upper)
