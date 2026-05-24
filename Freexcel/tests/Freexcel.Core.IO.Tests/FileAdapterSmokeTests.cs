@@ -13437,8 +13437,12 @@ public partial class FileAdapterSmokeTests
             EnableRefresh = false,
             PreserveSourceSortFilter = false,
             MissingItemsLimit = 0,
+            RecordCount = 2,
+            CreatedVersion = 8,
+            MinRefreshableVersion = 4,
             RefreshedVersion = 7,
-            RefreshedBy = "Freexcel Tests"
+            RefreshedBy = "Freexcel Tests",
+            RefreshedDateIso = "2026-05-24T12:34:56Z"
         };
         cache.Fields.Add(new PivotCacheFieldModel("Category"));
         cache.Fields.Add(new PivotCacheFieldModel("Amount"));
@@ -13467,8 +13471,12 @@ public partial class FileAdapterSmokeTests
             cacheXml.Should().Contain("enableRefresh=\"0\"");
             cacheXml.Should().Contain("preserveSourceSortFilter=\"0\"");
             cacheXml.Should().Contain("missingItemsLimit=\"0\"");
+            cacheXml.Should().Contain("recordCount=\"2\"");
+            cacheXml.Should().Contain("createdVersion=\"8\"");
+            cacheXml.Should().Contain("minRefreshableVersion=\"4\"");
             cacheXml.Should().Contain("refreshedVersion=\"7\"");
             cacheXml.Should().Contain("refreshedBy=\"Freexcel Tests\"");
+            cacheXml.Should().Contain("refreshedDateIso=\"2026-05-24T12:34:56Z\"");
         }
 
         saved.Position = 0;
@@ -13479,8 +13487,12 @@ public partial class FileAdapterSmokeTests
         loadedCache.EnableRefresh.Should().BeFalse();
         loadedCache.PreserveSourceSortFilter.Should().BeFalse();
         loadedCache.MissingItemsLimit.Should().Be(0);
+        loadedCache.RecordCount.Should().Be(2);
+        loadedCache.CreatedVersion.Should().Be(8);
+        loadedCache.MinRefreshableVersion.Should().Be(4);
         loadedCache.RefreshedVersion.Should().Be(7);
         loadedCache.RefreshedBy.Should().Be("Freexcel Tests");
+        loadedCache.RefreshedDateIso.Should().Be("2026-05-24T12:34:56Z");
     }
 
     [Fact]
