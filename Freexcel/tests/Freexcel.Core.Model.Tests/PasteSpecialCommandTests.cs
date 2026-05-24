@@ -408,6 +408,52 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteCommentsCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 2);
+        sheet.Comments[source] = "copy me";
+        sheet.Comments[destination] = "old";
+        sheet.IsProtected = true;
+
+        var outcome = new PasteCommentsCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination,
+            transpose: false).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.Comments[destination].Should().Be("old");
+    }
+
+    [Fact]
+    public void PasteCommentsCommand_AllowsProtectedSheetWithEditObjectsPermission()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 2);
+        sheet.Comments[source] = "copy me";
+        sheet.Comments[destination] = "old";
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditObjects);
+
+        var outcome = new PasteCommentsCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination,
+            transpose: false).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.Comments[destination].Should().Be("copy me");
+    }
+
+    [Fact]
     public void PasteDataValidationCommand_CopiesIntersectingRulesAndUndoRestores()
     {
         var wb = new Workbook("test");
