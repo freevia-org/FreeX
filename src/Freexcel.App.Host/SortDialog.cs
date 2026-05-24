@@ -494,5 +494,12 @@ public sealed class SortOptionsDialog : Window
             DialogResult = true;
         }, buttonWidth: 72));
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _caseSensitiveBox.Focus();
+        Keyboard.Focus(_caseSensitiveBox);
     }
 }
