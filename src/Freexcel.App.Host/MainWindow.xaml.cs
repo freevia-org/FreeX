@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private readonly IAppDiagnostics? _diagnostics;
+    private readonly AppDiagnosticsMetadata _diagnosticsMetadata;
+    private readonly AppDiagnosticsOptions _diagnosticsOptions;
     private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
     private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
@@ -104,7 +106,9 @@ public partial class MainWindow : Window
         IEnumerable<IFileAdapter> fileAdapters,
         WorkbookRef workbookRef,
         Workbook workbook,
-        IAppDiagnostics? diagnostics = null)
+        IAppDiagnostics? diagnostics = null,
+        AppDiagnosticsMetadata? diagnosticsMetadata = null,
+        AppDiagnosticsOptions? diagnosticsOptions = null)
     {
         _logger = logger;
         _viewportService = viewportService;
@@ -112,6 +116,8 @@ public partial class MainWindow : Window
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
         _diagnostics = diagnostics;
+        _diagnosticsMetadata = diagnosticsMetadata ?? AppDiagnosticsMetadata.Create(AppInfo.VersionText);
+        _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
         _workbookRef = workbookRef;
         _workbook = workbook;
         _recentFiles = RecentFilesStore.Load();

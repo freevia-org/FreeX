@@ -199,6 +199,19 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
+    public void NameManagerWarnings_UseOwnedMessageBoxes()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        source.Should().Contain("MessageBox.Show(this, \"Select a named range to edit.\"");
+        source.Should().Contain("MessageBox.Show(this, \"Please enter a name.\"");
+        source.Should().Contain("MessageBox.Show(this,");
+        source.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not define named range.\"");
+        source.Should().Contain("MessageBox.Show(this, \"Select a named range to delete.\"");
+        source.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not delete.\"");
+    }
+
+    [Fact]
     public void Planner_FiltersWorkbookAndWorksheetScopedNames()
     {
         var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");

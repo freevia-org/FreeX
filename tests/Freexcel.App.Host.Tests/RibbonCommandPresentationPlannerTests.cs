@@ -77,6 +77,8 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Check Accessibility", RibbonCommandIconKind.Accessibility)]
     [InlineData("Protect Sheet", RibbonCommandIconKind.Protect)]
     [InlineData("Help Online", RibbonCommandIconKind.Help)]
+    [InlineData("Report Issue", RibbonCommandIconKind.Feedback)]
+    [InlineData("Copy Diagnostics", RibbonCommandIconKind.Info)]
     [InlineData("What's New", RibbonCommandIconKind.Info)]
     [InlineData("Unknown Command", RibbonCommandIconKind.Generic)]
     public void GetIcon_MapsKnownCommandsToSemanticVectorKinds(string commandName, RibbonCommandIconKind expectedKind)
@@ -93,7 +95,8 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Fill", RibbonCommandIconAccent.Fill)]
     [InlineData("Error Checking", RibbonCommandIconAccent.Warning)]
     [InlineData("Protect Workbook", RibbonCommandIconAccent.Protect)]
-    [InlineData("Send Feedback", RibbonCommandIconAccent.Help)]
+    [InlineData("Report Issue", RibbonCommandIconAccent.Help)]
+    [InlineData("Copy Diagnostics", RibbonCommandIconAccent.Help)]
     [InlineData("Contact Support", RibbonCommandIconAccent.Help)]
     [InlineData("Show Training", RibbonCommandIconAccent.Help)]
     [InlineData("What's New", RibbonCommandIconAccent.Help)]

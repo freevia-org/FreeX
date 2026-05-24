@@ -6,6 +6,7 @@ public static partial class RibbonCommandPresentationPlanner
     {
         var name = commandName.ToLowerInvariant();
 
+        if (name.Contains("diagnostics")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
         if (name == "insert") return new(RibbonCommandIconKind.Insert);
         if (name.Contains("undo")) return new(RibbonCommandIconKind.Undo);
@@ -188,7 +189,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
         if (name.Contains("about")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
-        if (name.Contains("feedback")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
+        if (name.Contains("feedback") || name.Contains("report issue")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
         if (name.Contains("report layout")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("blank row")) return new(RibbonCommandIconKind.PageBreak);
         if (name.Contains("grand total")) return new(RibbonCommandIconKind.Sum);

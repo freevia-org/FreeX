@@ -184,6 +184,18 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void BetaDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var xValues = MakeSheet((1, 1, 0.25), (2, 1, 0.5));
+
+        AssertColumnApproximately(Eval("BETA.DIST(A1:A2,1,1,TRUE)", xValues), 0.25, 0.5);
+        AssertColumnApproximately(Eval("BETA.DIST(A1:A2,1,1,FALSE)", xValues), 1.0, 1.0);
+
+        var probabilities = MakeSheet((1, 1, 0.25), (2, 1, 0.5));
+        AssertColumnApproximately(Eval("BETA.INV(A1:A2,1,1)", probabilities), 0.25, 0.5);
+    }
+
+    [Fact]
     public void TDist_CumulativeAt0_Returns0Point5()
         => Calc("T.DIST(0,10,TRUE)").Should().BeApproximately(0.5, 1e-10);
 
