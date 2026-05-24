@@ -75,13 +75,13 @@ public static partial class NumberFormatter
 
         if (value < 0)
         {
-            if (sections.Length >= 2 && sections[1].Format != "")
+            if (sections.Length >= 2)
                 return (sections[1], Math.Abs(value));
 
             return (sections[0], value);
         }
 
-        if (sections.Length >= 3 && sections[2].Format != "")
+        if (sections.Length >= 3)
             return (sections[2], value);
 
         return (sections[0], value);
