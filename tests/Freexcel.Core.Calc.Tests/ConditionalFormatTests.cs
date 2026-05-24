@@ -25,7 +25,42 @@ public class ConditionalFormatTests
     private static DisplayCell GetCell(ViewportModel vp, uint row, uint col) =>
         vp.Cells.Single(c => c.Row == row && c.Col == col);
 
+    [Fact]
+    public void ConditionalFormatAggregates_DoNotEnumerateEveryCellInLargeAppliesToRanges()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.Calc", "ViewportService.ConditionalFormats.cs"));
+
+        source.Should().NotContain(
+            "cf.AppliesTo.AllCells()",
+            "viewport refreshes for full-column or full-sheet conditional formats should scan sparse used cells instead of every address");
+    }
+
     // ─── tests ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ColorScale_LargeSparseRange_UsesOccupiedCellsForAggregates()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(0)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1_000_000, 1), Cell.FromValue(new NumberValue(100)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, CellAddress.MaxRow, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            MinColor = new RgbColor(0, 255, 0),
+            MaxColor = new RgbColor(255, 0, 0),
+            UseThreeColorScale = false
+        });
+
+        var viewport = GetViewport(wb, sheet);
+
+        GetCell(viewport, 1, 1).Style!.FillColor.Should().Be(new CellColor(0, 255, 0));
+    }
 
     [Fact]
     public void CellValue_GreaterThan_AppliesFormatToMatchingCells()
@@ -560,5 +595,19 @@ public class ConditionalFormatTests
     {
         public Workbook Workbook => wb;
         public Sheet GetSheet(SheetId id) => wb.GetSheet(id)!;
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(parts));
     }
 }
