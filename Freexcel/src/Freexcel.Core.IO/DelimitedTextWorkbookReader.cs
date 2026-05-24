@@ -169,19 +169,20 @@ internal static partial class DelimitedTextWorkbookReader
     {
         using var memory = new MemoryStream();
         stream.CopyTo(memory);
-        var bytes = memory.ToArray();
+        if (!memory.TryGetBuffer(out var bytes))
+            throw new InvalidOperationException("Buffered delimited text stream is not accessible.");
 
-        return new StringReader(DecodeText(bytes));
+        return new StringReader(DecodeText(bytes.AsSpan()));
     }
 
-    private static string DecodeText(byte[] bytes)
+    private static string DecodeText(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length >= 3 &&
             bytes[0] == 0xEF &&
             bytes[1] == 0xBB &&
             bytes[2] == 0xBF)
         {
-            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+            return Encoding.UTF8.GetString(bytes[3..]);
         }
 
         if (bytes.Length >= 4 &&
@@ -190,7 +191,7 @@ internal static partial class DelimitedTextWorkbookReader
             bytes[2] == 0x00 &&
             bytes[3] == 0x00)
         {
-            return Encoding.UTF32.GetString(bytes, 4, bytes.Length - 4);
+            return Encoding.UTF32.GetString(bytes[4..]);
         }
 
         if (bytes.Length >= 4 &&
@@ -200,21 +201,21 @@ internal static partial class DelimitedTextWorkbookReader
             bytes[3] == 0xFF)
         {
             return new UTF32Encoding(bigEndian: true, byteOrderMark: true)
-                .GetString(bytes, 4, bytes.Length - 4);
+                .GetString(bytes[4..]);
         }
 
         if (bytes.Length >= 2 &&
             bytes[0] == 0xFF &&
             bytes[1] == 0xFE)
         {
-            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+            return Encoding.Unicode.GetString(bytes[2..]);
         }
 
         if (bytes.Length >= 2 &&
             bytes[0] == 0xFE &&
             bytes[1] == 0xFF)
         {
-            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+            return Encoding.BigEndianUnicode.GetString(bytes[2..]);
         }
 
         try
