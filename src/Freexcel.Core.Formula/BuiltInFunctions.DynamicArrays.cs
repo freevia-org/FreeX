@@ -46,7 +46,7 @@ public static partial class BuiltInFunctions
         var include = args[1] is RangeValue includeRange
             ? includeRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        var ifEmpty = args.Count > 2 ? args[2] : ErrorValue.Calc;
+        var ifEmpty = args.Count > 2 && args[2] is not BlankValue ? args[2] : ErrorValue.Calc;
 
         if (include.ColCount == 1 && include.RowCount == arr.RowCount)
             return FilterRows(arr, include, ifEmpty);
