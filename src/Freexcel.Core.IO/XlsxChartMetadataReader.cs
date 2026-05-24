@@ -32,6 +32,7 @@ internal static class XlsxChartMetadataReader
 
         chart.ColorMapOverride = ReadColorMapOverride(chartXml.Root?.Element(ChartNs + "clrMapOvr"));
         chart.ExternalData = ReadExternalData(chartXml.Root?.Element(ChartNs + "externalData"));
+        chart.UserShapes = ReadUserShapes(chartXml.Root?.Element(ChartNs + "userShapes"));
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
         chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
         ApplyDefaultTextProperties(chartXml.Root?.Element(ChartNs + "txPr"), chart);
@@ -196,6 +197,17 @@ internal static class XlsxChartMetadataReader
                 FirstFooter = ReadOptionalTextElement(headerFooter, "firstFooter")
             }
         };
+    }
+
+    private static ChartUserShapesModel? ReadUserShapes(XElement? userShapes)
+    {
+        if (userShapes is null)
+            return null;
+
+        var relationshipId = userShapes.Attribute(OfficeRelNs + "id")?.Value;
+        return string.IsNullOrWhiteSpace(relationshipId)
+            ? null
+            : new ChartUserShapesModel { RelationshipId = relationshipId };
     }
 
     private static string? ReadOptionalTextElement(XElement parent, string localName)
