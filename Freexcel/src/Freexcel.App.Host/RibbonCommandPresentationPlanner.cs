@@ -262,6 +262,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help);
         if (name.Contains("training")) return new(RibbonCommandIconKind.Book);
         if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
+        if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("blog")) return new(RibbonCommandIconKind.Generic);
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
