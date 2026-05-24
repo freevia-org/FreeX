@@ -707,6 +707,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialogInvalidRange_RefocusesAndSelectsInvalidRangeInput()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+
+        source.Should().Contain("FocusInvalidRangeInput(error);");
+        source.Should().Contain("private void FocusInvalidRangeInput(string? error)");
+        source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
