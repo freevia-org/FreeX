@@ -59,6 +59,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPhoneticPropertyMapper.Save(packageStream, workbook);
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.AutoFilter is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
         {
             packageStream.Position = 0;
@@ -200,6 +206,12 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        if (workbook.Sheets.Any(sheet => sheet.AutoFilter is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
 
         if (workbook.Sheets.Any(XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes))
         {

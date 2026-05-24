@@ -77,6 +77,12 @@ public sealed partial class NativeJsonAdapter
         public string? ValueType { get; set; }
     }
 
+    private class WorksheetAutoFilterDto
+    {
+        public string? Reference { get; set; }
+        public string? NativeXml { get; set; }
+    }
+
     private class CustomViewDto
     {
         public string Name { get; set; } = "";
@@ -139,6 +145,7 @@ public sealed partial class NativeJsonAdapter
         public uint? ActiveCol { get; set; }
         public uint? SplitRow { get; set; }
         public uint? SplitColumn { get; set; }
+        public WorksheetAutoFilterDto? AutoFilter { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }

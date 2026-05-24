@@ -36,6 +36,18 @@ public sealed class ExcelParityDateSerialTests
             new NumberValue(0.5625));
     }
 
+    [Fact]
+    public void DateAndTime_RangeTrailingArguments_SpillElementwise()
+    {
+        var dateParts = Sheet((1, 1, 1), (2, 1, 2));
+        var timeParts = Sheet((1, 1, 15), (2, 1, 45));
+
+        AssertColumn(_eval.Evaluate("=DATE(2024,A1:A2,15)", dateParts), new NumberValue(45306), new NumberValue(45337));
+        AssertColumn(_eval.Evaluate("=DATE(2024,1,A1:A2)", dateParts), new NumberValue(45292), new NumberValue(45293));
+        AssertColumn(_eval.Evaluate("=TIME(1,A1:A2,0)", timeParts), new NumberValue(75.0 / 1440.0), new NumberValue(105.0 / 1440.0));
+        AssertColumn(_eval.Evaluate("=TIME(1,0,A1:A2)", timeParts), new NumberValue(3615.0 / 86400.0), new NumberValue(3645.0 / 86400.0));
+    }
+
     [Theory]
     [InlineData("=DATE(1900,0,31)")]
     [InlineData("=DATE(1900,-1,62)")]
