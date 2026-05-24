@@ -658,8 +658,8 @@ public partial class MainWindow
         var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
-        var iconSize = layoutKind == RibbonCommandLayoutKind.Large ? 32 : 20;
-        var slotSize = layoutKind == RibbonCommandLayoutKind.Large ? 34 : 20;
+        var iconSize = layoutKind == RibbonCommandLayoutKind.Large ? 32 : 22;
+        var slotSize = layoutKind == RibbonCommandLayoutKind.Large ? 34 : 24;
         var iconSlot = new Border
         {
             Width = slotSize,

@@ -259,6 +259,9 @@ public static partial class RibbonIconFactory
             case RibbonCommandIconKind.Delete:
                 DrawDelete(canvas, glyphBrush);
                 break;
+            case RibbonCommandIconKind.Clear:
+                DrawClear(canvas, glyphBrush);
+                break;
             case RibbonCommandIconKind.Group:
             case RibbonCommandIconKind.Ungroup:
             case RibbonCommandIconKind.Expand:
@@ -414,10 +417,11 @@ public static partial class RibbonIconFactory
 
     private static void DrawWrap(Canvas canvas, Brush brush)
     {
-        AddLine(canvas, 5, 7, 19, 7, brush, 1.3);
-        AddLine(canvas, 5, 11, 16, 11, brush, 1.3);
-        AddPath(canvas, "M16,11 C20,11 20,17 16,17 L11,17", brush, 1.4);
-        AddPath(canvas, "M13,14 L10,17 L13,20", brush, 1.4);
+        AddLine(canvas, 4, 6, 19, 6, brush, 1);
+        AddLine(canvas, 4, 10, 17, 10, brush, 1);
+        AddLine(canvas, 4, 18, 14, 18, brush, 1);
+        AddPath(canvas, "M17,10 C21,10 21,18 16,18 L12,18", brush, 1.2);
+        AddPath(canvas, "M14,15 L11,18 L14,21", brush, 1.2);
     }
 
     private static void DrawAlign(Canvas canvas, Brush brush)
@@ -523,9 +527,9 @@ public static partial class RibbonIconFactory
 
     private static void DrawSortLines(Canvas canvas, Brush brush)
     {
-        AddLine(canvas, 6, 7, 18, 7, brush);
-        AddLine(canvas, 6, 12, 15, 12, brush);
-        AddLine(canvas, 6, 17, 12, 17, brush);
+        DrawText(canvas, "A", brush, 8.5, FontWeights.SemiBold, x: 2, y: 1);
+        DrawText(canvas, "Z", brush, 8.5, FontWeights.SemiBold, x: 2, y: 10);
+        AddPath(canvas, "M17,5 L17,18 M14,15 L17,18 L20,15", brush, 1.2);
     }
 
     private static void DrawRefresh(Canvas canvas, Brush brush)
@@ -594,9 +598,10 @@ public static partial class RibbonIconFactory
 
     private static void DrawFill(Canvas canvas, Brush brush)
     {
-        AddPath(canvas, "M7,5 L15,13 L10,18 L4,12 Z", brush, 1.6);
-        AddLine(canvas, 4, 12, 15, 12, brush, 1.4);
-        AddFilledRectangle(canvas, 15, 17, 5, 2, brush);
+        AddRectangle(canvas, 7, 4, 9, 16, brush);
+        AddLine(canvas, 7, 8, 16, 8, brush, 1);
+        AddLine(canvas, 7, 12, 16, 12, brush, 1);
+        AddPath(canvas, "M17,5 L13,13 L17,13 L14,20 L21,10 L17,10 Z", brush, 1.1, brush, 0.18);
     }
 
     private static void DrawBorder(Canvas canvas, Brush brush)
@@ -639,6 +644,13 @@ public static partial class RibbonIconFactory
     {
         AddLine(canvas, 7, 7, 17, 17, brush, 1.8);
         AddLine(canvas, 17, 7, 7, 17, brush, 1.8);
+    }
+
+    private static void DrawClear(Canvas canvas, Brush brush)
+    {
+        AddPath(canvas, "M7,14 L14,7 L20,13 L13,20 Z", brush, 1.4);
+        AddLine(canvas, 5, 20, 20, 20, brush, 1.2);
+        AddLine(canvas, 11, 10, 17, 16, brush, 1);
     }
 
     private static void DrawOutlineGroup(Canvas canvas, Brush brush)

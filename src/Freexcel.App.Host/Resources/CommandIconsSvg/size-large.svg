@@ -1,8 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  
-  <path d="M9.6 4.48 H22.4 V27.52 H9.6 Z" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M7.36 6.4 L7.36 25.6" stroke-width="1.44" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <polygon points="4.96 21.76 7.36 25.6 9.76 21.76" fill="#0078d4"/>
-  <path d="M24.64 25.6 L24.64 6.4" stroke-width="1.44" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <polygon points="27.04 10.24 24.64 6.4 22.24 10.24" fill="#0078d4"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <rect class="f s" x="8" y="9.6" width="16" height="12.8" stroke-width="1"/>
+  <path class="r" d="M6.4 25.6 L25.6 25.6" stroke-width="1"/>
+  <polygon class="b" points="21.76 28 25.6 25.6 21.76 23.2"/>
+  <path class="r" d="M27.2 24 L27.2 8" stroke-width="1"/>
+  <polygon class="b" points="29.6 11.84 27.2 8 24.8 11.84"/>
 </svg>
