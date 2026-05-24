@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
 
@@ -49,6 +50,7 @@ public partial class PivotValueFilterDialog : Window
                 out var error))
         {
             MessageBox.Show(this, error ?? "Enter a valid value filter.", "Value Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidValueFilterInput(error);
             return;
         }
 
@@ -60,5 +62,15 @@ public partial class PivotValueFilterDialog : Window
     {
         ValueFilterKindBox.Focus();
         Keyboard.Focus(ValueFilterKindBox);
+    }
+
+    private void FocusInvalidValueFilterInput(string? error)
+    {
+        var target = string.Equals(error, "Enter a numeric ending comparison value.", StringComparison.Ordinal)
+            ? ValueFilterValue2Box
+            : ValueFilterValueBox;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 }

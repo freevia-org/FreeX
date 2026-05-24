@@ -73,6 +73,7 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisMajorUnit { get; set; }
         public double? XAxisMinorUnit { get; set; }
         public bool XAxisLogScale { get; set; }
+        public bool XAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowXAxisMajorGridlines { get; set; }
         public bool ShowXAxisMinorGridlines { get; set; }
@@ -83,6 +84,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
         public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowXAxisLabels { get; set; } = true;
+        public ChartAxisTickLabelPosition XAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
         public CellColor? XAxisLabelTextColor { get; set; }
         public ThemeColorReferenceDto? XAxisLabelTextThemeColor { get; set; }
         public double XAxisLabelFontSize { get; set; } = 11;
@@ -106,6 +108,7 @@ public sealed partial class NativeJsonAdapter
         public double? YAxisMajorUnit { get; set; }
         public double? YAxisMinorUnit { get; set; }
         public bool YAxisLogScale { get; set; }
+        public bool YAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowYAxisMajorGridlines { get; set; }
         public bool ShowYAxisMinorGridlines { get; set; }
@@ -115,6 +118,7 @@ public sealed partial class NativeJsonAdapter
         public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
         public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
         public bool ShowYAxisLabels { get; set; } = true;
+        public ChartAxisTickLabelPosition YAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
         public CellColor? YAxisLabelTextColor { get; set; }
         public ThemeColorReferenceDto? YAxisLabelTextThemeColor { get; set; }
         public double YAxisLabelFontSize { get; set; } = 11;

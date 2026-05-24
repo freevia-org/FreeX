@@ -38,6 +38,9 @@ public sealed partial class XlsxFileAdapter
         Dictionary<uint, int> ColOutlineLevels,
         HashSet<uint> GroupHiddenRows,
         HashSet<uint> GroupHiddenCols,
+        Dictionary<uint, double> RowHeights,
+        Dictionary<uint, double> ColumnWidths,
+        IReadOnlyList<(uint Row, uint Col, string Text)> Comments,
         IReadOnlyList<XlsxChartPackagePart> ChartParts,
         IReadOnlyList<XlsxPicturePackagePart> PictureParts,
         IReadOnlyList<XlsxTextBoxPackagePart> TextBoxParts,
@@ -158,6 +161,8 @@ public sealed partial class XlsxFileAdapter
         var colOutlineLevels = new Dictionary<uint, int>();
         var groupHiddenRows = new HashSet<uint>();
         var groupHiddenCols = new HashSet<uint>();
+        var rowHeights = new Dictionary<uint, double>();
+        var columnWidths = new Dictionary<uint, double>();
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -168,6 +173,9 @@ public sealed partial class XlsxFileAdapter
 
             if (IsTruthy(row.Attribute("hidden")?.Value))
                 hiddenRows.Add(rowNumber);
+
+            if (ParseOptionalDouble(row.Attribute("ht")?.Value) is { } heightPoints && heightPoints > 0)
+                rowHeights[rowNumber] = heightPoints * (96.0 / 72.0);
 
             var outlineStr = row.Attribute("outlineLevel")?.Value;
             if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
@@ -183,6 +191,8 @@ public sealed partial class XlsxFileAdapter
             if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
                 continue;
             if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
+                continue;
+            if (min > max)
                 continue;
 
             if (IsTruthy(col.Attribute("hidden")?.Value))
@@ -201,6 +211,18 @@ public sealed partial class XlsxFileAdapter
                     if (collapsed)
                         groupHiddenCols.Add(colNumber);
                 }
+            }
+
+            if (IsTruthy(col.Attribute("customWidth")?.Value) &&
+                ParseOptionalDouble(col.Attribute("width")?.Value) is { } width &&
+                width > 0)
+            {
+                if (col.Attribute("style") is not null && width <= 9.2)
+                    continue;
+
+                width = Math.Floor(width);
+                for (var colNumber = min; colNumber <= max; colNumber++)
+                    columnWidths[colNumber] = width;
             }
         }
 
@@ -240,6 +262,7 @@ public sealed partial class XlsxFileAdapter
         var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
+        var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -276,6 +299,9 @@ public sealed partial class XlsxFileAdapter
             colOutlineLevels,
             groupHiddenRows,
             groupHiddenCols,
+            rowHeights,
+            columnWidths,
+            comments,
             chartParts,
             pictureParts,
             textBoxParts,

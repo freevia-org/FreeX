@@ -7,6 +7,14 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 {
     public static MemoryStream Create(MemoryStream sourcePackage)
     {
+        sourcePackage.Position = 0;
+        if (!RequiresSanitization(sourcePackage))
+        {
+            sourcePackage.Position = 0;
+            return sourcePackage;
+        }
+
+        sourcePackage.Position = 0;
         var sanitized = new MemoryStream();
         if (sourcePackage.TryGetBuffer(out var sourceBuffer))
             sanitized.Write(sourceBuffer.Array!, sourceBuffer.Offset, sourceBuffer.Count);
@@ -21,6 +29,54 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
         sanitized.Position = 0;
         return sanitized;
+    }
+
+    private static bool RequiresSanitization(Stream sourcePackage)
+    {
+        try
+        {
+            using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+            return HasPivotPackageMetadata(archive) ||
+                   HasUnsupportedConditionalFormattingBlocks(archive);
+        }
+        catch
+        {
+            return true;
+        }
+        finally
+        {
+            if (sourcePackage.CanSeek)
+                sourcePackage.Position = 0;
+        }
+    }
+
+    private static bool HasPivotPackageMetadata(ZipArchive archive) =>
+        archive.Entries.Any(entry =>
+            entry.FullName.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+            entry.FullName.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            if (root
+                .Elements(worksheetNs + "conditionalFormatting")
+                .Any(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void RemoveUnsupportedConditionalFormattingBlocks(ZipArchive archive)

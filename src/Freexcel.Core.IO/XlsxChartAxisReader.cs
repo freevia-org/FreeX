@@ -183,12 +183,15 @@ internal static class XlsxChartAxisReader
         var majorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
         var minorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
         var logScale = scaling?.Element(ChartNs + "logBase") is not null;
+        var reverseOrder = IsReverseOrientation(scaling);
         var numberFormat = FromXlsxNumberFormatCode(axisElement.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
         var majorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines"));
         var minorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines"));
         var majorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         var minorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
-        var showLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
+        var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
+        var showLabels = tickLabelPositionValue != "none";
+        var tickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
         var axisLine = ReadAxisLine(axisElement.Element(ChartNs + "spPr"));
         var crossing = ReadAxisCrossing(axisElement);
         var displayUnit = FromXlsxAxisDisplayUnit(
@@ -204,11 +207,13 @@ internal static class XlsxChartAxisReader
             chart.XAxisMajorUnit = majorUnit;
             chart.XAxisMinorUnit = minorUnit;
             chart.XAxisLogScale = logScale;
+            chart.XAxisReverseOrder = reverseOrder;
             chart.XAxisNumberFormat = numberFormat;
             ApplyXAxisGridlineProperties(chart, majorGridline, minorGridline);
             chart.XAxisMajorTickStyle = majorTickStyle;
             chart.XAxisMinorTickStyle = minorTickStyle;
             chart.ShowXAxisLabels = showLabels;
+            chart.XAxisTickLabelPosition = tickLabelPosition;
             ApplyXAxisLineProperties(chart, axisLine);
             chart.XAxisCrosses = crossing.Crosses;
             chart.XAxisCrossesAt = crossing.CrossesAt;
@@ -222,11 +227,13 @@ internal static class XlsxChartAxisReader
         chart.YAxisMajorUnit = majorUnit;
         chart.YAxisMinorUnit = minorUnit;
         chart.YAxisLogScale = logScale;
+        chart.YAxisReverseOrder = reverseOrder;
         chart.YAxisNumberFormat = numberFormat;
         ApplyYAxisGridlineProperties(chart, majorGridline, minorGridline);
         chart.YAxisMajorTickStyle = majorTickStyle;
         chart.YAxisMinorTickStyle = minorTickStyle;
         chart.ShowYAxisLabels = showLabels;
+        chart.YAxisTickLabelPosition = tickLabelPosition;
         ApplyYAxisLineProperties(chart, axisLine);
         chart.YAxisCrosses = crossing.Crosses;
         chart.YAxisCrossesAt = crossing.CrossesAt;
@@ -243,9 +250,12 @@ internal static class XlsxChartAxisReader
             chart,
             ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines")),
             ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
+        chart.XAxisReverseOrder = IsReverseOrientation(axisElement.Element(ChartNs + "scaling"));
         chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
-        chart.ShowXAxisLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
+        var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
+        chart.ShowXAxisLabels = tickLabelPositionValue != "none";
+        chart.XAxisTickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
         chart.XAxisLabelSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickLblSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
@@ -373,6 +383,14 @@ internal static class XlsxChartAxisReader
             _ => fallback
         };
 
+    private static ChartAxisTickLabelPosition FromXlsxTickLabelPosition(string? value) =>
+        value switch
+        {
+            "low" => ChartAxisTickLabelPosition.Low,
+            "high" => ChartAxisTickLabelPosition.High,
+            _ => ChartAxisTickLabelPosition.NextTo
+        };
+
     private static ChartAxisCrosses FromXlsxAxisCrosses(string? value) =>
         value switch
         {
@@ -431,4 +449,7 @@ internal static class XlsxChartAxisReader
 
     private static bool ReadBool(string? value) =>
         value is "1" or "true";
+
+    private static bool IsReverseOrientation(XElement? scaling) =>
+        scaling?.Element(ChartNs + "orientation")?.Attribute("val")?.Value == "maxMin";
 }

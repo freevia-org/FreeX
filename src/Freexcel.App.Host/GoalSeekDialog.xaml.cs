@@ -55,6 +55,7 @@ public partial class GoalSeekDialog : Window
                 out var error))
         {
             MessageBox.Show(error, "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidInput(error);
             return;
         }
 
@@ -65,6 +66,26 @@ public partial class GoalSeekDialog : Window
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private void FocusInvalidInput(string error)
+    {
+        var target = ResolveInvalidInputTarget(error);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private TextBox ResolveInvalidInputTarget(string error)
+    {
+        if (string.Equals(error, "Please enter the Set cell address.", StringComparison.Ordinal) ||
+            !CellAddress.TryParse(SetCellBox.Text.Trim(), _sheetId, out _))
+            return SetCellBox;
+
+        if (error.Contains("valid number", StringComparison.Ordinal))
+            return ToValueBox;
+
+        return ChangingCellBox;
+    }
 
     private void RangePickerButton_Click(object sender, RoutedEventArgs e)
     {

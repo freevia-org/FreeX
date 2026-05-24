@@ -388,7 +388,7 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartInsert_UsesTypeDialogInsteadOfHardCodedColumn()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotChartCommands.cs"));
         var methodStart = source.IndexOf("private void PivotChartBtn_Click", StringComparison.Ordinal);
         var methodEnd = source.IndexOf("private void PivotChartChangeTypeBtn_Click", StringComparison.Ordinal);
         methodStart.Should().BeGreaterThanOrEqualTo(0);

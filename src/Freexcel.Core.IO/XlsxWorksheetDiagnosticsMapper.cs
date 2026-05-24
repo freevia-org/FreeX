@@ -87,10 +87,10 @@ internal static class XlsxWorksheetDiagnosticsMapper
 
         foreach (var sheet in workbook.Sheets)
         {
-            var ignoredCells = sheet.GetUsedCells()
-                .Where(pair => pair.Value.IgnoreFormulaError)
-                .OrderBy(pair => pair.Key.Row)
-                .ThenBy(pair => pair.Key.Col)
+            var ignoredCells = sheet.EnumerateCells()
+                .Where(pair => pair.Cell.IgnoreFormulaError)
+                .OrderBy(pair => pair.Address.Row)
+                .ThenBy(pair => pair.Address.Col)
                 .ToList();
             if (ignoredCells.Count == 0)
                 continue;
@@ -112,7 +112,7 @@ internal static class XlsxWorksheetDiagnosticsMapper
                 workbookNs + "ignoredErrors",
                 ignoredCells.Select(pair => new XElement(
                     workbookNs + "ignoredError",
-                    new XAttribute("sqref", pair.Key.ToA1()),
+                    new XAttribute("sqref", pair.Address.ToA1()),
                     new XAttribute("numberStoredAsText", "1"),
                     new XAttribute("evalError", "1"),
                     new XAttribute("formula", "1"),

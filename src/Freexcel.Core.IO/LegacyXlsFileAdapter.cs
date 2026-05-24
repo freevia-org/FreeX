@@ -10,7 +10,8 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     public string FormatName => "Excel 97-2003 Workbook";
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
-        new(".xls", "Excel 97-2003 Workbook", CanOpen: true, CanSave: false)
+        new(".xls", "Excel 97-2003 Workbook", CanOpen: true, CanSave: false),
+        new(".xlsb", "Excel Binary Workbook", CanOpen: true, CanSave: false)
     ];
 
     public Workbook Load(Stream stream)
