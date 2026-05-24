@@ -57,7 +57,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         using var xlWorkbook = new XLWorkbook(closedXmlPackageStream);
         var workbook = new Workbook("Untitled");
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, new XlsxSourcePackage(packageStream.ToArray()));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
