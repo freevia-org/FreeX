@@ -135,7 +135,10 @@ public sealed partial class SelectDataSourceDialog : Window
 
     private static void HiddenEmptyCellsButton_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show(
+        var owner = sender is DependencyObject dependencyObject
+            ? Window.GetWindow(dependencyObject)
+            : null;
+        MessageBox.Show(owner,
             "Hidden rows and columns are not plotted. Empty cells are shown as gaps.",
             "Hidden and Empty Cell Settings",
             MessageBoxButton.OK,
