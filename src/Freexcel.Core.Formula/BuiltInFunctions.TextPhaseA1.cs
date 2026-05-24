@@ -11,7 +11,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Unichar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, UnicharScalar);
+        return UnicharScalar(args[0]);
+    }
+
+    private static ScalarValue UnicharScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Value;
         int codePoint = (int)Math.Truncate(n);
         if (codePoint <= 0 || codePoint > 0x10FFFF) return ErrorValue.Value;
@@ -22,7 +28,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue UnicodeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, UnicodeScalar);
+        return UnicodeScalar(args[0]);
+    }
+
+    private static ScalarValue UnicodeScalar(ScalarValue value)
+    {
+        var text = ToText(value);
         if (text.Length == 0) return ErrorValue.Value;
         if (char.IsHighSurrogate(text[0]))
         {
@@ -39,10 +51,16 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
-        var text = ToText(args[0]).Trim();
         var decSep = args.Count > 1 ? ToText(args[1]) : ".";
         var grpSep = args.Count > 2 ? ToText(args[2]) : ",";
+        if (args[0] is RangeValue range)
+            return MapUnaryTextRange(range, value => NumbervalueScalar(value, decSep, grpSep));
+        return NumbervalueScalar(args[0], decSep, grpSep);
+    }
 
+    private static ScalarValue NumbervalueScalar(ScalarValue value, string decSep, string grpSep)
+    {
+        var text = ToText(value).Trim();
         // Validate separators per Excel spec
         if (decSep.Length != 1) return ErrorValue.Value;
         if (grpSep.Length == 0) return ErrorValue.Value;

@@ -15,6 +15,7 @@ internal sealed class NameDefinitionDialog : Window
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
     private readonly IReadOnlyList<string> _scopeOptions;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
+    private readonly Func<string, bool> _isValidRange;
 
     public NameDefinitionDialogResult Result { get; private set; }
     public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
@@ -22,11 +23,13 @@ internal sealed class NameDefinitionDialog : Window
     public NameDefinitionDialog(
         NameDefinitionDialogResult initial,
         IReadOnlyList<string> scopeOptions,
-        Action<NamedRangeSelectionRequest>? requestRangeSelection = null)
+        Action<NamedRangeSelectionRequest>? requestRangeSelection = null,
+        Func<string, bool>? isValidRange = null)
     {
         Result = initial;
         _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
         _requestRangeSelection = requestRangeSelection;
+        _isValidRange = isValidRange ?? (rangeText => !string.IsNullOrWhiteSpace(rangeText));
         Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
         Width = 460;
         Height = 300;
@@ -119,6 +122,20 @@ internal sealed class NameDefinitionDialog : Window
 
     private void Accept()
     {
+        if (string.IsNullOrWhiteSpace(_nameBox.Text))
+        {
+            MessageBox.Show(this, "Please enter a name.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusNameInput();
+            return;
+        }
+
+        if (!_isValidRange(_refersToBox.Text.Trim()))
+        {
+            MessageBox.Show(this, "Invalid range format. Use: SheetName!A1:B10 or A1:B10", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusRefersToInput();
+            return;
+        }
+
         Result = new NameDefinitionDialogResult(
             _nameBox.Text.Trim(),
             (_scopeBox.SelectedItem as string)?.Trim() ?? "Workbook",
@@ -127,10 +144,22 @@ internal sealed class NameDefinitionDialog : Window
         DialogResult = true;
     }
 
-    private void FocusInitialKeyboardTarget()
+    private void FocusNameInput()
     {
         _nameBox.Focus();
         _nameBox.SelectAll();
         Keyboard.Focus(_nameBox);
+    }
+
+    private void FocusRefersToInput()
+    {
+        _refersToBox.Focus();
+        _refersToBox.SelectAll();
+        Keyboard.Focus(_refersToBox);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        FocusNameInput();
     }
 }

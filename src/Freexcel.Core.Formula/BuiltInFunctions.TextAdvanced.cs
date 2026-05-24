@@ -156,14 +156,22 @@ public static partial class BuiltInFunctions
     private static ScalarValue Asc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(ConvertToHalfWidth(ToText(args[0])));
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, AscScalar);
+        return AscScalar(args[0]);
     }
+
+    private static ScalarValue AscScalar(ScalarValue value) =>
+        TextResult(ConvertToHalfWidth(ToText(value)));
 
     private static ScalarValue Dbcs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TextResult(ConvertToFullWidth(ToText(args[0])));
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, DbcsScalar);
+        return DbcsScalar(args[0]);
     }
+
+    private static ScalarValue DbcsScalar(ScalarValue value) =>
+        TextResult(ConvertToFullWidth(ToText(value)));
 
     private static ScalarValue Phonetic(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

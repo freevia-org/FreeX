@@ -61,7 +61,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogOpenedFromKeyboard_FocusesOrientationBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -95,7 +95,7 @@ public sealed class PageSetupDialogXamlTests
     public void PageTab_DisablesInactiveScalingInputsByMode()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("Checked=\"ScalingMode_Changed\"");
         source.Should().Contain("UpdateScalingInputState");
@@ -150,7 +150,7 @@ public sealed class PageSetupDialogXamlTests
     public void SheetTab_ExposesCurrentSelectionRangePickerButtonsForPrintRanges()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -197,7 +197,7 @@ public sealed class PageSetupDialogXamlTests
     public void PageSetupDialogInvalidPrintArea_SelectsSheetTabPrintAreaBox()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"PageSetupTabs\"");
         xaml.Should().Contain("x:Name=\"SheetTab\"");
@@ -212,7 +212,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidPrintTitles_SelectsSheetTabInvalidTitleBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         source.Should().Contain("FocusInvalidPrintTitles();");
         source.Should().Contain("private void FocusInvalidPrintTitles()");
@@ -226,7 +226,7 @@ public sealed class PageSetupDialogXamlTests
     public void PageSetupDialogInvalidPageTabNumber_SelectsPageTabInvalidBox()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"PageTab\"");
         source.Should().Contain("FocusInvalidPageTabNumber(FirstPageNumberBox);");
@@ -242,7 +242,7 @@ public sealed class PageSetupDialogXamlTests
     public void PageSetupDialogInvalidMargin_SelectsMarginsTabInvalidBox()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"MarginsTab\"");
         source.Should().Contain("FocusInvalidMarginInput();");
@@ -258,7 +258,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidScaling_SelectsPageTabActiveScalingBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
 
         source.Should().Contain("FocusInvalidScalingInput();");
         source.Should().Contain("private void FocusInvalidScalingInput()");
@@ -275,7 +275,7 @@ public sealed class PageSetupDialogXamlTests
     public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        var source = ReadPageSetupDialogSource();
         var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
@@ -305,4 +305,11 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("dialog.ScaleHeaderFooterWithDocument");
         source.Should().Contain("dialog.AlignHeaderFooterWithMargins");
     }
+
+    private static string ReadPageSetupDialogSource() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.RangeSelection.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.ValidationFocus.cs")));
 }

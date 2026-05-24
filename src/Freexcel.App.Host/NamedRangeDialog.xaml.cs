@@ -136,7 +136,8 @@ public sealed partial class NamedRangeDialog : Window
         var dialog = new NameDefinitionDialog(
             new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
             GetScopeOptions(),
-            RequestRangeSelection) { Owner = this };
+            RequestRangeSelection,
+            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)) { Owner = this };
         if (dialog.ShowDialog() == true)
             DefineOrUpdateName(dialog.Result);
     }
@@ -152,7 +153,8 @@ public sealed partial class NamedRangeDialog : Window
         var dialog = new NameDefinitionDialog(
             new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
             GetScopeOptions(),
-            RequestRangeSelection)
+            RequestRangeSelection,
+            isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _))
         {
             Owner = this
         };
