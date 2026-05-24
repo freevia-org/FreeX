@@ -89,15 +89,14 @@ public sealed class ClearHyperlinksCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         _snapshot = sheet.Hyperlinks
             .Where(p => _range.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
         _metadataSnapshot = sheet.HyperlinkMetadata
             .Where(p => _range.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
+        if (_snapshot.Keys.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
+            return new CommandOutcome(false, "The sheet is protected.");
 
         foreach (var addr in _snapshot.Keys)
             sheet.Hyperlinks.Remove(addr);
