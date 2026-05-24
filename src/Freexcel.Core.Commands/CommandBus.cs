@@ -52,7 +52,7 @@ public sealed class CommandBus : ICommandBus
         var command = stack.PopUndo();
         command.Revert(ctx);
 
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, AffectedCells: GetAffectedCells(command));
     }
 
     public CommandOutcome Redo(WorkbookId workbookId)
@@ -70,7 +70,7 @@ public sealed class CommandBus : ICommandBus
         else
             stack.PushRedo(command); // restore so the user can retry
 
-        return outcome;
+        return outcome with { AffectedCells = outcome.AffectedCells ?? GetAffectedCells(command) };
     }
 
     public bool CanUndo(WorkbookId workbookId) =>
@@ -99,6 +99,11 @@ public sealed class CommandBus : ICommandBus
         }
         return stack;
     }
+
+    private static IReadOnlyList<CellAddress>? GetAffectedCells(IWorkbookCommand command) =>
+        command is IAffectedCellsCommand affectedCellsCommand
+            ? affectedCellsCommand.AffectedCells
+            : null;
 
     private sealed class CommandStack
     {

@@ -1639,6 +1639,7 @@ public class XlsxCorpusRunnerTests
         new(
             textBox.Name ?? "",
             textBox.Text,
+            textBox.Title ?? "",
             textBox.AltText ?? "",
             textBox.Anchor.Row,
             textBox.Anchor.Col,
@@ -1655,6 +1656,7 @@ public class XlsxCorpusRunnerTests
         new(
             shape.Name ?? "",
             shape.Kind,
+            shape.Title ?? "",
             shape.AltText ?? "",
             shape.Anchor.Row,
             shape.Anchor.Col,
@@ -1673,6 +1675,7 @@ public class XlsxCorpusRunnerTests
         new(
             picture.Name ?? "",
             picture.Kind,
+            picture.Title ?? "",
             picture.AltText ?? "",
             picture.Anchor.Row,
             picture.Anchor.Col,
@@ -2677,6 +2680,7 @@ public class XlsxCorpusRunnerTests
     private sealed record TextBoxSummary(
         string Name,
         string Text,
+        string Title,
         string AltText,
         uint AnchorRow,
         uint AnchorColumn,
@@ -2692,6 +2696,7 @@ public class XlsxCorpusRunnerTests
     private sealed record DrawingShapeSummary(
         string Name,
         DrawingShapeKind Kind,
+        string Title,
         string AltText,
         uint AnchorRow,
         uint AnchorColumn,
@@ -2709,6 +2714,7 @@ public class XlsxCorpusRunnerTests
     private sealed record PictureSummary(
         string Name,
         PictureKind Kind,
+        string Title,
         string AltText,
         uint AnchorRow,
         uint AnchorColumn,

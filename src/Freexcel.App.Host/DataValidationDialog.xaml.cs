@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -35,6 +36,7 @@ public partial class DataValidationDialog : Window
         _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
         ResetToDefaults(markClearRequested: false);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public DataValidationDialog(DataValidation? existing, Action<DataValidationRangeSelectionRequest>? requestRangeSelection = null)
@@ -80,6 +82,12 @@ public partial class DataValidationDialog : Window
         Result = null;
         ApplyToSameSettings = false;
         UpdateVisibility();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        TypeCombo.Focus();
+        Keyboard.Focus(TypeCombo);
     }
 
     private void TypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

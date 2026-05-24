@@ -28,6 +28,8 @@
                     <ComboBoxItem Content="All names"/>
                     <ComboBoxItem Content="Names scoped to workbook"/>
                     <ComboBoxItem Content="Names scoped to worksheet"/>
+                    <ComboBoxItem Content="Names with errors"/>
+                    <ComboBoxItem Content="Names without errors"/>
                 </ComboBox>
             </StackPanel>
         </DockPanel>
