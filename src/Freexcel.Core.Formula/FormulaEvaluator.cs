@@ -1046,6 +1046,7 @@ public sealed class FormulaEvaluator
              or "ASC" or "DBCS"
              or "UNICHAR" or "UNICODE" or "NUMBERVALUE"
              or "ABS" or "SQRT" or "INT" or "SIGN"
+             or "MOD" or "POWER" or "LOG" or "QUOTIENT" or "CEILING" or "FLOOR" or "MROUND"
              or "SIN" or "COS" or "TAN" or "DEGREES" or "RADIANS"
              or "ASIN" or "ACOS" or "ATAN" or "LN" or "EXP" or "FACT"
              or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
