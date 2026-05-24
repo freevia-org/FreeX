@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -37,6 +38,7 @@ public sealed class ShapeGradientDialog : Window
         _endColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs();
         UpdateColorText();
         Content = CreateContent();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static bool TryCreateResult(string input, out ShapeGradientDialogResult result, out string? error)
@@ -63,6 +65,13 @@ public sealed class ShapeGradientDialog : Window
 
         Result = new ShapeGradientDialogResult(startColor, endColor);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _startColorBox.Focus();
+        _startColorBox.SelectAll();
+        Keyboard.Focus(_startColorBox);
     }
 
     private StackPanel CreateContent()
