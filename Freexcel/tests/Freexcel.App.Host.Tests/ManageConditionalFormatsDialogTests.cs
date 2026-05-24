@@ -192,6 +192,38 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void FormatPreviewColumn_ShowsExcelStyleSampleText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        source.Should().Contain("Header = \"Format\"");
+        source.Should().Contain("typeof(Border)");
+        source.Should().Contain("typeof(TextBlock)");
+        source.Should().Contain("AaBbCcYyZz");
+        source.Should().Contain("new PreviewForegroundBrushConverter()");
+        source.Should().Contain("new PreviewFontWeightConverter()");
+        source.Should().Contain("new PreviewFontStyleConverter()");
+        source.Should().Contain("new PreviewTextDecorationsConverter()");
+    }
+
+    [Fact]
+    public void PreviewForegroundBrush_UsesConditionalFormatFontColor()
+    {
+        var sheetId = SheetId.New();
+        var rule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1)),
+            FormatIfTrue = new CellStyle { FontColor = new CellColor(12, 34, 56) }
+        };
+
+        var brush = ManageConditionalFormatsDialog.PreviewForegroundBrush(rule)
+            .Should()
+            .BeOfType<SolidColorBrush>()
+            .Subject;
+        brush.Color.Should().Be(Color.FromRgb(12, 34, 56));
+    }
+
+    [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
