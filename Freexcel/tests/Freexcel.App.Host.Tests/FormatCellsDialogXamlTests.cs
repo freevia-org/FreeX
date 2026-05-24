@@ -63,6 +63,23 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialogOpenedFromKeyboard_FocusesActiveTabFirstControl()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
+
+        source.Should().Contain("FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("NumberCategoryList");
+        source.Should().Contain("DlgHAlignBox");
+        source.Should().Contain("DlgFontNameBox");
+        source.Should().Contain("DlgFillColorBox");
+        source.Should().Contain("DlgBorderLineStyleBox");
+        source.Should().Contain("DlgLockedCheck");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void FormatCellsDialog_ContainsControlsForSupportedStyleFields()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
