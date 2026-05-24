@@ -80,6 +80,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var pageLayoutTab = ExtractTabXaml(xaml, "Page Layout", "Formulas");
+        var pageSetupGroup = ExtractGroupXaml(pageLayoutTab, "Page Setup");
 
         ExtractGroupLabels(pageLayoutTab).Should().Equal(
             "Themes",
@@ -88,6 +89,13 @@ public sealed class RibbonTabParityTests
             "Sheet Options",
             "Arrange");
 
+        ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
+            "Margins",
+            "Orientation",
+            "Size",
+            "Print Area",
+            "Breaks");
+        ExtractTooltipTitles(pageSetupGroup).Should().NotContain("Paper Size");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Bring Forward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
