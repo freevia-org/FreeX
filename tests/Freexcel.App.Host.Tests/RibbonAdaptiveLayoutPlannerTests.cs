@@ -121,6 +121,27 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Collapsed);
     }
 
+    [Fact]
+    public void ApplyBreakpointOverrides_KeepsInsertTablesVisibleAtNormalNarrowWidths()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            ["Tables", "Illustrations", "Add-ins", "Charts", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 10).ToArray());
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.SmallWithLabels,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
+
     [Theory]
     [InlineData(1120, new[] { "Get & Transform", "Sort & Filter", "Data Tools", "What-If Analysis", "Outline", "Named Ranges" }, 2)]
     [InlineData(1120, new[] { "Workbook Views", "Show", "Freeze Panes", "Zoom", "Window" }, 2)]
