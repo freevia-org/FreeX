@@ -46,14 +46,7 @@ internal static class XlsxChartDataLabelReader
             }
 
             var format = ReadPointDataLabelFormat(label, seriesIndex, pointIndex);
-            if (format.FillColor is null &&
-                format.BorderColor is null &&
-                format.BorderThickness is null &&
-                format.TextColor is null &&
-                format.FontSize is null &&
-                format.FillThemeColor is null &&
-                format.BorderThemeColor is null &&
-                format.TextThemeColor is null)
+            if (!HasPointDataLabelMetadata(format))
             {
                 continue;
             }
@@ -216,8 +209,24 @@ internal static class XlsxChartDataLabelReader
             fontSize,
             fillThemeColor,
             borderThemeColor,
-            textThemeColor);
+            textThemeColor,
+            ReadNullableBool(label.Element(ChartNs + "delete")?.Attribute("val")?.Value),
+            label.Element(ChartNs + "dLblPos") is { } position
+                ? FromXlsxDataLabelPosition(position.Attribute("val")?.Value)
+                : null);
     }
+
+    private static bool HasPointDataLabelMetadata(ChartPointDataLabelFormat format) =>
+        format.FillColor is not null
+        || format.BorderColor is not null
+        || format.BorderThickness is not null
+        || format.TextColor is not null
+        || format.FontSize is not null
+        || format.FillThemeColor is not null
+        || format.BorderThemeColor is not null
+        || format.TextThemeColor is not null
+        || format.IsDeleted is not null
+        || format.Position is not null;
 
     private static ChartDataLabelPosition FromXlsxDataLabelPosition(string? value) =>
         value switch
@@ -226,6 +235,14 @@ internal static class XlsxChartDataLabelReader
             "inEnd" => ChartDataLabelPosition.InsideEnd,
             "outEnd" => ChartDataLabelPosition.OutsideEnd,
             _ => ChartDataLabelPosition.BestFit
+        };
+
+    private static bool? ReadNullableBool(string? value) =>
+        value switch
+        {
+            "1" or "true" => true,
+            "0" or "false" => false,
+            _ => null
         };
 
     private static ChartDataLabelSeparator FromXlsxDataLabelSeparator(string? value) =>

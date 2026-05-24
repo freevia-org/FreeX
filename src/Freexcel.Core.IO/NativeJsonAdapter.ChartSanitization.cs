@@ -323,7 +323,8 @@ public sealed partial class NativeJsonAdapter
                 : null,
             FontSize = format.FontSize is { } fontSize
                 ? Math.Clamp(fontSize, 6, 72)
-                : null
+                : null,
+            Position = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.Position)
         };
 
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
@@ -334,5 +335,7 @@ public sealed partial class NativeJsonAdapter
         || format.FontSize is not null
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null;
+        || format.TextThemeColor is not null
+        || format.IsDeleted is not null
+        || format.Position is not null;
 }

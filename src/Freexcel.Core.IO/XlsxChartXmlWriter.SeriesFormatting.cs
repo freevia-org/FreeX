@@ -35,7 +35,9 @@ internal static partial class XlsxChartXmlWriter
         || format.FontSize is not null
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null;
+        || format.TextThemeColor is not null
+        || format.IsDeleted is not null
+        || format.Position is not null;
 
     private static XElement ToPointDataLabelXml(
         ChartPointDataLabelFormat format,
@@ -43,6 +45,12 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs) =>
         new(chartNs + "dLbl",
             new XElement(chartNs + "idx", new XAttribute("val", format.PointIndex)),
+            format.IsDeleted is { } isDeleted
+                ? new XElement(chartNs + "delete", new XAttribute("val", isDeleted ? "1" : "0"))
+                : null,
+            format.Position is { } position
+                ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+                : null,
             ToShapeProperties(
                 chartNs,
                 drawingNs,
