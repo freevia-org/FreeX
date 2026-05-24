@@ -58,13 +58,16 @@ public partial class ConditionalFormatDialog
         RefreshRuleDescription(newRuleType);
     }
 
-    private static string DefaultRuleTypeForShellLabel(string shellLabel) =>
-        shellLabel == ExcelRuleShellTypes[0] ? "Data Bar" :
-        shellLabel == ExcelRuleShellTypes[2] ? "Top 10 Items" :
-        shellLabel == ExcelRuleShellTypes[3] ? "Above Average" :
-        shellLabel == ExcelRuleShellTypes[4] ? "Duplicate Values" :
-        shellLabel == ExcelRuleShellTypes[5] ? "Formula" :
-        "Greater Than";
+    private string DefaultRuleTypeForShellLabel(string shellLabel)
+    {
+        if (shellLabel == ExcelRuleShellTypes[0])
+            return _ruleType is "Data Bar" or "Color Scale" or "Icon Set" ? _ruleType : "Data Bar";
+        if (shellLabel == ExcelRuleShellTypes[2]) return "Top 10 Items";
+        if (shellLabel == ExcelRuleShellTypes[3]) return "Above Average";
+        if (shellLabel == ExcelRuleShellTypes[4]) return "Duplicate Values";
+        if (shellLabel == ExcelRuleShellTypes[5]) return "Formula";
+        return "Greater Than";
+    }
 
     private static string RuleTypeShellLabel(string ruleType) => ruleType switch
     {
