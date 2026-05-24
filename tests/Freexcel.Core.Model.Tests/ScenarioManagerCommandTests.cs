@@ -142,6 +142,26 @@ public sealed class ScenarioManagerCommandTests
     }
 
     [Fact]
+    public void ApplyScenarioCommand_AllowsProtectedSheetWithEditScenariosPermission()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new NumberValue(10));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditScenarios);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [new ScenarioCellValue(address, new NumberValue(42))]));
+
+        var outcome = new ApplyScenarioCommand("Best Case").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void DeleteScenarioCommand_RemovesScenarioAndUndoRestoresIt()
     {
         var workbook = new Workbook("test");
@@ -175,6 +195,23 @@ public sealed class ScenarioManagerCommandTests
 
         outcome.Success.Should().BeFalse();
         workbook.Scenarios.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void DeleteScenarioCommand_AllowsProtectedSheetWithEditScenariosPermission()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(42))]));
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.EditScenarios);
+
+        var outcome = new DeleteScenarioCommand("Best Case").Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        workbook.Scenarios.Should().BeEmpty();
     }
 
     [Fact]
