@@ -71,13 +71,33 @@ public sealed class PageBreakDialog : Window
         else if (_insertColumnButton.IsChecked == true)
         {
             if (!uint.TryParse(_columnBreakBox.Text.Trim(), out var columnBreak))
+            {
+                MessageBox.Show(
+                    this,
+                    "Enter a positive column number for the page break.",
+                    Title,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                FocusInvalidBreakInput(_columnBreakBox);
                 return;
+            }
+
             result = new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, columnBreak);
         }
         else
         {
             if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak))
+            {
+                MessageBox.Show(
+                    this,
+                    "Enter a positive row number for the page break.",
+                    Title,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                FocusInvalidBreakInput(_rowBreakBox);
                 return;
+            }
+
             result = new PageBreakDialogResult(PageBreakDialogAction.AddRow, rowBreak, null);
         }
 
@@ -104,6 +124,13 @@ public sealed class PageBreakDialog : Window
             _rowBreakBox.SelectAll();
             Keyboard.Focus(_rowBreakBox);
         }
+    }
+
+    private static void FocusInvalidBreakInput(TextBox textBox)
+    {
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
     }
 
     private void SeedDefault(string defaultValue)

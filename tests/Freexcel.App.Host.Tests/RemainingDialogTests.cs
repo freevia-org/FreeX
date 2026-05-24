@@ -249,6 +249,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void PageBreakDialogInvalidBreakEntry_ShowsOwnedWarningAndRefocusesEntry()
+    {
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("Enter a positive row number for the page break.");
+        source.Should().Contain("Enter a positive column number for the page break.");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
+        source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
+        source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");
+    }
+
+    [Fact]
     public void GoalSeekStatusDialog_CreateMessage_DescribesSolvedAndUnsolvedResults()
     {
         GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4), targetValue: 100)
