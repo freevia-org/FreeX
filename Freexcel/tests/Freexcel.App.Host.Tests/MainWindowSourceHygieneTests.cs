@@ -1385,12 +1385,12 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void F6StatusBar_FocusesFirstZoomControlBeforeSliderFallback()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
-        selectionSource.Should().Contain("return FocusStatusBar();");
-        selectionSource.Should().Contain("private bool FocusStatusBar()");
-        selectionSource.Should().Contain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
+        keyboardFocusSource.Should().Contain("return FocusStatusBar();");
+        keyboardFocusSource.Should().Contain("private bool FocusStatusBar()");
+        keyboardFocusSource.Should().Contain("return StatusZoomOutButton.Focus() || ZoomSlider.Focus();");
         xaml.Should().Contain("x:Name=\"StatusZoomOutButton\"");
         xaml.Should().Contain("x:Name=\"StatusZoomInButton\"");
     }
@@ -1399,33 +1399,34 @@ public sealed class MainWindowSourceHygieneTests
     public void FocusedStatusBar_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
 
         selectionSource.Should().Contain("if (TryHandleFocusedStatusBarKeyboardNavigation(e))");
-        selectionSource.Should().Contain("private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
-        selectionSource.Should().Contain("!IsDescendantOf(focusedElement, StatusBarGrid)");
-        selectionSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
-        selectionSource.Should().Contain("new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift");
-        selectionSource.Should().Contain("FocusNavigationDirection.Previous");
-        selectionSource.Should().Contain("FocusNavigationDirection.Next");
-        selectionSource.Should().Contain("focusedElement.MoveFocus(request);");
+        keyboardFocusSource.Should().Contain("private bool TryHandleFocusedStatusBarKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        keyboardFocusSource.Should().Contain("!IsDescendantOf(focusedElement, StatusBarGrid)");
+        keyboardFocusSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
+        keyboardFocusSource.Should().Contain("new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift");
+        keyboardFocusSource.Should().Contain("FocusNavigationDirection.Previous");
+        keyboardFocusSource.Should().Contain("FocusNavigationDirection.Next");
+        keyboardFocusSource.Should().Contain("focusedElement.MoveFocus(request);");
     }
 
     [Fact]
     public void FocusedRibbon_TabAndArrowKeysRequestFocusTraversal()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
 
-        selectionSource.Should().Contain("MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift");
-        selectionSource.Should().Contain("FocusNavigationDirection.Previous");
-        selectionSource.Should().Contain("FocusNavigationDirection.Next");
-        selectionSource.Should().Contain("Key.Left => FocusNavigationDirection.Left");
-        selectionSource.Should().Contain("Key.Right => FocusNavigationDirection.Right");
-        selectionSource.Should().Contain("Key.Up => FocusNavigationDirection.Up");
-        selectionSource.Should().Contain("Key.Down => FocusNavigationDirection.Down");
-        selectionSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
-        selectionSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
-        selectionSource.Should().Contain("private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)");
-        selectionSource.Should().Contain("focusedUiElement.MoveFocus(new TraversalRequest(direction));");
+        keyboardFocusSource.Should().Contain("MoveFocusedRibbonElement(focusedElement, Keyboard.Modifiers == ModifierKeys.Shift");
+        keyboardFocusSource.Should().Contain("FocusNavigationDirection.Previous");
+        keyboardFocusSource.Should().Contain("FocusNavigationDirection.Next");
+        keyboardFocusSource.Should().Contain("Key.Left => FocusNavigationDirection.Left");
+        keyboardFocusSource.Should().Contain("Key.Right => FocusNavigationDirection.Right");
+        keyboardFocusSource.Should().Contain("Key.Up => FocusNavigationDirection.Up");
+        keyboardFocusSource.Should().Contain("Key.Down => FocusNavigationDirection.Down");
+        keyboardFocusSource.Should().Contain("Key.Home => FocusNavigationDirection.First");
+        keyboardFocusSource.Should().Contain("Key.End => FocusNavigationDirection.Last");
+        keyboardFocusSource.Should().Contain("private static bool MoveFocusedRibbonElement(DependencyObject focusedElement, FocusNavigationDirection direction)");
+        keyboardFocusSource.Should().Contain("focusedUiElement.MoveFocus(new TraversalRequest(direction));");
     }
 
     [Fact]
