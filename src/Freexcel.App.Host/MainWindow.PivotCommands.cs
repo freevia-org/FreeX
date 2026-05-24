@@ -163,7 +163,7 @@ public partial class MainWindow
     private void PivotChartBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
         if (pivotTable is null)
         {
             MessageBox.Show(
@@ -329,7 +329,7 @@ public partial class MainWindow
             return;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        var pivotTable = sheet is null ? null : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange);
         if (sheet is null || pivotTable is null)
         {
             PivotFieldListPane.Visibility = Visibility.Collapsed;
