@@ -841,6 +841,38 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_CompactReportLayoutUsesSubtotaledFieldCaptionForNestedSubtotals()
+    {
+        var workbook = new Workbook("PivotCompactNestedSubtotalCaptionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "H20"),
+            ReportLayout = PivotReportLayout.Compact,
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.RowFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F5").Should().Be("Q1 Total");
+        Number(sheet, "G5").Should().Be(25);
+        Text(sheet, "F8").Should().Be("Q2 Total");
+        Number(sheet, "G8").Should().Be(45);
+        Text(sheet, "F11").Should().Be("Q1 Total");
+        Number(sheet, "G11").Should().Be(65);
+        Text(sheet, "F14").Should().Be("Q2 Total");
+        Number(sheet, "G14").Should().Be(85);
+    }
+
+    [Fact]
     public void Refresh_MergeAndCenterLabelsMergesRepeatedOuterRowLabels()
     {
         var workbook = new Workbook("PivotMergeLabelsRefreshTest");
