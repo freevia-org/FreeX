@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Commands;
 
@@ -128,6 +129,7 @@ public sealed class EvaluateFormulaDialog : Window
         stack.Children.Add(_valueText);
 
         Refresh();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private void Refresh()
@@ -159,6 +161,12 @@ public sealed class EvaluateFormulaDialog : Window
             "Evaluate Formula Help",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _nextButton.Focus();
+        Keyboard.Focus(_nextButton);
     }
 
     private void RefreshFormulaHighlight()

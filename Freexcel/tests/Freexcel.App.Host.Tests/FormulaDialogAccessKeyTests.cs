@@ -53,4 +53,15 @@ public sealed class FormulaDialogAccessKeyTests
 
         source.Should().NotContain("Content = \"_Previous\"");
     }
+
+    [Fact]
+    public void EvaluateFormulaDialogOpenedFromKeyboard_FocusesEvaluateButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_nextButton.Focus();");
+        source.Should().Contain("Keyboard.Focus(_nextButton);");
+    }
 }
