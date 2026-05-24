@@ -84,6 +84,27 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Fact]
+    public void BitFunctions_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12)),
+            (2, 1, new NumberValue(10)));
+
+        AssertColumn(_eval.Evaluate("=BITAND(A1:A2,10)", sheet), new NumberValue(8), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=BITOR(A1:A2,5)", sheet), new NumberValue(13), new NumberValue(15));
+        AssertColumn(_eval.Evaluate("=BITXOR(A1:A2,5)", sheet), new NumberValue(9), new NumberValue(15));
+        AssertColumn(_eval.Evaluate("=BITLSHIFT(A1:A2,1)", sheet), new NumberValue(24), new NumberValue(20));
+        AssertColumn(_eval.Evaluate("=BITRSHIFT(A1:A2,1)", sheet), new NumberValue(6), new NumberValue(5));
+
+        var shifts = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)));
+        AssertColumn(_eval.Evaluate("=BITAND(12,A1:A2)", shifts), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=BITLSHIFT(4,A1:A2)", shifts), new NumberValue(8), new NumberValue(16));
+        AssertColumn(_eval.Evaluate("=BITRSHIFT(16,A1:A2)", shifts), new NumberValue(8), new NumberValue(4));
+    }
+
     [Theory]
     [InlineData("=BITLSHIFT(1,2.9)", 4)]
     [InlineData("=BITRSHIFT(8,1.9)", 4)]
@@ -121,5 +142,20 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.NA);
     }
 
-    private static Sheet MakeSheet() => new(SheetId.New(), "S");
+    private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.Cells[row, 0].Should().Be(expected[row]);
+    }
+
+    private static Sheet MakeSheet(params (uint Row, uint Col, ScalarValue Value)[] values)
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        foreach (var (row, col, value) in values)
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), value);
+        return sheet;
+    }
 }

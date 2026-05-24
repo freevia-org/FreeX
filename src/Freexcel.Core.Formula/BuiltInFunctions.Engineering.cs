@@ -374,8 +374,15 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (!TryGetBitInteger(args[0], out var left)) return ErrorValue.Num;
-        if (!TryGetBitInteger(args[1], out var right)) return ErrorValue.Num;
+        if (args[1] is RangeValue rightRange) return MapUnaryTextRange(rightRange, value => BitBinaryScalar(args[0], value, op));
+        if (args[0] is RangeValue leftRange) return MapUnaryTextRange(leftRange, value => BitBinaryScalar(value, args[1], op));
+        return BitBinaryScalar(args[0], args[1], op);
+    }
+
+    private static ScalarValue BitBinaryScalar(ScalarValue leftValue, ScalarValue rightValue, Func<long, long, long> op)
+    {
+        if (!TryGetBitInteger(leftValue, out var left)) return ErrorValue.Num;
+        if (!TryGetBitInteger(rightValue, out var right)) return ErrorValue.Num;
         return new NumberValue(op(left, right));
     }
 
@@ -389,8 +396,15 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (!TryGetBitInteger(args[0], out var number)) return ErrorValue.Num;
-        if (!TryGetEngineeringTruncatedInteger(args[1], out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
+        if (args[1] is RangeValue shiftRange) return MapUnaryTextRange(shiftRange, value => BitShiftScalar(args[0], value, leftShift));
+        if (args[0] is RangeValue numberRange) return MapUnaryTextRange(numberRange, value => BitShiftScalar(value, args[1], leftShift));
+        return BitShiftScalar(args[0], args[1], leftShift);
+    }
+
+    private static ScalarValue BitShiftScalar(ScalarValue numberValue, ScalarValue shiftValue, bool leftShift)
+    {
+        if (!TryGetBitInteger(numberValue, out var number)) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(shiftValue, out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
 
         bool effectiveLeft = leftShift ? shift >= 0 : shift < 0;
         int bits = (int)Math.Abs(shift);
