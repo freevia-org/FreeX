@@ -111,6 +111,41 @@ public sealed class FileDialogFilterBuilderTests
         format!.Extension.Should().Be(".xlsm");
     }
 
+    [Theory]
+    [InlineData("xlsx", typeof(XlsxFileAdapter), ".xlsx")]
+    [InlineData(".CSV", typeof(CsvFileAdapter), ".csv")]
+    public void FindSaveAdapter_RealAdaptersResolveOnlySaveCapableFormats(
+        string extension,
+        Type expectedAdapterType,
+        string expectedExtension)
+    {
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter() };
+
+        var result = FileDialogFilterBuilder.FindSaveAdapter(adapters, extension, out var format);
+
+        result.Should().BeOfType(expectedAdapterType);
+        format.Should().NotBeNull();
+        format!.Extension.Should().Be(expectedExtension);
+        format.CanSave.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(".xlsm")]
+    [InlineData(".xltx")]
+    [InlineData(".xltm")]
+    [InlineData(".xls")]
+    [InlineData(".xlsb")]
+    [InlineData(".xlt")]
+    public void FindSaveAdapter_RealAdaptersRejectOpenOnlyExcelFormats(string extension)
+    {
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter() };
+
+        var result = FileDialogFilterBuilder.FindSaveAdapter(adapters, extension, out var format);
+
+        result.Should().BeNull();
+        format.Should().BeNull();
+    }
+
     private sealed class FakeAdapter(IReadOnlyList<FileFormatDescriptor> formats) : IFileAdapter
     {
         public string Extension => formats[0].Extension;
