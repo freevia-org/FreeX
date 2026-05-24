@@ -99,6 +99,18 @@ internal static class PdfTextOverlayExtractor
                 headeredContentControl.FontStyle == FontStyles.Italic || headeredContentControl.FontStyle == FontStyles.Oblique,
                 ResolveColor(headeredContentControl.Foreground)));
         }
+        else if (element is ItemsControl itemsControl && ExtractItemsText(itemsControl) is { Length: > 0 } itemsText)
+        {
+            overlays.Add(new PdfTextOverlay(
+                itemsText,
+                x,
+                y,
+                itemsControl.FontSize,
+                itemsControl.FontFamily.Source,
+                itemsControl.FontWeight >= FontWeights.SemiBold,
+                itemsControl.FontStyle == FontStyles.Italic || itemsControl.FontStyle == FontStyles.Oblique,
+                ResolveColor(itemsControl.Foreground)));
+        }
         else if (element is Glyphs glyphs && !string.IsNullOrEmpty(glyphs.UnicodeString))
         {
             overlays.Add(new PdfTextOverlay(
@@ -140,6 +152,18 @@ internal static class PdfTextOverlayExtractor
             AppendInlineText(inline, parts);
 
         return string.Concat(parts);
+    }
+
+    private static string ExtractItemsText(ItemsControl itemsControl)
+    {
+        var parts = new List<string>();
+        foreach (var item in itemsControl.Items)
+        {
+            if (item is string text && !string.IsNullOrWhiteSpace(text))
+                parts.Add(text);
+        }
+
+        return string.Join("\n", parts);
     }
 
     private static void AppendInlineText(Inline inline, List<string> parts)
