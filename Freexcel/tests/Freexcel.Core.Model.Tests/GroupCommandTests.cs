@@ -58,6 +58,34 @@ public class GroupCommandTests
     }
 
     [Fact]
+    public void CollapseRows_RejectsProtectedSheetWithoutFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        sheet.IsProtected = true;
+
+        var outcome = new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GroupHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CollapseRows_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GroupHiddenRows.Should().Contain(2).And.Contain(4);
+    }
+
+    [Fact]
     public void ExpandRows_ShowsCollapsedRows()
     {
         var (_, sheet, ctx) = Setup();
@@ -66,6 +94,36 @@ public class GroupCommandTests
         new ExpandRowGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenRows.Should().NotContain(2);
         sheet.IsRowEffectivelyHidden(2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExpandRows_RejectsProtectedSheetWithoutFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.IsProtected = true;
+
+        var outcome = new ExpandRowGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GroupHiddenRows.Should().Contain(2).And.Contain(4);
+    }
+
+    [Fact]
+    public void ExpandRows_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new ExpandRowGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GroupHiddenRows.Should().BeEmpty();
     }
 
     [Fact]
@@ -99,6 +157,34 @@ public class GroupCommandTests
     }
 
     [Fact]
+    public void CollapseColumns_RejectsProtectedSheetWithoutFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        sheet.IsProtected = true;
+
+        var outcome = new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GroupHiddenCols.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CollapseColumns_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GroupHiddenCols.Should().Contain(2).And.Contain(4);
+    }
+
+    [Fact]
     public void ExpandColumns_ShowsCollapsedColumns()
     {
         var (_, sheet, ctx) = Setup();
@@ -107,6 +193,36 @@ public class GroupCommandTests
         new ExpandColGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenCols.Should().NotContain(2);
         sheet.IsColEffectivelyHidden(2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExpandColumns_RejectsProtectedSheetWithoutFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.IsProtected = true;
+
+        var outcome = new ExpandColGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GroupHiddenCols.Should().Contain(2).And.Contain(4);
+    }
+
+    [Fact]
+    public void ExpandColumns_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new ExpandColGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GroupHiddenCols.Should().BeEmpty();
     }
 
     [Fact]
