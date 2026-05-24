@@ -170,6 +170,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDestinationPicker_RefocusesDestinationAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.Delimiters.cs"));
+        var handlerSource = source[source.IndexOf("private DockPanel CreateReferenceEditor", StringComparison.Ordinal)..];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
         var dialogSource = ReadTextToColumnsDialogSources();
