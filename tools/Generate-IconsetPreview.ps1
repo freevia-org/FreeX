@@ -519,5 +519,6 @@ $($htmlRows -join "`n")
 "@
 
 [IO.Directory]::CreateDirectory((Split-Path -Parent $outputFullPath)) | Out-Null
+$html = $html -replace "`r`n", "`n" -replace "`r", "`n"
 [IO.File]::WriteAllText($outputFullPath, $html, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Wrote $outputFullPath with $($rows.Count) command rows."
