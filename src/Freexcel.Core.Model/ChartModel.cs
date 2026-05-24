@@ -438,6 +438,16 @@ public sealed class ChartModel
     public bool ShowTrendlineRSquared { get; set; }
     public string? TrendlineLabelNumberFormatCode { get; set; }
     public bool? TrendlineLabelNumberFormatSourceLinked { get; set; }
+    public ChartManualLayoutModel? TrendlineLabelLayout { get; set; }
+    public CellColor? TrendlineLabelFillColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineLabelFillThemeColor { get; set; }
+    public CellColor? TrendlineLabelBorderColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineLabelBorderThemeColor { get; set; }
+    public double? TrendlineLabelBorderThickness { get; set; }
+    public CellColor? TrendlineLabelTextColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineLabelTextThemeColor { get; set; }
+    public double? TrendlineLabelFontSize { get; set; }
+    public double? TrendlineLabelAngle { get; set; }
     public CellColor? TrendlineColor { get; set; }
     public WorkbookThemeColorReference? TrendlineThemeColor { get; set; }
     public double TrendlineThickness { get; set; } = 1.5;

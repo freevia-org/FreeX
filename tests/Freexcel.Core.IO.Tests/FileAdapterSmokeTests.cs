@@ -8776,6 +8776,116 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartTrendlineLabelLayoutAndFormattingPackagePart()
+    {
+        var workbook = new Workbook("ChartTrendlineLabelFormattingPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                      <c:trendline>
+                        <c:trendlineType val="linear"/>
+                        <c:dispEq val="1"/>
+                        <c:dispRSqr val="1"/>
+                        <c:trendlineLbl>
+                          <c:layout>
+                            <c:manualLayout>
+                              <c:xMode val="edge"/>
+                              <c:yMode val="edge"/>
+                              <c:x val="0.36"/>
+                              <c:y val="0.18"/>
+                              <c:w val="0.22"/>
+                              <c:h val="0.12"/>
+                            </c:manualLayout>
+                          </c:layout>
+                          <c:spPr>
+                            <a:solidFill><a:srgbClr val="FCE4D6"/></a:solidFill>
+                            <a:ln w="19050"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:ln>
+                          </c:spPr>
+                          <c:txPr>
+                            <a:bodyPr rot="-2700000"/>
+                            <a:p><a:pPr><a:defRPr sz="1400"><a:solidFill><a:srgbClr val="7030A0"/></a:solidFill></a:defRPr></a:pPr></a:p>
+                          </c:txPr>
+                        </c:trendlineLbl>
+                      </c:trendline>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.TrendlineLabelLayout.Should().BeEquivalentTo(new ChartManualLayoutModel
+        {
+            XMode = "edge",
+            YMode = "edge",
+            X = 0.36,
+            Y = 0.18,
+            Width = 0.22,
+            Height = 0.12
+        });
+        loadedChart.TrendlineLabelFillColor.Should().Be(new CellColor(0xFC, 0xE4, 0xD6));
+        loadedChart.TrendlineLabelBorderColor.Should().Be(new CellColor(0xC0, 0x00, 0x00));
+        loadedChart.TrendlineLabelBorderThickness.Should().Be(1.5);
+        loadedChart.TrendlineLabelTextColor.Should().Be(new CellColor(0x70, 0x30, 0xA0));
+        loadedChart.TrendlineLabelFontSize.Should().Be(14);
+        loadedChart.TrendlineLabelAngle.Should().Be(-45);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var label = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!)
+            .Descendants(chartNs + "trendlineLbl")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        var manualLayout = label.Element(chartNs + "layout")!.Element(chartNs + "manualLayout")!;
+        manualLayout.Element(chartNs + "xMode")!.Attribute("val")!.Value.Should().Be("edge");
+        manualLayout.Element(chartNs + "yMode")!.Attribute("val")!.Value.Should().Be("edge");
+        manualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.36");
+        manualLayout.Element(chartNs + "y")!.Attribute("val")!.Value.Should().Be("0.18");
+        manualLayout.Element(chartNs + "w")!.Attribute("val")!.Value.Should().Be("0.22");
+        manualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.12");
+        label.Element(chartNs + "spPr")!.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("FCE4D6");
+        var border = label.Element(chartNs + "spPr")!.Element(drawingNs + "ln")!;
+        border.Attribute("w")!.Value.Should().Be("19050");
+        border.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("C00000");
+        var textProperties = label.Element(chartNs + "txPr")!;
+        textProperties.Element(drawingNs + "bodyPr")!.Attribute("rot")!.Value.Should().Be("-2700000");
+        var runProperties = textProperties.Descendants(drawingNs + "defRPr").Should().ContainSingle().Subject;
+        runProperties.Attribute("sz")!.Value.Should().Be("1400");
+        runProperties.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("7030A0");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_ClampsEmbeddedChartTrendlineThicknessPackagePart()
     {
         var workbook = new Workbook("ChartTrendlineThicknessPackageSave");
