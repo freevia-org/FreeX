@@ -125,7 +125,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void Source_ProvidesNewEditNameDialogWithExcelNameFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+        var source = ReadNamedRangeDialogSource();
 
         source.Should().Contain("NameDefinitionDialog");
         source.Should().Contain("NamedRangeSelectionRequest");
@@ -156,7 +156,7 @@ public sealed class NamedRangeDialogXamlTests
     public void NameManagerDialogOpenedFromKeyboard_FocusesNamesListOrNewButton()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+        var source = ReadNamedRangeDialogSource();
 
         xaml.Should().Contain("x:Name=\"NewButton\"");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -279,6 +279,13 @@ public sealed class NamedRangeDialogXamlTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static string ReadNamedRangeDialogSource() =>
+        string.Join(Environment.NewLine, new[]
+        {
+            "NamedRangeDialog.xaml.cs",
+            "NameDefinitionDialog.cs"
+        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetPrivateField<T>(object instance, string name)
         where T : class
