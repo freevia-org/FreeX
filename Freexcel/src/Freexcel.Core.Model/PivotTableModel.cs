@@ -103,6 +103,11 @@ public sealed class PivotTableModel
     public bool PreserveFormattingOnUpdate { get; set; } = true;
     public bool ShowExpandCollapseButtons { get; set; } = true;
     public bool EnableDrill { get; set; } = true;
+    public bool AsteriskTotals { get; set; }
+    public bool MultipleFieldFilters { get; set; } = true;
+    public bool EnableFieldDialog { get; set; } = true;
+    public bool EnableFieldProperties { get; set; } = true;
+    public bool EnableDataValueEditing { get; set; }
     public bool PrintTitles { get; set; }
     public bool PrintExpandCollapseButtons { get; set; }
     public string? AltTextTitle { get; set; }
