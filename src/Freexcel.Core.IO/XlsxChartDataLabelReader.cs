@@ -217,7 +217,13 @@ internal static class XlsxChartDataLabelReader
             ReadNullableBool(label.Element(ChartNs + "delete")?.Attribute("val")?.Value),
             label.Element(ChartNs + "dLblPos") is { } position
                 ? FromXlsxDataLabelPosition(position.Attribute("val")?.Value)
-                : null);
+                : null,
+            ReadNullableBool(label.Element(ChartNs + "showVal")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showCatName")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showSerName")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showPercent")?.Attribute("val")?.Value),
+            ReadNullableBool(label.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value));
     }
 
     private static bool HasPointDataLabelMetadata(ChartPointDataLabelFormat format) =>
@@ -230,7 +236,13 @@ internal static class XlsxChartDataLabelReader
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
         || format.IsDeleted is not null
-        || format.Position is not null;
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null;
 
     private static ChartDataLabelPosition FromXlsxDataLabelPosition(string? value) =>
         value switch
