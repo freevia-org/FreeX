@@ -208,8 +208,20 @@ public partial class FormatCellsDialog : Window
             return;
         }
 
-        CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
-        CellColor? fillPatternColor = TryParseColor(DlgFillPatternColorBox.Text);
+        if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
+            ShowInvalidInputWarning("Enter a fill color as #RRGGBB or R, G, B, or leave it blank.", DlgFillColorBox);
+            return;
+        }
+
+        if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
+            ShowInvalidInputWarning("Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.", DlgFillPatternColorBox);
+            return;
+        }
+
         var fillPatternStyle = SelectedFillPatternStyle();
         bool clearFill = DlgClearFillCheck.IsChecked == true;
 

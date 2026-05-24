@@ -704,6 +704,18 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_RejectsInvalidFillColorsWithOwnedWarnings()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a fill color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillColorBox);");
+        source.Should().Contain("if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillPatternColorBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;");
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFontFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
