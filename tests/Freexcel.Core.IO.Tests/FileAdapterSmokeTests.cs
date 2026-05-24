@@ -14649,6 +14649,9 @@ public partial class FileAdapterSmokeTests
         {
             Name = "PivotTable1",
             CacheId = 1,
+            CreatedVersion = 6,
+            UpdatedVersion = 7,
+            MinRefreshableVersion = 5,
             SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
             DataOnRows = false,
@@ -14707,6 +14710,9 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("rowFields");
             pivotXml.ToString().Should().Contain("dataFields");
             pivotXml.Root!.Attribute("dataOnRows")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("createdVersion")!.Value.Should().Be("6");
+            pivotXml.Root!.Attribute("updatedVersion")!.Value.Should().Be("7");
+            pivotXml.Root!.Attribute("minRefreshableVersion")!.Value.Should().Be("5");
             pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstHeaderRow")!.Value.Should().Be("0");
             pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstDataRow")!.Value.Should().Be("2");
             pivotXml.Root!.Element(workbookNs + "location")!.Attribute("firstDataCol")!.Value.Should().Be("2");
@@ -14748,6 +14754,9 @@ public partial class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
         loadedPivot.DataFields.Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+        loadedPivot.CreatedVersion.Should().Be(6);
+        loadedPivot.UpdatedVersion.Should().Be(7);
+        loadedPivot.MinRefreshableVersion.Should().Be(5);
         loadedPivot.DataOnRows.Should().BeFalse();
         loadedPivot.FirstHeaderRow.Should().Be(0);
         loadedPivot.FirstDataRow.Should().Be(2);
