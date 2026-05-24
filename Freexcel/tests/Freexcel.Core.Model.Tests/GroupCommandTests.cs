@@ -29,6 +29,33 @@ public class GroupCommandTests
     }
 
     [Fact]
+    public void GroupRows_RejectsProtectedSheetWithoutFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+
+        var outcome = new GroupRowsCommand(sheet.Id, 2, 5, 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.RowOutlineLevels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GroupRows_AllowsProtectedSheetWithFormatRowsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatRows);
+
+        var outcome = new GroupRowsCommand(sheet.Id, 2, 5, 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowOutlineLevels[2].Should().Be(1);
+        sheet.RowOutlineLevels[5].Should().Be(1);
+    }
+
+    [Fact]
     public void UngroupRows_ClearsOutlineLevel()
     {
         var (_, sheet, ctx) = Setup();
@@ -142,6 +169,33 @@ public class GroupCommandTests
     {
         var (_, sheet, ctx) = Setup();
         new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        sheet.ColOutlineLevels[2].Should().Be(1);
+        sheet.ColOutlineLevels[4].Should().Be(1);
+    }
+
+    [Fact]
+    public void GroupColumns_RejectsProtectedSheetWithoutFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+
+        var outcome = new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ColOutlineLevels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GroupColumns_AllowsProtectedSheetWithFormatColumnsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatColumns);
+
+        var outcome = new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
         sheet.ColOutlineLevels[2].Should().Be(1);
         sheet.ColOutlineLevels[4].Should().Be(1);
     }
