@@ -49,6 +49,50 @@ public sealed class FillCellsCommandTests
         sheet.GetCell(target)!.Value.Should().Be(new TextValue("old"));
     }
 
+    [Fact]
+    public void FillDown_RejectsLockedTargetsOnProtectedSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(source, Cell.FromValue(new TextValue("source")));
+        sheet.SetCell(target, Cell.FromValue(new TextValue("target")));
+        sheet.IsProtected = true;
+
+        var outcome = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Down).Apply(new SimpleCommandContext(workbook));
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.GetCell(target)!.Value.Should().Be(new TextValue("target"));
+    }
+
+    [Fact]
+    public void FillDown_AllowsUnlockedTargetsOnProtectedSheet()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var unlockedStyle = workbook.RegisterStyle(new CellStyle { Locked = false });
+        sheet.SetCell(source, Cell.FromValue(new TextValue("source")));
+        var targetCell = Cell.FromValue(new TextValue("target"));
+        targetCell.StyleId = unlockedStyle;
+        sheet.SetCell(target, targetCell);
+        sheet.IsProtected = true;
+
+        var outcome = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Down).Apply(new SimpleCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(target)!.Value.Should().Be(new TextValue("source"));
+    }
+
     private sealed class SimpleCommandContext(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook => workbook;

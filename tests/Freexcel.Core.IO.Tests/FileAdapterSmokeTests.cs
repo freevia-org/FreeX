@@ -8470,7 +8470,14 @@ public partial class FileAdapterSmokeTests
             DropLineDashStyle = ChartLineDashStyle.Dot,
             HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
             HighLowLineThickness = 2,
-            HighLowLineDashStyle = ChartLineDashStyle.Dash
+            HighLowLineDashStyle = ChartLineDashStyle.Dash,
+            UpDownBarGapWidth = 180,
+            UpBarFillColor = new CellColor(112, 173, 71),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 1,
+            DownBarFillColor = new CellColor(192, 0, 0),
+            DownBarBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            DownBarBorderThickness = 2
         });
 
         var saved = new MemoryStream();
@@ -8499,6 +8506,20 @@ public partial class FileAdapterSmokeTests
         highLowLine.Attribute("w")!.Value.Should().Be("25400");
         highLowLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent4");
         highLowLine.Element(drawingNs + "prstDash")!.Attribute("val")!.Value.Should().Be("dash");
+
+        var upDownBars = lineChart.Element(chartNs + "upDownBars")!;
+        upDownBars.Element(chartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("180");
+        var upBarsShape = upDownBars.Element(chartNs + "upBars")!.Element(chartNs + "spPr")!;
+        upBarsShape.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("70AD47");
+        var upBarsLine = upBarsShape.Element(drawingNs + "ln")!;
+        upBarsLine.Attribute("w")!.Value.Should().Be("12700");
+        upBarsLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("548235");
+
+        var downBarsShape = upDownBars.Element(chartNs + "downBars")!.Element(chartNs + "spPr")!;
+        downBarsShape.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("C00000");
+        var downBarsLine = downBarsShape.Element(drawingNs + "ln")!;
+        downBarsLine.Attribute("w")!.Value.Should().Be("25400");
+        downBarsLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent2");
     }
 
     [Fact]
@@ -12817,6 +12838,24 @@ public partial class FileAdapterSmokeTests
                 RightAngleAxes = false,
                 Perspective = 45
             },
+            FloorFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 234, 211),
+                BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+                BorderThickness = 1
+            },
+            SideWallFormat = new ChartSurfaceFormatModel
+            {
+                FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+                BorderColor = new CellColor(192, 0, 0),
+                BorderThickness = 2
+            },
+            BackWallFormat = new ChartSurfaceFormatModel
+            {
+                FillColor = new CellColor(217, 225, 242),
+                BorderColor = new CellColor(68, 114, 196),
+                BorderThickness = 3
+            },
             PrintSettings = new ChartPrintSettingsModel
             {
                 PageMargins = new ChartPageMarginsModel
@@ -12910,6 +12949,21 @@ public partial class FileAdapterSmokeTests
             view3D.Element(chartNs + "depthPercent")!.Attribute("val")!.Value.Should().Be("200");
             view3D.Element(chartNs + "rAngAx")!.Attribute("val")!.Value.Should().Be("0");
             view3D.Element(chartNs + "perspective")!.Attribute("val")!.Value.Should().Be("45");
+            var floorShape = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "floor")!.Element(chartNs + "spPr")!;
+            floorShape.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("D9EAD3");
+            var floorLine = floorShape.Element(drawingNs + "ln")!;
+            floorLine.Attribute("w")!.Value.Should().Be("12700");
+            floorLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent6");
+            var sideWallShape = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "sideWall")!.Element(chartNs + "spPr")!;
+            sideWallShape.Element(drawingNs + "solidFill")!.Element(drawingNs + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent2");
+            var sideWallLine = sideWallShape.Element(drawingNs + "ln")!;
+            sideWallLine.Attribute("w")!.Value.Should().Be("25400");
+            sideWallLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("C00000");
+            var backWallShape = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "backWall")!.Element(chartNs + "spPr")!;
+            backWallShape.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("D9E1F2");
+            var backWallLine = backWallShape.Element(drawingNs + "ln")!;
+            backWallLine.Attribute("w")!.Value.Should().Be("38100");
+            backWallLine.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("4472C4");
             var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
             var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
             pageMargins.Attribute("l")!.Value.Should().Be("0.7");
