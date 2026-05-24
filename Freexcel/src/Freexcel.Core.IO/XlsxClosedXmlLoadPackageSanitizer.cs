@@ -8,8 +8,10 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     public static MemoryStream Create(MemoryStream sourcePackage)
     {
         var sanitized = new MemoryStream();
-        var sourceBytes = sourcePackage.ToArray();
-        sanitized.Write(sourceBytes, 0, sourceBytes.Length);
+        if (sourcePackage.TryGetBuffer(out var sourceBuffer))
+            sanitized.Write(sourceBuffer.Array!, sourceBuffer.Offset, sourceBuffer.Count);
+        else
+            sourcePackage.WriteTo(sanitized);
         sanitized.Position = 0;
         using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
         {
