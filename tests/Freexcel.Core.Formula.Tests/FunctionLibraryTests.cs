@@ -4676,6 +4676,26 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sequence_BlankLeadingArguments_UseExcelDefaults()
+    {
+        var cols = _eval.Evaluate("=SEQUENCE(,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        cols.RowCount.Should().Be(1);
+        cols.ColCount.Should().Be(2);
+        cols.Cells[0, 0].Should().Be(new NumberValue(1));
+        cols.Cells[0, 1].Should().Be(new NumberValue(2));
+
+        var start = _eval.Evaluate("=SEQUENCE(,,5)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        start.RowCount.Should().Be(1);
+        start.ColCount.Should().Be(1);
+        start.Cells[0, 0].Should().Be(new NumberValue(5));
+
+        var step = _eval.Evaluate("=SEQUENCE(,,,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        step.RowCount.Should().Be(1);
+        step.ColCount.Should().Be(1);
+        step.Cells[0, 0].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Sequence_WithStartAndStep_CountsByTwos()
     {
         var result = _eval.Evaluate("=SEQUENCE(4,1,0,2)", MakeSheet());

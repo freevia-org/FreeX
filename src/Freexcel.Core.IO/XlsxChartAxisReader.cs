@@ -191,6 +191,7 @@ internal static class XlsxChartAxisReader
         var majorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
         var minorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
         var logScale = scaling?.Element(ChartNs + "logBase") is not null;
+        var logBase = ReadDouble(scaling?.Element(ChartNs + "logBase")?.Attribute("val")?.Value);
         var reverseOrder = IsReverseOrientation(scaling);
         var numberFormat = FromXlsxNumberFormatCode(axisElement.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
         var majorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines"));
@@ -215,6 +216,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisMajorUnit = majorUnit;
             chart.XAxisMinorUnit = minorUnit;
             chart.XAxisLogScale = logScale;
+            chart.XAxisLogBase = logBase;
             chart.XAxisReverseOrder = reverseOrder;
             chart.XAxisNumberFormat = numberFormat;
             ApplyXAxisGridlineProperties(chart, majorGridline, minorGridline);
@@ -235,6 +237,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisMajorUnit = majorUnit;
         chart.YAxisMinorUnit = minorUnit;
         chart.YAxisLogScale = logScale;
+        chart.YAxisLogBase = logBase;
         chart.YAxisReverseOrder = reverseOrder;
         chart.YAxisNumberFormat = numberFormat;
         ApplyYAxisGridlineProperties(chart, majorGridline, minorGridline);
