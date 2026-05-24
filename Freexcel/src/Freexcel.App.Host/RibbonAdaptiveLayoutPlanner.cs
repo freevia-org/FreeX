@@ -209,6 +209,9 @@ public static class RibbonAdaptiveLayoutPlanner
 
         if (availableWidth <= 1120)
         {
+            if (states.Length > 0)
+                states[0] = RibbonAdaptiveGroupState.SmallWithLabels;
+
             for (var i = 1; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
