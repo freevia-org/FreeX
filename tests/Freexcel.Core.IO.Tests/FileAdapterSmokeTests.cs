@@ -12271,6 +12271,51 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAsymmetricPrintQualityDpi()
+    {
+        var workbook = new Workbook("WorksheetAsymmetricPrintQualityDpi");
+        workbook.AddSheet("Sheet1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        using (var sourceArchive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var sourceWorksheetXml = LoadPackageXml(sourceArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace sourceWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sourcePageSetup = sourceWorksheetXml.Root!.Element(sourceWorksheetNs + "pageSetup");
+            if (sourcePageSetup is null)
+            {
+                sourcePageSetup = new XElement(sourceWorksheetNs + "pageSetup");
+                sourceWorksheetXml.Root!.Add(sourcePageSetup);
+            }
+
+            sourcePageSetup.SetAttributeValue("horizontalDpi", "600");
+            sourcePageSetup.SetAttributeValue("verticalDpi", "300");
+            ReplacePackageXml(sourceArchive, "xl/worksheets/sheet1.xml", sourceWorksheetXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrintQualityDpi.Should().Be(600);
+        loadedSheet.PrintQualityVerticalDpi.Should().Be(300);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull();
+        pageSetup!.Attribute("horizontalDpi")!.Value.Should().Be("600");
+        pageSetup.Attribute("verticalDpi")!.Value.Should().Be("300");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPageMarginsHeaderFooterAttributes()
     {
         var workbook = new Workbook("WorksheetPageMarginsNativeMetadata");
@@ -12486,6 +12531,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintBlackAndWhite = false;
         loadedSheet.PrintDraftQuality = false;
         loadedSheet.PrintQualityDpi = null;
+        loadedSheet.PrintQualityVerticalDpi = null;
         loadedSheet.UsePrinterDefaults = false;
         loadedSheet.PrintCopies = null;
         loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
@@ -12551,6 +12597,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintBlackAndWhite = false;
         loadedSheet.PrintDraftQuality = false;
         loadedSheet.PrintQualityDpi = null;
+        loadedSheet.PrintQualityVerticalDpi = null;
         loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
         loadedSheet.PrintComments = WorksheetPrintComments.None;
 
