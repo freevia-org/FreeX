@@ -284,7 +284,8 @@ public sealed class NamedRangeDialogXamlTests
         string.Join(Environment.NewLine, new[]
         {
             "NamedRangeDialog.xaml.cs",
-            "NameDefinitionDialog.cs"
+            "NameDefinitionDialog.cs",
+            "NamedRangeDialogPlanner.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetPrivateField<T>(object instance, string name)
