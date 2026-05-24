@@ -201,7 +201,13 @@ public partial class FormatCellsDialog : Window
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        CellColor? fontColor = TryParseColor(DlgFontColorBox.Text);
+        if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
+            ShowInvalidInputWarning("Enter a font color as #RRGGBB or R, G, B.", DlgFontColorBox);
+            return;
+        }
+
         CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
         CellColor? fillPatternColor = TryParseColor(DlgFillPatternColorBox.Text);
         var fillPatternStyle = SelectedFillPatternStyle();

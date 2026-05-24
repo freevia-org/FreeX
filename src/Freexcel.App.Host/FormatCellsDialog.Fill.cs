@@ -102,6 +102,9 @@ public partial class FormatCellsDialog
             : null;
     }
 
+    private static bool TryParseRequiredColor(string text, out CellColor color) =>
+        ColorInputParser.TryParseRgbColorText(text, out color);
+
     private static Brush BrushForColor(CellColor? color, Brush fallback)
         => color is { } rgb
             ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))
