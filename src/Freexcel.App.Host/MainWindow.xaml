@@ -2918,7 +2918,7 @@
                                             local:RibbonTooltip.Title="Refresh"
                                             local:RibbonTooltip.KeyTip="R"
                                             local:RibbonTooltip.Description="Refresh the selected PivotTable."/>
-                                    <Button Content="Change Source" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChangeDataSourceBtn_Click"
+                                    <Button Content="Change Data Source" Width="132" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChangeDataSourceBtn_Click"
                                             local:RibbonTooltip.Title="Change Data Source"
                                             local:RibbonTooltip.KeyTip="CD"
                                             local:RibbonTooltip.Description="Change the source range for the selected PivotTable."/>
