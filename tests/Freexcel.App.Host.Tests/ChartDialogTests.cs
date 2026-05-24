@@ -568,6 +568,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAreaLegendDialogOpenedFromKeyboard_FocusesChartAreaFillBox()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_chartAreaFillBox.Focus();");
+        dialogSource.Should().Contain("_chartAreaFillBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_chartAreaFillBox);");
+    }
+
+    [Fact]
     public void ChartDataLabelsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartDataLabelsDialog.CreateResult(

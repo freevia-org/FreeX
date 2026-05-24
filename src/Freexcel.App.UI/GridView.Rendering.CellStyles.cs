@@ -111,4 +111,15 @@ public partial class GridView
 
     public static TextDecorationCollection? BuildTextDecorations(CellStyle? style) =>
         CellTextDecorationPlanner.Build(style);
+
+    public static Typeface CreateCellTypeface(CellStyle? style)
+    {
+        var fontName = string.IsNullOrWhiteSpace(style?.FontName)
+            ? "Calibri"
+            : style!.FontName;
+        var fontStyle = style?.Italic == true ? FontStyles.Italic : FontStyles.Normal;
+        var fontWeight = style?.Bold == true ? FontWeights.Bold : FontWeights.Normal;
+
+        return new Typeface(new FontFamily(fontName), fontStyle, fontWeight, FontStretches.Normal);
+    }
 }
