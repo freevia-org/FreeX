@@ -286,6 +286,8 @@ public sealed class ChartModel
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
+    public ChartManualLayoutModel? TitleLayout { get; set; }
+    public bool TitleOverlay { get; set; }
     public string? XAxisTitle { get; set; }
     public string? YAxisTitle { get; set; }
     public bool HideXAxis { get; set; }

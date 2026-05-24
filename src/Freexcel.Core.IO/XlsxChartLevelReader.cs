@@ -23,7 +23,10 @@ internal static class XlsxChartLevelReader
     public static void ApplyChartLevelProperties(XDocument chartXml, ChartModel chart)
     {
         var chartElement = chartXml.Root?.Element(ChartNs + "chart");
-        XlsxChartFormattingReader.ApplyChartTitleFormatting(chartElement?.Element(ChartNs + "title"), chart);
+        var title = chartElement?.Element(ChartNs + "title");
+        chart.TitleLayout = XlsxChartMetadataReader.ReadManualLayout(title?.Element(ChartNs + "layout"));
+        chart.TitleOverlay = XlsxChartScalarReader.IsTrue(title?.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
+        XlsxChartFormattingReader.ApplyChartTitleFormatting(title, chart);
         XlsxChartFormattingReader.ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
         var plotArea = chartElement?.Element(ChartNs + "plotArea");
         chart.PlotAreaLayout = XlsxChartMetadataReader.ReadManualLayout(plotArea?.Element(ChartNs + "layout"));

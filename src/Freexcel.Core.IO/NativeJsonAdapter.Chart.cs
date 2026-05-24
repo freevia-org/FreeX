@@ -48,6 +48,8 @@ public sealed partial class NativeJsonAdapter
                 FirstRowIsHeader = chartDto.FirstRowIsHeader,
                 FirstColIsCategories = chartDto.FirstColIsCategories,
                 Title = chartDto.Title,
+                TitleLayout = chartDto.TitleLayout,
+                TitleOverlay = chartDto.TitleOverlay,
                 XAxisTitle = chartDto.XAxisTitle,
                 YAxisTitle = chartDto.YAxisTitle,
                 HideXAxis = chartDto.HideXAxis,

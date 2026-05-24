@@ -144,6 +144,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             PivotCacheId = chart.PivotCacheId,
             PivotFormatsXml = chart.PivotFormatsXml,
             Title = chart.Title,
+            TitleLayout = chart.TitleLayout,
+            TitleOverlay = chart.TitleOverlay,
             XAxisTitle = chart.XAxisTitle,
             YAxisTitle = chart.YAxisTitle,
             HideXAxis = chart.HideXAxis,

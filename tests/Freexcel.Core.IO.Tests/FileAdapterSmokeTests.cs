@@ -14111,6 +14111,7 @@ public partial class FileAdapterSmokeTests
         {
             Type = ChartType.Column,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            Title = "Pivot Sales",
             IsPivotChart = true,
             PivotTableName = "PivotTable1",
             PivotFormatsXml = """
@@ -14142,6 +14143,16 @@ public partial class FileAdapterSmokeTests
                 TargetMode = "External",
                 AutoUpdate = true
             },
+            TitleLayout = new ChartManualLayoutModel
+            {
+                XMode = "edge",
+                YMode = "edge",
+                X = 0.12,
+                Y = 0.04,
+                Width = 0.45,
+                Height = 0.1
+            },
+            TitleOverlay = true,
             PlotAreaLayout = new ChartManualLayoutModel
             {
                 LayoutTarget = "outer",
@@ -14259,6 +14270,18 @@ public partial class FileAdapterSmokeTests
             externalRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/package");
             externalRelationship.Attribute("Target")!.Value.Should().Be("linked-pivot-source.xlsx");
             externalRelationship.Attribute("TargetMode")!.Value.Should().Be("External");
+            var title = chartXml.Root.Element(chartNs + "chart")!
+                .Element(chartNs + "title")!;
+            title.Element(chartNs + "overlay")!.Attribute("val")!.Value.Should().Be("1");
+            var titleManualLayout = title
+                .Element(chartNs + "layout")!
+                .Element(chartNs + "manualLayout")!;
+            titleManualLayout.Element(chartNs + "xMode")!.Attribute("val")!.Value.Should().Be("edge");
+            titleManualLayout.Element(chartNs + "yMode")!.Attribute("val")!.Value.Should().Be("edge");
+            titleManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.12");
+            titleManualLayout.Element(chartNs + "y")!.Attribute("val")!.Value.Should().Be("0.04");
+            titleManualLayout.Element(chartNs + "w")!.Attribute("val")!.Value.Should().Be("0.45");
+            titleManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.1");
             var plotAreaManualLayout = chartXml.Root.Element(chartNs + "chart")!
                 .Element(chartNs + "plotArea")!
                 .Element(chartNs + "layout")!
@@ -14342,6 +14365,8 @@ public partial class FileAdapterSmokeTests
         loadedChart.Language.Should().Be("en-US");
         loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
         loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
+        loadedChart.TitleLayout.Should().BeEquivalentTo(chart.TitleLayout);
+        loadedChart.TitleOverlay.Should().BeTrue();
         loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
         loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
         loadedChart.ThreeDView.Should().BeEquivalentTo(chart.ThreeDView);
