@@ -43,6 +43,10 @@ public class FunctionLibraryTests
             range.At(row + 1, 1).Should().Be(expected[row]);
     }
 
+    private static BoolValue True() => new(true);
+
+    private static BoolValue False() => new(false);
+
     // ── IFERROR ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -986,6 +990,23 @@ public class FunctionLibraryTests
             (1, 1, new TextValue("10")),
             (2, 1, new TextValue("x")));
         AssertColumn(_eval.Evaluate("=VALUE(A1:A2)", valueSheet), new NumberValue(10), ErrorValue.Value);
+    }
+
+    [Fact]
+    public void IsFunctions_RangeArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new TextValue("x")),
+            (3, 1, ErrorValue.NA),
+            (4, 1, new BoolValue(true)));
+
+        AssertColumn(_eval.Evaluate("=ISNUMBER(A1:A5)", sheet), True(), False(), False(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISTEXT(A1:A5)", sheet), False(), True(), False(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISERROR(A1:A5)", sheet), False(), False(), True(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISNA(A1:A5)", sheet), False(), False(), True(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISLOGICAL(A1:A5)", sheet), False(), False(), False(), True(), False());
+        AssertColumn(_eval.Evaluate("=ISBLANK(A1:A5)", sheet), False(), False(), False(), False(), True());
     }
 
     [Fact]
