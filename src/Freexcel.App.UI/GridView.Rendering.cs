@@ -91,13 +91,7 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var typeface = (style?.Bold == true, style?.Italic == true) switch
-            {
-                (true,  true)  => new Typeface(new FontFamily("Calibri"), FontStyles.Italic,  FontWeights.Bold,   FontStretches.Normal),
-                (true,  false) => new Typeface(new FontFamily("Calibri"), FontStyles.Normal,  FontWeights.Bold,   FontStretches.Normal),
-                (false, true)  => new Typeface(new FontFamily("Calibri"), FontStyles.Italic,  FontWeights.Normal, FontStretches.Normal),
-                _              => DefaultTypeface
-            };
+            var typeface = CreateCellTypeface(style);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
@@ -226,6 +220,21 @@ public partial class GridView
             DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h));
         }
 
+        // Pass 2b: comment/note indicators
+        foreach (var cell in Viewport.Cells)
+        {
+            if (!cell.HasComment) continue;
+            if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
+            if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
+
+            var rect = new Rect(
+                colMetric.LeftOffset + ActualRowHeaderWidth,
+                rowMetric.TopOffset + EffectiveColHeaderHeight,
+                colMetric.Width,
+                rowMetric.Height);
+            DrawCommentIndicator(dc, rect);
+        }
+
         // Pass 3: text
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
@@ -285,13 +294,7 @@ public partial class GridView
                 }
             }
 
-            var typeface = (style?.Bold == true, style?.Italic == true) switch
-            {
-                (true,  true)  => new Typeface(new FontFamily("Calibri"), FontStyles.Italic,  FontWeights.Bold,   FontStretches.Normal),
-                (true,  false) => new Typeface(new FontFamily("Calibri"), FontStyles.Normal,  FontWeights.Bold,   FontStretches.Normal),
-                (false, true)  => new Typeface(new FontFamily("Calibri"), FontStyles.Italic,  FontWeights.Normal, FontStretches.Normal),
-                _              => DefaultTypeface
-            };
+            var typeface = CreateCellTypeface(style);
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
@@ -371,6 +374,20 @@ public partial class GridView
             }
             dc.Pop();
         }
+    }
+
+    private static void DrawCommentIndicator(DrawingContext dc, Rect rect)
+    {
+        const double size = 7;
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(rect.Right - size, rect.Top), isFilled: true, isClosed: true);
+            context.LineTo(new Point(rect.Right, rect.Top), isStroked: true, isSmoothJoin: false);
+            context.LineTo(new Point(rect.Right, rect.Top + size), isStroked: true, isSmoothJoin: false);
+        }
+        geometry.Freeze();
+        dc.DrawGeometry(Brushes.Red, null, geometry);
     }
 
 }
