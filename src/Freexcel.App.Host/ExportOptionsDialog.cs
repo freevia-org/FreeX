@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -98,6 +99,13 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(buttons);
 
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _activeSheetButton.Focus();
+        Keyboard.Focus(_activeSheetButton);
     }
 
     private void SetPageRangeFieldsEnabled(bool enabled)
