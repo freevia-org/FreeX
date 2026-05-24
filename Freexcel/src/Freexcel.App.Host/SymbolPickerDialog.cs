@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace Freexcel.App.Host;
@@ -154,7 +155,7 @@ public sealed partial class SymbolPickerDialog : Window
         specialList.SelectedIndex = 0;
 
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        codeRow.Children.Add(new TextBlock { Text = "Character code:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        codeRow.Children.Add(new Label { Content = "Character _code:", Target = selectedCode, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         codeRow.Children.Add(selectedCode);
         codeRow.Children.Add(new TextBlock { Text = "from: Unicode (hex)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
         var codeSelect = new Button { Content = "_Go", Width = 52, Margin = new Thickness(8, 0, 0, 0) };
@@ -162,6 +163,10 @@ public sealed partial class SymbolPickerDialog : Window
         {
             if (TryParseCharacterCode(selectedCode.Text, out var symbol))
                 SelectSymbolText(symbol);
+
+            selectedCode.Focus();
+            selectedCode.SelectAll();
+            Keyboard.Focus(selectedCode);
         };
         codeRow.Children.Add(codeSelect);
 
