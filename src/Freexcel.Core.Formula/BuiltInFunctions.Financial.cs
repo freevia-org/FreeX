@@ -699,8 +699,14 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
-        double pr          = ToNumber(args[2]);
         double redemption  = ToNumber(args[3]);
+        if (args[2] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => DiscScalar(settlement, maturity, value, redemption, args));
+        return DiscScalar(settlement, maturity, args[2], redemption, args);
+    }
+
+    private static ScalarValue DiscScalar(double settlement, double maturity, ScalarValue priceValue, double redemption, IReadOnlyList<ScalarValue> args)
+    {
+        double pr = ToNumber(priceValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
@@ -718,8 +724,14 @@ public static partial class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         double settlement  = ToNumber(args[0]);
         double maturity    = ToNumber(args[1]);
-        double investment  = ToNumber(args[2]);
         double redemption  = ToNumber(args[3]);
+        if (args[2] is RangeValue investmentRange) return MapUnaryTextRange(investmentRange, value => IntrateScalar(settlement, maturity, value, redemption, args));
+        return IntrateScalar(settlement, maturity, args[2], redemption, args);
+    }
+
+    private static ScalarValue IntrateScalar(double settlement, double maturity, ScalarValue investmentValue, double redemption, IReadOnlyList<ScalarValue> args)
+    {
+        double investment = ToNumber(investmentValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(investment) || !double.IsFinite(redemption))
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;
@@ -738,7 +750,13 @@ public static partial class BuiltInFunctions
         double settlement = ToNumber(args[0]);
         double maturity   = ToNumber(args[1]);
         double investment = ToNumber(args[2]);
-        double discount   = ToNumber(args[3]);
+        if (args[3] is RangeValue discountRange) return MapUnaryTextRange(discountRange, value => ReceivedScalar(settlement, maturity, investment, value, args));
+        return ReceivedScalar(settlement, maturity, investment, args[3], args);
+    }
+
+    private static ScalarValue ReceivedScalar(double settlement, double maturity, double investment, ScalarValue discountValue, IReadOnlyList<ScalarValue> args)
+    {
+        double discount = ToNumber(discountValue);
         if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(investment) || !double.IsFinite(discount))
             return ErrorValue.Num;
         if (!TryGetFinancialBasis(args, 4, out int basis)) return ErrorValue.Num;

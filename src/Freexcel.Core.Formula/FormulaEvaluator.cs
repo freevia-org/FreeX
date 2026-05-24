@@ -1040,6 +1040,7 @@ public sealed class FormulaEvaluator
              or "CUMIPMT" or "CUMPRINC"
              or "EFFECT" or "NOMINAL" or "RRI" or "PDURATION"
              or "DOLLARDE" or "DOLLARFR"
+             or "DISC" or "INTRATE" or "RECEIVED"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL"
              or "TEXTJOIN" or "EXACT" or "CODE" or "CHAR" or "LEN" or "LEFT" or "RIGHT" or "MID" or "REPLACE"
              or "FIND" or "SEARCH"

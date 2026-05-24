@@ -494,8 +494,12 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SparklineDialogRangePicker_RefocusesSelectedInputWithKeyboardFocus()
     {
-        var source = ReadClassSource("SparklineDialog.cs", "private void RequestRangeSelection", "}");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs"));
+        var handlerSource = source[source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..];
 
+        handlerSource.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest);");
+        handlerSource.Should().Contain("FocusRangeSelectionInput(textBox);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox textBox)");
         source.Should().Contain("textBox.Focus();");
         source.Should().Contain("textBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(textBox);");
