@@ -145,6 +145,20 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void InsertChartDialogOpenedFromKeyboard_FocusesRecommendedGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class InsertChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record ChangeChartTypeDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_recommendedGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_recommendedGallery);");
+    }
+
+    [Fact]
     public void ChangeChartTypeDialog_PreselectsCurrentTypeAndBuildsResult()
     {
         StaTestRunner.Run(() =>
@@ -154,6 +168,18 @@ public sealed class ChartDialogTests
             dialog.SelectedChartType.Should().Be(ChartType.Bar);
         });
         ChangeChartTypeDialog.CreateResult(ChartType.Area).ChartType.Should().Be(ChartType.Area);
+    }
+
+    [Fact]
+    public void ChangeChartTypeDialogOpenedFromKeyboard_FocusesSubtypeGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class ChangeChartTypeDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_subtypeGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_subtypeGallery);");
     }
 
     [Fact]
@@ -177,6 +203,21 @@ public sealed class ChartDialogTests
         source.Should().Contain("AddInput(stack, \"_Primary horizontal axis title:\", _xAxisTitleBox)");
         source.Should().Contain("AddInput(stack, \"Primary _vertical axis title:\", _yAxisTitleBox)");
         source.Should().Contain("new Label { Content = label, Target = box");
+    }
+
+    [Fact]
+    public void ChartTitlesDialogOpenedFromKeyboard_FocusesChartTitleBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_chartTitleBox.Focus();");
+        dialogSource.Should().Contain("_chartTitleBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_chartTitleBox);");
     }
 
     [Fact]
@@ -213,12 +254,40 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartStyleDialogOpenedFromKeyboard_FocusesStyleGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class ChartStyleDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record MoveChartDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_styleGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_styleGallery);");
+    }
+
+    [Fact]
     public void MoveChartDialog_CreatesObjectAndNewSheetResults()
     {
         MoveChartDialog.CreateObjectResult("Sheet2").Should().Be(
             new MoveChartDialogResult(MoveChartTargetKind.ObjectInSheet, "Sheet2"));
         MoveChartDialog.CreateNewSheetResult("Revenue Chart").Should().Be(
             new MoveChartDialogResult(MoveChartTargetKind.NewChartSheet, "Revenue Chart"));
+    }
+
+    [Fact]
+    public void MoveChartDialogOpenedFromKeyboard_FocusesObjectInSheetChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_objectInSheet.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_objectInSheet);");
     }
 
     [Theory]
@@ -256,6 +325,19 @@ public sealed class ChartDialogTests
         result.SourceRangeText.Should().Be("A1:D12");
         result.FirstColumnIsCategories.Should().BeTrue();
         result.SwitchRowColumn.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class SelectDataSourceDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_rangeBox.Focus();");
+        dialogSource.Should().Contain("_rangeBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_rangeBox);");
     }
 
     [Fact]

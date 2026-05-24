@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -50,6 +51,7 @@ public sealed class ChartTitlesDialog : Window
             DialogResult = true;
         }));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartTitlesDialogResult CreateResult(string? chartTitle, string? xAxisTitle, string? yAxisTitle) =>
@@ -63,6 +65,13 @@ public sealed class ChartTitlesDialog : Window
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _chartTitleBox.Focus();
+        _chartTitleBox.SelectAll();
+        Keyboard.Focus(_chartTitleBox);
     }
 }
 
@@ -100,6 +109,7 @@ public sealed class ChartStyleDialog : Window
         stack.Children.Add(_styleGallery);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartStyleDialogResult FromChart(ChartModel chart) =>
@@ -119,6 +129,12 @@ public sealed class ChartStyleDialog : Window
             ? CreateResult(option.StyleId)
             : CreateResult(null);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _styleGallery.Focus();
+        Keyboard.Focus(_styleGallery);
     }
 
     private static DataTemplate CreateStyleGalleryTemplate()
@@ -216,6 +232,7 @@ public sealed class MoveChartDialog : Window
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static MoveChartDialogResult CreateObjectResult(string? sheetName) =>
@@ -230,6 +247,12 @@ public sealed class MoveChartDialog : Window
             ? CreateObjectResult(_targetBox.Text)
             : CreateNewSheetResult(_targetBox.Text);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _objectInSheet.Focus();
+        Keyboard.Focus(_objectInSheet);
     }
 
     private static string RequireTargetName(string? name)
@@ -325,6 +348,7 @@ public sealed class SelectDataSourceDialog : Window
             DialogResult = true;
         }));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static SelectDataSourceDialogResult CreateResult(
@@ -376,6 +400,13 @@ public sealed class SelectDataSourceDialog : Window
 
     public static SelectDataSourceRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _rangeBox.Focus();
+        _rangeBox.SelectAll();
+        Keyboard.Focus(_rangeBox);
+    }
 
     private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
         DialogReferencePicker.CreateEditor(
