@@ -220,6 +220,10 @@ internal static partial class XlsxChartXmlWriter
             element.SetAttributeValue("orientation", pageSetup.Orientation);
         if (pageSetup.Copies is { } copies)
             element.SetAttributeValue("copies", copies.ToString(CultureInfo.InvariantCulture));
+        AddOptionalBoolAttribute(element, "usePrinterDefaults", pageSetup.UsePrinterDefaults);
+        AddOptionalIntAttribute(element, "firstPageNumber", pageSetup.FirstPageNumber);
+        AddOptionalIntAttribute(element, "horizontalDpi", pageSetup.HorizontalDpi);
+        AddOptionalIntAttribute(element, "verticalDpi", pageSetup.VerticalDpi);
         AddOptionalBoolAttribute(element, "blackAndWhite", pageSetup.BlackAndWhite);
         AddOptionalBoolAttribute(element, "draft", pageSetup.Draft);
         return element.HasAttributes ? element : null;
@@ -241,6 +245,12 @@ internal static partial class XlsxChartXmlWriter
     {
         if (value is { } intValue)
             element.Add(new XElement(chartNs + name, new XAttribute("val", intValue.ToString(CultureInfo.InvariantCulture))));
+    }
+
+    private static void AddOptionalIntAttribute(XElement element, string name, int? value)
+    {
+        if (value is { } intValue)
+            element.SetAttributeValue(name, intValue.ToString(CultureInfo.InvariantCulture));
     }
 
     private static void AddOptionalDoubleAttribute(XElement element, string name, double? value)
