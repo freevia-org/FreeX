@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace Freexcel.Core.Model;
 
 /// <summary>
@@ -31,15 +29,58 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
     /// </summary>
     public static bool TryParse(string a1, SheetId sheet, out CellAddress result)
     {
-        var match = A1Regex().Match(a1.Trim());
-        if (!match.Success)
+        var value = a1.AsSpan().Trim();
+        if (value.IsEmpty)
         {
             result = default;
             return false;
         }
 
-        var col = ColumnNameToNumber(match.Groups[1].Value);
-        if (!uint.TryParse(match.Groups[2].Value, out var row) || row == 0 || row > MaxRow || col > MaxCol)
+        uint col = 0;
+        var index = 0;
+        while (index < value.Length)
+        {
+            var c = value[index];
+            if (c is >= 'a' and <= 'z')
+                c = (char)(c - ('a' - 'A'));
+            if (c is < 'A' or > 'Z')
+                break;
+
+            col = col * 26 + (uint)(c - 'A' + 1);
+            if (col > MaxCol)
+            {
+                result = default;
+                return false;
+            }
+
+            index++;
+        }
+
+        if (index == 0 || index == value.Length)
+        {
+            result = default;
+            return false;
+        }
+
+        uint row = 0;
+        for (; index < value.Length; index++)
+        {
+            var c = value[index];
+            if (c is < '0' or > '9')
+            {
+                result = default;
+                return false;
+            }
+
+            row = row * 10 + (uint)(c - '0');
+            if (row > MaxRow)
+            {
+                result = default;
+                return false;
+            }
+        }
+
+        if (row == 0)
         {
             result = default;
             return false;
@@ -48,7 +89,6 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         result = new CellAddress(sheet, row, col);
         return true;
     }
-
     /// <summary>
     /// Converts a column name (e.g. "A", "Z", "AA", "XFD") to a 1-based column number.
     /// </summary>
@@ -90,8 +130,6 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         return rowCmp != 0 ? rowCmp : Col.CompareTo(other.Col);
     }
 
-    [GeneratedRegex(@"^([A-Za-z]+)(\d+)$")]
-    private static partial Regex A1Regex();
 }
 
 /// <summary>

@@ -1125,7 +1125,8 @@ public sealed class PivotWorkflowDialogTests
                 "PivotWorkflowDialogs.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",
-                "PivotTableOptionsDialog.cs"
+                "PivotTableOptionsDialog.cs",
+                "PivotTableOptionsDialog.Result.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 

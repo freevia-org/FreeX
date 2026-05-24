@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Input;
 using System.Windows.Media;
 using Freexcel.Core.Model;
 
@@ -147,68 +146,6 @@ public sealed partial class TextToColumnsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    private void FocusInitialKeyboardTarget()
-    {
-        _delimitedButton.Focus();
-        Keyboard.Focus(_delimitedButton);
-    }
-
-    private GroupBox CreateOriginalDataTypePanel()
-    {
-        var panel = new StackPanel();
-        panel.Children.Add(_delimitedButton);
-        panel.Children.Add(_fixedWidthButton);
-
-        return new GroupBox
-        {
-            Header = "Original data type",
-            Content = panel,
-            Padding = new Thickness(8),
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-    }
-
-    private GroupBox CreateDelimiterPanel()
-    {
-        var panel = new WrapPanel();
-        panel.Children.Add(_tabBox);
-        panel.Children.Add(_semicolonBox);
-        panel.Children.Add(_commaBox);
-        panel.Children.Add(_spaceBox);
-
-        var otherPanel = new StackPanel { Orientation = Orientation.Horizontal };
-        otherPanel.Children.Add(_otherBox);
-        otherPanel.Children.Add(_customBox);
-        panel.Children.Add(otherPanel);
-
-        var qualifierPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        qualifierPanel.Children.Add(new Label
-        {
-            Content = "Text _qualifier:",
-            Target = _textQualifierBox,
-            Padding = new Thickness(0),
-            VerticalAlignment = System.Windows.VerticalAlignment.Center
-        });
-        _textQualifierBox.Items.Add("\"");
-        _textQualifierBox.Items.Add("'");
-        _textQualifierBox.Items.Add("{none}");
-        _textQualifierBox.SelectedIndex = 0;
-        qualifierPanel.Children.Add(_textQualifierBox);
-
-        var layout = new StackPanel();
-        layout.Children.Add(panel);
-        layout.Children.Add(qualifierPanel);
-        layout.Children.Add(_treatConsecutiveDelimitersBox);
-
-        return new GroupBox
-        {
-            Header = "Delimiters",
-            Content = layout,
-            Padding = new Thickness(8),
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-    }
-
     private GroupBox CreateFixedWidthPanel()
     {
         var panel = new StackPanel();
@@ -241,37 +178,6 @@ public sealed partial class TextToColumnsDialog : Window
         };
     }
 
-    private DockPanel CreateDestinationPanel()
-    {
-        var panel = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-        panel.Children.Add(new Label
-        {
-            Content = "_Destination:",
-            Target = _destinationBox,
-            Padding = new Thickness(0),
-            Margin = new Thickness(0, 4, 8, 0)
-        });
-        panel.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
-        return panel;
-    }
-
-    private IReadOnlyList<TextToColumnsDelimiterKind> SelectedDelimiterKinds()
-    {
-        var kinds = new List<TextToColumnsDelimiterKind>();
-        if (_otherBox.IsChecked == true)
-            kinds.Add(TextToColumnsDelimiterKind.Custom);
-        if (_tabBox.IsChecked == true)
-            kinds.Add(TextToColumnsDelimiterKind.Tab);
-        if (_semicolonBox.IsChecked == true)
-            kinds.Add(TextToColumnsDelimiterKind.Semicolon);
-        if (_spaceBox.IsChecked == true)
-            kinds.Add(TextToColumnsDelimiterKind.Space);
-        if (_commaBox.IsChecked == true)
-            kinds.Add(TextToColumnsDelimiterKind.Comma);
-
-        return kinds.Count == 0 ? [TextToColumnsDelimiterKind.Comma] : kinds;
-    }
-
     private void Accept()
     {
         try
@@ -298,129 +204,6 @@ public sealed partial class TextToColumnsDialog : Window
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-    }
-
-    private void FocusInvalidDestinationInput()
-    {
-        _wizardStep = 3;
-        UpdateWizardStep();
-        _destinationBox.Focus();
-        Keyboard.Focus(_destinationBox);
-        _destinationBox.SelectAll();
-    }
-
-    public static TextToColumnsRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
-        new(currentText.Trim(), CollapseDialog: true);
-
-    private DockPanel CreateReferenceEditor(TextBox textBox, string automationName) =>
-        DialogReferencePicker.CreateEditor(
-            textBox,
-            automationName,
-            requestSelection: request =>
-            {
-                RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
-                _requestRangeSelection?.Invoke(RangeSelectionRequest);
-            });
-
-    internal static StackPanel CreateButtonRow(Action accept) =>
-        DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
-
-    private StackPanel CreateWizardButtonRow()
-    {
-        var panel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-
-        _backButton = new Button
-        {
-            Content = "< _Back",
-            Width = 72,
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        _backButton.Click += (_, _) => MoveWizardStep(-1);
-        panel.Children.Add(_backButton);
-        _nextButton = new Button
-        {
-            Content = "_Next >",
-            Width = 72,
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        _nextButton.Click += (_, _) =>
-        {
-            if (_wizardStep < 3)
-                MoveWizardStep(1);
-            else
-                Accept();
-        };
-        panel.Children.Add(_nextButton);
-        var finishButton = new Button
-        {
-            Content = "_Finish",
-            Width = 72,
-            Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
-        };
-        finishButton.Click += (_, _) => Accept();
-        panel.Children.Add(finishButton);
-        panel.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
-        return panel;
-    }
-
-    private void MoveWizardStep(int direction)
-    {
-        _wizardStep = Math.Clamp(_wizardStep + direction, 1, 3);
-        UpdateWizardStep();
-    }
-
-    private void UpdateWizardStep()
-    {
-        _wizardHeader.Text = $"Text Wizard - Step {_wizardStep} of 3";
-        _wizardInstruction.Text = _wizardStep switch
-        {
-            1 => "Choose the file type that best describes your data.",
-            2 => "Choose the delimiters that separate your selected text.",
-            _ => "Select each column and set the data format and destination."
-        };
-
-        SetVisible(_originalDataTypePanel, _wizardStep == 1);
-        SetVisible(_delimiterPanel, _wizardStep == 2 && _fixedWidthButton.IsChecked != true);
-        SetVisible(_fixedWidthPanel, _wizardStep == 2 && _fixedWidthButton.IsChecked == true);
-        SetVisible(_dataPreviewLabel, true);
-        _previewGrid.Visibility = Visibility.Visible;
-        SetVisible(_columnFormatPanel, _wizardStep == 3);
-        SetVisible(_destinationPanel, _wizardStep == 3);
-
-        if (_backButton is not null)
-            _backButton.IsEnabled = _wizardStep > 1;
-        if (_nextButton is not null)
-            _nextButton.IsEnabled = _wizardStep < 3;
-    }
-
-    private static void SetVisible(FrameworkElement? element, bool visible)
-    {
-        if (element is not null)
-            element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void RefreshMode()
-    {
-        var fixedWidth = _fixedWidthButton.IsChecked == true;
-        _tabBox.IsEnabled = !fixedWidth;
-        _semicolonBox.IsEnabled = !fixedWidth;
-        _commaBox.IsEnabled = !fixedWidth;
-        _spaceBox.IsEnabled = !fixedWidth;
-        _otherBox.IsEnabled = !fixedWidth;
-        _customBox.IsEnabled = !fixedWidth && _otherBox.IsChecked == true;
-        _textQualifierBox.IsEnabled = !fixedWidth;
-        _treatConsecutiveDelimitersBox.IsEnabled = !fixedWidth;
-        _fixedWidthBreaksBox.IsEnabled = fixedWidth;
-        _fixedWidthRuler.IsEnabled = fixedWidth;
-        _fixedWidthRuler.Opacity = fixedWidth ? 1.0 : 0.55;
-        UpdateWizardStep();
-        RefreshPreview();
     }
 
     private void RefreshPreview()

@@ -90,6 +90,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         if (!PivotValueFieldSettingsInputParser.TryParseOptionalNumberFormatId(NumberFormatBox.Text, out var numberFormatId))
         {
             MessageBox.Show(this, "Number format ID must be a whole number.", "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidNumberFormatInput();
             return;
         }
 
@@ -107,10 +108,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         if (!TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out var showValuesAsError))
         {
             MessageBox.Show(this, showValuesAsError, "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
-            if (baseFieldIndex is null)
-                BaseFieldBox.Focus();
-            else
-                BaseItemBox.Focus();
+            FocusInvalidShowValuesAsInput(baseFieldIndex);
             return;
         }
 
@@ -129,6 +127,32 @@ public partial class PivotValueFieldSettingsDialog : Window
             BaseItem = baseItem
         };
         DialogResult = true;
+    }
+
+    private void FocusInvalidNumberFormatInput()
+    {
+        ValueFieldTabs.SelectedItem = NumberFormatTab;
+        FocusAndSelect(NumberFormatBox);
+    }
+
+    private void FocusInvalidShowValuesAsInput(int? baseFieldIndex)
+    {
+        ValueFieldTabs.SelectedItem = ShowValuesAsTab;
+        if (baseFieldIndex is null)
+        {
+            BaseFieldBox.Focus();
+            Keyboard.Focus(BaseFieldBox);
+            return;
+        }
+
+        FocusAndSelect(BaseItemBox);
+    }
+
+    private static void FocusAndSelect(System.Windows.Controls.TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     private void NumberFormatPresetBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
