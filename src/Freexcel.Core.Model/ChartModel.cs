@@ -301,6 +301,7 @@ public sealed class ChartModel
     public double? XAxisMajorUnit { get; set; }
     public double? XAxisMinorUnit { get; set; }
     public bool XAxisLogScale { get; set; }
+    public bool XAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public bool ShowXAxisMajorGridlines { get; set; }
     public bool ShowXAxisMinorGridlines { get; set; }
@@ -335,6 +336,7 @@ public sealed class ChartModel
     public double? YAxisMajorUnit { get; set; }
     public double? YAxisMinorUnit { get; set; }
     public bool YAxisLogScale { get; set; }
+    public bool YAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public bool ShowYAxisMajorGridlines { get; set; }
     public bool ShowYAxisMinorGridlines { get; set; }

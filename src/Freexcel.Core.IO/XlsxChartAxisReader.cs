@@ -183,6 +183,7 @@ internal static class XlsxChartAxisReader
         var majorUnit = ReadDouble(axisElement.Element(ChartNs + "majorUnit")?.Attribute("val")?.Value);
         var minorUnit = ReadDouble(axisElement.Element(ChartNs + "minorUnit")?.Attribute("val")?.Value);
         var logScale = scaling?.Element(ChartNs + "logBase") is not null;
+        var reverseOrder = IsReverseOrientation(scaling);
         var numberFormat = FromXlsxNumberFormatCode(axisElement.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
         var majorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines"));
         var minorGridline = ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines"));
@@ -206,6 +207,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisMajorUnit = majorUnit;
             chart.XAxisMinorUnit = minorUnit;
             chart.XAxisLogScale = logScale;
+            chart.XAxisReverseOrder = reverseOrder;
             chart.XAxisNumberFormat = numberFormat;
             ApplyXAxisGridlineProperties(chart, majorGridline, minorGridline);
             chart.XAxisMajorTickStyle = majorTickStyle;
@@ -225,6 +227,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisMajorUnit = majorUnit;
         chart.YAxisMinorUnit = minorUnit;
         chart.YAxisLogScale = logScale;
+        chart.YAxisReverseOrder = reverseOrder;
         chart.YAxisNumberFormat = numberFormat;
         ApplyYAxisGridlineProperties(chart, majorGridline, minorGridline);
         chart.YAxisMajorTickStyle = majorTickStyle;
@@ -247,6 +250,7 @@ internal static class XlsxChartAxisReader
             chart,
             ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines")),
             ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
+        chart.XAxisReverseOrder = IsReverseOrientation(axisElement.Element(ChartNs + "scaling"));
         chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
         var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
@@ -445,4 +449,7 @@ internal static class XlsxChartAxisReader
 
     private static bool ReadBool(string? value) =>
         value is "1" or "true";
+
+    private static bool IsReverseOrientation(XElement? scaling) =>
+        scaling?.Element(ChartNs + "orientation")?.Attribute("val")?.Value == "maxMin";
 }

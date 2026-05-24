@@ -7363,6 +7363,58 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartAxisReverseOrderPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisReverseOrderPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            XAxisReverseOrder = true,
+            YAxisReverseOrder = true,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + "catAx")
+                .Single()
+                .Element(chartNs + "scaling")!
+                .Element(chartNs + "orientation")!
+                .Attribute("val")!
+                .Value.Should().Be("maxMin");
+            chartXml.Descendants(chartNs + "valAx")
+                .Single()
+                .Element(chartNs + "scaling")!
+                .Element(chartNs + "orientation")!
+                .Attribute("val")!
+                .Value.Should().Be("maxMin");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.XAxisReverseOrder.Should().BeTrue();
+        loadedChart.YAxisReverseOrder.Should().BeTrue();
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartValueAxisGridlinesPackagePart()
     {
         var workbook = new Workbook("ChartValueAxisGridlinesPackageSave");
