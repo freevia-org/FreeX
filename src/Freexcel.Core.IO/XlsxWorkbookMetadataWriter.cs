@@ -182,6 +182,48 @@ internal static class XlsxWorkbookMetadataWriter
             element.SetAttributeValue(name, value is { } boolValue ? boolValue ? "1" : "0" : null);
     }
 
+    public static void SaveFileVersion(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        root.Element(workbookNs + "fileVersion")?.Remove();
+        if (workbook.FileVersion is null)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        var fileVersion = new XElement(workbookNs + "fileVersion");
+        foreach (var attribute in workbook.FileVersion.NativeAttributes)
+        {
+            if (!string.IsNullOrWhiteSpace(attribute.Key) &&
+                attribute.Key is not "appName" and not "lastEdited" and not "lowestEdited" and not "rupBuild" and not "codeName")
+            {
+                fileVersion.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+        }
+
+        fileVersion.SetAttributeValue("appName", NullIfWhiteSpace(workbook.FileVersion.AppName));
+        fileVersion.SetAttributeValue("lastEdited", NullIfWhiteSpace(workbook.FileVersion.LastEdited));
+        fileVersion.SetAttributeValue("lowestEdited", NullIfWhiteSpace(workbook.FileVersion.LowestEdited));
+        fileVersion.SetAttributeValue("rupBuild", NullIfWhiteSpace(workbook.FileVersion.RupBuild));
+        fileVersion.SetAttributeValue("codeName", NullIfWhiteSpace(workbook.FileVersion.CodeName));
+
+        root.AddFirst(fileVersion);
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+
+        static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);

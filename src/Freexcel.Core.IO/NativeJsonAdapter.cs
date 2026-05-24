@@ -33,6 +33,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.SheetTabRatio = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.SheetTabRatio, 1000);
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.FirstVisibleSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
         workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.ActiveSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
+        workbook.FileVersion = ToWorkbookFileVersion(dto.FileVersion);
         workbook.FileSharing = ToWorkbookFileSharing(dto.FileSharing);
         foreach (var fileRecoveryProperties in (dto.FileRecoveryProperties ?? []).Select(ToWorkbookFileRecoveryProperties).OfType<WorkbookFileRecoveryPropertiesModel>())
             workbook.FileRecoveryProperties.Add(fileRecoveryProperties);
@@ -401,6 +402,40 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             ReadOnlyRecommended = dto.ReadOnlyRecommended,
             UserName = userName,
             ReservationPassword = reservationPassword
+        };
+    }
+
+    private static WorkbookFileVersionModel? ToWorkbookFileVersion(WorkbookFileVersionDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = (dto.NativeAttributes ?? new Dictionary<string, string>())
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var appName = string.IsNullOrWhiteSpace(dto.AppName) ? null : dto.AppName;
+        var lastEdited = string.IsNullOrWhiteSpace(dto.LastEdited) ? null : dto.LastEdited;
+        var lowestEdited = string.IsNullOrWhiteSpace(dto.LowestEdited) ? null : dto.LowestEdited;
+        var rupBuild = string.IsNullOrWhiteSpace(dto.RupBuild) ? null : dto.RupBuild;
+        var codeName = string.IsNullOrWhiteSpace(dto.CodeName) ? null : dto.CodeName;
+        if (appName is null &&
+            lastEdited is null &&
+            lowestEdited is null &&
+            rupBuild is null &&
+            codeName is null &&
+            nativeAttributes.Count == 0)
+        {
+            return null;
+        }
+
+        return new WorkbookFileVersionModel
+        {
+            AppName = appName,
+            LastEdited = lastEdited,
+            LowestEdited = lowestEdited,
+            RupBuild = rupBuild,
+            CodeName = codeName,
+            NativeAttributes = nativeAttributes
         };
     }
 

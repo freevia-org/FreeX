@@ -16,6 +16,7 @@ public sealed partial class NativeJsonAdapter
         public int? SheetTabRatio { get; set; }
         public int? FirstVisibleSheetIndex { get; set; }
         public int? ActiveSheetIndex { get; set; }
+        public WorkbookFileVersionDto? FileVersion { get; set; }
         public WorkbookFileSharingDto? FileSharing { get; set; }
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
         public bool IsStructureProtected { get; set; }
@@ -55,6 +56,16 @@ public sealed partial class NativeJsonAdapter
         public bool? ReadOnlyRecommended { get; set; }
         public string? UserName { get; set; }
         public string? ReservationPassword { get; set; }
+    }
+
+    private class WorkbookFileVersionDto
+    {
+        public string? AppName { get; set; }
+        public string? LastEdited { get; set; }
+        public string? LowestEdited { get; set; }
+        public string? RupBuild { get; set; }
+        public string? CodeName { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
     private class WorkbookFileRecoveryPropertiesDto

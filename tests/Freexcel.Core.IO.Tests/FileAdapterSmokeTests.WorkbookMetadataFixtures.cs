@@ -255,7 +255,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("appName", "xl"),
                 new XAttribute("lastEdited", "7"),
                 new XAttribute("lowestEdited", "7"),
-                new XAttribute("rupBuild", "28129")));
+                new XAttribute("rupBuild", "28129"),
+                new XAttribute("customVersionFlag", "keep")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

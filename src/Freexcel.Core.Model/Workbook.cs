@@ -16,6 +16,16 @@ public sealed class WorkbookFileRecoveryPropertiesModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookFileVersionModel
+{
+    public string? AppName { get; set; }
+    public string? LastEdited { get; set; }
+    public string? LowestEdited { get; set; }
+    public string? RupBuild { get; set; }
+    public string? CodeName { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a workbook containing one or more worksheets.
 /// This is the top-level domain object.
@@ -116,6 +126,9 @@ public sealed class Workbook
 
     /// <summary>Excel workbook file recovery metadata records.</summary>
     public List<WorkbookFileRecoveryPropertiesModel> FileRecoveryProperties { get; } = [];
+
+    /// <summary>Excel workbook file-version metadata.</summary>
+    public WorkbookFileVersionModel? FileVersion { get; set; }
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
