@@ -232,6 +232,7 @@ public sealed class MoveChartDialog : Window
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static MoveChartDialogResult CreateObjectResult(string? sheetName) =>
@@ -246,6 +247,12 @@ public sealed class MoveChartDialog : Window
             ? CreateObjectResult(_targetBox.Text)
             : CreateNewSheetResult(_targetBox.Text);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _objectInSheet.Focus();
+        Keyboard.Focus(_objectInSheet);
     }
 
     private static string RequireTargetName(string? name)
