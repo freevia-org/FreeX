@@ -13095,6 +13095,10 @@ public partial class FileAdapterSmokeTests
             MergeAndCenterLabels = true,
             PageOverThenDown = true,
             PageWrap = 2,
+            ApplyNumberFormats = false,
+            ApplyBorderFormats = false,
+            ApplyFontFormats = false,
+            ApplyPatternFormats = false,
             AutofitColumnsOnUpdate = false,
             PreserveFormattingOnUpdate = false,
             PrintTitles = true,
@@ -13142,6 +13146,10 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("mergeItem")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("pageOverThenDown")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("pageWrap")!.Value.Should().Be("2");
+            pivotXml.Root!.Attribute("applyNumberFormats")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("applyBorderFormats")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("applyFontFormats")!.Value.Should().Be("0");
+            pivotXml.Root!.Attribute("applyPatternFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("applyWidthHeightFormats")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("preserveFormatting")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("printDrill")!.Value.Should().Be("1");
@@ -13175,6 +13183,10 @@ public partial class FileAdapterSmokeTests
         loadedPivot.MergeAndCenterLabels.Should().BeTrue();
         loadedPivot.PageOverThenDown.Should().BeTrue();
         loadedPivot.PageWrap.Should().Be(2);
+        loadedPivot.ApplyNumberFormats.Should().BeFalse();
+        loadedPivot.ApplyBorderFormats.Should().BeFalse();
+        loadedPivot.ApplyFontFormats.Should().BeFalse();
+        loadedPivot.ApplyPatternFormats.Should().BeFalse();
         loadedPivot.AutofitColumnsOnUpdate.Should().BeFalse();
         loadedPivot.PreserveFormattingOnUpdate.Should().BeFalse();
         loadedPivot.PrintTitles.Should().BeTrue();
