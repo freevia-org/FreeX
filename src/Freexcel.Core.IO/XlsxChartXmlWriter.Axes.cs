@@ -211,6 +211,7 @@ internal static partial class XlsxChartXmlWriter
             ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
             ToBooleanAxisValueXml("noMultiLvlLbl", chart.XAxisNoMultiLevelLabels, chartNs),
+            ToAxisLabelAlignmentXml(chart.XAxisLabelAlignment, chartNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
@@ -397,6 +398,14 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToBooleanAxisValueXml(string elementName, bool value, XNamespace chartNs) =>
         value ? new XElement(chartNs + elementName, new XAttribute("val", "1")) : null;
+
+    private static XElement? ToAxisLabelAlignmentXml(ChartAxisLabelAlignment alignment, XNamespace chartNs) =>
+        alignment == ChartAxisLabelAlignment.Center
+            ? null
+            : new XElement(chartNs + "lblAlgn", new XAttribute("val", ToXlsxAxisLabelAlignment(alignment)));
+
+    private static string ToXlsxAxisLabelAlignment(ChartAxisLabelAlignment alignment) =>
+        alignment == ChartAxisLabelAlignment.Right ? "r" : "l";
 
     private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format) =>
         format switch
