@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -117,6 +118,7 @@ public sealed class PivotTableDialog : Window
 
         Content = stack;
         UpdateDestinationState();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     private static TextBlock CreateSectionHeader(string text) =>
@@ -214,5 +216,12 @@ public sealed class PivotTableDialog : Window
     private void UpdateDestinationState()
     {
         _destinationRangeBox.IsEnabled = _existingWorksheetButton.IsChecked == true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _sourceRangeBox.Focus();
+        _sourceRangeBox.SelectAll();
+        Keyboard.Focus(_sourceRangeBox);
     }
 }
