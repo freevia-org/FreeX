@@ -152,6 +152,10 @@ public sealed class ChartPageSetupModel
     public string? PaperSize { get; set; }
     public string? Orientation { get; set; }
     public int? Copies { get; set; }
+    public bool? UsePrinterDefaults { get; set; }
+    public int? FirstPageNumber { get; set; }
+    public int? HorizontalDpi { get; set; }
+    public int? VerticalDpi { get; set; }
     public bool? BlackAndWhite { get; set; }
     public bool? Draft { get; set; }
 }
