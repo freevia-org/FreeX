@@ -46,8 +46,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var n = ToNumber(args[0]);
         var d = ToNumber(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ModScalar(value, d));
+        return ModScalar(args[0], d);
+    }
+
+    private static ScalarValue ModScalar(ScalarValue value, double d)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n) || !double.IsFinite(d)) return ErrorValue.Num;
         if (d == 0) return ErrorValue.DivByZero;
         return NumberResult(n - d * Math.Floor(n / d));
@@ -57,8 +63,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var number = ToNumber(args[0]);
         var power = ToNumber(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => PowerScalar(value, power));
+        return PowerScalar(args[0], power);
+    }
+
+    private static ScalarValue PowerScalar(ScalarValue value, double power)
+    {
+        var number = ToNumber(value);
         if (number == 0 && power < 0) return ErrorValue.DivByZero;
         if (number == 0 && power == 0) return ErrorValue.Num;
         var result = Math.Pow(number, power);
@@ -99,8 +111,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var n = ToNumber(args[0]);
         var sig = ToNumber(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => CeilingScalar(value, sig));
+        return CeilingScalar(args[0], sig);
+    }
+
+    private static ScalarValue CeilingScalar(ScalarValue value, double sig)
+    {
+        var n = ToNumber(value);
         if (sig == 0) return new NumberValue(0);
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
         if (n > 0 && sig < 0) return ErrorValue.Num;
@@ -111,8 +129,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var n = ToNumber(args[0]);
         var sig = ToNumber(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FloorScalar(value, sig));
+        return FloorScalar(args[0], sig);
+    }
+
+    private static ScalarValue FloorScalar(ScalarValue value, double sig)
+    {
+        var n = ToNumber(value);
         if (sig == 0) return new NumberValue(0);
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
         if (n > 0 && sig < 0) return ErrorValue.Num;
@@ -154,8 +178,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        var n    = ToNumber(args[0]);
         var base_ = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 10.0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => LogScalar(value, base_));
+        return LogScalar(args[0], base_);
+    }
+
+    private static ScalarValue LogScalar(ScalarValue value, double base_)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n) || !double.IsFinite(base_)) return ErrorValue.Num;
         if (n <= 0 || base_ <= 0 || base_ == 1) return ErrorValue.Num;
         return NumberResult(Math.Log(n) / Math.Log(base_));
@@ -462,8 +492,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double n = ToNumber(args[0]);
         double d = ToNumber(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => QuotientScalar(value, d));
+        return QuotientScalar(args[0], d);
+    }
+
+    private static ScalarValue QuotientScalar(ScalarValue value, double d)
+    {
+        double n = ToNumber(value);
         if (!double.IsFinite(n) || !double.IsFinite(d)) return ErrorValue.Num;
         if (d == 0) return ErrorValue.DivByZero;
         return NumberResult(Math.Truncate(n / d));
@@ -535,8 +571,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double n = ToNumber(args[0]);
         double m = ToNumber(args[1]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => MroundScalar(value, m));
+        return MroundScalar(args[0], m);
+    }
+
+    private static ScalarValue MroundScalar(ScalarValue value, double m)
+    {
+        double n = ToNumber(value);
         if (!double.IsFinite(n) || !double.IsFinite(m)) return ErrorValue.Num;
         if (m == 0) return new NumberValue(0);
         if (n != 0 && (n < 0) != (m < 0)) return ErrorValue.Num;

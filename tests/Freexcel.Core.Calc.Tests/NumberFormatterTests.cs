@@ -76,6 +76,14 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Fact]
+    public void CustomNumberSubset_DoesNotExpandEscapedFillDirectiveToRequestedCharacterWidth()
+    {
+        var result = NumberFormatter.Format(new NumberValue(12), "0\\*0", 5);
+
+        Assert.Equal("1*2", result);
+    }
+
     [Theory]
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]

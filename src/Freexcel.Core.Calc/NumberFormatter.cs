@@ -130,6 +130,12 @@ public static partial class NumberFormatter
                 continue;
             }
 
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
             if (!inQuote && (c == '_' || c == '*'))
                 return true;
         }
