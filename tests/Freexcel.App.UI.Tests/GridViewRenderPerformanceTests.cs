@@ -33,6 +33,20 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
     }
 
+    [Fact]
+    public void RenderCells_ReusesCellColorBrushesWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var brushCache = new Dictionary<CellColor, SolidColorBrush>();");
+        renderCells.Should().Contain("BrushForCellColor(bg.FillColor.Value, brushCache)");
+        renderCells.Should().Contain("BrushForCellColor(fc, brushCache)");
+        renderCells.Should().NotContain("new SolidColorBrush");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
