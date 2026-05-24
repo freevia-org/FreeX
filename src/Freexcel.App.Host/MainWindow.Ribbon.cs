@@ -264,7 +264,7 @@ public partial class MainWindow
         if (button is Control control)
             control.Padding = new Thickness(1);
 
-        button.Content = CreateRibbonIconOnlyContent(commandName, 20);
+        button.Content = CreateRibbonIconOnlyContent(commandName, 22);
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
         button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
         return true;

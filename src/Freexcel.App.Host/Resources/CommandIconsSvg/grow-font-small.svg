@@ -1,10 +1,6 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-  <defs>
-    <style>
-      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
-    </style>
-  </defs>
-  <text class="t" x="7.5" y="10.5" font-size="13" >A</text>
-  <path class="r" d="M15 15 L15 5" stroke-width="1"/>
-  <polygon class="b" points="12.8 7 15 4.5 17.2 7"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Grow Font">
+<rect width="20" height="20" fill="none"/>
+<text x="7.5" y="11" font-size="16" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="400" text-anchor="middle" dominant-baseline="central">A</text>
+<path d="M15 15V5" fill="none" stroke="#1f6aa5" stroke-width="1.25" stroke-linecap="square"/>
+<path d="M12 8l3-3 3 3" fill="none" stroke="#1f6aa5" stroke-width="1.25" stroke-linecap="square" stroke-linejoin="miter"/>
 </svg>
