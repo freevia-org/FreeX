@@ -20,7 +20,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
         foreach (var existing in sheet.MergedRegions)
@@ -83,7 +83,7 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
         _removed = sheet.RemoveMergedRegion(_range);
