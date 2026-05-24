@@ -2686,6 +2686,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xmatch_BinarySearchModes_HandleDuplicateExactMatchesLikeExcel()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(2)), (4, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=XMATCH(2,A1:A4,0,2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(2,A1:A4,0,-2)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Xmatch_WildcardMode_MatchesPattern()
     {
         var sheet = MakeSheet(
