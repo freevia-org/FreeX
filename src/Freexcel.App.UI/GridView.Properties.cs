@@ -7,6 +7,24 @@ public partial class GridView
 {
     // Dependency properties
 
+    public static readonly DependencyProperty SelectedObjectIdProperty =
+        DependencyProperty.Register(nameof(SelectedObjectId), typeof(Guid), typeof(GridView),
+            new FrameworkPropertyMetadata(Guid.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Guid SelectedObjectId
+    {
+        get => (Guid)GetValue(SelectedObjectIdProperty);
+        set => SetValue(SelectedObjectIdProperty, value);
+    }
+
+    public static readonly DependencyProperty SelectedObjectKindProperty =
+        DependencyProperty.Register(nameof(SelectedObjectKind), typeof(ObjectKind), typeof(GridView),
+            new FrameworkPropertyMetadata(ObjectKind.None, FrameworkPropertyMetadataOptions.AffectsRender));
+    public ObjectKind SelectedObjectKind
+    {
+        get => (ObjectKind)GetValue(SelectedObjectKindProperty);
+        set => SetValue(SelectedObjectKindProperty, value);
+    }
+
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));

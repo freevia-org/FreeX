@@ -121,9 +121,11 @@ public sealed class OpenWorkbookLoaderTests
 
     [Theory]
     [InlineData(".xlsx", false, true)]
+    [InlineData(".XLSX", false, true)]
     [InlineData(".xlsm", false, false)]
     [InlineData(".XLSM", false, false)]
     [InlineData(".xltx", true, false)]
+    [InlineData(".XLTX", true, false)]
     [InlineData(".xltm", true, false)]
     [InlineData(".XLTM", true, false)]
     public async Task LoadAsync_InspectsOpenXmlExcelVariants(string extension, bool opensAsTemplate, bool canSave)
