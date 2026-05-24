@@ -673,6 +673,25 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataLabelsDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDataLabelsDialog.cs"));
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _fillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _borderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _textBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label border width from 0 to 10 points.\", _borderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label font size from 6 to 72 points.\", _fontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label angle from -90 to 90 degrees.\", _angleBox);");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void ChartTrendlineOptionsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartTrendlineOptionsDialog.CreateResult(
