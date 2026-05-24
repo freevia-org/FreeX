@@ -188,6 +188,18 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ShapeGradientDialogOpenedFromKeyboard_FocusesStartColorBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ShapeGradientDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_startColorBox.Focus();");
+        source.Should().Contain("_startColorBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_startColorBox);");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
