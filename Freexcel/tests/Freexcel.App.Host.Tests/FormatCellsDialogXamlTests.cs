@@ -107,6 +107,24 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_ColorPickerButtons_OpenContextNamedExcelDialogs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
+
+        source.Should().Contain("PickColorInto(DlgFontColorBox, allowNoColor: false, \"Font Color\")");
+        source.Should().Contain("PickColorInto(DlgFillColorBox, allowNoColor: true, \"Fill Color\")");
+        source.Should().Contain("PickColorInto(DlgFillPatternColorBox, allowNoColor: true, \"Pattern Color\")");
+        source.Should().Contain("Title = title");
+
+        var borderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.Border.cs"));
+        borderSource.Should().Contain("PickColorInto(DlgBorderLineColorBox, allowNoColor: false, \"Border Color\")");
+        borderSource.Should().Contain("PickColorInto(DlgBorderTopColorBox, allowNoColor: false, \"Top Border Color\")");
+        borderSource.Should().Contain("PickColorInto(DlgBorderRightColorBox, allowNoColor: false, \"Right Border Color\")");
+        borderSource.Should().Contain("PickColorInto(DlgBorderBottomColorBox, allowNoColor: false, \"Bottom Border Color\")");
+        borderSource.Should().Contain("PickColorInto(DlgBorderLeftColorBox, allowNoColor: false, \"Left Border Color\")");
+    }
+
+    [Fact]
     public void FormatCellsDialog_ExposesShrinkToFitAndMapsItIntoStyleDiff()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
