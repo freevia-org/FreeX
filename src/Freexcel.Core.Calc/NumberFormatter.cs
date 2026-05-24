@@ -430,7 +430,7 @@ public static partial class NumberFormatter
 
     private static FormatResult FormatTextWithColor(string text, string[] sections)
     {
-        if (sections.Length <= 3 || string.IsNullOrEmpty(sections[3]))
+        if (sections.Length <= 3)
         {
             var firstSection = ParseSection(sections[0]);
             return firstSection.Format.Contains('@', StringComparison.Ordinal)
@@ -439,6 +439,9 @@ public static partial class NumberFormatter
         }
 
         var parsed = ParseSection(sections[3]);
+        if (parsed.Format == "")
+            return new FormatResult("", parsed.ColorHex);
+
         return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);
     }
 
