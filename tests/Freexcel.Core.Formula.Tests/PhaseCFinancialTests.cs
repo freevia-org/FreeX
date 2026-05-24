@@ -48,6 +48,24 @@ public class PhaseCFinancialTests
 
     // ── IPMT ─────────────────────────────────────────────────────────────
 
+    private ScalarValue EvalWithData(string formula, params (int row, int col, double val)[] cells)
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("S");
+        foreach (var (r, c, v) in cells)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)r, (uint)c), new NumberValue(v));
+        return _eval.Evaluate("=" + formula, sheet, wb);
+    }
+
+    private static void AssertApproxColumn(ScalarValue value, params double[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(expected.Length);
+        range.ColCount.Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            ((NumberValue)range.At(row + 1, 1)).Value.Should().BeApproximately(expected[row], 1e-10);
+    }
+
     [Fact]
     public void Ipmt_Period1_ReturnsExpectedInterest()
     {
@@ -55,6 +73,23 @@ public class PhaseCFinancialTests
         // PMT = -879.159..., IPMT period 1 = 10000 * 0.1/12 = -83.333...
         double ipmt = Calc("IPMT(0.1/12,1,12,10000)");
         ipmt.Should().BeApproximately(-83.333333, 0.001);
+    }
+
+    [Fact]
+    public void PaymentFinancialFunctions_RangePeriodAndNperArguments_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.1/12,A1:A2,12,10000)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("IPMT(0.1/12,1,12,10000)"),
+            Calc("IPMT(0.1/12,2,12,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.1/12,A1:A2,12,10000)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("PPMT(0.1/12,1,12,10000)"),
+            Calc("PPMT(0.1/12,2,12,10000)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(A1:A2,-188.71,10000)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("RATE(60,-188.71,10000)"),
+            Calc("RATE(72,-188.71,10000)"));
     }
 
     [Fact]
@@ -114,6 +149,19 @@ public class PhaseCFinancialTests
         => CalcError("CUMIPMT(-0.1,12,10000,1,12,0)").Should().Be("#NUM!");
 
     // ── CUMPRINC ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CumulativePaymentFunctions_RangeStartPeriodArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("CUMIPMT(0.1/12,12,10000,A1:A2,12,0)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("CUMIPMT(0.1/12,12,10000,1,12,0)"),
+            Calc("CUMIPMT(0.1/12,12,10000,2,12,0)"));
+        AssertApproxColumn(
+            EvalWithData("CUMPRINC(0.1/12,12,10000,A1:A2,12,0)", (1, 1, 1.0), (2, 1, 2.0)),
+            Calc("CUMPRINC(0.1/12,12,10000,1,12,0)"),
+            Calc("CUMPRINC(0.1/12,12,10000,2,12,0)"));
+    }
 
     [Fact]
     public void Cumprinc_AllPeriods_SumApproxNegativePV()

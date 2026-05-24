@@ -34,6 +34,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.FirstVisibleSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
         workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(dto.ActiveSheetIndex, Math.Max(0, (dto.Sheets?.Count ?? 1) - 1));
         workbook.FileSharing = ToWorkbookFileSharing(dto.FileSharing);
+        foreach (var fileRecoveryProperties in (dto.FileRecoveryProperties ?? []).Select(ToWorkbookFileRecoveryProperties).OfType<WorkbookFileRecoveryPropertiesModel>())
+            workbook.FileRecoveryProperties.Add(fileRecoveryProperties);
         workbook.IsStructureProtected = dto.IsStructureProtected;
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
@@ -399,6 +401,33 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             ReadOnlyRecommended = dto.ReadOnlyRecommended,
             UserName = userName,
             ReservationPassword = reservationPassword
+        };
+    }
+
+    private static WorkbookFileRecoveryPropertiesModel? ToWorkbookFileRecoveryProperties(WorkbookFileRecoveryPropertiesDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = (dto.NativeAttributes ?? new Dictionary<string, string>())
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        if (dto.AutoRecover is null &&
+            dto.CrashSave is null &&
+            dto.DataExtractLoad is null &&
+            dto.RepairLoad is null &&
+            nativeAttributes.Count == 0)
+        {
+            return null;
+        }
+
+        return new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = dto.AutoRecover,
+            CrashSave = dto.CrashSave,
+            DataExtractLoad = dto.DataExtractLoad,
+            RepairLoad = dto.RepairLoad,
+            NativeAttributes = nativeAttributes
         };
     }
 }

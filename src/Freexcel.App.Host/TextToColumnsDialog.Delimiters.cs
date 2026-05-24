@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -104,5 +105,13 @@ public sealed partial class TextToColumnsDialog
             {
                 RangeSelectionRequest = CreateRangeSelectionRequest(request.CurrentText);
                 _requestRangeSelection?.Invoke(RangeSelectionRequest);
+                FocusRangeSelectionInput(request.Target);
             });
+
+    private static void FocusRangeSelectionInput(TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
 }
