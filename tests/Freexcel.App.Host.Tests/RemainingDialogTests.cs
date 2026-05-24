@@ -412,6 +412,19 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ForecastSheetDialogInvalidPeriods_ShowsOwnedWarningAndRefocusesInput()
+    {
+        var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("error ?? \"Enter a positive whole number of forecast periods.\"");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidPeriodsInput();");
+        source.Should().Contain("private void FocusInvalidPeriodsInput()");
+    }
+
+    [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
         SparklineDialog.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)
