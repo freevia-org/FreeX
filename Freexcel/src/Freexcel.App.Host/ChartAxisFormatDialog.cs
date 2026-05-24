@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -111,6 +112,7 @@ public sealed class ChartAxisFormatDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartAxisFormatDialogResult FromChart(ChartModel chart, bool useXAxis) => useXAxis
@@ -210,6 +212,13 @@ public sealed class ChartAxisFormatDialog : Window
         _labelAngleBox.Text = result.LabelAngle.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _lineColorBox.Text = ChartDialogHelpers.FormatColor(result.LineColor);
         _lineThicknessBox.Text = result.LineThickness.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _minimumBox.Focus();
+        _minimumBox.SelectAll();
+        Keyboard.Focus(_minimumBox);
     }
 
     private void Accept()
