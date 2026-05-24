@@ -481,7 +481,7 @@ public sealed class XlsxChartPartReaderTests
               </c:printSettings>
               <c:pivotSource>
                 <c:name>Data!PivotTable1</c:name>
-                <c:fmtId val="0"/>
+                <c:fmtId val="7"/>
               </c:pivotSource>
               <c:roundedCorners val="1"/>
               <c:chart>
@@ -564,6 +564,7 @@ public sealed class XlsxChartPartReaderTests
 
         chart.IsPivotChart.Should().BeTrue();
         chart.PivotTableName.Should().Be("PivotTable1");
+        chart.PivotSourceFormatId.Should().Be(7);
         chart.PivotFormatsXml.Should().Contain("pivotFmt");
         chart.PivotFormatsXml.Should().Contain("4472C4");
         chart.ChartStyleId.Should().Be(42);
