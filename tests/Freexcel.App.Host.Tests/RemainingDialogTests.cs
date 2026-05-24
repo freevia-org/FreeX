@@ -134,6 +134,19 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialogInvalidStep_ShowsOwnedWarningAndRefocusesInput()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("error ?? \"Enter a numeric step value.\"");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidStepInput();");
+        source.Should().Contain("private void FocusInvalidStepInput()");
+    }
+
+    [Fact]
     public void ZoomDialog_TryCreateResult_AcceptsPercentWithinExcelRange()
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
