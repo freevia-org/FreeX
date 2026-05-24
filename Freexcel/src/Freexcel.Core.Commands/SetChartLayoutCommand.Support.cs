@@ -154,6 +154,7 @@ public sealed partial class SetChartLayoutCommand
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {
         var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
+        var supportsSmooth = chartType is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
         return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
@@ -163,7 +164,8 @@ public sealed partial class SetChartLayoutCommand
                 ? ClampFinite(markerSize, 1, 30)
                 : null,
             DashStyle = ValidNullableEnumOrNull(format.DashStyle),
-            MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null
+            MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null,
+            Smooth = supportsSmooth ? format.Smooth : null
         };
     }
 
@@ -175,7 +177,8 @@ public sealed partial class SetChartLayoutCommand
         || format.MarkerStyle is not null
         || format.MarkerSize is not null
         || format.FillThemeColor is not null
-        || format.StrokeThemeColor is not null;
+        || format.StrokeThemeColor is not null
+        || format.Smooth is not null;
 
     private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
         where TEnum : struct, Enum =>
