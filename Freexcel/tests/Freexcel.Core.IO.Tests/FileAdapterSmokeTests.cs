@@ -8335,7 +8335,11 @@ public partial class FileAdapterSmokeTests
                 new CellAddress(sheet.Id, 4, 2)),
             VaryColorsByPoint = true,
             BarOverlap = -20,
-            BarGapWidth = 75
+            BarGapWidth = 75,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, InvertIfNegative: true)
+            ]
         });
 
         var saved = new MemoryStream();
@@ -8350,6 +8354,8 @@ public partial class FileAdapterSmokeTests
         barChart.Element(chartNs + "varyColors")!.Attribute("val")!.Value.Should().Be("1");
         barChart.Element(chartNs + "overlap")!.Attribute("val")!.Value.Should().Be("-20");
         barChart.Element(chartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("75");
+        barChart.Descendants(chartNs + "ser").Single()
+            .Element(chartNs + "invertIfNegative")!.Attribute("val")!.Value.Should().Be("1");
     }
 
     [Fact]
