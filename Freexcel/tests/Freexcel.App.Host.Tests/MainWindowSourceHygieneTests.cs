@@ -155,16 +155,16 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageF6_CyclesWithinOverlayBeforeWorkbookShellFallback()
     {
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
 
         const string backstageRoute = "if (IsStartScreenVisible() && TryHandleBackstageShellFocusCycle";
         const string workbookFallback = "ExecuteCommandShortcut(commandShortcut, this, e);";
 
-        selectionSource.Should().Contain(backstageRoute);
-        selectionSource.IndexOf(backstageRoute, StringComparison.Ordinal)
+        keyboardFocusSource.Should().Contain(backstageRoute);
+        keyboardFocusSource.IndexOf(backstageRoute, StringComparison.Ordinal)
             .Should()
-            .BeLessThan(selectionSource.IndexOf(workbookFallback, StringComparison.Ordinal));
+            .BeLessThan(keyboardFocusSource.IndexOf(workbookFallback, StringComparison.Ordinal));
         backstageSource.Should().Contain("private bool TryHandleBackstageShellFocusCycle(bool reverse)");
         backstageSource.Should().Contain("IsInsideStartScreenOverlay(focusedElement)");
         backstageSource.Should().Contain("StartScreenOverlay.MoveFocus");
@@ -1343,7 +1343,7 @@ public sealed class MainWindowSourceHygieneTests
     {
         var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
         var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
-        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         contextMenuSource.Should().Contain("if (TryOpenFocusedSheetTabContextMenu())");
@@ -1351,7 +1351,7 @@ public sealed class MainWindowSourceHygieneTests
         sheetTabsSource.Should().Contain("Keyboard.FocusedElement is not DependencyObject focusedElement");
         sheetTabsSource.Should().Contain("contextMenu.PlacementTarget = target;");
         sheetTabsSource.Should().Contain("contextMenu.IsOpen = true;");
-        selectionSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
+        keyboardFocusSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
         xaml.Should().Contain("Focusable=\"True\"");
     }
 
