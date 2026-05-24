@@ -39,6 +39,20 @@ public class ConditionalFormatTests
     // ─── tests ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void ConditionalFormatEvaluation_DoesNotRunLinqRangeFiltersPerDisplayedCell()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.Calc", "ViewportService.ConditionalFormats.cs"));
+
+        source.Should().NotContain(
+            ".Where(cf => cf.AppliesTo.Contains(addr))",
+            "conditional-format rules should be ordered once per viewport and checked with allocation-free loops per cell");
+        source.Should().NotContain(
+            ".Where(cf => cf.RuleType == CfRuleType.IconSet && cf.AppliesTo.Contains(addr))",
+            "icon-set lookup runs for each displayed cell and should reuse preordered icon rules");
+    }
+
+    [Fact]
     public void ColorScale_LargeSparseRange_UsesOccupiedCellsForAggregates()
     {
         var (wb, sheet) = MakeWorkbook();
