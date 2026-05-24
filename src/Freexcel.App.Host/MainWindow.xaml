@@ -2146,22 +2146,22 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Define Name"    Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DefineNameBtn_Click"
-                                        local:RibbonTooltip.Title="Define Name"
-                                        local:RibbonTooltip.KeyTip="DN"
-                                        local:RibbonTooltip.Description="Assign a name to a cell or range so you can refer to it in formulas."/>
-                                <Button Content="Create from Selection" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CreateNamesFromSelectionBtn_Click"
-                                        local:RibbonTooltip.Title="Create from Selection"
-                                        local:RibbonTooltip.KeyTip="CS"
-                                        local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
-                                <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
-                                        local:RibbonTooltip.Title="Use in Formula"
-                                        local:RibbonTooltip.KeyTip="I"
-                                        local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>
                                 <Button Content="Name Manager"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NamedRangesButton_Click"
                                         local:RibbonTooltip.Title="Name Manager"
                                         local:RibbonTooltip.KeyTip="N"
                                         local:RibbonTooltip.Description="View, create, edit, and delete all named ranges in the workbook."/>
+                                <Button Content="Define Name"    Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DefineNameBtn_Click"
+                                        local:RibbonTooltip.Title="Define Name"
+                                        local:RibbonTooltip.KeyTip="DN"
+                                        local:RibbonTooltip.Description="Assign a name to a cell or range so you can refer to it in formulas."/>
+                                <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
+                                        local:RibbonTooltip.Title="Use in Formula"
+                                        local:RibbonTooltip.KeyTip="I"
+                                        local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>
+                                <Button Content="Create from Selection" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CreateNamesFromSelectionBtn_Click"
+                                        local:RibbonTooltip.Title="Create from Selection"
+                                        local:RibbonTooltip.KeyTip="CS"
+                                        local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Defined Names" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

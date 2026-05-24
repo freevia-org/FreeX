@@ -57,6 +57,26 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
+    public void FormulasTab_UsesExcelLikeDefinedNamesCommandOrder()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var formulasTab = ExtractTabXaml(xaml, "Formulas", "Data");
+        var definedNamesGroup = ExtractGroupXaml(formulasTab, "Defined Names");
+
+        ExtractGroupLabels(formulasTab).Should().Equal(
+            "Function Library",
+            "Defined Names",
+            "Formula Auditing",
+            "Calculation");
+
+        ExtractTooltipTitles(definedNamesGroup).Should().ContainInOrder(
+            "Name Manager",
+            "Define Name",
+            "Use in Formula",
+            "Create from Selection");
+    }
+
+    [Fact]
     public void DataTab_UsesExcelLikeGroupOrderAndForecastPlacement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -166,10 +186,12 @@ public sealed class RibbonTabParityTests
 
     private static int FindTabStart(string xaml, string header, int startIndex)
     {
-        var headerIndex = xaml.IndexOf($"Header=\"{header}\"", startIndex, StringComparison.Ordinal);
-        return headerIndex < 0
-            ? -1
-            : xaml.LastIndexOf("<TabItem", headerIndex, StringComparison.Ordinal);
+        var match = Regex.Match(
+            xaml[startIndex..],
+            $"<TabItem\\b[^>]*Header=\"{Regex.Escape(header)}\"",
+            RegexOptions.CultureInvariant);
+
+        return match.Success ? startIndex + match.Index : -1;
     }
 
     private static IReadOnlyList<string> ExtractGroupLabels(string tabXaml) =>
@@ -189,4 +211,9 @@ public sealed class RibbonTabParityTests
         start.Should().BeGreaterThanOrEqualTo(0);
         return nextStart < 0 ? tabXaml[start..] : tabXaml[start..nextStart];
     }
+
+    private static IReadOnlyList<string> ExtractTooltipTitles(string xaml) =>
+        Regex.Matches(xaml, "local:RibbonTooltip.Title=\"(?<title>[^\"]+)\"")
+            .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
+            .ToList();
 }
