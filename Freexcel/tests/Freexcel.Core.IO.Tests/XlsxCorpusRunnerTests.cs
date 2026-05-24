@@ -1337,6 +1337,9 @@ public class XlsxCorpusRunnerTests
                 chart.XAxisLabelTextThemeColor,
                 chart.XAxisLabelFontSize,
                 chart.XAxisLabelAngle,
+                chart.XAxisLabelSkip,
+                chart.XAxisTickMarkSkip,
+                chart.XAxisLabelOffset,
                 chart.XAxisLineColor is null ? "" : ToColorSummary(chart.XAxisLineColor.Value),
                 chart.XAxisLineThickness)
             : new ChartAxisSummary(
@@ -1358,6 +1361,9 @@ public class XlsxCorpusRunnerTests
                 chart.YAxisLabelTextThemeColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
+                0,
+                0,
+                0,
                 chart.YAxisLineColor is null ? "" : ToColorSummary(chart.YAxisLineColor.Value),
                 chart.YAxisLineThickness);
 
@@ -2416,6 +2422,9 @@ public class XlsxCorpusRunnerTests
         WorkbookThemeColorReference? LabelTextThemeColor,
         double LabelFontSize,
         double LabelAngle,
+        int LabelSkip,
+        int TickMarkSkip,
+        int LabelOffset,
         string LineColor,
         double LineThickness);
 
