@@ -16,7 +16,6 @@ public static partial class BuiltInFunctions
         int codePoint = (int)Math.Truncate(n);
         if (codePoint <= 0 || codePoint > 0x10FFFF) return ErrorValue.Value;
         if (codePoint >= 0xD800 && codePoint <= 0xDFFF) return ErrorValue.Value; // surrogate halves
-        if (n != codePoint) return ErrorValue.Value; // non-integer
         return new TextValue(char.ConvertFromUtf32(codePoint));
     }
 
