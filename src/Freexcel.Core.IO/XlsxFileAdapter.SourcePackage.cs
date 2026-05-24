@@ -35,8 +35,8 @@ public sealed partial class XlsxFileAdapter
             XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
         if (HasSourcePackagePart(sourceArchive, "xl/drawings/"))
         {
-            XlsxWorksheetDrawingPartMerger.Merge(sourceArchive, generatedArchive, context);
-            XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
+            var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context);
+            XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context, drawingPaths);
         }
         if (HasSourcePackagePart(sourceArchive, "xl/printerSettings/"))
             XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
