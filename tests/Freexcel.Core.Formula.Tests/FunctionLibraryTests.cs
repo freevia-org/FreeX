@@ -1919,6 +1919,22 @@ public class FunctionLibraryTests
     // ── INT ───────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void BinaryMath_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=POWER(A1:A2,2)", sheet), new NumberValue(16), new NumberValue(81));
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,2)", sheet), new NumberValue(0), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=LOG(A1:A2,2)", sheet), new NumberValue(2), new NumberValue(Math.Log(9) / Math.Log(2)));
+        AssertColumn(_eval.Evaluate("=QUOTIENT(A1:A2,2)", sheet), new NumberValue(2), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=CEILING(A1:A2,5)", sheet), new NumberValue(5), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=FLOOR(A1:A2,5)", sheet), new NumberValue(0), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=MROUND(A1:A2,5)", sheet), new NumberValue(5), new NumberValue(10));
+    }
+
+    [Fact]
     public void Int_TruncatesDown()
     {
         var sheet = MakeSheet();
