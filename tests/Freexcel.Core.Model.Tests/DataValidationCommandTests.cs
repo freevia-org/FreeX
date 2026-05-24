@@ -65,6 +65,38 @@ public sealed class DataValidationCommandTests
         sheet.DataValidations.Should().BeEmpty();
     }
 
+    [Fact]
+    public void SetDataValidationCommand_RejectsProtectedSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.IsProtected = true;
+
+        var outcome = new SetDataValidationCommand(sheet.Id, NewRule(sheet.Id)).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.DataValidations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ClearDataValidationCommand_RejectsProtectedSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var rule = NewRule(sheet.Id);
+        sheet.DataValidations.Add(rule);
+        sheet.IsProtected = true;
+
+        var outcome = new ClearDataValidationCommand(sheet.Id, rule.AppliesTo).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.DataValidations.Should().ContainSingle().Which.Should().BeSameAs(rule);
+    }
+
     private static DataValidation NewRule(SheetId sheetId) =>
         new()
         {
