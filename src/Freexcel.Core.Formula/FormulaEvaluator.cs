@@ -1052,6 +1052,7 @@ public sealed class FormulaEvaluator
              or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
              or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
              or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
+             or "DATE" or "TIME"
              or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND"
              or "WEEKDAY" or "WEEKNUM" or "ISOWEEKNUM" or "EDATE" or "EOMONTH"
              or "DATEVALUE" or "TIMEVALUE"
