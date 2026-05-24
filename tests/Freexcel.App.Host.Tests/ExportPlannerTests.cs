@@ -766,6 +766,33 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedTextBlocks()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateNestedTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Nested PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
     {
         StaTestRunner.Run(() =>
@@ -940,6 +967,27 @@ public class ExportPlannerTests
 
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
+
+    private static FixedDocument CreateNestedTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new Border
+        {
+            Margin = new System.Windows.Thickness(12),
+            Child = new TextBlock { Text = "Nested PDF Text" }
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
 
     private static FixedDocument CreateDocument(int pageCount)
     {
