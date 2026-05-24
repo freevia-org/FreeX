@@ -47,6 +47,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisCrossesAt,
                 chart.XAxisCrossBetween,
                 chart.XAxisDisplayUnit,
+                chart.XAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs);
             yield return ToValueAxisXml(
@@ -85,6 +86,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
                 chart.YAxisDisplayUnit,
+                chart.YAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs);
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
@@ -126,6 +128,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisCrossesAt,
                     chart.YAxisCrossBetween,
                     chart.YAxisDisplayUnit,
+                    chart.YAxisCustomDisplayUnit,
                     chartNs,
                     drawingNs);
             }
@@ -169,6 +172,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisCrossesAt,
             chart.YAxisCrossBetween,
             chart.YAxisDisplayUnit,
+            chart.YAxisCustomDisplayUnit,
             chartNs,
             drawingNs);
 
@@ -211,6 +215,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
                 chart.YAxisDisplayUnit,
+                chart.YAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs);
         }
@@ -281,6 +286,7 @@ internal static partial class XlsxChartXmlWriter
         double? crossesAt,
         ChartAxisCrossBetween? crossBetween,
         ChartAxisDisplayUnit? displayUnit,
+        double? customDisplayUnit,
         XNamespace chartNs,
         XNamespace drawingNs) =>
         new(chartNs + "valAx",
@@ -303,7 +309,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels, tickLabelPosition))),
-            ToAxisDisplayUnitXml(displayUnit, chartNs),
+            ToAxisDisplayUnitXml(displayUnit, customDisplayUnit, chartNs),
             ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
@@ -485,11 +491,17 @@ internal static partial class XlsxChartXmlWriter
             _ => "months"
         };
 
-    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, XNamespace chartNs) =>
-        unit is null
+    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, double? customUnit, XNamespace chartNs)
+    {
+        if (customUnit is { } customNumeric && double.IsFinite(customNumeric) && customNumeric > 0)
+            return new XElement(chartNs + "dispUnits",
+                new XElement(chartNs + "custUnit", new XAttribute("val", customNumeric.ToString(CultureInfo.InvariantCulture))));
+
+        return unit is null
             ? null
             : new XElement(chartNs + "dispUnits",
                 new XElement(chartNs + "builtInUnit", new XAttribute("val", ToXlsxAxisDisplayUnit(unit.Value))));
+    }
 
     private static string ToXlsxAxisDisplayUnit(ChartAxisDisplayUnit unit) =>
         unit switch
