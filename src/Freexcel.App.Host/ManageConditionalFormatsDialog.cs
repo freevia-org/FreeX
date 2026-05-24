@@ -171,14 +171,24 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         // Column 3 — format preview (colored rectangle)
         var fmtCol = new GridViewColumn { Header = "Format", Width = 95 };
         var fmtTemplate = new DataTemplate();
-        var rectFactory  = new FrameworkElementFactory(typeof(Rectangle));
-        rectFactory.SetValue(Rectangle.WidthProperty, 78.0);
-        rectFactory.SetValue(Rectangle.HeightProperty, 16.0);
-        rectFactory.SetValue(Rectangle.MarginProperty, new Thickness(0, 2, 0, 2));
-        rectFactory.SetValue(Rectangle.StrokeProperty, Brushes.DarkGray);
-        rectFactory.SetValue(Rectangle.StrokeThicknessProperty, 0.5);
-        rectFactory.SetBinding(Rectangle.FillProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
-        fmtTemplate.VisualTree = rectFactory;
+        var previewBorderFactory = new FrameworkElementFactory(typeof(Border));
+        previewBorderFactory.SetValue(Border.WidthProperty, 82.0);
+        previewBorderFactory.SetValue(Border.HeightProperty, 20.0);
+        previewBorderFactory.SetValue(Border.MarginProperty, new Thickness(0, 2, 0, 2));
+        previewBorderFactory.SetValue(Border.BorderBrushProperty, Brushes.DarkGray);
+        previewBorderFactory.SetValue(Border.BorderThicknessProperty, new Thickness(0.5));
+        previewBorderFactory.SetBinding(Border.BackgroundProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
+        var previewTextFactory = new FrameworkElementFactory(typeof(TextBlock));
+        previewTextFactory.SetValue(TextBlock.TextProperty, "AaBbCcYyZz");
+        previewTextFactory.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        previewTextFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        previewTextFactory.SetValue(TextBlock.FontSizeProperty, 10.0);
+        previewTextFactory.SetBinding(TextBlock.ForegroundProperty, new Binding(".") { Converter = new PreviewForegroundBrushConverter() });
+        previewTextFactory.SetBinding(TextBlock.FontWeightProperty, new Binding(".") { Converter = new PreviewFontWeightConverter() });
+        previewTextFactory.SetBinding(TextBlock.FontStyleProperty, new Binding(".") { Converter = new PreviewFontStyleConverter() });
+        previewTextFactory.SetBinding(TextBlock.TextDecorationsProperty, new Binding(".") { Converter = new PreviewTextDecorationsConverter() });
+        previewBorderFactory.AppendChild(previewTextFactory);
+        fmtTemplate.VisualTree = previewBorderFactory;
         fmtCol.CellTemplate = fmtTemplate;
         gridView.Columns.Add(fmtCol);
 
