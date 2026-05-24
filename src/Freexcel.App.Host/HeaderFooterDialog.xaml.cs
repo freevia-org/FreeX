@@ -82,12 +82,6 @@ public partial class HeaderFooterDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static string InsertToken(string text, int caretIndex, string token)
-    {
-        var boundedCaretIndex = Math.Clamp(caretIndex, 0, text.Length);
-        return text.Insert(boundedCaretIndex, token);
-    }
-
     private void HeaderFooterBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
         if (sender is TextBox textBox)
@@ -165,25 +159,6 @@ public partial class HeaderFooterDialog : Window
         ApplyPreset(FooterCenterBox, FooterPresetBox.SelectedItem);
     }
 
-    private static void ApplyPreset(TextBox target, object? selectedItem)
-    {
-        if (selectedItem is not ComboBoxItem { Tag: string preset })
-            return;
-
-        target.Text = preset;
-        target.CaretIndex = target.Text.Length;
-        target.Focus();
-    }
-
-    private void InsertTokenIntoActiveBox(string token)
-    {
-        var target = _activeTextBox ?? HeaderCenterBox;
-        var caretIndex = target.CaretIndex;
-        target.Text = InsertToken(target.Text, caretIndex, token);
-        target.CaretIndex = caretIndex + token.Length;
-        target.Focus();
-    }
-
     private void RefreshOptionalSectionState()
     {
         var firstEnabled = DifferentFirstPageBox.IsChecked == true;
@@ -206,12 +181,6 @@ public partial class HeaderFooterDialog : Window
         if (_activeTextBox is not null && !_activeTextBox.IsEnabled)
             _activeTextBox = HeaderCenterBox;
         UpdatePictureButtonState();
-    }
-
-    private static void SetControlsEnabled(bool isEnabled, params Control[] controls)
-    {
-        foreach (var control in controls)
-            control.IsEnabled = isEnabled;
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
