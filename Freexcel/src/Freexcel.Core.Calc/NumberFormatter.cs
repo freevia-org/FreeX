@@ -100,7 +100,9 @@ public static partial class NumberFormatter
             (section, displayValue) = SelectPositionalSection(value, parsedSections);
         }
 
-        string text = ApplyNumericFormat(displayValue, section.Format);
+        string text = section.Format == ""
+            ? ""
+            : ApplyNumericFormat(displayValue, section.Format);
         return new FormatResult(text, section.ColorHex);
     }
 
