@@ -856,7 +856,8 @@ public sealed class ChartDialogTests
         {
             "ChartDialogs.cs",
             "SelectDataSourceDialog.cs",
-            "SelectDataSourceDialog.Planning.cs"
+            "SelectDataSourceDialog.Planning.cs",
+            "SelectDataSourceDialog.Controls.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static string ReadChartTypeDialogSource() =>
