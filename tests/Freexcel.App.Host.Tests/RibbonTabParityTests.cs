@@ -111,6 +111,47 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonTooltip.Title=\"Macros\"");
     }
 
+    [Fact]
+    public void PivotTableAnalyzeTab_UsesExcelLikeContextualGroupOrder()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var analyzeTab = ExtractTabXaml(xaml, "PivotTable Analyze", "Design");
+
+        ExtractGroupLabels(analyzeTab).Should().Equal(
+            "PivotTable",
+            "Active Field",
+            "Group",
+            "Filter",
+            "Data",
+            "Actions",
+            "Calculations",
+            "Tools",
+            "Show");
+
+        ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonTooltip.Title=\"Group Field\"");
+        ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
+        ExtractGroupXaml(analyzeTab, "Data").Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
+        ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonTooltip.Title=\"Calculated Field\"");
+        ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonTooltip.Title=\"PivotChart\"");
+        ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonTooltip.Title=\"Field List\"");
+    }
+
+    [Fact]
+    public void PivotTableDesignTab_SeparatesStyleGalleryFromStyleOptions()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var designTab = ExtractTabXaml(xaml, "Design", "Help");
+
+        ExtractGroupLabels(designTab).Should().Equal(
+            "Layout",
+            "PivotTable Style Options",
+            "PivotTable Styles");
+
+        ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonTooltip.Title=\"Report Layout\"");
+        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonTooltip.Title=\"Banded Rows\"");
+        ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonTooltip.Title=\"PivotTable Styles\"");
+    }
+
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)
     {
         var start = FindTabStart(xaml, header, 0);
