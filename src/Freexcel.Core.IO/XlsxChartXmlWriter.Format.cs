@@ -234,12 +234,12 @@ internal static partial class XlsxChartXmlWriter
                 chart.DataLabelBorderColor,
                 chart.DataLabelBorderThickness),
             ToDataLabelTextProperties(chart, chartNs, drawingNs),
-            new XElement(chartNs + "showLegendKey", new XAttribute("val", "0")),
-            new XElement(chartNs + "showVal", new XAttribute("val", "1")),
+            new XElement(chartNs + "showLegendKey", new XAttribute("val", chart.ShowDataLabelLegendKey ? "1" : "0")),
+            new XElement(chartNs + "showVal", new XAttribute("val", chart.ShowDataLabelValue ? "1" : "0")),
             new XElement(chartNs + "showCatName", new XAttribute("val", chart.ShowDataLabelCategoryName ? "1" : "0")),
             new XElement(chartNs + "showSerName", new XAttribute("val", chart.ShowDataLabelSeriesName ? "1" : "0")),
             new XElement(chartNs + "showPercent", new XAttribute("val", chart.ShowDataLabelPercentage && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type) ? "1" : "0")),
-            new XElement(chartNs + "showBubbleSize", new XAttribute("val", "0")),
+            new XElement(chartNs + "showBubbleSize", new XAttribute("val", chart.ShowDataLabelBubbleSize ? "1" : "0")),
             new XElement(chartNs + "separator",
                 chart.DataLabelSeparator == ChartDataLabelSeparator.NewLine
                     ? new XAttribute(XNamespace.Xml + "space", "preserve")

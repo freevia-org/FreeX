@@ -351,6 +351,9 @@ public partial class FileAdapterSmokeTests
             ShowLegend = false,
             ShowDataLabels = true,
             DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            ShowDataLabelValue = false,
+            ShowDataLabelLegendKey = true,
+            ShowDataLabelBubbleSize = true,
             ShowDataLabelCategoryName = true,
             ShowDataLabelSeriesName = true,
             ShowDataLabelPercentage = true,
@@ -7790,6 +7793,9 @@ public partial class FileAdapterSmokeTests
             Title = "Sales",
             ShowDataLabels = true,
             DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            ShowDataLabelValue = false,
+            ShowDataLabelLegendKey = true,
+            ShowDataLabelBubbleSize = true,
             ShowDataLabelCategoryName = true,
             ShowDataLabelSeriesName = true,
             ShowDataLabelPercentage = true,
@@ -7822,6 +7828,18 @@ public partial class FileAdapterSmokeTests
                 .Should()
                 .ContainSingle()
                 .Which.Attribute("val")?.Value.Should().Be("0");
+            chartXml.Descendants(chartNs + "showVal")
+                .Should()
+                .ContainSingle()
+                .Which.Attribute("val")?.Value.Should().Be("0");
+            chartXml.Descendants(chartNs + "showLegendKey")
+                .Should()
+                .ContainSingle()
+                .Which.Attribute("val")?.Value.Should().Be("1");
+            chartXml.Descendants(chartNs + "showBubbleSize")
+                .Should()
+                .ContainSingle()
+                .Which.Attribute("val")?.Value.Should().Be("1");
         }
 
         saved.Position = 0;
@@ -7829,6 +7847,9 @@ public partial class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.ShowDataLabels.Should().BeTrue();
         loadedChart.DataLabelPosition.Should().Be(ChartDataLabelPosition.OutsideEnd);
+        loadedChart.ShowDataLabelValue.Should().BeFalse();
+        loadedChart.ShowDataLabelLegendKey.Should().BeTrue();
+        loadedChart.ShowDataLabelBubbleSize.Should().BeTrue();
         loadedChart.ShowDataLabelCategoryName.Should().BeTrue();
         loadedChart.ShowDataLabelSeriesName.Should().BeTrue();
         loadedChart.ShowDataLabelPercentage.Should().BeFalse();
