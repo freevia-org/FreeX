@@ -123,6 +123,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ZoomDialogOpenedFromKeyboard_FocusesCustomZoomEntry()
+    {
+        var source = ReadRemainingDialogSources();
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_customZoomButton.Focus();");
+        source.Should().Contain("_zoomBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_zoomBox);");
+    }
+
+    [Fact]
     public void ZoomDialog_CreateFitSelectionResult_RequestsFitSelectionWithoutChangingPercent()
     {
         ZoomDialog.CreateFitSelectionResult(125)
