@@ -208,6 +208,11 @@ internal static class XlsxChartAxisReader
                 .Element(ChartNs + "builtInUnit")?
                 .Attribute("val")?
                 .Value);
+        var customDisplayUnit = ReadDouble(
+            axisElement.Element(ChartNs + "dispUnits")?
+                .Element(ChartNs + "custUnit")?
+                .Attribute("val")?
+                .Value);
 
         if (useXAxis)
         {
@@ -229,6 +234,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisCrossesAt = crossing.CrossesAt;
             chart.XAxisCrossBetween = crossing.CrossBetween;
             chart.XAxisDisplayUnit = displayUnit;
+            chart.XAxisCustomDisplayUnit = customDisplayUnit;
             return;
         }
 
@@ -250,6 +256,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisCrossesAt = crossing.CrossesAt;
         chart.YAxisCrossBetween = crossing.CrossBetween;
         chart.YAxisDisplayUnit = displayUnit;
+        chart.YAxisCustomDisplayUnit = customDisplayUnit;
     }
 
     private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart)
