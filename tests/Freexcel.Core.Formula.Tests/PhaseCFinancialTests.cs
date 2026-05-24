@@ -415,6 +415,19 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void DollarFractionHelpers_RangeFirstArgument_SpillElementwise()
+    {
+        AssertApproxColumn(
+            EvalWithData("DOLLARDE(A1:A2,32)", (1, 1, 1.02), (2, 1, 2.16)),
+            Calc("DOLLARDE(1.02,32)"),
+            Calc("DOLLARDE(2.16,32)"));
+        AssertApproxColumn(
+            EvalWithData("DOLLARFR(A1:A2,32)", (1, 1, 1.0625), (2, 1, 2.5)),
+            Calc("DOLLARFR(1.0625,32)"),
+            Calc("DOLLARFR(2.5,32)"));
+    }
+
+    [Fact]
     public void Dollarfr_InverseOfDollarde()
     {
         // DOLLARFR(1.0625, 32) = 1 + 0.0625*32/100 = 1.02

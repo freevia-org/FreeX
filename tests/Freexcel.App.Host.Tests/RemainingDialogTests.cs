@@ -71,7 +71,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public enum PageBreakDialogAction");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record ForecastSheetDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -223,7 +223,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void PageBreakDialogOpenedFromKeyboard_FocusesSelectedBreakEntry()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class PageBreakDialog", "public sealed record ForecastSheetDialogResult");
+        var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -667,6 +667,7 @@ public sealed class RemainingDialogTests
         return string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageBreakDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FillSeriesStepDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
