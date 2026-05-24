@@ -673,6 +673,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PivotContextualTabs_UseStrictPivotSelectionInsteadOfWorkbookFallback()
+    {
+        var pivotSource = ReadPivotCommandSource();
+
+        pivotSource.Should().Contain("SetPivotContextualTabsVisible(false);");
+        pivotSource.Split("FindPivotTableContainingSelection", StringSplitOptions.None)
+            .Should()
+            .HaveCountGreaterThan(2, "contextual tabs and the Field List entry point should require the selection to be inside a PivotTable");
+    }
+
+    [Fact]
     public void SelectionAndGridInteractionController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
