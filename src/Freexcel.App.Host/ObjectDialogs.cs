@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -78,6 +79,7 @@ public sealed class HyperlinkDialog : Window
         Grid.SetColumnSpan(grid.Children[^1], 2);
         root.Children.Add(grid);
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static HyperlinkDialogResult CreateResult(
@@ -125,6 +127,13 @@ public sealed class HyperlinkDialog : Window
 
         _bookmark = dialog.Result.Text;
         _bookmarkButton.ToolTip = string.IsNullOrWhiteSpace(_bookmark) ? null : _bookmark;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _targetBox.Focus();
+        _targetBox.SelectAll();
+        Keyboard.Focus(_targetBox);
     }
 
     private static Grid DialogGrid(int inputRows)
@@ -198,7 +207,15 @@ public class TextEntryDialog : Window
             Result = CreateResult(_textBox.Text);
             DialogResult = true;
         });
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static TextEntryDialogResult CreateResult(string? text) => new((text ?? "").Trim());
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _textBox.Focus();
+        _textBox.SelectAll();
+        Keyboard.Focus(_textBox);
+    }
 }
