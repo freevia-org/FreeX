@@ -10,4 +10,16 @@ public sealed class SlicerModel
     public string? StyleName { get; init; }
     public List<string> SelectedItems { get; } = [];
     public string PackagePart { get; init; } = "";
+    public DrawingAnchorRange? DrawingAnchor { get; init; }
+    public string? DrawingShapeName { get; init; }
 }
+
+public sealed record DrawingAnchorPoint(
+    uint Column,
+    long ColumnOffsetEmu,
+    uint Row,
+    long RowOffsetEmu);
+
+public sealed record DrawingAnchorRange(
+    DrawingAnchorPoint From,
+    DrawingAnchorPoint To);
