@@ -920,13 +920,13 @@ public sealed class FormulaEvaluator
                 width = (int)Math.Truncate(dw);
             }
         }
+        if (height < 0 || width < 0) return ErrorValue.Value;
         if (height == 0 || width == 0) return ErrorValue.Ref;
 
         long startRow = (long)baseRow + rowsOff;
         long startCol = (long)baseCol + colsOff;
-        // Allow negative height/width: range extends upward/leftward from base
-        long endRow = startRow + (height > 0 ? height - 1 : height + 1);
-        long endCol = startCol + (width  > 0 ? width  - 1 : width  + 1);
+        long endRow = startRow + height - 1;
+        long endCol = startCol + width - 1;
         long r0Final = Math.Min(startRow, endRow);
         long r1Final = Math.Max(startRow, endRow);
         long c0Final = Math.Min(startCol, endCol);
