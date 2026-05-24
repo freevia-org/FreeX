@@ -71,7 +71,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void ColumnWidthDialogOpenedFromKeyboard_FocusesWidthBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record UnhideSheetDialogResult");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -548,7 +548,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void SheetNameDialogOpenedFromKeyboard_FocusesNameBox()
     {
-        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class SheetNameDialog", "public sealed record UnhideSheetDialogResult");
+        var source = ReadClassSource("SheetNameDialog.cs", "public sealed class SheetNameDialog", "public sealed record __NoNextSheetNameDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -703,6 +703,7 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageBreakDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ForecastSheetDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SheetNameDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FillSeriesStepDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ZoomDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
