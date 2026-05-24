@@ -214,7 +214,9 @@ public sealed record ChartPointDataLabelFormat(
     double? FontSize = null,
     WorkbookThemeColorReference? FillThemeColor = null,
     WorkbookThemeColorReference? BorderThemeColor = null,
-    WorkbookThemeColorReference? TextThemeColor = null)
+    WorkbookThemeColorReference? TextThemeColor = null,
+    bool? IsDeleted = null,
+    ChartDataLabelPosition? Position = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;
