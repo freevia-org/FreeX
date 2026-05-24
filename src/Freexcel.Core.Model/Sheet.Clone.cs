@@ -40,6 +40,8 @@ public sealed partial class Sheet
             PrintGridlines                = PrintGridlines,
             PrintHeadings                 = PrintHeadings,
             ScaleToFit                    = ScaleToFit,
+            FitToPage                     = FitToPage,
+            AutoPageBreaks                = AutoPageBreaks,
             PrintTitleRows                = PrintTitleRows,
             PrintTitleColumns             = PrintTitleColumns,
             PageHeader                    = PageHeader,

@@ -96,6 +96,12 @@ public sealed partial class Sheet
     /// <summary>Worksheet print scaling settings.</summary>
     public WorksheetScaleToFit ScaleToFit { get; set; } = WorksheetScaleToFit.Default;
 
+    /// <summary>Optional Excel fit-to-page sheet property. Null lets Excel infer from scaling settings.</summary>
+    public bool? FitToPage { get; set; }
+
+    /// <summary>Optional Excel automatic page-break flag stored in sheet properties.</summary>
+    public bool? AutoPageBreaks { get; set; }
+
     /// <summary>Rows repeated at the top of every printed page.</summary>
     public WorksheetRepeatRange? PrintTitleRows { get; set; }
 
