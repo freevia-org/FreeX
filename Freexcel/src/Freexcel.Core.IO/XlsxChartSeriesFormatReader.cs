@@ -37,12 +37,14 @@ internal static class XlsxChartSeriesFormatReader
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
+        var invertIfNegative = XlsxChartScalarReader.ReadOptionalBool(series.Element(ChartNs + "invertIfNegative")?.Attribute("val")?.Value);
         if (fillColor is null &&
             fillThemeColor is null &&
             strokeColor is null &&
             strokeThemeColor is null &&
             strokeThickness is null &&
-            dashStyle is null)
+            dashStyle is null &&
+            invertIfNegative is null)
         {
             return false;
         }
@@ -54,7 +56,8 @@ internal static class XlsxChartSeriesFormatReader
             StrokeThickness: strokeThickness,
             DashStyle: dashStyle,
             FillThemeColor: fillThemeColor,
-            StrokeThemeColor: strokeThemeColor);
+            StrokeThemeColor: strokeThemeColor,
+            InvertIfNegative: invertIfNegative);
         return true;
     }
 
