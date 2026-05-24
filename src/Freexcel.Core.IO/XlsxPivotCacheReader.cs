@@ -49,8 +49,12 @@ internal static class XlsxPivotCacheReader
                 EnableRefresh = XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
                 PreserveSourceSortFilter = XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveSourceSortFilter", defaultValue: true),
                 MissingItemsLimit = XlsxXmlAttributeReader.ReadIntAttribute(root, "missingItemsLimit"),
+                RecordCount = XlsxXmlAttributeReader.ReadIntAttribute(root, "recordCount"),
+                CreatedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "createdVersion"),
+                MinRefreshableVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "minRefreshableVersion"),
                 RefreshedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "refreshedVersion"),
-                RefreshedBy = root.Attribute("refreshedBy")?.Value
+                RefreshedBy = root.Attribute("refreshedBy")?.Value,
+                RefreshedDateIso = root.Attribute("refreshedDateIso")?.Value
             };
 
             foreach (var field in root
