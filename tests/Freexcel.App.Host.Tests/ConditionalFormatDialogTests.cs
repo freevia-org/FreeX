@@ -13,7 +13,7 @@ public sealed class ConditionalFormatDialogTests
     [Fact]
     public void BaseRuleDialog_ExposesKeyboardAccessKeysForFieldsAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+        var source = ReadConditionalFormatDialogSource();
 
         source.Should().Contain("isBetween ? \"_Minimum:\" : \"_Value:\"");
         source.Should().Contain("Content = \"Ma_ximum:\"");
@@ -45,7 +45,7 @@ public sealed class ConditionalFormatDialogTests
     [Fact]
     public void RuleDialogOpenedFromKeyboard_FocusesFirstRuleEditor()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+        var source = ReadConditionalFormatDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -448,7 +448,7 @@ public sealed class ConditionalFormatDialogTests
     [Fact]
     public void DataBarRule_SourceUsesSharedColorPickerForCustomBarColors()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+        var source = ReadConditionalFormatDialogSource();
 
         source.Should().Contain("CreateDataBarColorButton");
         source.Should().Contain("CreateDataBarColorEditor");
@@ -546,7 +546,7 @@ public sealed class ConditionalFormatDialogTests
     [Fact]
     public void ColorScaleRule_SourceUsesSharedColorPickerDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+        var source = ReadConditionalFormatDialogSource();
 
         source.Should().Contain("CreateColorScaleColorButton");
         source.Should().Contain("CreateColorScaleColorEditor");
@@ -794,6 +794,13 @@ public sealed class ConditionalFormatDialogTests
         dialog.Show();
         return dialog;
     }
+
+    private static string ReadConditionalFormatDialogSource() =>
+        string.Join(Environment.NewLine, new[]
+        {
+            "ConditionalFormatDialog.cs",
+            "ConditionalFormatDialog.ColorEditors.cs"
+        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)
         where T : class
