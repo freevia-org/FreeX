@@ -21,6 +21,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToAxisTitleXml(
         string? title,
+        ChartManualLayoutModel? layout,
         WorkbookThemeColorReference? textThemeColor,
         CellColor? textColor,
         double fontSize,
@@ -34,7 +35,8 @@ internal static partial class XlsxChartXmlWriter
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
                                 ToTextRunProperties(textThemeColor, textColor, fontSize, drawingNs),
-                                new XElement(drawingNs + "t", title))))));
+                                new XElement(drawingNs + "t", title))))),
+                ToManualLayoutXml(layout, chartNs));
 
     private static XElement? ToTextRunProperties(
         WorkbookThemeColorReference? textThemeColor,

@@ -223,6 +223,20 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyViewOptions()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            InitialView: PdfInitialView.TwoColumnLeft,
+            OpenMode: PdfOpenMode.FullScreen);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Active sheet only; standard quality; PDF initial view is PDF-only; PDF open mode is PDF-only; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyMinimumSize()
     {
         var options = new ExportOptions(

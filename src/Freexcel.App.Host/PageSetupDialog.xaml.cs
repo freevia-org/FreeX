@@ -192,42 +192,6 @@ public partial class PageSetupDialog : Window
         Keyboard.Focus(OrientationBox);
     }
 
-    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: string targetName } ||
-            FindName(targetName) is not TextBox target)
-            return;
-
-        RangeSelectionRequest = CreateRangeSelectionRequest(GetRangeSelectionTarget(targetName), target.Text);
-        _requestRangeSelection?.Invoke(RangeSelectionRequest);
-
-        if (_requestRangeSelection is null && _currentSelection is { } selection)
-        {
-            target.Text = targetName switch
-            {
-                nameof(RowsRepeatBox) => $"{selection.Start.Row}:{selection.End.Row}",
-                nameof(ColumnsRepeatBox) => $"{CellAddress.NumberToColumnName(selection.Start.Col)}:{CellAddress.NumberToColumnName(selection.End.Col)}",
-                _ => selection.ToString()
-            };
-        }
-
-        target.Focus();
-        target.SelectAll();
-    }
-
-    public static PageSetupRangeSelectionRequest CreateRangeSelectionRequest(
-        PageSetupRangeSelectionTarget target,
-        string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
-
-    private static PageSetupRangeSelectionTarget GetRangeSelectionTarget(string targetName) =>
-        targetName switch
-        {
-            nameof(RowsRepeatBox) => PageSetupRangeSelectionTarget.RepeatRows,
-            nameof(ColumnsRepeatBox) => PageSetupRangeSelectionTarget.RepeatColumns,
-            _ => PageSetupRangeSelectionTarget.PrintArea
-        };
-
     private void UpdateScalingInputState()
     {
         if (ScalePercentBox is null || FitPagesWideBox is null || FitPagesTallBox is null)
@@ -367,83 +331,6 @@ public partial class PageSetupDialog : Window
         RequestedAction = requestedAction;
         DialogResult = true;
         Close();
-    }
-
-    private void FocusInvalidPrintArea()
-    {
-        PageSetupTabs.SelectedItem = SheetTab;
-        PrintAreaBox.Focus();
-        PrintAreaBox.SelectAll();
-        Keyboard.Focus(PrintAreaBox);
-    }
-
-    private void FocusInvalidPrintTitles()
-    {
-        var target = PageLayoutInputParser.TryParseRepeatRows(RowsRepeatBox.Text, out _)
-            ? ColumnsRepeatBox
-            : RowsRepeatBox;
-        PageSetupTabs.SelectedItem = SheetTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
-
-    private void FocusInvalidPageTabNumber(TextBox target)
-    {
-        PageSetupTabs.SelectedItem = PageTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
-
-    private void FocusInvalidScalingInput()
-    {
-        TextBox target;
-        if (FitToRadioButton.IsChecked == true)
-        {
-            target = int.TryParse(FitPagesWideBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) && wide > 0
-                ? FitPagesTallBox
-                : FitPagesWideBox;
-        }
-        else
-        {
-            target = ScalePercentBox;
-        }
-
-        PageSetupTabs.SelectedItem = PageTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
-    }
-
-    private void FocusInvalidMarginInput()
-    {
-        foreach (var target in new[] { LeftMarginBox, RightMarginBox, TopMarginBox, BottomMarginBox })
-        {
-            if (!PageLayoutInputParser.TryParseMarginDistance(target.Text, out _))
-            {
-                FocusMarginsTabTextBox(target);
-                return;
-            }
-        }
-
-        FocusMarginsTabTextBox(LeftMarginBox);
-    }
-
-    private void FocusInvalidHeaderFooterMargin()
-    {
-        FocusMarginsTabTextBox(
-            PageLayoutInputParser.TryParseMarginDistance(HeaderMarginBox.Text, out _)
-                ? FooterMarginBox
-                : HeaderMarginBox);
-    }
-
-    private void FocusMarginsTabTextBox(TextBox target)
-    {
-        PageSetupTabs.SelectedItem = MarginsTab;
-        target.Focus();
-        target.SelectAll();
-        Keyboard.Focus(target);
     }
 
     private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

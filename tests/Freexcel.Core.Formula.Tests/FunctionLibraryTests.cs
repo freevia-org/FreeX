@@ -1864,6 +1864,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SQRT(A1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void UnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=ABS(A1:A2)", sheet), new NumberValue(4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SQRT(A1:A2)", sheet), ErrorValue.Num, new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=INT(A1:A2)", sheet), new NumberValue(-4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SIGN(A1:A2)", sheet), new NumberValue(-1), new NumberValue(1));
+    }
+
     // ── INT ───────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -6505,6 +6518,25 @@ public class FunctionLibraryTests
     public void Unicode_EmptyText_ReturnsValueError() =>
         _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
 
+    [Fact]
+    public void UnicharUnicodeAndNumbervalue_RangeArgument_SpillsElementwise()
+    {
+        var codePoints = MakeSheet(
+            (1, 1, new NumberValue(65)),
+            (2, 1, new NumberValue(9731)));
+        AssertTextColumn(_eval.Evaluate("=UNICHAR(A1:A2)", codePoints), "A", "\u2603");
+
+        var text = MakeSheet(
+            (1, 1, new TextValue("A")),
+            (2, 1, new TextValue("\u2603")));
+        AssertColumn(_eval.Evaluate("=UNICODE(A1:A2)", text), new NumberValue(65), new NumberValue(9731));
+
+        var numbers = MakeSheet(
+            (1, 1, new TextValue("1234.5")),
+            (2, 1, new TextValue("x")));
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2)", numbers), new NumberValue(1234.5), ErrorValue.Value);
+    }
+
     // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
 
     [Fact]
@@ -6519,6 +6551,28 @@ public class FunctionLibraryTests
     {
         _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
             .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
+    }
+
+    [Fact]
+    public void AscAndDbcs_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("ï¼¡ï¼¢ï¼£")),
+            (2, 1, new TextValue("ABC")));
+
+        var asc = _eval.Evaluate("=ASC(A1:A2)", sheet);
+        var ascRange = asc.Should().BeOfType<RangeValue>().Subject;
+        ascRange.RowCount.Should().Be(2);
+        ascRange.ColCount.Should().Be(1);
+        ascRange.At(1, 1).Should().Be(_eval.Evaluate("=ASC(A1)", sheet));
+        ascRange.At(2, 1).Should().Be(_eval.Evaluate("=ASC(A2)", sheet));
+
+        var dbcs = _eval.Evaluate("=DBCS(A1:A2)", sheet);
+        var dbcsRange = dbcs.Should().BeOfType<RangeValue>().Subject;
+        dbcsRange.RowCount.Should().Be(2);
+        dbcsRange.ColCount.Should().Be(1);
+        dbcsRange.At(1, 1).Should().Be(_eval.Evaluate("=DBCS(A1)", sheet));
+        dbcsRange.At(2, 1).Should().Be(_eval.Evaluate("=DBCS(A2)", sheet));
     }
 
     [Fact]

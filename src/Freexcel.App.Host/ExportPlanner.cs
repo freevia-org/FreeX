@@ -187,8 +187,8 @@ internal static class ExportPlanner
         var printAreas = options.IgnorePrintAreas
             ? "print areas are ignored"
             : null;
-        var initialView = format == ExportFormat.Pdf ? DescribeInitialView(options.InitialView) : null;
-        var openMode = format == ExportFormat.Pdf ? DescribeOpenMode(options.OpenMode) : null;
+        var initialView = DescribeInitialViewForFormat(options.InitialView, format);
+        var openMode = DescribeOpenModeForFormat(options.OpenMode, format);
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
@@ -333,6 +333,16 @@ internal static class ExportPlanner
             _ => null
         };
 
+    private static string? DescribeInitialViewForFormat(PdfInitialView initialView, ExportFormat format)
+    {
+        if (initialView == PdfInitialView.SinglePage)
+            return null;
+
+        return format == ExportFormat.Xps
+            ? "PDF initial view is PDF-only"
+            : DescribeInitialView(initialView);
+    }
+
     private static string? DescribeOpenMode(PdfOpenMode openMode) =>
         openMode switch
         {
@@ -340,4 +350,14 @@ internal static class ExportPlanner
             PdfOpenMode.FullScreen => "opens full screen",
             _ => null
         };
+
+    private static string? DescribeOpenModeForFormat(PdfOpenMode openMode, ExportFormat format)
+    {
+        if (openMode == PdfOpenMode.Normal)
+            return null;
+
+        return format == ExportFormat.Xps
+            ? "PDF open mode is PDF-only"
+            : DescribeOpenMode(openMode);
+    }
 }

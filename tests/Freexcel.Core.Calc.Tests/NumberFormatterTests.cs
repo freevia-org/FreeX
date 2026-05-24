@@ -22,6 +22,17 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("general", 42.5, "42.5")]
+    [InlineData("GENERAL", 42.5, "42.5")]
+    [InlineData("General;general", -42.5, "42.5")]
+    public void Format_GeneralFormatCode_IsCaseInsensitive(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData(1234.5, "$ 1,234.50")]
     [InlineData(-1234.5, "$ (1,234.50)")]
     [InlineData(0, "$ -")]

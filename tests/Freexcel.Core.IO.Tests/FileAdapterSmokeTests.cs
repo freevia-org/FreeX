@@ -7340,6 +7340,8 @@ public partial class FileAdapterSmokeTests
             Title = "Sales",
             XAxisTitle = "Month",
             YAxisTitle = "Amount",
+            XAxisTitleLayout = new ChartManualLayoutModel { XMode = "edge", X = 0.25, Y = 0.86 },
+            YAxisTitleLayout = new ChartManualLayoutModel { XMode = "edge", X = 0.02, Y = 0.35 },
             DataRange = new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 4, 2))
@@ -7354,6 +7356,8 @@ public partial class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.XAxisTitle.Should().Be("Month");
         loadedChart.YAxisTitle.Should().Be("Amount");
+        loadedChart.XAxisTitleLayout.Should().BeEquivalentTo(new ChartManualLayoutModel { XMode = "edge", X = 0.25, Y = 0.86 });
+        loadedChart.YAxisTitleLayout.Should().BeEquivalentTo(new ChartManualLayoutModel { XMode = "edge", X = 0.02, Y = 0.35 });
     }
 
     [Fact]
@@ -14132,6 +14136,79 @@ public partial class FileAdapterSmokeTests
             .Element(chartNs + "pivotSource")!
             .Element(chartNs + "name")!
             .Value.Should().Be("Data!PivotTable1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesPivotChartFieldButtonExtensionMetadata()
+    {
+        var workbook = new Workbook("PivotChartFieldButtonExtensionPackagePreserve");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:c14="http://schemas.microsoft.com/office/drawing/2007/8/2/chart">
+              <c:pivotSource><c:name>Data!PivotTable1</c:name><c:fmtId val="7"/></c:pivotSource>
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Data!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Data!$A$2:$A$3</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Data!$B$2:$B$3</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+                <c:extLst>
+                  <c:ext uri="{C3380CC4-5D6E-409C-BE32-E72D297353CC}">
+                    <c14:pivotOptions>
+                      <c14:dropZonesVisible val="0"/>
+                      <c14:dropZoneFilter val="0"/>
+                      <c14:dropZoneCategories val="1"/>
+                      <c14:dropZoneData val="0"/>
+                    </c14:pivotOptions>
+                  </c:ext>
+                </c:extLst>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ShowPivotChartFieldButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        loadedChart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chart14Ns = "http://schemas.microsoft.com/office/drawing/2007/8/2/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var pivotOptions = chartXml.Root!
+            .Element(chartNs + "chart")!
+            .Element(chartNs + "extLst")!
+            .Descendants(chart14Ns + "pivotOptions")
+            .Should().ContainSingle().Subject;
+        pivotOptions.Element(chart14Ns + "dropZonesVisible")!.Attribute("val")!.Value.Should().Be("0");
+        pivotOptions.Element(chart14Ns + "dropZoneFilter")!.Attribute("val")!.Value.Should().Be("0");
+        pivotOptions.Element(chart14Ns + "dropZoneCategories")!.Attribute("val")!.Value.Should().Be("1");
+        pivotOptions.Element(chart14Ns + "dropZoneData")!.Attribute("val")!.Value.Should().Be("0");
     }
 
     [Fact]
