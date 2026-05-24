@@ -105,6 +105,16 @@ public sealed partial class NativeJsonAdapter
         chart.DropLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DropLineDashStyle, ChartLineDashStyle.Solid);
         chart.HighLowLineThickness = Math.Clamp(chart.HighLowLineThickness, 0.5, 10);
         chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
+        chart.SeriesLineThickness = Math.Clamp(chart.SeriesLineThickness, 0.5, 10);
+        chart.SeriesLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.SeriesLineDashStyle, ChartLineDashStyle.Solid);
+        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
+        {
+            chart.ShowSeriesLines = false;
+            chart.SeriesLineColor = null;
+            chart.SeriesLineThemeColor = null;
+            chart.SeriesLineThickness = 1;
+            chart.SeriesLineDashStyle = ChartLineDashStyle.Solid;
+        }
         chart.UpDownBarGapWidth = ClampNullableInt(chart.UpDownBarGapWidth, 0, 500);
         chart.UpBarBorderThickness = ClampNullableDouble(chart.UpBarBorderThickness, 0, 10);
         chart.DownBarBorderThickness = ClampNullableDouble(chart.DownBarBorderThickness, 0, 10);

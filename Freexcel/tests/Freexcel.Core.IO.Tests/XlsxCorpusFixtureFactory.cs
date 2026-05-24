@@ -1286,6 +1286,16 @@ internal static class XlsxCorpusFixtureFactory
         });
         sheet.Charts.Add(new ChartModel
         {
+            Type = ChartType.StackedColumn,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "Stacked With Series Lines",
+            ShowSeriesLines = true,
+            SeriesLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5),
+            SeriesLineThickness = 1.5,
+            SeriesLineDashStyle = ChartLineDashStyle.Dot
+        });
+        sheet.Charts.Add(new ChartModel
+        {
             Type = ChartType.Radar,
             DataRange = Range(sheet, "A1", "C4"),
             Title = "Radar View",

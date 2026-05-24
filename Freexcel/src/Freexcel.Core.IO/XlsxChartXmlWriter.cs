@@ -193,7 +193,8 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "barDir", new XAttribute("val", ToXlsxBarDirection(chart.Type))),
                 new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxBarGrouping(chart.Type))),
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs)
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries),
+                ToSeriesLinesXml(chart, chartNs, drawingNs)), chart, chartNs)
         };
 
     private static XElement CreateStockVolumeBarChart(
@@ -303,6 +304,18 @@ internal static partial class XlsxChartXmlWriter
         if (chart.ShowUpDownBars)
             yield return ToUpDownBarsXml(chart, chartNs, drawingNs);
     }
+
+    private static XElement? ToSeriesLinesXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
+        ChartTypeSupport.SupportsSeriesLines(chart.Type) && chart.ShowSeriesLines
+            ? new XElement(chartNs + "serLines",
+                ToChartGuideLineShapeProperties(
+                    chart.SeriesLineThemeColor,
+                    chart.SeriesLineColor,
+                    chart.SeriesLineThickness,
+                    chart.SeriesLineDashStyle,
+                    chartNs,
+                    drawingNs))
+            : null;
 
     private static XElement ToUpDownBarsXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
