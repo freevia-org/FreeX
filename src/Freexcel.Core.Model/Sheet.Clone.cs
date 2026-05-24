@@ -69,6 +69,7 @@ public sealed partial class Sheet
             PrintBlackAndWhite            = PrintBlackAndWhite,
             PrintDraftQuality             = PrintDraftQuality,
             PrintQualityDpi               = PrintQualityDpi,
+            PrintQualityVerticalDpi       = PrintQualityVerticalDpi,
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
             ViewMode                      = ViewMode,

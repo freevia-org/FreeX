@@ -253,6 +253,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.PrintQualityDpi = xlSheet.PageSetup.HorizontalDpi > 0
                 ? xlSheet.PageSetup.HorizontalDpi
                 : xlSheet.PageSetup.VerticalDpi > 0 ? xlSheet.PageSetup.VerticalDpi : null;
+            sheet.PrintQualityVerticalDpi = xlSheet.PageSetup.VerticalDpi > 0
+                ? xlSheet.PageSetup.VerticalDpi
+                : null;
             sheet.PrintErrorValue = XlsxWorksheetPageSetupMapper.FromPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
             sheet.PrintComments = XlsxWorksheetPageSetupMapper.FromPrintComments(xlSheet.PageSetup.ShowComments);
             sheet.DifferentFirstPageHeaderFooter = xlSheet.PageSetup.DifferentFirstPageOnHF;

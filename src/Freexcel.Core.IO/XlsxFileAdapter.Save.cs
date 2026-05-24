@@ -183,7 +183,13 @@ public sealed partial class XlsxFileAdapter
             if (sheet.PrintQualityDpi is { } printQualityDpi && printQualityDpi > 0)
             {
                 xlSheet.PageSetup.HorizontalDpi = printQualityDpi;
-                xlSheet.PageSetup.VerticalDpi = printQualityDpi;
+                xlSheet.PageSetup.VerticalDpi = sheet.PrintQualityVerticalDpi is { } verticalDpi && verticalDpi > 0
+                    ? verticalDpi
+                    : printQualityDpi;
+            }
+            else if (sheet.PrintQualityVerticalDpi is { } verticalDpi && verticalDpi > 0)
+            {
+                xlSheet.PageSetup.VerticalDpi = verticalDpi;
             }
 
             xlSheet.PageSetup.PrintErrorValue = XlsxWorksheetPageSetupMapper.ToPrintErrorValue(printErrorValue);

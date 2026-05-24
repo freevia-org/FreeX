@@ -183,6 +183,9 @@ public sealed partial class Sheet
     /// <summary>Optional worksheet print quality in dots per inch. Null means printer/default quality.</summary>
     public int? PrintQualityDpi { get; set; }
 
+    /// <summary>Optional vertical worksheet print quality in dots per inch when it differs from horizontal DPI.</summary>
+    public int? PrintQualityVerticalDpi { get; set; }
+
     /// <summary>How formula/cell error values are represented when printing.</summary>
     public WorksheetPrintErrorValue PrintErrorValue { get; set; } = WorksheetPrintErrorValue.Displayed;
 
