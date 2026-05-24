@@ -382,6 +382,7 @@ public sealed class ChangeChartTypeDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChangeChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
@@ -393,4 +394,10 @@ public sealed class ChangeChartTypeDialog : Window
         Result = CreateResult(SelectedChartType);
         DialogResult = true;
     });
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _subtypeGallery.Focus();
+        Keyboard.Focus(_subtypeGallery);
+    }
 }

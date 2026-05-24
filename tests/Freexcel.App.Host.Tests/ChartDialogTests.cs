@@ -171,6 +171,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChangeChartTypeDialogOpenedFromKeyboard_FocusesSubtypeGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class ChangeChartTypeDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_subtypeGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_subtypeGallery);");
+    }
+
+    [Fact]
     public void ChartTitlesDialogResult_MapsTitleTextToLayoutOptions()
     {
         var result = ChartTitlesDialog.CreateResult(" Revenue ", " Quarter ", " Amount ");
