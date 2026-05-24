@@ -10,7 +10,8 @@ public sealed record DisplayCell(
     StyleId StyleId,
     CellError? Error,
     CellStyle? Style = null,
-    ConditionalFormatIcon? ConditionalIcon = null);
+    ConditionalFormatIcon? ConditionalIcon = null,
+    bool HasComment = false);
 
 public sealed record ConditionalFormatIcon(
     string Style,

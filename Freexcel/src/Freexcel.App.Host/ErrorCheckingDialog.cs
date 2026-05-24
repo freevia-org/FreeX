@@ -134,8 +134,15 @@ public sealed class ErrorCheckingDialog : Window
         if (_issues.Count > 0)
         {
             _listView.SelectedIndex = 0;
-            Loaded += (_, _) => NavigateSelected();
         }
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _listView.Focus();
+        Keyboard.Focus(_listView);
+        NavigateSelected();
     }
 
     private void NavigateSelected()

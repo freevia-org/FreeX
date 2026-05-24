@@ -39,6 +39,15 @@ public sealed class ViewportScrollCalculatorTests
             .Should().Be((43d, 43d));
     }
 
+    [Theory]
+    [InlineData(30, 1)]
+    [InlineData(-30, -1)]
+    [InlineData(240, 2)]
+    public void NormalizeWheelNotches_PreservesHighResolutionTouchpadDeltas(int delta, int expected)
+    {
+        ViewportScrollCalculator.NormalizeWheelNotches(delta).Should().Be(expected);
+    }
+
     [Fact]
     public void CalculateScrollbarMaximumForUsedRange_ReturnsToUsedRangeWhenScrolledBack()
     {

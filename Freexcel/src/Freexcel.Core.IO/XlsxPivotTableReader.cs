@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, true, false, false, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -171,12 +171,22 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "pageOverThenDown"),
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(root, "pageWrap") ?? 0),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDrill", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDrill", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "asteriskTotals"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "multipleFieldFilters", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldDialog", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldProperties", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDataValueEditing"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyWidthHeightFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveFormatting", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "itemPrintTitles") || XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldPrintTitles"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "printDrill"),
             root.Attribute("altText")?.Value,
             root.Attribute("altTextSummary")?.Value,
+            root.Attribute("dataCaption")?.Value,
+            root.Attribute("grandTotalCaption")?.Value,
+            root.Attribute("missingCaption")?.Value,
+            root.Attribute("errorCaption")?.Value,
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
@@ -497,12 +507,22 @@ internal static partial class XlsxPivotTableReader
             PageOverThenDown = pending.PageOverThenDown,
             PageWrap = pending.PageWrap,
             ShowExpandCollapseButtons = pending.ShowExpandCollapseButtons,
+            EnableDrill = pending.EnableDrill,
+            AsteriskTotals = pending.AsteriskTotals,
+            MultipleFieldFilters = pending.MultipleFieldFilters,
+            EnableFieldDialog = pending.EnableFieldDialog,
+            EnableFieldProperties = pending.EnableFieldProperties,
+            EnableDataValueEditing = pending.EnableDataValueEditing,
             AutofitColumnsOnUpdate = pending.AutofitColumnsOnUpdate,
             PreserveFormattingOnUpdate = pending.PreserveFormattingOnUpdate,
             PrintTitles = pending.PrintTitles,
             PrintExpandCollapseButtons = pending.PrintExpandCollapseButtons,
             AltTextTitle = string.IsNullOrWhiteSpace(pending.AltTextTitle) ? null : pending.AltTextTitle,
-            AltTextDescription = string.IsNullOrWhiteSpace(pending.AltTextDescription) ? null : pending.AltTextDescription
+            AltTextDescription = string.IsNullOrWhiteSpace(pending.AltTextDescription) ? null : pending.AltTextDescription,
+            DataCaption = string.IsNullOrWhiteSpace(pending.DataCaption) ? null : pending.DataCaption,
+            GrandTotalCaption = string.IsNullOrWhiteSpace(pending.GrandTotalCaption) ? null : pending.GrandTotalCaption,
+            MissingCaption = string.IsNullOrWhiteSpace(pending.MissingCaption) ? null : pending.MissingCaption,
+            ErrorCaption = string.IsNullOrWhiteSpace(pending.ErrorCaption) ? null : pending.ErrorCaption
         };
 
         pivotTable.RowFields.AddRange(pending.RowFields);
@@ -572,12 +592,22 @@ internal static partial class XlsxPivotTableReader
         bool PageOverThenDown,
         int PageWrap,
         bool ShowExpandCollapseButtons,
+        bool EnableDrill,
+        bool AsteriskTotals,
+        bool MultipleFieldFilters,
+        bool EnableFieldDialog,
+        bool EnableFieldProperties,
+        bool EnableDataValueEditing,
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,
         bool PrintTitles,
         bool PrintExpandCollapseButtons,
         string? AltTextTitle,
         string? AltTextDescription,
+        string? DataCaption,
+        string? GrandTotalCaption,
+        string? MissingCaption,
+        string? ErrorCaption,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,

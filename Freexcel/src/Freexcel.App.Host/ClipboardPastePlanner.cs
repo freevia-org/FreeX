@@ -1,3 +1,4 @@
+using System;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -14,6 +15,10 @@ public static class ClipboardPastePlanner
             PasteMode.Formats => PasteCellsMode.Formats,
             _ => PasteCellsMode.All
         };
+
+    public static bool ShouldUseInternalClipboard(string internalClipboardText, string? currentClipboardText) =>
+        currentClipboardText is null ||
+        string.Equals(internalClipboardText, currentClipboardText, StringComparison.Ordinal);
 
     public static bool ShouldClearCutSourceAfterPaste(
         bool isCut,

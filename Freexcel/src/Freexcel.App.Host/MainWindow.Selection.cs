@@ -194,6 +194,11 @@ public partial class MainWindow
             {
                 ExtendSelection(_selectionAnchor.Value, newAddr);
             }
+            else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryOpenHyperlink(newAddr))
+            {
+                e.Handled = true;
+                return;
+            }
             else
             {
                 SetActiveCell(newAddr);

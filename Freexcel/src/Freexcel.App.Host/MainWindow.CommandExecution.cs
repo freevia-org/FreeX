@@ -219,7 +219,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Undo(_workbook.Id);
         if (!outcome.Success) return;
-        RecalculateWorkbook();
+        RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -229,7 +229,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success) return;
-        RecalculateWorkbook();
+        RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -241,7 +241,7 @@ public partial class MainWindow
         var outcome = _commandBus.RepeatLast(_workbook.Id);
         if (!outcome.Success) return;
         postAction?.Invoke(outcome);
-        RecalculateWorkbook();
+        RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -254,5 +254,13 @@ public partial class MainWindow
         return targetSheetIds.Count > 1
             ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
             : new EditCellsCommand(_currentSheetId, edits);
+    }
+
+    private void RecalculateAfterCommandOutcome(CommandOutcome outcome)
+    {
+        if (outcome.AffectedCells is { Count: > 0 } affectedCells)
+            RecalculateIfAutomatic(affectedCells);
+        else
+            RecalculateWorkbook();
     }
 }
