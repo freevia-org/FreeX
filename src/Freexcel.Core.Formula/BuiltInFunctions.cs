@@ -1260,14 +1260,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (!TryTruncateToLong(ToNumber(args[0]), out long n)) return ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsevenScalar);
+        return IsevenScalar(args[0]);
+    }
+
+    private static ScalarValue IsevenScalar(ScalarValue value)
+    {
+        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
         return new BoolValue(n % 2 == 0);
     }
 
     private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (!TryTruncateToLong(ToNumber(args[0]), out long n)) return ErrorValue.Num;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, IsoddScalar);
+        return IsoddScalar(args[0]);
+    }
+
+    private static ScalarValue IsoddScalar(ScalarValue value)
+    {
+        if (!TryTruncateToLong(ToNumber(value), out long n)) return ErrorValue.Num;
         return new BoolValue(n % 2 != 0);
     }
 

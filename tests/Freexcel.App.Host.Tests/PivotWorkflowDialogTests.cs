@@ -1094,9 +1094,9 @@ public sealed class PivotWorkflowDialogTests
     public void PivotChartOptionsDialogOpenedFromKeyboard_FocusesStyleGallery()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotChartOptionsDialog.cs",
             "public sealed class PivotChartOptionsDialog",
-            "public sealed record PivotFieldGroupingDialogResult");
+            "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -1123,6 +1123,7 @@ public sealed class PivotWorkflowDialogTests
             new[]
             {
                 "PivotWorkflowDialogs.cs",
+                "PivotChartOptionsDialog.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",
                 "PivotTableOptionsDialog.cs",

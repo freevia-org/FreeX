@@ -1640,6 +1640,24 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SECOND(A1)", sheet).Should().Be(new NumberValue(45));
     }
 
+    [Fact]
+    public void DateTimeExtractors_RangeArgument_SpillElementwise()
+    {
+        var dates = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2026, 5, 24).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2027, 6, 25).ToOADate())));
+        AssertColumn(_eval.Evaluate("=YEAR(A1:A2)", dates), new NumberValue(2026), new NumberValue(2027));
+        AssertColumn(_eval.Evaluate("=MONTH(A1:A2)", dates), new NumberValue(5), new NumberValue(6));
+        AssertColumn(_eval.Evaluate("=DAY(A1:A2)", dates), new NumberValue(24), new NumberValue(25));
+
+        var times = MakeSheet(
+            (1, 1, new NumberValue(new TimeSpan(1, 2, 3).TotalDays)),
+            (2, 1, new NumberValue(new TimeSpan(4, 5, 6).TotalDays)));
+        AssertColumn(_eval.Evaluate("=HOUR(A1:A2)", times), new NumberValue(1), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=MINUTE(A1:A2)", times), new NumberValue(2), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=SECOND(A1:A2)", times), new NumberValue(3), new NumberValue(6));
+    }
+
     // ── WEEKDAY ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -3439,6 +3457,19 @@ public class FunctionLibraryTests
 
     [Fact] public void Even_3_Returns4() =>
         _eval.Evaluate("=EVEN(3)", MakeSheet()).Should().Be(new NumberValue(4));
+
+    [Fact]
+    public void OddEvenAndIsParity_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=ODD(A1:A2)", sheet), new NumberValue(3), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=EVEN(A1:A2)", sheet), new NumberValue(2), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=ISEVEN(A1:A2)", sheet), True(), False());
+        AssertColumn(_eval.Evaluate("=ISODD(A1:A2)", sheet), False(), True());
+    }
 
     // ── Date / Time ──────────────────────────────────────────────────────────────
 

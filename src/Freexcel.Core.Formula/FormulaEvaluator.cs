@@ -1049,7 +1049,9 @@ public sealed class FormulaEvaluator
              or "SIN" or "COS" or "TAN" or "DEGREES" or "RADIANS"
              or "ASIN" or "ACOS" or "ATAN" or "LN" or "EXP" or "FACT"
              or "ROUND" or "ROUNDUP" or "ROUNDDOWN" or "TRUNC"
-             or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL";
+             or "ISBLANK" or "ISNUMBER" or "ISTEXT" or "ISERROR" or "ISNA" or "ISLOGICAL"
+             or "ISEVEN" or "ISODD" or "ODD" or "EVEN"
+             or "YEAR" or "MONTH" or "DAY" or "HOUR" or "MINUTE" or "SECOND";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
