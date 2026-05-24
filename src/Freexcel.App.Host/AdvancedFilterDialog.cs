@@ -169,6 +169,29 @@ public sealed partial class AdvancedFilterDialog : Window
             : Visibility.Visible;
     }
 
+    private void FocusInvalidRangeInput(string? error)
+    {
+        TextBox target;
+        if (string.Equals(error, "Enter a valid criteria range.", StringComparison.Ordinal))
+        {
+            target = _criteriaRangeBox;
+        }
+        else if (string.Equals(error, "Enter a valid copy-to cell or one-row header range.", StringComparison.Ordinal))
+        {
+            _copyToAnotherLocationButton.IsChecked = true;
+            UpdateCopyToState();
+            target = _copyToBox;
+        }
+        else
+        {
+            target = _listRangeBox;
+        }
+
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
     private void Accept()
     {
         if (!TryParse(
@@ -183,6 +206,7 @@ public sealed partial class AdvancedFilterDialog : Window
                 out var error))
         {
             MessageBox.Show(this, error ?? "Enter valid filter ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidRangeInput(error);
             return;
         }
 
