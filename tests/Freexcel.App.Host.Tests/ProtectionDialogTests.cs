@@ -132,6 +132,10 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("RangeSelectionRequest = CreateRangeSelectionRequest");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
         source.Should().Contain("_rangeBox.SelectAll()");
+        var pickerHandlerSource = source[
+            source.IndexOf("private void RangePicker_Click", StringComparison.Ordinal)..
+            source.IndexOf("public static AllowEditRangeSelectionRequest", StringComparison.Ordinal)];
+        pickerHandlerSource.Should().Contain("Keyboard.Focus(_rangeBox)");
         source.Should().Contain("Use an A1-style range");
     }
 
