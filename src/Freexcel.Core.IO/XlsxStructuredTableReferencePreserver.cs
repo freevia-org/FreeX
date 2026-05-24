@@ -123,12 +123,11 @@ internal static class XlsxStructuredTableReferencePreserver
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            if (sourceWorksheetXml is null || targetWorksheetEntry is null)
                 continue;
 
-            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             var sourceTableParts = sourceWorksheetXml.Root?
                 .Element(context.WorkbookNs + "tableParts")?
                 .Elements(context.WorkbookNs + "tablePart")

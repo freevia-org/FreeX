@@ -102,12 +102,11 @@ internal static class XlsxWorksheetDrawingReferencePreserver
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            if (sourceWorksheetXml is null || targetWorksheetEntry is null)
                 continue;
 
-            var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             var sourceDrawing = sourceWorksheetXml.Root?.Element(context.WorkbookNs + "drawing");
             var sourceRelId = sourceDrawing?.Attribute(context.RelNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(sourceRelId))
