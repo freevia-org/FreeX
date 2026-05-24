@@ -6993,6 +6993,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filterxml_RangeXPathArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("/root/item[1]")),
+            (2, 1, new TextValue("/root/item[2]")));
+
+        AssertTextColumn(_eval.Evaluate("=FILTERXML(\"<root><item>A</item><item>B</item></root>\",A1:A2)", sheet), "A", "B");
+    }
+
+    [Fact]
     public void Numbervalue_DefaultSeparators_ParsesPlainNumber() =>
         _eval.Evaluate("=NUMBERVALUE(\"1234.56\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
