@@ -253,6 +253,38 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_ResolvesSupportedBuiltInPivotStyleFromWorkbookTheme()
+    {
+        var workbook = new Workbook("PivotStyleThemeRenderTest")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 80, 120))
+        };
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium2",
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(10, 80, 120));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(230, 238, 242));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(182, 202, 214));
+    }
+
+    [Fact]
     public void Refresh_MaterializesColumnFieldMatrix()
     {
         var workbook = new Workbook("PivotRefreshTest");
