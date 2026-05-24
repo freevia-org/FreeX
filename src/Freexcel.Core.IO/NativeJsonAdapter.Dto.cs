@@ -12,6 +12,10 @@ public sealed partial class NativeJsonAdapter
         public string Name { get; set; } = "";
         public WorkbookThemeDto? Theme { get; set; }
         public bool Uses1904DateSystem { get; set; }
+        public bool? ShowSheetTabs { get; set; }
+        public int? SheetTabRatio { get; set; }
+        public int? FirstVisibleSheetIndex { get; set; }
+        public int? ActiveSheetIndex { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
