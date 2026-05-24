@@ -79,6 +79,58 @@ internal static class XlsxWorkbookMetadataWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
     }
 
+    public static void SaveFileSharing(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var existingFileSharing = root.Element(workbookNs + "fileSharing");
+        var fileSharing = existingFileSharing is not null
+            ? new XElement(existingFileSharing)
+            : new XElement(workbookNs + "fileSharing");
+        existingFileSharing?.Remove();
+        if (workbook.FileSharing is null)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        fileSharing.Attribute("readOnlyRecommended")?.Remove();
+        fileSharing.Attribute("userName")?.Remove();
+        fileSharing.Attribute("reservationPassword")?.Remove();
+        fileSharing.SetAttributeValue(
+            "readOnlyRecommended",
+            workbook.FileSharing.ReadOnlyRecommended is { } readOnlyRecommended ? readOnlyRecommended ? "1" : "0" : null);
+        fileSharing.SetAttributeValue(
+            "userName",
+            string.IsNullOrWhiteSpace(workbook.FileSharing.UserName) ? null : workbook.FileSharing.UserName);
+        fileSharing.SetAttributeValue(
+            "reservationPassword",
+            string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
+
+        var workbookProtection = root.Element(workbookNs + "workbookProtection");
+        if (workbookProtection is not null)
+            workbookProtection.AddBeforeSelf(fileSharing);
+        else
+        {
+            var sheets = root.Element(workbookNs + "sheets");
+            if (sheets is not null)
+                sheets.AddBeforeSelf(fileSharing);
+            else
+                root.Add(fileSharing);
+        }
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
