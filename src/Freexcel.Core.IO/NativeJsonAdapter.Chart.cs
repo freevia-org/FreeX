@@ -37,6 +37,9 @@ public sealed partial class NativeJsonAdapter
                 Protection = chartDto.Protection,
                 PrintSettings = chartDto.PrintSettings,
                 ThreeDView = chartDto.ThreeDView,
+                FloorFormat = ToChartSurfaceFormat(chartDto.FloorFormat),
+                SideWallFormat = ToChartSurfaceFormat(chartDto.SideWallFormat),
+                BackWallFormat = ToChartSurfaceFormat(chartDto.BackWallFormat),
                 ShowPivotChartFieldButtons = chartDto.ShowPivotChartFieldButtons,
                 ShowPivotChartReportFilterButtons = chartDto.ShowPivotChartReportFilterButtons,
                 ShowPivotChartAxisFieldButtons = chartDto.ShowPivotChartAxisFieldButtons,
@@ -169,6 +172,17 @@ public sealed partial class NativeJsonAdapter
                 HighLowLineThickness = chartDto.HighLowLineThickness,
                 HighLowLineDashStyle = chartDto.HighLowLineDashStyle,
                 ShowUpDownBars = chartDto.ShowUpDownBars,
+                UpDownBarGapWidth = chartDto.UpDownBarGapWidth,
+                UpBarFillColor = chartDto.UpBarFillColor,
+                UpBarFillThemeColor = ToThemeColorReference(chartDto.UpBarFillThemeColor),
+                UpBarBorderColor = chartDto.UpBarBorderColor,
+                UpBarBorderThemeColor = ToThemeColorReference(chartDto.UpBarBorderThemeColor),
+                UpBarBorderThickness = chartDto.UpBarBorderThickness,
+                DownBarFillColor = chartDto.DownBarFillColor,
+                DownBarFillThemeColor = ToThemeColorReference(chartDto.DownBarFillThemeColor),
+                DownBarBorderColor = chartDto.DownBarBorderColor,
+                DownBarBorderThemeColor = ToThemeColorReference(chartDto.DownBarBorderThemeColor),
+                DownBarBorderThickness = chartDto.DownBarBorderThickness,
                 ShowSecondaryAxis = chartDto.ShowSecondaryAxis,
                 SecondaryAxisSeriesIndexes = chartDto.SecondaryAxisSeriesIndexes ?? [],
                 ComboLineSeriesIndexes = chartDto.ComboLineSeriesIndexes ?? [],
@@ -215,6 +229,9 @@ public sealed partial class NativeJsonAdapter
         Protection = chart.Protection,
         PrintSettings = chart.PrintSettings,
         ThreeDView = chart.ThreeDView,
+        FloorFormat = FromChartSurfaceFormat(chart.FloorFormat),
+        SideWallFormat = FromChartSurfaceFormat(chart.SideWallFormat),
+        BackWallFormat = FromChartSurfaceFormat(chart.BackWallFormat),
         ShowPivotChartFieldButtons = chart.ShowPivotChartFieldButtons,
         ShowPivotChartReportFilterButtons = chart.ShowPivotChartReportFilterButtons,
         ShowPivotChartAxisFieldButtons = chart.ShowPivotChartAxisFieldButtons,
@@ -347,6 +364,17 @@ public sealed partial class NativeJsonAdapter
         HighLowLineThickness = chart.HighLowLineThickness,
         HighLowLineDashStyle = chart.HighLowLineDashStyle,
         ShowUpDownBars = chart.ShowUpDownBars,
+        UpDownBarGapWidth = chart.UpDownBarGapWidth,
+        UpBarFillColor = chart.UpBarFillColor,
+        UpBarFillThemeColor = FromThemeColorReference(chart.UpBarFillThemeColor),
+        UpBarBorderColor = chart.UpBarBorderColor,
+        UpBarBorderThemeColor = FromThemeColorReference(chart.UpBarBorderThemeColor),
+        UpBarBorderThickness = chart.UpBarBorderThickness,
+        DownBarFillColor = chart.DownBarFillColor,
+        DownBarFillThemeColor = FromThemeColorReference(chart.DownBarFillThemeColor),
+        DownBarBorderColor = chart.DownBarBorderColor,
+        DownBarBorderThemeColor = FromThemeColorReference(chart.DownBarBorderThemeColor),
+        DownBarBorderThickness = chart.DownBarBorderThickness,
         ShowSecondaryAxis = chart.ShowSecondaryAxis,
         SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
         ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
@@ -358,4 +386,28 @@ public sealed partial class NativeJsonAdapter
         Width = chart.Width,
         Height = chart.Height
     };
+
+    private static ChartSurfaceFormatModel? ToChartSurfaceFormat(ChartSurfaceFormatDto? dto) =>
+        dto is null
+            ? null
+            : new ChartSurfaceFormatModel
+            {
+                FillColor = dto.FillColor,
+                FillThemeColor = ToThemeColorReference(dto.FillThemeColor),
+                BorderColor = dto.BorderColor,
+                BorderThemeColor = ToThemeColorReference(dto.BorderThemeColor),
+                BorderThickness = dto.BorderThickness
+            };
+
+    private static ChartSurfaceFormatDto? FromChartSurfaceFormat(ChartSurfaceFormatModel? format) =>
+        format is null
+            ? null
+            : new ChartSurfaceFormatDto
+            {
+                FillColor = format.FillColor,
+                FillThemeColor = FromThemeColorReference(format.FillThemeColor),
+                BorderColor = format.BorderColor,
+                BorderThemeColor = FromThemeColorReference(format.BorderThemeColor),
+                BorderThickness = format.BorderThickness
+            };
 }

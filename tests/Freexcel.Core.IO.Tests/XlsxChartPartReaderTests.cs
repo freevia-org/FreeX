@@ -500,6 +500,15 @@ public sealed class XlsxChartPartReaderTests
                   <c:rAngAx val="0"/>
                   <c:perspective val="45"/>
                 </c:view3D>
+                <c:floor>
+                  <c:spPr><a:solidFill><a:srgbClr val="D9EAD3"/></a:solidFill><a:ln w="12700"><a:solidFill><a:schemeClr val="accent6"/></a:solidFill></a:ln></c:spPr>
+                </c:floor>
+                <c:sideWall>
+                  <c:spPr><a:solidFill><a:schemeClr val="accent2"/></a:solidFill><a:ln w="25400"><a:solidFill><a:srgbClr val="C00000"/></a:solidFill></a:ln></c:spPr>
+                </c:sideWall>
+                <c:backWall>
+                  <c:spPr><a:solidFill><a:srgbClr val="D9E1F2"/></a:solidFill><a:ln w="38100"><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></a:ln></c:spPr>
+                </c:backWall>
                 <c:plotArea>
                   <c:layout>
                     <c:manualLayout>
@@ -611,6 +620,24 @@ public sealed class XlsxChartPartReaderTests
             DepthPercent = 200,
             RightAngleAxes = false,
             Perspective = 45
+        });
+        chart.FloorFormat.Should().BeEquivalentTo(new ChartSurfaceFormatModel
+        {
+            FillColor = new CellColor(217, 234, 211),
+            BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
+            BorderThickness = 1
+        });
+        chart.SideWallFormat.Should().BeEquivalentTo(new ChartSurfaceFormatModel
+        {
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            BorderColor = new CellColor(192, 0, 0),
+            BorderThickness = 2
+        });
+        chart.BackWallFormat.Should().BeEquivalentTo(new ChartSurfaceFormatModel
+        {
+            FillColor = new CellColor(217, 225, 242),
+            BorderColor = new CellColor(68, 114, 196),
+            BorderThickness = 3
         });
         chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
         {
@@ -817,7 +844,11 @@ public sealed class XlsxChartPartReaderTests
                     <c:hiLowLines>
                       <c:spPr><a:ln w="25400"><a:solidFill><a:schemeClr val="accent4"/></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr>
                     </c:hiLowLines>
-                    <c:upDownBars/>
+                    <c:upDownBars>
+                      <c:gapWidth val="180"/>
+                      <c:upBars><c:spPr><a:solidFill><a:srgbClr val="70AD47"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="548235"/></a:solidFill></a:ln></c:spPr></c:upBars>
+                      <c:downBars><c:spPr><a:solidFill><a:srgbClr val="C00000"/></a:solidFill><a:ln w="25400"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:ln></c:spPr></c:downBars>
+                    </c:upDownBars>
                   </c:lineChart>
                 </c:plotArea>
               </c:chart>
@@ -838,6 +869,14 @@ public sealed class XlsxChartPartReaderTests
         chart.HighLowLineColor.Should().BeNull();
         chart.HighLowLineThickness.Should().Be(2);
         chart.HighLowLineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+        chart.UpDownBarGapWidth.Should().Be(180);
+        chart.UpBarFillColor.Should().Be(new CellColor(112, 173, 71));
+        chart.UpBarBorderColor.Should().Be(new CellColor(84, 130, 53));
+        chart.UpBarBorderThickness.Should().Be(1);
+        chart.DownBarFillColor.Should().Be(new CellColor(192, 0, 0));
+        chart.DownBarBorderThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2));
+        chart.DownBarBorderColor.Should().BeNull();
+        chart.DownBarBorderThickness.Should().Be(2);
     }
 
     [Fact]
@@ -867,6 +906,33 @@ public sealed class XlsxChartPartReaderTests
 
         chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
             new ChartSeriesFormat(0, FillColor: new CellColor(12, 34, 56)));
+    }
+
+    [Fact]
+    public void TryReadSupportedChart_ReadsLineSeriesSmoothFormatting()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:lineChart>
+                    <c:ser>
+                      <c:smooth val="1"/>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:lineChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, Smooth: true));
     }
 
     [Fact]
