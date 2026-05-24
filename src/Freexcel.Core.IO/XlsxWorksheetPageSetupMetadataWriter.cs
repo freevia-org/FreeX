@@ -9,7 +9,9 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
 {
     public static bool HasModeledPrinterAttributes(Sheet sheet) =>
         sheet.UsePrinterDefaults is not null ||
-        sheet.PrintCopies is > 0;
+        sheet.PrintCopies is > 0 ||
+        sheet.FitToPage is not null ||
+        sheet.AutoPageBreaks is not null;
 
     public static void Save(
         Stream packageStream,
@@ -36,23 +38,54 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
             if (root is null)
                 continue;
 
-            var pageSetup = root.Element(workbookNs + "pageSetup");
-            if (pageSetup is null)
-            {
-                if (!HasModeledPrinterAttributes(sheet))
-                    continue;
-
-                pageSetup = new XElement(workbookNs + "pageSetup");
-                InsertPageSetupInOrder(root, workbookNs, pageSetup);
-            }
-
             var changed = false;
-            changed |= SetOptionalBoolAttribute(pageSetup, "usePrinterDefaults", sheet.UsePrinterDefaults);
-            changed |= SetOptionalIntAttribute(pageSetup, "copies", sheet.PrintCopies);
+            changed |= ApplyPageSetupAttributes(root, workbookNs, sheet);
+            changed |= ApplyPageSetupProperties(root, workbookNs, sheet);
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
+    }
+
+    private static bool ApplyPageSetupAttributes(XElement root, XNamespace workbookNs, Sheet sheet)
+    {
+        var pageSetup = root.Element(workbookNs + "pageSetup");
+        if (pageSetup is null)
+        {
+            if (sheet.UsePrinterDefaults is null && sheet.PrintCopies is not > 0)
+                return false;
+
+            pageSetup = new XElement(workbookNs + "pageSetup");
+            InsertPageSetupInOrder(root, workbookNs, pageSetup);
+        }
+
+        var changed = false;
+        changed |= SetOptionalBoolAttribute(pageSetup, "usePrinterDefaults", sheet.UsePrinterDefaults);
+        changed |= SetOptionalIntAttribute(pageSetup, "copies", sheet.PrintCopies);
+        return changed;
+    }
+
+    private static bool ApplyPageSetupProperties(XElement root, XNamespace workbookNs, Sheet sheet)
+    {
+        var sheetProperties = root.Element(workbookNs + "sheetPr");
+        var pageSetupProperties = sheetProperties?.Element(workbookNs + "pageSetUpPr");
+        if (pageSetupProperties is null)
+        {
+            if (sheet.FitToPage is null && sheet.AutoPageBreaks is null)
+                return false;
+
+            sheetProperties ??= new XElement(workbookNs + "sheetPr");
+            if (sheetProperties.Parent is null)
+                root.AddFirst(sheetProperties);
+
+            pageSetupProperties = new XElement(workbookNs + "pageSetUpPr");
+            sheetProperties.Add(pageSetupProperties);
+        }
+
+        var changed = false;
+        changed |= SetOptionalBoolAttribute(pageSetupProperties, "fitToPage", sheet.FitToPage);
+        changed |= SetOptionalBoolAttribute(pageSetupProperties, "autoPageBreaks", sheet.AutoPageBreaks);
+        return changed;
     }
 
     private static bool SetOptionalBoolAttribute(XElement element, XName name, bool? value) =>
