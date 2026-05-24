@@ -143,4 +143,50 @@ internal static class XlsxWorksheetDrawingReferencePreserver
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
+
+    public static void Preserve(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context,
+        XlsxWorksheetDrawingPathMap drawingPaths)
+    {
+        if (context is null || drawingPaths == XlsxWorksheetDrawingPathMap.Empty)
+        {
+            Preserve(sourceArchive, targetArchive, context);
+            return;
+        }
+
+        foreach (var (sheetName, drawingPath) in drawingPaths.SourceDrawingPaths)
+        {
+            if (drawingPaths.TargetDrawingPaths.ContainsKey(sheetName))
+                continue;
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (targetWorksheetEntry is null)
+                continue;
+
+            var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null || targetRoot.Element(context.WorkbookNs + "drawing") is not null)
+                continue;
+
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
+            var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
+                ? XlsxPackageXmlEditor.LoadXml(targetWorksheetRelsEntry)
+                : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+            var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+                targetWorksheetRelsXml,
+                context.PackageRelNs,
+                targetWorksheetPath,
+                drawingPath,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+
+            targetRoot.Add(new XElement(context.WorkbookNs + "drawing", new XAttribute(context.RelNs + "id", targetRelId)));
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
 }
