@@ -750,6 +750,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAxisFormatDialogOpenedFromKeyboard_FocusesMinimumBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartAxisFormatDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_minimumBox.Focus();");
+        source.Should().Contain("_minimumBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_minimumBox);");
+    }
+
+    [Fact]
     public void ChartSeriesFormatDialogResult_ReplacesSelectedSeriesFormat()
     {
         var result = ChartSeriesFormatDialog.CreateResult(
