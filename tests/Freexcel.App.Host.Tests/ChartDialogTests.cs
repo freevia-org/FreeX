@@ -871,6 +871,22 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartSeriesFormatDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartSeriesFormatDialog.cs"));
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _fillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive line width or leave it blank.\", _strokeThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive marker size or leave it blank.\", _markerSizeBox);");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void ChartDialogs_LabelEditableHelperControlsWithTargets()
     {
         var source = ReadChartDialogSource();
