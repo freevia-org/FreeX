@@ -162,7 +162,7 @@ public sealed partial class TextToColumnsDialog
         return updated.Distinct().Order().ToList();
     }
 
-private static IReadOnlyList<string> NormalizePreviewRows(IEnumerable<string>? previewRows)
+    private static IReadOnlyList<string> NormalizePreviewRows(IEnumerable<string>? previewRows)
     {
         var rows = previewRows?
             .Where(row => !string.IsNullOrWhiteSpace(row))
@@ -174,7 +174,7 @@ private static IReadOnlyList<string> NormalizePreviewRows(IEnumerable<string>? p
             : rows;
     }
 
-private static string[] PadRow(IReadOnlyList<string> row, int columnCount)
+    private static string[] PadRow(IReadOnlyList<string> row, int columnCount)
     {
         var padded = new string[columnCount];
         for (var index = 0; index < columnCount; index++)
@@ -182,7 +182,7 @@ private static string[] PadRow(IReadOnlyList<string> row, int columnCount)
         return padded;
     }
 
-public static IReadOnlyList<int> ParseFixedWidthBreakPositions(string? text) =>
+    public static IReadOnlyList<int> ParseFixedWidthBreakPositions(string? text) =>
         (text ?? string.Empty)
             .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(part => int.TryParse(part, out var position) ? position : 0)
