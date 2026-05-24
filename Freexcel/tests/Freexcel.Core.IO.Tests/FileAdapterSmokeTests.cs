@@ -14120,6 +14120,33 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadsSlicerTimelineDrawingAnchorsAndShapeNames()
+    {
+        var workbook = new Workbook("SlicerTimelineDrawingMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalSlicerTimelinePackage(source, includeDrawing: true);
+
+        var loaded = adapter.Load(source);
+
+        var slicer = loaded.Slicers.Should().ContainSingle().Subject;
+        slicer.DrawingShapeName.Should().Be("Native Slicer Shape");
+        slicer.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(2, 0, 2, 0),
+            new DrawingAnchorPoint(5, 0, 10, 0)));
+
+        var timeline = loaded.Timelines.Should().ContainSingle().Subject;
+        timeline.DrawingShapeName.Should().Be("Native Timeline Shape");
+        timeline.DrawingAnchor.Should().Be(new DrawingAnchorRange(
+            new DrawingAnchorPoint(7, 0, 2, 0),
+            new DrawingAnchorPoint(10, 0, 10, 0)));
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTripsAuthoredSlicerAndTimelineSelectionState()
     {
         var workbook = new Workbook("AuthoredSlicerTimelineStateTest");
@@ -16994,6 +17021,8 @@ public partial class FileAdapterSmokeTests
             {
                 var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
                 AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/slicers/slicer1.xml", "application/vnd.ms-excel.slicer+xml");
+                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/timelines/timeline1.xml", "application/vnd.ms-excel.timeline+xml");
                 ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
 
                 var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
@@ -17018,9 +17047,9 @@ public partial class FileAdapterSmokeTests
                         new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
                         new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                         new XAttribute(XNamespace.Xmlns + "r", relNs),
-                        new XElement(spreadsheetDrawingNs + "twoCellAnchor",
-                            new XElement(spreadsheetDrawingNs + "from",
-                                new XElement(spreadsheetDrawingNs + "col", "2"),
+                            new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                                new XElement(spreadsheetDrawingNs + "from",
+                                    new XElement(spreadsheetDrawingNs + "col", "2"),
                                 new XElement(spreadsheetDrawingNs + "colOff", "0"),
                                 new XElement(spreadsheetDrawingNs + "row", "2"),
                                 new XElement(spreadsheetDrawingNs + "rowOff", "0")),
@@ -17040,8 +17069,41 @@ public partial class FileAdapterSmokeTests
                                     new XElement(drawingNs + "bodyPr"),
                                     new XElement(drawingNs + "lstStyle"),
                                     new XElement(drawingNs + "p"))),
+                            new XElement(spreadsheetDrawingNs + "clientData")),
+                        new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                            new XElement(spreadsheetDrawingNs + "from",
+                                new XElement(spreadsheetDrawingNs + "col", "7"),
+                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                                new XElement(spreadsheetDrawingNs + "row", "2"),
+                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                            new XElement(spreadsheetDrawingNs + "to",
+                                new XElement(spreadsheetDrawingNs + "col", "10"),
+                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                                new XElement(spreadsheetDrawingNs + "row", "10"),
+                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                            new XElement(spreadsheetDrawingNs + "sp",
+                                new XElement(spreadsheetDrawingNs + "nvSpPr",
+                                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                                        new XAttribute("id", "101"),
+                                        new XAttribute("name", "Native Timeline Shape")),
+                                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+                                new XElement(spreadsheetDrawingNs + "spPr"),
+                                new XElement(spreadsheetDrawingNs + "txBody",
+                                    new XElement(drawingNs + "bodyPr"),
+                                    new XElement(drawingNs + "lstStyle"),
+                                    new XElement(drawingNs + "p"))),
                             new XElement(spreadsheetDrawingNs + "clientData"))));
                 ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+                ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", new XDocument(
+                    new XElement(packageRelNs + "Relationships",
+                        new XElement(packageRelNs + "Relationship",
+                            new XAttribute("Id", "rIdNativeSlicerControl"),
+                            new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicer"),
+                            new XAttribute("Target", "../slicers/slicer1.xml")),
+                        new XElement(packageRelNs + "Relationship",
+                            new XAttribute("Id", "rIdNativeTimelineControl"),
+                            new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/timeline"),
+                            new XAttribute("Target", "../timelines/timeline1.xml")))));
             }
         }
 

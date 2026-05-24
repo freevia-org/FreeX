@@ -13,4 +13,6 @@ public sealed class TimelineModel
     public string? SelectedStartDate { get; set; }
     public string? SelectedEndDate { get; set; }
     public string PackagePart { get; init; } = "";
+    public DrawingAnchorRange? DrawingAnchor { get; init; }
+    public string? DrawingShapeName { get; init; }
 }
