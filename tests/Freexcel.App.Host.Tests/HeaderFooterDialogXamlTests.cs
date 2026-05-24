@@ -107,7 +107,7 @@ public sealed class HeaderFooterDialogXamlTests
     public void PictureButtons_UseDedicatedPictureHandlers()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        var source = ReadHeaderFooterDialogSource();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "Button")
@@ -172,7 +172,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void PictureFormatDialog_ExposesExcelLikeSizeControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        var source = ReadHeaderFooterDialogSource();
 
         source.Should().Contain("private readonly CheckBox _lockAspectRatioBox");
         source.Should().Contain("Content = \"_Lock aspect ratio\"");
@@ -186,7 +186,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void HeaderFooterDialogsOpenedFromKeyboard_FocusInitialTextFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        var source = ReadHeaderFooterDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -212,7 +212,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void OptionalFirstAndEvenSections_AreEnabledOnlyWhenTheirOptionsAreChecked()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        var source = ReadHeaderFooterDialogSource();
 
         source.Should().Contain("DifferentFirstPageBox.Checked += (_, _) => RefreshOptionalSectionState()");
         source.Should().Contain("DifferentOddEvenBox.Checked += (_, _) => RefreshOptionalSectionState()");
@@ -227,7 +227,7 @@ public sealed class HeaderFooterDialogXamlTests
     public void FirstAndEvenHeadersAndFooters_UseSectionBoxesWithoutPipeParsing()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        var source = ReadHeaderFooterDialogSource();
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         foreach (var name in new[]
@@ -326,6 +326,13 @@ public sealed class HeaderFooterDialogXamlTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static string ReadHeaderFooterDialogSource() =>
+        string.Join(Environment.NewLine, new[]
+        {
+            "HeaderFooterDialog.xaml.cs",
+            "HeaderFooterPictureFormatDialog.cs"
+        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static void InvokePrivateAllowingNonModalDialogResult(HeaderFooterDialog dialog, string methodName)
     {

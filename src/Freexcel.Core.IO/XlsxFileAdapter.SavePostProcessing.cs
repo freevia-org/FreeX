@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -7,6 +8,18 @@ public sealed partial class XlsxFileAdapter
 {
     private static void ApplyPackagePostProcessing(Workbook workbook, Stream packageStream)
     {
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap = null;
+        XlsxWorkbookWorksheetPathMap? GetWorksheetPathMap()
+        {
+            if (worksheetPathMap is not null)
+                return worksheetPathMap;
+
+            packageStream.Position = 0;
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+            worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+            return worksheetPathMap;
+        }
+
         if (workbook.IsStructureProtected)
         {
             packageStream.Position = 0;
@@ -19,7 +32,7 @@ public sealed partial class XlsxFileAdapter
         if (workbook.Sheets.Any(XlsxWorksheetDimensionDefaultsWriter.HasNonDefaultDimensions))
         {
             packageStream.Position = 0;
-            XlsxWorksheetDimensionDefaultsWriter.Save(packageStream, workbook);
+            XlsxWorksheetDimensionDefaultsWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
@@ -49,7 +62,7 @@ public sealed partial class XlsxFileAdapter
         if (XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(workbook))
         {
             packageStream.Position = 0;
-            XlsxAdvancedConditionalFormatWriter.Save(packageStream, workbook);
+            XlsxAdvancedConditionalFormatWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.Sparklines.Count > 0))
@@ -82,7 +95,7 @@ public sealed partial class XlsxFileAdapter
         if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))
         {
             packageStream.Position = 0;
-            XlsxWorksheetViewWriter.Save(packageStream, workbook);
+            XlsxWorksheetViewWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => !string.IsNullOrWhiteSpace(sheet.CodeName)))

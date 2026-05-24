@@ -345,6 +345,23 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void FormatPictureDialogInvalidInput_SelectsRelevantTabAndField()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+
+        source.Should().Contain("private readonly TabControl _tabs = new();");
+        source.Should().Contain("private readonly TabItem _sizeTab = new() { Header = \"_Size\" };");
+        source.Should().Contain("private readonly TabItem _cropTab = new() { Header = \"_Crop\" };");
+        source.Should().Contain("FocusInvalidInput(error);");
+        source.Should().Contain("private void FocusInvalidInput(string? error)");
+        source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
+        source.Should().Contain("_tabs.SelectedItem = _cropTab;");
+        source.Should().Contain("FocusAndSelect(_rotationBox);");
+        source.Should().Contain("FocusAndSelect(_cropLeftBox);");
+        source.Should().Contain("Keyboard.Focus(box);");
+    }
+
+    [Fact]
     public void FormatPictureDialog_ResetActionsRestoreInitialFieldText()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
