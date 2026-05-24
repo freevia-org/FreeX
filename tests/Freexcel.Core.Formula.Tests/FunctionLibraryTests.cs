@@ -3440,6 +3440,19 @@ public class FunctionLibraryTests
     [Fact] public void Even_3_Returns4() =>
         _eval.Evaluate("=EVEN(3)", MakeSheet()).Should().Be(new NumberValue(4));
 
+    [Fact]
+    public void OddEvenAndIsParity_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=ODD(A1:A2)", sheet), new NumberValue(3), new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=EVEN(A1:A2)", sheet), new NumberValue(2), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=ISEVEN(A1:A2)", sheet), True(), False());
+        AssertColumn(_eval.Evaluate("=ISODD(A1:A2)", sheet), False(), True());
+    }
+
     // ── Date / Time ──────────────────────────────────────────────────────────────
 
     [Fact] public void Time_HMS_ReturnsFraction()

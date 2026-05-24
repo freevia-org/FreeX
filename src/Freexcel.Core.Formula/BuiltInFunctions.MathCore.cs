@@ -577,7 +577,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Odd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        double n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, OddScalar);
+        return OddScalar(args[0]);
+    }
+
+    private static ScalarValue OddScalar(ScalarValue value)
+    {
+        double n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (n == 0) return new NumberValue(1);
         double sign = n > 0 ? 1 : -1;
@@ -591,7 +597,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Even(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        double n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, EvenScalar);
+        return EvenScalar(args[0]);
+    }
+
+    private static ScalarValue EvenScalar(ScalarValue value)
+    {
+        double n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (n == 0) return new NumberValue(0);
         double sign = n > 0 ? 1 : -1;
