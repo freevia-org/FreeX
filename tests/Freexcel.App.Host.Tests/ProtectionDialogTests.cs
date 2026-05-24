@@ -152,6 +152,22 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void ProtectionDialogsInvalidInputs_RefocusInvalidEntryFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+
+        source.Should().Contain("FocusConfirmationInput();");
+        source.Should().Contain("private void FocusConfirmationInput()");
+        source.Should().Contain("_confirmationBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_confirmationBox);");
+        source.Should().Contain("FocusRangeInput();");
+        source.Should().Contain("private void FocusRangeInput()");
+        source.Should().Contain("_rangeBox.Focus();");
+        source.Should().Contain("_rangeBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_rangeBox);");
+    }
+
+    [Fact]
     public void AllowEditRangeDialog_ExposesExcelLikeRangeManagerActions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
