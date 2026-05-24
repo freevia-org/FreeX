@@ -184,6 +184,21 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void HeaderFooterDialogsOpenedFromKeyboard_FocusInitialTextFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("HeaderCenterBox.Focus();");
+        source.Should().Contain("HeaderCenterBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(HeaderCenterBox);");
+        source.Should().Contain("_widthBox.Focus();");
+        source.Should().Contain("_widthBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_widthBox);");
+    }
+
+    [Fact]
     public void PictureFormatDialog_CalculatesLockedAspectSize()
     {
         HeaderFooterPictureFormatDialog.CalculateLockedAspectHeight(200, originalWidth: 100, originalHeight: 50)
