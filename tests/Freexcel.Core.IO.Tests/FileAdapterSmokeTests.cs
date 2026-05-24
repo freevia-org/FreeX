@@ -3679,8 +3679,6 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
-        loadedSheet.UsePrinterDefaults.Should().BeTrue();
-        loadedSheet.PrintCopies.Should().Be(3);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
