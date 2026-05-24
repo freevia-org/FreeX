@@ -258,20 +258,30 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue oldTextError) return oldTextError;
         if (args[2] is ErrorValue newTextError) return newTextError;
-        var text    = ToText(args[0]);
         var oldText = ToText(args[1]);
         var newText = ToText(args[2]);
 
-        if (oldText.Length == 0) return TextResult(text);
-
+        int? instanceNum = null;
         if (args.Count > 3 && args[3] is not BlankValue)
         {
-            // Replace the Nth occurrence only
             if (args[3] is ErrorValue e3) return e3;
             double rawInstanceNum = ToNumber(args[3]);
             if (!double.IsFinite(rawInstanceNum) || rawInstanceNum > int.MaxValue) return ErrorValue.Value;
-            int instanceNum = (int)rawInstanceNum;
+            instanceNum = (int)rawInstanceNum;
             if (instanceNum < 1) return ErrorValue.Value;
+        }
+
+        if (args[0] is RangeValue range)
+            return MapUnaryTextRange(range, value => SubstituteText(ToText(value), oldText, newText, instanceNum));
+        return SubstituteText(ToText(args[0]), oldText, newText, instanceNum);
+    }
+
+    private static ScalarValue SubstituteText(string text, string oldText, string newText, int? instanceNum)
+    {
+        if (oldText.Length == 0) return TextResult(text);
+
+        if (instanceNum is int instance)
+        {
             int count = 0;
             int pos = 0;
             while (pos < text.Length)
@@ -279,16 +289,14 @@ public static partial class BuiltInFunctions
                 int idx = text.IndexOf(oldText, pos, StringComparison.Ordinal);
                 if (idx < 0) break;
                 count++;
-                if (count == instanceNum)
+                if (count == instance)
                     return TextResult(text[..idx] + newText + text[(idx + oldText.Length)..]);
                 pos = idx + oldText.Length;
             }
-            return TextResult(text); // instance not found
+            return TextResult(text);
         }
-        else
-        {
-            return TextResult(text.Replace(oldText, newText, StringComparison.Ordinal));
-        }
+
+        return TextResult(text.Replace(oldText, newText, StringComparison.Ordinal));
     }
 
     private static ScalarValue TextResult(string text) =>
@@ -497,11 +505,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue repeatError) return repeatError;
-        var text  = ToText(args[0]);
         var timesD = ToNumber(args[1]);
         if (!double.IsFinite(timesD) || timesD > int.MaxValue) return ErrorValue.Value;
         int times = (int)timesD;
         if (times < 0) return ErrorValue.Value;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ReptText(ToText(value), times));
+        return ReptText(ToText(args[0]), times);
+    }
+
+    private static ScalarValue ReptText(string text, int times)
+    {
         if ((long)text.Length * times > 32767) return ErrorValue.Value;
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < times; i++) sb.Append(text);

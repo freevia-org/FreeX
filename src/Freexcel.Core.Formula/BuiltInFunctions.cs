@@ -1297,13 +1297,48 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        var rangeIndex = -1;
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue e) return e;
+            if (args[i] is RangeValue)
+            {
+                if (rangeIndex >= 0) return ErrorValue.Value;
+                rangeIndex = i;
+            }
+        }
+
+        if (rangeIndex >= 0)
+            return MapConcatenateRange((RangeValue)args[rangeIndex], args, rangeIndex);
+
         var sb = new System.Text.StringBuilder();
         foreach (var a in args)
         {
-            if (a is ErrorValue e) return e;
             sb.Append(ToText(a));
         }
         return TextResult(sb.ToString());
+    }
+
+    private static RangeValue MapConcatenateRange(RangeValue range, IReadOnlyList<ScalarValue> args, int rangeIndex)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is ErrorValue e)
+                {
+                    cells[r, c] = e;
+                    continue;
+                }
+
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < args.Count; i++)
+                    sb.Append(i == rangeIndex ? ToText(value) : ToText(args[i]));
+                cells[r, c] = TextResult(sb.ToString());
+            }
+
+        return new RangeValue(cells);
     }
 
     private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

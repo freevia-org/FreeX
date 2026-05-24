@@ -1113,6 +1113,18 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SUBSTITUTE(\"aababc\",\"ab\",\"X\",2)", sheet).Should().Be(new TextValue("aabXc"));
     }
 
+    [Fact]
+    public void SubstituteReptAndConcatenate_RangeTextArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"X\")", sheet), "XXbXbc", "bXnXnX");
+        AssertTextColumn(_eval.Evaluate("=REPT(A1:A2,2)", sheet), "aababcaababc", "bananabanana");
+        AssertTextColumn(_eval.Evaluate("=CONCATENATE(A1:A2,\"!\")", sheet), "aababc!", "banana!");
+    }
+
     // ── FIND ──────────────────────────────────────────────────────────────────
 
     [Fact]
