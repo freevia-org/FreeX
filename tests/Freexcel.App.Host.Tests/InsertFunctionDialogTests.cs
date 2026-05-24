@@ -94,6 +94,19 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void FunctionArgumentsDialogOpenedFromKeyboard_FocusesFirstArgumentBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_argumentBoxes.FirstOrDefault()");
+        source.Should().Contain("firstArgument.Focus();");
+        source.Should().Contain("firstArgument.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(firstArgument);");
+    }
+
+    [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
