@@ -117,7 +117,7 @@ public sealed class ProtectionDialogTests
     [Fact]
     public void ProtectionDialogs_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+        var source = ReadProtectionDialogSources();
 
         source.Should().Contain("DialogButtonRowFactory.Create");
         source.Should().Contain("new Label { Content = \"_Range:\"");
@@ -138,7 +138,7 @@ public sealed class ProtectionDialogTests
     [Fact]
     public void ProtectionDialogsOpenedFromKeyboard_FocusInitialEntryFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+        var source = ReadProtectionDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -154,7 +154,7 @@ public sealed class ProtectionDialogTests
     [Fact]
     public void ProtectionDialogsInvalidInputs_RefocusInvalidEntryFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+        var source = ReadProtectionDialogSources();
 
         source.Should().Contain("FocusConfirmationInput();");
         source.Should().Contain("private void FocusConfirmationInput()");
@@ -170,7 +170,7 @@ public sealed class ProtectionDialogTests
     [Fact]
     public void AllowEditRangeDialog_ExposesExcelLikeRangeManagerActions()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+        var source = ReadProtectionDialogSources();
 
         source.Should().Contain("public enum AllowEditRangeDialogAction");
         source.Should().Contain("public sealed record AllowEditRangeDialogResult");
@@ -282,5 +282,6 @@ public sealed class ProtectionDialogTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AllowEditRangeDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogPlanner.cs")));
 }
