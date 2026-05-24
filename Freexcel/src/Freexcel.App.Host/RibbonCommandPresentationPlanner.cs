@@ -88,6 +88,7 @@ public static class RibbonCommandPresentationPlanner
         var name = commandName.ToLowerInvariant();
 
         if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
+        if (name == "insert") return new(RibbonCommandIconKind.Insert);
         if (name.Contains("undo")) return new(RibbonCommandIconKind.Undo);
         if (name.Contains("redo")) return new(RibbonCommandIconKind.Redo);
         if (name.Contains("cut")) return new(RibbonCommandIconKind.Cut);
@@ -113,34 +114,43 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("align")) return new(RibbonCommandIconKind.Align);
         if (name.Contains("accounting") || name.Contains("currency")) return new(RibbonCommandIconKind.Currency);
+        if (name.Contains("number format")) return new(RibbonCommandIconKind.Number);
         if (name.Contains("percent")) return new(RibbonCommandIconKind.Percent);
         if (name.Contains("comma style")) return new(RibbonCommandIconKind.Comma);
+        if (name.Contains("find") || name.Contains("select")) return new(RibbonCommandIconKind.Search);
         if (name.Contains("increase decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decimal")) return new(RibbonCommandIconKind.Decimal);
+        if (name.Contains("conditional formatting")) return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
+        if (name.Contains("format as table")) return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("add-ins")) return new(RibbonCommandIconKind.GetData);
         if (name.Contains("3d map")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
         if (name.Contains("column chart") || name.Contains("bar chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
-        if (name.Contains("line chart") || name.Contains("trendline")) return new(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart);
-        if (name.Contains("pie chart") || name.Contains("doughnut")) return new(RibbonCommandIconKind.ChartPie, RibbonCommandIconAccent.Chart);
+        if (name.Contains("line chart") || name.Contains("trendline") || name.Contains("moving average") || name.Contains("polynomial") || name.Contains("r-squared")) return new(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart);
+        if (name.Contains("pie chart") || name.Contains("doughnut") || name.Contains("slice")) return new(RibbonCommandIconKind.ChartPie, RibbonCommandIconAccent.Chart);
         if (name.Contains("scatter") || name.Contains("bubble")) return new(RibbonCommandIconKind.ChartScatter, RibbonCommandIconAccent.Chart);
         if (name.Contains("area chart")) return new(RibbonCommandIconKind.ChartArea, RibbonCommandIconAccent.Chart);
-        if (name.Contains("data label")) return new(RibbonCommandIconKind.Label, RibbonCommandIconAccent.Chart);
+        if (name.Contains("data label") || name.Contains("point label") || name.Contains("category name") || name.Contains("callout") || name.Contains("label")) return new(RibbonCommandIconKind.Label, RibbonCommandIconAccent.Chart);
+        if (name.Contains("error bar")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+        if (name.Contains("log scale")) return new(RibbonCommandIconKind.Scale);
         if (name.Contains("axis") || name.Contains("legend") || name.Contains("plot") || name.Contains("series")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("sparkline")) return new(RibbonCommandIconKind.Sparkline, RibbonCommandIconAccent.Chart);
         if (name.Contains("slicer")) return new(RibbonCommandIconKind.Filter);
         if (name.Contains("timeline")) return new(RibbonCommandIconKind.Date);
         if (name.Contains("link")) return new(RibbonCommandIconKind.Link);
+        if (name.Contains("delete")) return new(RibbonCommandIconKind.Delete);
         if (name.Contains("delete note") || name.Contains("delete comment")) return new(RibbonCommandIconKind.Delete);
+        if (name.Contains("clear")) return new(RibbonCommandIconKind.Delete);
         if (name.Contains("previous comment") || name.Contains("previous note")) return new(RibbonCommandIconKind.Previous);
         if (name.Contains("next comment") || name.Contains("next note")) return new(RibbonCommandIconKind.Next);
         if (name.Contains("note") || name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
         if (name.Contains("symbol")) return new(RibbonCommandIconKind.Symbol);
         if (name.Contains("picture")) return new(RibbonCommandIconKind.Picture);
         if (name.Contains("shape")) return new(RibbonCommandIconKind.Rectangle);
+        if (name.Contains("object")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("rectangle")) return new(RibbonCommandIconKind.Rectangle);
         if (name.Contains("ellipse")) return new(RibbonCommandIconKind.Ellipse);
         if (name == "line") return new(RibbonCommandIconKind.Line);
@@ -153,6 +163,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("fill")) return new(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill);
         if (name.Contains("outline") || name.Contains("border")) return new(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
 
+        if (name.Contains("cell style")) return new(RibbonCommandIconKind.Theme);
+        if (name == "format") return new(RibbonCommandIconKind.Table);
         if (name.Contains("theme")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
         if (name.Contains("color")) return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
         if (name.Contains("font")) return new(RibbonCommandIconKind.Font);
@@ -167,7 +179,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("print")) return new(RibbonCommandIconKind.Print);
         if (name.Contains("break")) return new(RibbonCommandIconKind.PageBreak);
         if (name.Contains("header") || name.Contains("footer")) return new(RibbonCommandIconKind.HeaderFooter);
-        if (name.Contains("gridlines")) return new(RibbonCommandIconKind.Grid);
+        if (name.Contains("gridline")) return new(RibbonCommandIconKind.Grid);
         if (name.Contains("headings")) return new(RibbonCommandIconKind.Label);
 
         if (name.Contains("insert function")) return new(RibbonCommandIconKind.Function);
@@ -191,9 +203,10 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("error checking")) return new(RibbonCommandIconKind.Warning, RibbonCommandIconAccent.Warning);
         if (name.Contains("evaluate formula")) return new(RibbonCommandIconKind.Sparkline);
         if (name.Contains("watch")) return new(RibbonCommandIconKind.Watch);
-        if (name.Contains("calculate")) return new(RibbonCommandIconKind.Refresh);
+        if (name.Contains("calculate") || name.Contains("calculation")) return new(RibbonCommandIconKind.Refresh);
 
         if (name.Contains("get data")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
+        if (name.Contains("data source")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
         if (name.Contains("quer")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
         if (name.Contains("refresh")) return new(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data);
         if (name.Contains("sort ascending")) return new(RibbonCommandIconKind.SortAscending);
@@ -213,6 +226,8 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("forecast")) return new(RibbonCommandIconKind.ChartLine);
         if (name.Contains("group")) return new(RibbonCommandIconKind.Group);
         if (name.Contains("ungroup")) return new(RibbonCommandIconKind.Ungroup);
+        if (name.Contains("show detail")) return new(RibbonCommandIconKind.Expand);
+        if (name.Contains("hide detail")) return new(RibbonCommandIconKind.Collapse);
         if (name.Contains("collapse")) return new(RibbonCommandIconKind.Collapse);
         if (name.Contains("expand")) return new(RibbonCommandIconKind.Expand);
 
@@ -225,7 +240,7 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("alt text")) return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("previous")) return new(RibbonCommandIconKind.Previous);
         if (name.Contains("next")) return new(RibbonCommandIconKind.Next);
-        if (name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
+        if (name.Contains("allow edit") || name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
         if (name.Contains("share")) return new(RibbonCommandIconKind.Share, RibbonCommandIconAccent.Data);
         if (name.Contains("hide ink")) return new(RibbonCommandIconKind.Previous);
 
@@ -248,11 +263,20 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("training")) return new(RibbonCommandIconKind.Book);
         if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
+        if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("blog")) return new(RibbonCommandIconKind.Generic);
         if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
         if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
         if (name.Contains("about")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("feedback")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
+        if (name.Contains("report layout")) return new(RibbonCommandIconKind.Page);
+        if (name.Contains("blank row")) return new(RibbonCommandIconKind.PageBreak);
+        if (name.Contains("grand total")) return new(RibbonCommandIconKind.Sum);
+        if (name.Contains("row header") || name.Contains("column header") || name.Contains("banded")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("field list")) return new(RibbonCommandIconKind.List);
+        if (name.Contains("field setting")) return new(RibbonCommandIconKind.List);
+        if (name.Contains("field header")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("pivot style")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
 
         return new(RibbonCommandIconKind.Generic);
     }
