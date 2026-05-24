@@ -77,6 +77,7 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisMajorUnit { get; set; }
         public double? XAxisMinorUnit { get; set; }
         public bool XAxisLogScale { get; set; }
+        public double? XAxisLogBase { get; set; }
         public bool XAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowXAxisMajorGridlines { get; set; }
@@ -112,6 +113,7 @@ public sealed partial class NativeJsonAdapter
         public double? YAxisMajorUnit { get; set; }
         public double? YAxisMinorUnit { get; set; }
         public bool YAxisLogScale { get; set; }
+        public double? YAxisLogBase { get; set; }
         public bool YAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
         public bool ShowYAxisMajorGridlines { get; set; }
