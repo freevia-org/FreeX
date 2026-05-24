@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <TabControl x:Name="PageSetupTabs" Grid.Row="0">
-            <TabItem Header="_Page">
+            <TabItem x:Name="PageTab" Header="_Page">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
