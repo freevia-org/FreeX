@@ -37,7 +37,13 @@ internal static partial class XlsxChartXmlWriter
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
         || format.IsDeleted is not null
-        || format.Position is not null;
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null;
 
     private static XElement ToPointDataLabelXml(
         ChartPointDataLabelFormat format,
@@ -51,6 +57,12 @@ internal static partial class XlsxChartXmlWriter
             format.Position is { } position
                 ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
                 : null,
+            ToPointDataLabelBoolXml("showLegendKey", format.ShowLegendKey, chartNs),
+            ToPointDataLabelBoolXml("showVal", format.ShowValue, chartNs),
+            ToPointDataLabelBoolXml("showCatName", format.ShowCategoryName, chartNs),
+            ToPointDataLabelBoolXml("showSerName", format.ShowSeriesName, chartNs),
+            ToPointDataLabelBoolXml("showPercent", format.ShowPercentage, chartNs),
+            ToPointDataLabelBoolXml("showBubbleSize", format.ShowBubbleSize, chartNs),
             ToShapeProperties(
                 chartNs,
                 drawingNs,
@@ -60,6 +72,11 @@ internal static partial class XlsxChartXmlWriter
                 format.BorderColor,
                 format.BorderThickness),
             ToPointDataLabelTextProperties(format, chartNs, drawingNs));
+
+    private static XElement? ToPointDataLabelBoolXml(string name, bool? value, XNamespace chartNs) =>
+        value is { } flag
+            ? new XElement(chartNs + name, new XAttribute("val", flag ? "1" : "0"))
+            : null;
 
     private static XElement? ToPointDataLabelTextProperties(
         ChartPointDataLabelFormat format,
@@ -167,6 +184,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "errBars",
+            new XElement(chartNs + "errDir", new XAttribute("val", ToXlsxErrorBarAxisDirection(chart.ErrorBarAxisDirection))),
             new XElement(chartNs + "errBarType", new XAttribute("val", ToXlsxErrorBarDirection(chart.ErrorBarDirection))),
             new XElement(chartNs + "errValType", new XAttribute("val", ToXlsxErrorBarKind(chart.ErrorBarKind))),
             chart.ErrorBarEndCaps ? null : new XElement(chartNs + "noEndCap", new XAttribute("val", "1")),
@@ -218,6 +236,9 @@ internal static partial class XlsxChartXmlWriter
             ChartErrorBarKind.Custom => "cust",
             _ => "stdErr"
         };
+
+    private static string ToXlsxErrorBarAxisDirection(ChartErrorBarAxisDirection direction) =>
+        direction == ChartErrorBarAxisDirection.X ? "x" : "y";
 
     private static string ToXlsxErrorBarDirection(ChartErrorBarDirection direction) =>
         direction switch

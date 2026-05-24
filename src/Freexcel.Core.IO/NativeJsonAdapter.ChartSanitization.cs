@@ -110,6 +110,7 @@ public sealed partial class NativeJsonAdapter
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
         chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
         chart.ErrorBarKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarKind, ChartErrorBarKind.StandardError);
+        chart.ErrorBarAxisDirection = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarAxisDirection, ChartErrorBarAxisDirection.Y);
         chart.ErrorBarDirection = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarDirection, ChartErrorBarDirection.Both);
         chart.ErrorBarValue = Math.Clamp(chart.ErrorBarValue, 0, 1000);
         chart.ErrorBarPlusRangeFormula = string.IsNullOrWhiteSpace(chart.ErrorBarPlusRangeFormula) ? null : chart.ErrorBarPlusRangeFormula;
@@ -340,5 +341,11 @@ public sealed partial class NativeJsonAdapter
         || format.BorderThemeColor is not null
         || format.TextThemeColor is not null
         || format.IsDeleted is not null
-        || format.Position is not null;
+        || format.Position is not null
+        || format.ShowValue is not null
+        || format.ShowCategoryName is not null
+        || format.ShowSeriesName is not null
+        || format.ShowLegendKey is not null
+        || format.ShowPercentage is not null
+        || format.ShowBubbleSize is not null;
 }

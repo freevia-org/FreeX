@@ -80,6 +80,8 @@ public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
 public enum ChartErrorBarKind { StandardError, Percentage, FixedValue, Custom }
 
+public enum ChartErrorBarAxisDirection { Y, X }
+
 public enum ChartErrorBarDirection { Both, Plus, Minus }
 
 public enum ChartBlankDisplayMode { Gap, Span, Zero }
@@ -216,7 +218,13 @@ public sealed record ChartPointDataLabelFormat(
     WorkbookThemeColorReference? BorderThemeColor = null,
     WorkbookThemeColorReference? TextThemeColor = null,
     bool? IsDeleted = null,
-    ChartDataLabelPosition? Position = null)
+    ChartDataLabelPosition? Position = null,
+    bool? ShowValue = null,
+    bool? ShowCategoryName = null,
+    bool? ShowSeriesName = null,
+    bool? ShowLegendKey = null,
+    bool? ShowPercentage = null,
+    bool? ShowBubbleSize = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;
@@ -419,6 +427,7 @@ public sealed class ChartModel
     public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
     public bool ShowErrorBars { get; set; }
     public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
+    public ChartErrorBarAxisDirection ErrorBarAxisDirection { get; set; } = ChartErrorBarAxisDirection.Y;
     public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
     public double ErrorBarValue { get; set; } = 5;
     public string? ErrorBarPlusRangeFormula { get; set; }

@@ -73,6 +73,31 @@ internal static class PdfTextOverlayExtractor
                 textBox.FontStyle == FontStyles.Italic || textBox.FontStyle == FontStyles.Oblique,
                 ResolveColor(textBox.Foreground)));
         }
+        else if (element is ContentControl { Content: string contentText } contentControl &&
+                 !string.IsNullOrWhiteSpace(contentText))
+        {
+            overlays.Add(new PdfTextOverlay(
+                contentText,
+                x + contentControl.Padding.Left,
+                y + contentControl.Padding.Top,
+                contentControl.FontSize,
+                contentControl.FontFamily.Source,
+                contentControl.FontWeight >= FontWeights.SemiBold,
+                contentControl.FontStyle == FontStyles.Italic || contentControl.FontStyle == FontStyles.Oblique,
+                ResolveColor(contentControl.Foreground)));
+        }
+        else if (element is Glyphs glyphs && !string.IsNullOrEmpty(glyphs.UnicodeString))
+        {
+            overlays.Add(new PdfTextOverlay(
+                glyphs.UnicodeString,
+                x,
+                y,
+                glyphs.FontRenderingEmSize > 0 ? glyphs.FontRenderingEmSize : 12,
+                ResolveGlyphFontFamily(glyphs),
+                Bold: false,
+                Italic: false,
+                ResolveColor(glyphs.Fill)));
+        }
 
         if (element is Panel panel)
         {
@@ -137,4 +162,18 @@ internal static class PdfTextOverlayExtractor
         brush is SolidColorBrush solid
             ? solid.Color
             : Colors.Black;
+
+    private static string ResolveGlyphFontFamily(Glyphs glyphs)
+    {
+        var source = glyphs.FontUri?.ToString();
+        if (string.IsNullOrWhiteSpace(source))
+            return "Arial";
+
+        var lastSlash = source.LastIndexOf('/');
+        var name = lastSlash >= 0 && lastSlash + 1 < source.Length
+            ? source[(lastSlash + 1)..]
+            : source;
+
+        return string.IsNullOrWhiteSpace(name) ? "Arial" : name;
+    }
 }

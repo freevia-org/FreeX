@@ -29,7 +29,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <TabControl Grid.Row="0">
+            <TabControl x:Name="ColorTabs" Grid.Row="0">
                 <TabItem Header="_Standard">
                     <StackPanel Margin="8">
                         <TextBlock Text="Theme Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
@@ -46,7 +46,7 @@
                     </StackPanel>
                 </TabItem>
 
-                <TabItem Header="_Custom">
+                <TabItem x:Name="CustomTab" Header="_Custom">
                     <Grid Margin="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220"/>

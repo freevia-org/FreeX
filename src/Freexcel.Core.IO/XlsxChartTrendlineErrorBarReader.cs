@@ -45,6 +45,7 @@ internal static class XlsxChartTrendlineErrorBarReader
 
         chart.ShowErrorBars = true;
         chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
+        chart.ErrorBarAxisDirection = FromXlsxErrorBarAxisDirection(errorBars.Element(ChartNs + "errDir")?.Attribute("val")?.Value);
         chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
         chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
         chart.ErrorBarPlusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "plus"));
@@ -279,6 +280,9 @@ internal static class XlsxChartTrendlineErrorBarReader
             "cust" => ChartErrorBarKind.Custom,
             _ => ChartErrorBarKind.StandardError
         };
+
+    private static ChartErrorBarAxisDirection FromXlsxErrorBarAxisDirection(string? value) =>
+        value == "x" ? ChartErrorBarAxisDirection.X : ChartErrorBarAxisDirection.Y;
 
     private static ChartErrorBarDirection FromXlsxErrorBarDirection(string? value) =>
         value switch

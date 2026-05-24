@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 
 namespace Freexcel.Core.IO;
 
@@ -8,7 +9,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
     public static MemoryStream Create(MemoryStream sourcePackage)
     {
         sourcePackage.Position = 0;
-        if (!RequiresSanitization(sourcePackage))
+        var requirements = GetSanitizationRequirements(sourcePackage);
+        if (!requirements.RequiresAny)
         {
             sourcePackage.Position = 0;
             return sourcePackage;
@@ -23,31 +25,41 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         sanitized.Position = 0;
         using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
         {
-            XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
-            RemoveUnsupportedConditionalFormattingBlocks(archive);
+            if (requirements.HasPivotPackageMetadata)
+                XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
+            if (requirements.HasUnsupportedConditionalFormattingBlocks)
+                RemoveUnsupportedConditionalFormattingBlocks(archive);
         }
 
         sanitized.Position = 0;
         return sanitized;
     }
 
-    private static bool RequiresSanitization(Stream sourcePackage)
+    private static SanitizationRequirements GetSanitizationRequirements(Stream sourcePackage)
     {
         try
         {
             using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
-            return HasPivotPackageMetadata(archive) ||
-                   HasUnsupportedConditionalFormattingBlocks(archive);
+            return new SanitizationRequirements(
+                HasPivotPackageMetadata(archive),
+                HasUnsupportedConditionalFormattingBlocks(archive));
         }
         catch
         {
-            return true;
+            return new SanitizationRequirements(true, true);
         }
         finally
         {
             if (sourcePackage.CanSeek)
                 sourcePackage.Position = 0;
         }
+    }
+
+    private readonly record struct SanitizationRequirements(
+        bool HasPivotPackageMetadata,
+        bool HasUnsupportedConditionalFormattingBlocks)
+    {
+        public bool RequiresAny => HasPivotPackageMetadata || HasUnsupportedConditionalFormattingBlocks;
     }
 
     private static bool HasPivotPackageMetadata(ZipArchive archive) =>
@@ -57,22 +69,31 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive)
     {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         foreach (var worksheetEntry in archive.Entries
                      .Where(entry =>
                          entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
                          entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
         {
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            if (root
-                .Elements(worksheetNs + "conditionalFormatting")
-                .Any(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs)))
+            using var stream = worksheetEntry.Open();
+            using var reader = XmlReader.Create(stream, new XmlReaderSettings
             {
-                return true;
+                DtdProcessing = DtdProcessing.Prohibit,
+                IgnoreComments = true,
+                IgnoreProcessingInstructions = true,
+                IgnoreWhitespace = true,
+            });
+
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element ||
+                    !string.Equals(reader.LocalName, "cfRule", StringComparison.Ordinal) ||
+                    !string.Equals(reader.NamespaceURI, "http://schemas.openxmlformats.org/spreadsheetml/2006/main", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!IsSupportedConditionalFormatRuleType(reader.GetAttribute("type")))
+                    return true;
             }
         }
 

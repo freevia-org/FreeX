@@ -1256,7 +1256,6 @@ public static partial class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
 
-        var text = ToText(args[0]);
         double rawStart = ToNumber(args[1]);
         double rawNumChars = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
@@ -1266,11 +1265,30 @@ public static partial class BuiltInFunctions
         int numChars = (int)rawNumChars;
         if (startNum < 1 || numChars < 0) return ErrorValue.Value;
 
+        var newText = ToText(args[3]);
+        if (args[0] is RangeValue range) return MapReplaceRange(range, startNum, numChars, newText);
+        return ReplaceText(ToText(args[0]), startNum, numChars, newText);
+    }
+
+    private static RangeValue MapReplaceRange(RangeValue range, int startNum, int numChars, string newText)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                cells[r, c] = value is ErrorValue e ? e : ReplaceText(ToText(value), startNum, numChars, newText);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
+    {
         bool hasSurrogatePair = ContainsSurrogatePair(text);
         int start = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(text, startNum)
             : Math.Min(startNum - 1, text.Length);
-        var newText = ToText(args[3]);
         int end = hasSurrogatePair
             ? AdvanceTextElements(text, start, numChars)
             : Math.Min(start + numChars, text.Length);
