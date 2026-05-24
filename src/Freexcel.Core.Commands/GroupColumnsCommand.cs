@@ -26,7 +26,8 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (CommandGuards.RejectIfProtected(sheet) is { } p) return p;
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatColumns) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousLevels = [];
         _previouslyHiddenByGroup = [];
