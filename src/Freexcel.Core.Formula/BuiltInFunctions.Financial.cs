@@ -653,8 +653,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Dollarde(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double d = ToNumber(args[0]);
         double f = Math.Truncate(ToNumber(args[1]));
+        if (args[0] is RangeValue dollarRange) return MapUnaryTextRange(dollarRange, value => DollardeScalar(value, f));
+        return DollardeScalar(args[0], f);
+    }
+
+    private static ScalarValue DollardeScalar(ScalarValue dollarValue, double f)
+    {
+        double d = ToNumber(dollarValue);
         if (!double.IsFinite(d) || !double.IsFinite(f)) return ErrorValue.Num;
         if (f < 0) return ErrorValue.Num;
         if (f == 0) return ErrorValue.DivByZero;
@@ -668,8 +674,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Dollarfr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double d = ToNumber(args[0]);
         double f = Math.Truncate(ToNumber(args[1]));
+        if (args[0] is RangeValue dollarRange) return MapUnaryTextRange(dollarRange, value => DollarfrScalar(value, f));
+        return DollarfrScalar(args[0], f);
+    }
+
+    private static ScalarValue DollarfrScalar(ScalarValue dollarValue, double f)
+    {
+        double d = ToNumber(dollarValue);
         if (!double.IsFinite(d) || !double.IsFinite(f)) return ErrorValue.Num;
         if (f < 0) return ErrorValue.Num;
         if (f == 0) return ErrorValue.DivByZero;
