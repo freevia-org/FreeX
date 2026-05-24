@@ -553,6 +553,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SpellCheckDialogOpenedFromKeyboard_FocusesSuggestionListOrReplacementBox()
+    {
+        var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_suggestionsBox.Items.Count > 0");
+        source.Should().Contain("_suggestionsBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_suggestionsBox);");
+        source.Should().Contain("_replacementBox.Focus();");
+        source.Should().Contain("_replacementBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_replacementBox);");
+    }
+
+    [Fact]
     public void ExportOptionsDialog_ExposesOnlyHonoredPdfXpsChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
