@@ -21,7 +21,10 @@ public partial class MainWindow
             settings,
             showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
             showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
-            refreshPreview: BuildActiveSheetPrintPreview)
+            refreshPreview: BuildActiveSheetPrintPreview,
+            sheetId: _currentSheetId,
+            sheet: sheet,
+            executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"))
         {
             Owner = this
         };
