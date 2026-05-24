@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -27,6 +28,7 @@ public partial class PageSetupDialog
 
         target.Focus();
         target.SelectAll();
+        Keyboard.Focus(target);
     }
 
     public static PageSetupRangeSelectionRequest CreateRangeSelectionRequest(
