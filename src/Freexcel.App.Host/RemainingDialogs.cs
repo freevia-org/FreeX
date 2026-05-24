@@ -24,6 +24,14 @@ public sealed class ConditionalFormatThresholdDialog : Window
         ShowInTaskbar = false;
         _thresholdBox.Text = Result.ThresholdText;
         Content = ObjectSizeDialog.CreateSingleInputContent("Format cells greater _than:", _thresholdBox, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _thresholdBox.Focus();
+        _thresholdBox.SelectAll();
+        Keyboard.Focus(_thresholdBox);
     }
 
     public static ConditionalFormatThresholdDialogResult CreateResult(string thresholdText) =>
@@ -109,6 +117,14 @@ public sealed class ColumnWidthDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
         Content = ObjectSizeDialog.CreateSingleInputContent("Column _width:", _widthBox, Accept);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _widthBox.Focus();
+        _widthBox.SelectAll();
+        Keyboard.Focus(_widthBox);
     }
 
     public static bool TryCreateResult(string? input, out ColumnWidthDialogResult result, out string? error)
