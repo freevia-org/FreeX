@@ -248,6 +248,7 @@ public sealed partial class NativeJsonAdapter
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {
         var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
+        var supportsSmooth = chartType is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
         return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
@@ -257,7 +258,8 @@ public sealed partial class NativeJsonAdapter
                 ? Math.Clamp(markerSize, 1, 30)
                 : null,
             DashStyle = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.DashStyle),
-            MarkerStyle = supportsMarkers ? NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.MarkerStyle) : null
+            MarkerStyle = supportsMarkers ? NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.MarkerStyle) : null,
+            Smooth = supportsSmooth ? format.Smooth : null
         };
     }
 
@@ -269,7 +271,8 @@ public sealed partial class NativeJsonAdapter
         || format.MarkerStyle is not null
         || format.MarkerSize is not null
         || format.FillThemeColor is not null
-        || format.StrokeThemeColor is not null;
+        || format.StrokeThemeColor is not null
+        || format.Smooth is not null;
 
     private static ChartPointDataLabelFormat ClampPointDataLabelFormat(ChartPointDataLabelFormat format) =>
         format with
