@@ -287,6 +287,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter a non-zero first page number, or leave it blank for Automatic.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidPageTabNumber(FirstPageNumberBox);
             return;
         }
 
@@ -294,6 +295,7 @@ public partial class PageSetupDialog : Window
         {
             MessageBox.Show(this, "Enter a positive print quality DPI value, or leave it blank for printer default.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidPageTabNumber(PrintQualityBox);
             return;
         }
 
@@ -378,6 +380,14 @@ public partial class PageSetupDialog : Window
             ? ColumnsRepeatBox
             : RowsRepeatBox;
         PageSetupTabs.SelectedItem = SheetTab;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private void FocusInvalidPageTabNumber(TextBox target)
+    {
+        PageSetupTabs.SelectedItem = PageTab;
         target.Focus();
         target.SelectAll();
         Keyboard.Focus(target);
