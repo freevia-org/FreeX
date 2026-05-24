@@ -134,6 +134,19 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void FillSeriesStepDialogInvalidStep_ShowsOwnedWarningAndRefocusesInput()
+    {
+        var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
+
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("error ?? \"Enter a numeric step value.\"");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("FocusInvalidStepInput();");
+        source.Should().Contain("private void FocusInvalidStepInput()");
+    }
+
+    [Fact]
     public void ZoomDialog_TryCreateResult_AcceptsPercentWithinExcelRange()
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
@@ -422,6 +435,27 @@ public sealed class RemainingDialogTests
         source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInvalidPeriodsInput();");
         source.Should().Contain("private void FocusInvalidPeriodsInput()");
+    }
+
+    [Fact]
+    public void RowAndColumnSizeDialogsInvalidInput_ShowOwnedWarningsAndRefocusInputs()
+    {
+        var rowSource = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+        var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
+
+        rowSource.Should().Contain("MessageBox.Show(");
+        rowSource.Should().Contain("this,");
+        rowSource.Should().Contain("error ?? \"Enter a positive row height.\"");
+        rowSource.Should().Contain("MessageBoxImage.Warning");
+        rowSource.Should().Contain("FocusInvalidHeightInput();");
+        rowSource.Should().Contain("private void FocusInvalidHeightInput()");
+
+        columnSource.Should().Contain("MessageBox.Show(");
+        columnSource.Should().Contain("this,");
+        columnSource.Should().Contain("error ?? \"Enter a positive column width.\"");
+        columnSource.Should().Contain("MessageBoxImage.Warning");
+        columnSource.Should().Contain("FocusInvalidWidthInput();");
+        columnSource.Should().Contain("private void FocusInvalidWidthInput()");
     }
 
     [Fact]

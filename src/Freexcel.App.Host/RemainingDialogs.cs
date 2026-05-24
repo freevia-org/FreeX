@@ -70,6 +70,11 @@ public sealed class RowHeightDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        FocusInvalidHeightInput();
+    }
+
+    private void FocusInvalidHeightInput()
+    {
         _heightBox.Focus();
         _heightBox.SelectAll();
         Keyboard.Focus(_heightBox);
@@ -91,8 +96,18 @@ public sealed class RowHeightDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_heightBox.Text, out var result, out _))
+        if (!TryCreateResult(_heightBox.Text, out var result, out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Enter a positive row height.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidHeightInput();
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }
@@ -122,6 +137,11 @@ public sealed class ColumnWidthDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        FocusInvalidWidthInput();
+    }
+
+    private void FocusInvalidWidthInput()
+    {
         _widthBox.Focus();
         _widthBox.SelectAll();
         Keyboard.Focus(_widthBox);
@@ -143,8 +163,18 @@ public sealed class ColumnWidthDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_widthBox.Text, out var result, out _))
+        if (!TryCreateResult(_widthBox.Text, out var result, out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Enter a positive column width.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidWidthInput();
             return;
+        }
+
         Result = result;
         DialogResult = true;
     }

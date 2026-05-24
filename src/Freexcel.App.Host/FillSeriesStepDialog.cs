@@ -72,6 +72,13 @@ public sealed class FillSeriesStepDialog : Window
         Keyboard.Focus(_columnsButton);
     }
 
+    private void FocusInvalidStepInput()
+    {
+        _stepBox.Focus();
+        _stepBox.SelectAll();
+        Keyboard.Focus(_stepBox);
+    }
+
     public static bool TryCreateResult(string? input, out FillSeriesStepDialogResult result, out string? error)
     {
         result = new FillSeriesStepDialogResult(1);
@@ -120,8 +127,18 @@ public sealed class FillSeriesStepDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_stepBox.Text, out var result, out _))
+        if (!TryCreateResult(_stepBox.Text, out var result, out var error))
+        {
+            MessageBox.Show(
+                this,
+                error ?? "Enter a numeric step value.",
+                Title,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            FocusInvalidStepInput();
             return;
+        }
+
         Result = CreateResult(
             _rowsButton.IsChecked == true ? FillSeriesDirection.Rows : FillSeriesDirection.Columns,
             SelectedSeriesType(),
