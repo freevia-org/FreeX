@@ -496,6 +496,28 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_SetsDefaultCatalogLanguage()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("en-US");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesRequestedPageRange()
     {
         StaTestRunner.Run(() =>
