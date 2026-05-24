@@ -318,12 +318,12 @@ public partial class MainWindow
         var plan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
         if (plan.Kind == ShareWorkbookPlanKind.SaveAsBeforeShare)
         {
-            if (!SaveWorkbookWithDialog())
+            if (!await SaveWorkbookWithDialogAsync())
                 return;
         }
         else if (FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target))
         {
-            if (!SaveWorkbookToTarget(target!))
+            if (!await SaveWorkbookToTargetAsync(target!))
                 return;
         }
 

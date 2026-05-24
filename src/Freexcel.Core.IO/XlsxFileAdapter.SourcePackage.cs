@@ -7,7 +7,7 @@ namespace Freexcel.Core.IO;
 public sealed partial class XlsxFileAdapter
 {
     // Source package snapshot and native package-part preservation for loaded workbook saves.
-    private static void PreserveSourcePackageParts(Workbook workbook, MemoryStream generatedPackage)
+    private static void PreserveSourcePackageParts(Workbook workbook, Stream generatedPackage)
     {
         if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
             return;

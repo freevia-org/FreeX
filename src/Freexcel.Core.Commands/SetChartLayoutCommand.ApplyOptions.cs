@@ -298,6 +298,52 @@ public sealed partial class SetChartLayoutCommand
             chart.HighLowLineThickness = ClampFinite(options.HighLowLineThickness.Value, 0.5, 10);
         if (options.HighLowLineDashStyle is not null)
             chart.HighLowLineDashStyle = ValidEnumOrDefault(options.HighLowLineDashStyle.Value, ChartLineDashStyle.Solid);
+        if (options.UpDownBarGapWidth is not null)
+            chart.UpDownBarGapWidth = Math.Clamp(options.UpDownBarGapWidth.Value, 0, 500);
+        if (options.UpBarFillColor is not null)
+        {
+            chart.UpBarFillColor = options.UpBarFillColor;
+            chart.UpBarFillThemeColor = null;
+        }
+        if (options.UpBarFillThemeColor is not null)
+        {
+            chart.UpBarFillThemeColor = options.UpBarFillThemeColor;
+            chart.UpBarFillColor = null;
+        }
+        if (options.UpBarBorderColor is not null)
+        {
+            chart.UpBarBorderColor = options.UpBarBorderColor;
+            chart.UpBarBorderThemeColor = null;
+        }
+        if (options.UpBarBorderThemeColor is not null)
+        {
+            chart.UpBarBorderThemeColor = options.UpBarBorderThemeColor;
+            chart.UpBarBorderColor = null;
+        }
+        if (options.UpBarBorderThickness is not null)
+            chart.UpBarBorderThickness = ClampFinite(options.UpBarBorderThickness.Value, 0, 10);
+        if (options.DownBarFillColor is not null)
+        {
+            chart.DownBarFillColor = options.DownBarFillColor;
+            chart.DownBarFillThemeColor = null;
+        }
+        if (options.DownBarFillThemeColor is not null)
+        {
+            chart.DownBarFillThemeColor = options.DownBarFillThemeColor;
+            chart.DownBarFillColor = null;
+        }
+        if (options.DownBarBorderColor is not null)
+        {
+            chart.DownBarBorderColor = options.DownBarBorderColor;
+            chart.DownBarBorderThemeColor = null;
+        }
+        if (options.DownBarBorderThemeColor is not null)
+        {
+            chart.DownBarBorderThemeColor = options.DownBarBorderThemeColor;
+            chart.DownBarBorderColor = null;
+        }
+        if (options.DownBarBorderThickness is not null)
+            chart.DownBarBorderThickness = ClampFinite(options.DownBarBorderThickness.Value, 0, 10);
         if (options.ShowSecondaryAxis is not null)
             chart.ShowSecondaryAxis = options.ShowSecondaryAxis.Value;
         if (options.SecondaryAxisSeriesIndexes is not null)

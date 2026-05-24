@@ -1140,11 +1140,13 @@
                                 <Button Content="PivotTable" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
                                         local:RibbonTooltip.Title="PivotTable"
                                         local:RibbonTooltip.KeyTip="P"
-                                        local:RibbonTooltip.Description="Create a PivotTable from the selected range."/>
-                                <Button Content="Recommended PivotTables" Width="148" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
-                                        local:RibbonTooltip.Title="Recommended PivotTables"
-                                        local:RibbonTooltip.KeyTip="R"
-                                        local:RibbonTooltip.Description="Create a PivotTable from the selected range using the current PivotTable workflow."/>
+                                        local:RibbonTooltip.Description="Create a PivotTable from the selected range.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Recommended PivotTables" local:RibbonTooltip.KeyTip="R" Click="RecommendedPivotTablesMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="Table" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"
@@ -1160,7 +1162,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Pictures" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
                                         local:RibbonTooltip.Title="Insert Picture"
-                                        local:RibbonTooltip.KeyTip="P"
+                                        local:RibbonTooltip.KeyTip="IP"
                                         local:RibbonTooltip.Description="Insert a picture from a local image file."/>
                                 <Button Content="Shapes" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
                                         local:RibbonTooltip.Title="Shapes"
@@ -1189,7 +1191,7 @@
                                         local:RibbonTooltip.Description="Office add-in discovery is deferred in Freexcel."/>
                                 <Button Content="My Add-ins" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="My Add-ins"
-                                        local:RibbonTooltip.KeyTip="M"
+                                        local:RibbonTooltip.KeyTip="AI"
                                         local:RibbonTooltip.Description="Office add-in management is deferred in Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Add-ins" Style="{StaticResource GroupLbl}"/></Border>
@@ -1249,7 +1251,7 @@
                                 <!-- Pie / Doughnut / Scatter -->
                                 <StackPanel Margin="1,0">
                                     <Button Content="Pie"       Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieMenuItem_Click"
-                                            local:RibbonTooltip.Title="Pie Chart" local:RibbonTooltip.KeyTip="PI"
+                                            local:RibbonTooltip.Title="Pie Chart" local:RibbonTooltip.KeyTip="PY"
                                             local:RibbonTooltip.Description="Insert a pie chart to show proportions of a whole."/>
                                     <Button Content="3D Pie"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DPieMenuItem_Click"
                                             local:RibbonTooltip.Title="3D Pie Chart" local:RibbonTooltip.KeyTip="3P"
@@ -1258,7 +1260,7 @@
                                             local:RibbonTooltip.Title="Doughnut Chart" local:RibbonTooltip.KeyTip="D"
                                             local:RibbonTooltip.Description="Insert a doughnut chart to show proportions with a center hole."/>
                                     <Button Content="Scatter"   Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartScatterMenuItem_Click"
-                                            local:RibbonTooltip.Title="Scatter Chart" local:RibbonTooltip.KeyTip="X"
+                                            local:RibbonTooltip.Title="Scatter Chart" local:RibbonTooltip.KeyTip="SX"
                                             local:RibbonTooltip.Description="Insert a scatter chart to compare numeric X and Y values."/>
                                 </StackPanel>
                                 <!-- Bubble / Radar -->
@@ -1302,7 +1304,7 @@
                                             local:RibbonTooltip.Title="Doughnut Hole Size" local:RibbonTooltip.KeyTip="DH"
                                             local:RibbonTooltip.Description="Cycle the current doughnut chart hole size."/>
                                     <Button Content="Surface"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSurfaceMenuItem_Click"
-                                            local:RibbonTooltip.Title="Surface Chart" local:RibbonTooltip.KeyTip="SF"
+                                            local:RibbonTooltip.Title="Surface Chart" local:RibbonTooltip.KeyTip="UF"
                                             local:RibbonTooltip.Description="Insert a surface chart rendered as a category-value matrix."/>
                                     <Button Content="3D Surface"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DSurfaceMenuItem_Click"
                                             local:RibbonTooltip.Title="3D Surface Chart" local:RibbonTooltip.KeyTip="3S"
@@ -1467,7 +1469,7 @@
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Trend Color"  Width="88"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineColorBtn_Click"
-                                            local:RibbonTooltip.Title="Trendline Color" local:RibbonTooltip.KeyTip="TL"
+                                            local:RibbonTooltip.Title="Trendline Color" local:RibbonTooltip.KeyTip="TK"
                                             local:RibbonTooltip.Description="Cycle the current chart trendline color."/>
                                     <Button Content="Trend Dash"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineDashBtn_Click"
                                             local:RibbonTooltip.Title="Trendline Dash" local:RibbonTooltip.KeyTip="TS"
@@ -1597,7 +1599,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="3D Map" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="3D Map"
-                                        local:RibbonTooltip.KeyTip="M"
+                                        local:RibbonTooltip.KeyTip="3D"
                                         local:RibbonTooltip.Description="3D Map tours are deferred in Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tours" Style="{StaticResource GroupLbl}"/></Border>
@@ -1635,7 +1637,7 @@
                                         local:RibbonTooltip.Description="Create a slicer connected to the selected PivotTable field."/>
                                 <Button Content="Timeline" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertTimelineBtn_Click"
                                         local:RibbonTooltip.Title="Insert Timeline"
-                                        local:RibbonTooltip.KeyTip="TL"
+                                        local:RibbonTooltip.KeyTip="IT"
                                         local:RibbonTooltip.Description="Create a timeline connected to the selected PivotTable date field."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Filters" Style="{StaticResource GroupLbl}"/></Border>
@@ -1661,7 +1663,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Text Box" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawTextBtn_Click"
                                         local:RibbonTooltip.Title="Text Box"
-                                        local:RibbonTooltip.KeyTip="X"
+                                        local:RibbonTooltip.KeyTip="TX"
                                         local:RibbonTooltip.Description="Insert a text box you can position and resize anywhere on the sheet."/>
                                 <Button Content="Header &amp; Footer" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HeaderFooterBtn_Click"
                                         local:RibbonTooltip.Title="Header &amp; Footer"
@@ -1690,6 +1692,19 @@
                                         local:RibbonTooltip.Description="Insert a special character or symbol at the cursor position."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Symbols" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Comments ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
+                                        local:RibbonTooltip.Title="New Comment"
+                                        local:RibbonTooltip.KeyTip="CM"
+                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -2042,7 +2057,7 @@
                                             local:RibbonTooltip.Description="Rotate the selected or most recent drawing object."/>
                                     <Button Content="Size" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
                                             local:RibbonTooltip.Title="Object Size"
-                                            local:RibbonTooltip.KeyTip="SZ"
+                                            local:RibbonTooltip.KeyTip="OZ"
                                             local:RibbonTooltip.Description="Resize the selected or most recent drawing object."/>
                                 </StackPanel>
                             </StackPanel>
@@ -3476,21 +3491,44 @@
                 <Border x:Name="StatusStatsViewport" Grid.Column="1"
                         Margin="8,0,12,0"
                         ClipToBounds="True">
-                    <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
-                                HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Visibility="Collapsed"
-                                ClipToBounds="True">
-                        <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
-                                   Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
-                                   MaxWidth="120" TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
+                    <Grid ClipToBounds="True">
+                        <StackPanel x:Name="StatusSaveProgressPanel"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Visibility="Collapsed"
+                                    MaxWidth="420"
+                                    ClipToBounds="True">
+                            <ProgressBar x:Name="StatusSaveProgressBar"
+                                         Width="120" Height="5"
+                                         Minimum="0" Maximum="100"
+                                         Foreground="#D7F0DF"
+                                         Background="#356B4D"
+                                         BorderThickness="0"
+                                         AutomationProperties.Name="Saving Progress"/>
+                            <TextBlock x:Name="StatusSaveProgressText"
+                                       Foreground="White" FontSize="12"
+                                       Margin="8,0,0,0"
+                                       MaxWidth="280"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    Visibility="Collapsed"
+                                    ClipToBounds="True">
+                            <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
+                                       Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
+                                       MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Grid>
                 </Border>
 
                 <!-- Zoom controls on the right -->

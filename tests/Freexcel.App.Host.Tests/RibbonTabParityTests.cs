@@ -22,7 +22,8 @@ public sealed class RibbonTabParityTests
             "Filters",
             "Links",
             "Text",
-            "Symbols");
+            "Symbols",
+            "Comments");
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Insert Picture\"");
