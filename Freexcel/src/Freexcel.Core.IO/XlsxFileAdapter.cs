@@ -26,8 +26,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     public Workbook Load(Stream stream)
     {
-        using var packageStream = new MemoryStream();
-        stream.CopyTo(packageStream);
+        using var packageStream = CreateLoadPackageStream(stream);
 
         packageStream.Position = 0;
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
@@ -378,6 +377,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 (uint)xlMerge.RangeAddress.LastAddress.ColumnNumber);
             sheet.AddMergedRegion(new GridRange(start, end));
         }
+    }
+
+    private static MemoryStream CreateLoadPackageStream(Stream stream)
+    {
+        var remainingLength = stream.CanSeek
+            ? Math.Max(0, stream.Length - stream.Position)
+            : 0;
+        var packageStream = remainingLength is > 0 and <= int.MaxValue
+            ? new MemoryStream((int)remainingLength)
+            : new MemoryStream();
+        stream.CopyTo(packageStream);
+        return packageStream;
     }
 
 }
