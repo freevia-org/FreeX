@@ -110,7 +110,10 @@ public sealed partial class GoToDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    private void FocusInitialKeyboardTarget()
+    private void FocusInitialKeyboardTarget() =>
+        FocusReferenceInput();
+
+    private void FocusReferenceInput()
     {
         _addressBox.Focus();
         _addressBox.SelectAll();
@@ -133,6 +136,7 @@ public sealed partial class GoToDialog : Window
         if (!TryParseReferenceRange(_addressBox.Text, _sheetId, _definedNames, out var range))
         {
             MessageBox.Show(this, "Reference is not valid.", "Go To", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusReferenceInput();
             return;
         }
 
