@@ -159,11 +159,17 @@ public static partial class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         double rate  = ToNumber(args[0]);
-        double per   = ToNumber(args[1]);
         double nper  = ToNumber(args[2]);
         double pv    = ToNumber(args[3]);
         double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
         double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
+        if (args[1] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => IpmtScalar(rate, value, nper, pv, fv, type));
+        return IpmtScalar(rate, args[1], nper, pv, fv, type);
+    }
+
+    private static ScalarValue IpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
+    {
+        double per = ToNumber(periodValue);
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
             !double.IsFinite(pv)   || !double.IsFinite(fv)  || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -179,11 +185,17 @@ public static partial class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         double rate  = ToNumber(args[0]);
-        double per   = ToNumber(args[1]);
         double nper  = ToNumber(args[2]);
         double pv    = ToNumber(args[3]);
         double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
         double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
+        if (args[1] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => PpmtScalar(rate, value, nper, pv, fv, type));
+        return PpmtScalar(rate, args[1], nper, pv, fv, type);
+    }
+
+    private static ScalarValue PpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
+    {
+        double per = ToNumber(periodValue);
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
             !double.IsFinite(pv)   || !double.IsFinite(fv)  || !double.IsFinite(type))
             return ErrorValue.Num;
@@ -1375,12 +1387,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[0]);
         double pmt   = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
         double fv    = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
         double guess = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0.1;
+        if (args[0] is RangeValue nperRange) return MapUnaryTextRange(nperRange, value => RateScalar(value, pmt, pv, fv, type, guess));
+        return RateScalar(args[0], pmt, pv, fv, type, guess);
+    }
+
+    private static ScalarValue RateScalar(ScalarValue nperValueArg, double pmt, double pv, double fv, double type, double guess)
+    {
+        double nperValue = ToNumber(nperValueArg);
         if (!double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;

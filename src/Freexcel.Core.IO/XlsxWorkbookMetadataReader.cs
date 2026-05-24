@@ -155,6 +155,28 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static List<WorkbookFileRecoveryPropertiesModel> LoadFileRecoveryProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return [];
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            return workbookXml.Root?
+                .Elements(workbookNs + "fileRecoveryPr")
+                .Select(ToFileRecoveryProperties)
+                .ToList() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try
@@ -189,6 +211,30 @@ internal static class XlsxWorkbookMetadataReader
         {
             return WorkbookCalculationProperties.Default;
         }
+    }
+
+    private static WorkbookFileRecoveryPropertiesModel ToFileRecoveryProperties(XElement element)
+    {
+        var model = new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "autoRecover"),
+            CrashSave = XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "crashSave"),
+            DataExtractLoad = XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "dataExtractLoad"),
+            RepairLoad = XlsxXmlAttributeReader.ReadNullableBoolAttribute(element, "repairLoad")
+        };
+
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                attribute.Name.LocalName is "autoRecover" or "crashSave" or "dataExtractLoad" or "repairLoad")
+            {
+                continue;
+            }
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model;
     }
 
     public static IReadOnlyList<XlsxWorkbookCustomView> LoadCustomViews(Stream xlsxStream)

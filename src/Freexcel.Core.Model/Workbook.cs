@@ -7,6 +7,15 @@ public sealed class WorkbookFileSharingModel
     public string? ReservationPassword { get; set; }
 }
 
+public sealed class WorkbookFileRecoveryPropertiesModel
+{
+    public bool? AutoRecover { get; set; }
+    public bool? CrashSave { get; set; }
+    public bool? DataExtractLoad { get; set; }
+    public bool? RepairLoad { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a workbook containing one or more worksheets.
 /// This is the top-level domain object.
@@ -104,6 +113,9 @@ public sealed class Workbook
 
     /// <summary>Excel workbook file-sharing/read-only recommendation metadata.</summary>
     public WorkbookFileSharingModel? FileSharing { get; set; }
+
+    /// <summary>Excel workbook file recovery metadata records.</summary>
+    public List<WorkbookFileRecoveryPropertiesModel> FileRecoveryProperties { get; } = [];
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;

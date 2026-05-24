@@ -39,6 +39,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var fileSharing = XlsxWorkbookMetadataReader.LoadFileSharing(packageStream);
         packageStream.Position = 0;
+        var fileRecoveryProperties = XlsxWorkbookMetadataReader.LoadFileRecoveryProperties(packageStream);
+        packageStream.Position = 0;
         var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
         packageStream.Position = 0;
         var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
@@ -75,6 +77,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             ? Math.Clamp(activeTab, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
             : null;
         workbook.FileSharing = fileSharing;
+        workbook.FileRecoveryProperties.AddRange(fileRecoveryProperties);
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
