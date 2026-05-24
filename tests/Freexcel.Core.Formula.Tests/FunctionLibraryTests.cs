@@ -6505,6 +6505,25 @@ public class FunctionLibraryTests
     public void Unicode_EmptyText_ReturnsValueError() =>
         _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
 
+    [Fact]
+    public void UnicharUnicodeAndNumbervalue_RangeArgument_SpillsElementwise()
+    {
+        var codePoints = MakeSheet(
+            (1, 1, new NumberValue(65)),
+            (2, 1, new NumberValue(9731)));
+        AssertTextColumn(_eval.Evaluate("=UNICHAR(A1:A2)", codePoints), "A", "\u2603");
+
+        var text = MakeSheet(
+            (1, 1, new TextValue("A")),
+            (2, 1, new TextValue("\u2603")));
+        AssertColumn(_eval.Evaluate("=UNICODE(A1:A2)", text), new NumberValue(65), new NumberValue(9731));
+
+        var numbers = MakeSheet(
+            (1, 1, new TextValue("1234.5")),
+            (2, 1, new TextValue("x")));
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2)", numbers), new NumberValue(1234.5), ErrorValue.Value);
+    }
+
     // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
 
     [Fact]
