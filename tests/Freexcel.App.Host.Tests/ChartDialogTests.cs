@@ -197,7 +197,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartTitlesDialog_LabelsTitleEditorsWithExcelAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
 
         source.Should().Contain("AddInput(stack, \"_Chart title:\", _chartTitleBox)");
         source.Should().Contain("AddInput(stack, \"_Primary horizontal axis title:\", _xAxisTitleBox)");
@@ -208,7 +208,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartTitlesDialogOpenedFromKeyboard_FocusesChartTitleBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
@@ -234,7 +234,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartStyleDialog_UsesVisualGalleryInsteadOfPlainStyleCombo()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
 
         source.Should().Contain("Chart style gallery");
         source.Should().Contain("CreateStyleGalleryTemplate");
@@ -256,7 +256,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartStyleDialogOpenedFromKeyboard_FocusesStyleGallery()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class ChartStyleDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record MoveChartDialogResult", StringComparison.Ordinal)];
@@ -279,7 +279,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void MoveChartDialogOpenedFromKeyboard_FocusesObjectInSheetChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
@@ -304,7 +304,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
 
         source.Should().Contain("Content = \"_Object in sheet\"");
         source.Should().Contain("Content = \"_New chart sheet\"");
@@ -330,7 +330,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void SelectDataSourceDialogOpenedFromKeyboard_FocusesChartDataRangeBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
         var dialogSource = source[source.IndexOf("public sealed class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -343,7 +343,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void SelectDataSourceDialog_ExposesExcelStylePickerSeriesAndAxisControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
 
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("Select chart data range");
@@ -817,7 +817,7 @@ public sealed class ChartDialogTests
     [Fact]
     public void ChartDialogs_LabelEditableHelperControlsWithTargets()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+        var source = ReadChartDialogSource();
         var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogHelpers.cs"));
 
         foreach (var expected in new[]
@@ -850,4 +850,11 @@ public sealed class ChartDialogTests
                 yield return descendant;
         }
     }
+
+    private static string ReadChartDialogSource() =>
+        string.Join(Environment.NewLine, new[]
+        {
+            "ChartDialogs.cs",
+            "SelectDataSourceDialog.cs"
+        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 }
