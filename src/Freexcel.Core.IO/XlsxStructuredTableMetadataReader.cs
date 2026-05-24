@@ -1,6 +1,7 @@
 using Freexcel.Core.Model;
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 
 namespace Freexcel.Core.IO;
 
@@ -57,14 +58,11 @@ internal static class XlsxStructuredTableMetadataReader
             if (worksheetEntry is null)
                 continue;
 
-            var worksheetXml = LoadXml(worksheetEntry);
-            var tableRelIds = worksheetXml.Root?
-                .Element(workbookNs + "tableParts")?
-                .Elements(workbookNs + "tablePart")
-                .Select(e => e.Attribute(relNs + "id")?.Value)
-                .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Select(id => id!)
-                .ToList() ?? [];
+            var tableRelIds = ReadWorksheetRelationshipIds(
+                worksheetEntry,
+                "tablePart",
+                "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                relNs.NamespaceName);
             if (tableRelIds.Count == 0)
                 continue;
 
@@ -153,6 +151,39 @@ internal static class XlsxStructuredTableMetadataReader
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static List<string> ReadWorksheetRelationshipIds(
+        ZipArchiveEntry worksheetEntry,
+        string localName,
+        string namespaceName,
+        string relationshipNamespaceName)
+    {
+        var result = new List<string>();
+        using var stream = worksheetEntry.Open();
+        using var reader = XmlReader.Create(stream, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true,
+            IgnoreWhitespace = true,
+        });
+
+        while (reader.Read())
+        {
+            if (reader.NodeType != XmlNodeType.Element ||
+                !string.Equals(reader.LocalName, localName, StringComparison.Ordinal) ||
+                !string.Equals(reader.NamespaceURI, namespaceName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var relId = reader.GetAttribute("id", relationshipNamespaceName);
+            if (!string.IsNullOrWhiteSpace(relId))
+                result.Add(relId);
+        }
+
+        return result;
     }
 
     private static Dictionary<string, string> LoadRelationshipTargets(
