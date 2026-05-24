@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 using Freexcel.Core.Commands;
@@ -156,6 +157,7 @@ public sealed class InsertChartDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static InsertChartDialogResult CreateResult(ChartType chartType) =>
@@ -169,6 +171,12 @@ public sealed class InsertChartDialog : Window
         var selected = SelectedGalleryChoice(_recommendedGallery, _subtypeGallery)?.Type ?? ChartType.Column;
         Result = new InsertChartDialogResult(selected, _recommendedBox.IsChecked == true);
         DialogResult = true;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _recommendedGallery.Focus();
+        Keyboard.Focus(_recommendedGallery);
     }
 
     private static ChartTypeGalleryChoice? SelectedGalleryChoice(ListBox recommendedGallery, ListBox subtypeGallery) =>
@@ -374,6 +382,7 @@ public sealed class ChangeChartTypeDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         Content = root;
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChangeChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
@@ -385,4 +394,10 @@ public sealed class ChangeChartTypeDialog : Window
         Result = CreateResult(SelectedChartType);
         DialogResult = true;
     });
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _subtypeGallery.Focus();
+        Keyboard.Focus(_subtypeGallery);
+    }
 }
