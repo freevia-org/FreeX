@@ -880,6 +880,49 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_ReadsBarSeriesLineMetadata()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="stacked"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$C$2:$C$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:serLines>
+                      <c:spPr><a:ln w="19050"><a:solidFill><a:schemeClr val="accent5"/></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr>
+                    </c:serLines>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.ShowSeriesLines.Should().BeTrue();
+        chart.SeriesLineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5));
+        chart.SeriesLineColor.Should().BeNull();
+        chart.SeriesLineThickness.Should().Be(1.5);
+        chart.SeriesLineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+    }
+
+    [Fact]
     public void TryReadSupportedChart_ReadsConcreteSeriesFill()
     {
         var sheetId = new SheetId(Guid.NewGuid());

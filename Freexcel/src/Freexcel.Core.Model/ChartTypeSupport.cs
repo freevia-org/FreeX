@@ -55,6 +55,12 @@ public static class ChartTypeSupport
     public static bool SupportsSeriesMarkers(ChartType type) =>
         type is ChartType.Line or ChartType.ThreeDLine or ChartType.Scatter;
 
+    public static bool SupportsSeriesLines(ChartType type) =>
+        type is ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar;
+
     public static bool SupportsInvertIfNegative(ChartType type) =>
         type is ChartType.Column
             or ChartType.StackedColumn
