@@ -80,6 +80,78 @@ public sealed class SetThreadedCommentCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Append a reply to an existing threaded comment with undo support.</summary>
+public sealed class AddThreadedCommentReplyCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private readonly CommentReply _reply;
+    private ThreadedComment? _previous;
+
+    public string Label => "Reply to Comment";
+
+    public AddThreadedCommentReplyCommand(SheetId sheetId, CellAddress address, string text, string author = "Freexcel")
+    {
+        _sheetId = sheetId;
+        _address = address;
+        _reply = new CommentReply(text, author);
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+        if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
+            return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
+        sheet.ThreadedComments[_address] = _previous with { Replies = [.._previous.Replies, _reply] };
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previous is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.ThreadedComments[_address] = _previous;
+    }
+}
+
+/// <summary>Toggle the resolved state of a threaded comment with undo support.</summary>
+public sealed class ResolveThreadedCommentCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private readonly bool _resolved;
+    private ThreadedComment? _previous;
+
+    public string Label => _resolved ? "Resolve Comment" : "Unresolve Comment";
+
+    public ResolveThreadedCommentCommand(SheetId sheetId, CellAddress address, bool resolved)
+    {
+        _sheetId = sheetId;
+        _address = address;
+        _resolved = resolved;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects) is { } protectedOutcome)
+            return protectedOutcome;
+        if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
+            return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
+        sheet.ThreadedComments[_address] = _previous with { IsResolved = _resolved };
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previous is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.ThreadedComments[_address] = _previous;
+    }
+}
+
 /// <summary>Delete a cell comment with undo support.</summary>
 public sealed class DeleteCommentCommand : IWorkbookCommand
 {

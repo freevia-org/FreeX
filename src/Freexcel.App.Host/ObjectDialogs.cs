@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -217,5 +219,105 @@ public class TextEntryDialog : Window
         _textBox.Focus();
         _textBox.SelectAll();
         Keyboard.Focus(_textBox);
+    }
+}
+
+public sealed record ThreadedCommentDialogResult(string? ReplyText, bool IsResolved);
+
+public sealed class ThreadedCommentDialog : Window
+{
+    private readonly TextBox _replyBox = new() { AcceptsReturn = true, MinLines = 3, MaxLines = 6 };
+    private readonly CheckBox _resolveBox;
+
+    public ThreadedCommentDialogResult Result { get; private set; } = new(null, false);
+
+    public ThreadedCommentDialog(string cellRef, ThreadedComment? existing)
+    {
+        Title = $"Comment — {cellRef}";
+        Width = 480;
+        MinHeight = 280;
+        MaxHeight = 600;
+        SizeToContent = SizeToContent.Height;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        _resolveBox = new CheckBox
+        {
+            Content = "_Mark as Resolved",
+            IsChecked = existing?.IsResolved ?? false,
+            Margin = new Thickness(0, 4, 0, 8)
+        };
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+
+        // Button row at bottom
+        var ok = new Button { Content = "OK", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 80 };
+        ok.Click += (_, _) =>
+        {
+            Result = new ThreadedCommentDialogResult(
+                string.IsNullOrWhiteSpace(_replyBox.Text) ? null : _replyBox.Text.Trim(),
+                _resolveBox.IsChecked == true);
+            DialogResult = true;
+        };
+        var btnRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        btnRow.Children.Add(ok);
+        btnRow.Children.Add(cancel);
+        DockPanel.SetDock(btnRow, Dock.Bottom);
+        root.Children.Add(btnRow);
+
+        // Content
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 300 };
+        var threadPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        if (existing is not null)
+        {
+            threadPanel.Children.Add(BuildMessage(existing.Author, existing.Text, isRoot: true));
+            foreach (var reply in existing.Replies)
+                threadPanel.Children.Add(BuildMessage(reply.Author, reply.Text, isRoot: false));
+        }
+        scroll.Content = threadPanel;
+
+        var inner = new StackPanel();
+        inner.Children.Add(scroll);
+        inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "_Reply:", Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        inner.Children.Add(_replyBox);
+        inner.Children.Add(_resolveBox);
+        root.Children.Add(inner);
+
+        Content = root;
+        Loaded += (_, _) => { _replyBox.Focus(); Keyboard.Focus(_replyBox); };
+    }
+
+    private static Border BuildMessage(string author, string text, bool isRoot)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = author,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(isRoot ? Color.FromRgb(0x1F, 0x49, 0x7D) : Color.FromRgb(0x40, 0x40, 0x40))
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(8, 2, 0, 0)
+        });
+        return new Border
+        {
+            Child = panel,
+            Background = new SolidColorBrush(isRoot ? Color.FromRgb(0xF0, 0xF4, 0xF8) : Colors.White),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(8, 6, 8, 6),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
     }
 }

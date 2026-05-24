@@ -35,6 +35,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);
         packageStream.Position = 0;
+        var workbookViewProperties = XlsxWorkbookMetadataReader.LoadWorkbookViewProperties(packageStream);
+        packageStream.Position = 0;
         var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
         packageStream.Position = 0;
         var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
@@ -62,6 +64,14 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
+        workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
+        workbook.SheetTabRatio = workbookViewProperties.SheetTabRatio is { } tabRatio ? Math.Clamp(tabRatio, 0, 1000) : null;
+        workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
+            ? Math.Clamp(firstSheet, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
+            : null;
+        workbook.ActiveSheetIndex = workbookViewProperties.ActiveSheetIndex is { } activeTab
+            ? Math.Clamp(activeTab, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
+            : null;
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
