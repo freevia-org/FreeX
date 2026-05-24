@@ -177,6 +177,14 @@ public class NumberFormatterTests
         Assert.Equal(expectedColor, result.ColorHex);
     }
 
+    [Fact]
+    public void CustomNumberSubset_EmptyConditionalDateTimeSectionSuppressesDisplay()
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), "[>40000];m/d/yyyy");
+
+        Assert.Equal("", result);
+    }
+
     [Theory]
     [InlineData("0\\ kg", 12, "12 kg")]
     [InlineData("\\#0", 12, "#12")]
