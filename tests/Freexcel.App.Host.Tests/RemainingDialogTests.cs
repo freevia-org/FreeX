@@ -492,6 +492,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialogRangePicker_RefocusesSelectedInputWithKeyboardFocus()
+    {
+        var source = ReadClassSource("SparklineDialog.cs", "private void RequestRangeSelection", "}");
+
+        source.Should().Contain("textBox.Focus();");
+        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(textBox);");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
