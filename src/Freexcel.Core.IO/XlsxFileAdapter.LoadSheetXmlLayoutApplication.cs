@@ -47,6 +47,11 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintCopies = layout.PrintCopies;
         sheet.FitToPage = layout.FitToPage;
         sheet.AutoPageBreaks = layout.AutoPageBreaks;
+        if (layout.PrintQualityDpi is { } printQualityDpi)
+            sheet.PrintQualityDpi = printQualityDpi;
+        sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
+            ? null
+            : layout.PrintQualityVerticalDpi;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;

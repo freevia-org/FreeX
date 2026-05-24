@@ -10,6 +10,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
     public static bool HasModeledPrinterAttributes(Sheet sheet) =>
         sheet.UsePrinterDefaults is not null ||
         sheet.PrintCopies is > 0 ||
+        sheet.PrintQualityVerticalDpi is > 0 ||
         sheet.FitToPage is not null ||
         sheet.AutoPageBreaks is not null;
 
@@ -62,6 +63,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         var changed = false;
         changed |= SetOptionalBoolAttribute(pageSetup, "usePrinterDefaults", sheet.UsePrinterDefaults);
         changed |= SetOptionalIntAttribute(pageSetup, "copies", sheet.PrintCopies);
+        changed |= SetOptionalIntAttribute(pageSetup, "verticalDpi", sheet.PrintQualityVerticalDpi);
         return changed;
     }
 

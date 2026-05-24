@@ -168,6 +168,7 @@ public sealed partial class NativeJsonAdapter
                 PrintBlackAndWhite = s.PrintBlackAndWhite,
                 PrintDraftQuality = s.PrintDraftQuality,
                 PrintQualityDpi = s.PrintQualityDpi is > 0 ? s.PrintQualityDpi : null,
+                PrintQualityVerticalDpi = s.PrintQualityVerticalDpi is > 0 ? s.PrintQualityVerticalDpi : null,
                 PrintErrorValue = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintErrorValue, WorksheetPrintErrorValue.Displayed),
                 PrintComments = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintComments, WorksheetPrintComments.None),
                 ScaleToFit = new ScaleToFitDto

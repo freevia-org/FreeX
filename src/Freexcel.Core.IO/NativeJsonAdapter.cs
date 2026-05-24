@@ -150,6 +150,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.PrintBlackAndWhite = sDto.PrintBlackAndWhite;
             sheet.PrintDraftQuality = sDto.PrintDraftQuality;
             sheet.PrintQualityDpi = sDto.PrintQualityDpi is > 0 ? sDto.PrintQualityDpi : null;
+            sheet.PrintQualityVerticalDpi = sDto.PrintQualityVerticalDpi is > 0 ? sDto.PrintQualityVerticalDpi : null;
             if (sDto.PrintErrorValue is { } printErrorValue && Enum.IsDefined(printErrorValue))
                 sheet.PrintErrorValue = printErrorValue;
             if (sDto.PrintComments is { } printComments && Enum.IsDefined(printComments))
