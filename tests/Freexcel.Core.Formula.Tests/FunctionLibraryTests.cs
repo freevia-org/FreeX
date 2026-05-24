@@ -4299,6 +4299,22 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("Hello Excel"));
 
     [Fact]
+    public void Replace_RangeOldTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=REPLACE(A1:A2,2,2,\"X\")", sheet);
+
+        var range = result.Should().BeOfType<RangeValue>().Subject;
+        range.RowCount.Should().Be(2);
+        range.ColCount.Should().Be(1);
+        range.At(1, 1).Should().Be(new TextValue("AXle"));
+        range.At(2, 1).Should().Be(new TextValue("BXana"));
+    }
+
+    [Fact]
     public void Replace_DoesNotSplitSurrogatePairs()
     {
         var sheet = MakeSheet();
