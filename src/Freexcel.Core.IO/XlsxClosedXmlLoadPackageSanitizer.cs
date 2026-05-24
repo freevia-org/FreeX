@@ -6,10 +6,15 @@ namespace Freexcel.Core.IO;
 
 internal static class XlsxClosedXmlLoadPackageSanitizer
 {
-    public static MemoryStream Create(MemoryStream sourcePackage)
+    public static MemoryStream Create(MemoryStream sourcePackage) =>
+        Create(sourcePackage, removeUnsupportedConditionalFormatting: false);
+
+    public static MemoryStream Create(
+        MemoryStream sourcePackage,
+        bool removeUnsupportedConditionalFormatting = false)
     {
         sourcePackage.Position = 0;
-        var requirements = GetSanitizationRequirements(sourcePackage);
+        var requirements = GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting);
         if (!requirements.RequiresAny)
         {
             sourcePackage.Position = 0;
@@ -35,14 +40,16 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         return sanitized;
     }
 
-    private static SanitizationRequirements GetSanitizationRequirements(Stream sourcePackage)
+    private static SanitizationRequirements GetSanitizationRequirements(
+        Stream sourcePackage,
+        bool scanUnsupportedConditionalFormatting = true)
     {
         try
         {
             using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
             return new SanitizationRequirements(
                 HasPivotPackageMetadata(archive),
-                HasUnsupportedConditionalFormattingBlocks(archive));
+                scanUnsupportedConditionalFormatting && HasUnsupportedConditionalFormattingBlocks(archive));
         }
         catch
         {

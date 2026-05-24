@@ -158,7 +158,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ln(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, LnScalar);
+        return LnScalar(args[0]);
+    }
+
+    private static ScalarValue LnScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         if (n <= 0) return ErrorValue.Num;
         return NumberResult(Math.Log(n));
@@ -167,7 +173,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Exp(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var result = Math.Exp(ToNumber(args[0]));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ExpScalar);
+        return ExpScalar(args[0]);
+    }
+
+    private static ScalarValue ExpScalar(ScalarValue value)
+    {
+        var result = Math.Exp(ToNumber(value));
         if (double.IsNaN(result) || double.IsInfinity(result)) return ErrorValue.Num;
         return new NumberValue(result);
     }
@@ -178,7 +190,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fact(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, FactScalar);
+        return FactScalar(args[0]);
+    }
+
+    private static ScalarValue FactScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n) || n < 0 || n > 170) return ErrorValue.Num; // Excel limit; 171! overflows double
         int ni = (int)Math.Truncate(n);
         double result = 1;
@@ -287,31 +305,41 @@ public static partial class BuiltInFunctions
     private static ScalarValue Sin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
-        return new NumberValue(Math.Sin(n));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TrigScalar(value, Math.Sin));
+        return TrigScalar(args[0], Math.Sin);
     }
 
     private static ScalarValue Cos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
-        return new NumberValue(Math.Cos(n));
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TrigScalar(value, Math.Cos));
+        return TrigScalar(args[0], Math.Cos);
     }
 
     private static ScalarValue Tan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TrigScalar(value, Math.Tan));
+        return TrigScalar(args[0], Math.Tan);
+    }
+
+    private static ScalarValue TrigScalar(ScalarValue value, Func<double, double> func)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
-        return new NumberValue(Math.Tan(n));
+        return new NumberValue(func(n));
     }
 
     private static ScalarValue Asin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        double n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, AsinScalar);
+        return AsinScalar(args[0]);
+    }
+
+    private static ScalarValue AsinScalar(ScalarValue value)
+    {
+        double n = ToNumber(value);
         if (n < -1 || n > 1) return ErrorValue.Num;
         return new NumberValue(Math.Asin(n));
     }
@@ -319,7 +347,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Acos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        double n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, AcosScalar);
+        return AcosScalar(args[0]);
+    }
+
+    private static ScalarValue AcosScalar(ScalarValue value)
+    {
+        double n = ToNumber(value);
         if (n < -1 || n > 1) return ErrorValue.Num;
         return new NumberValue(Math.Acos(n));
     }
@@ -327,7 +361,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Atan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, AtanScalar);
+        return AtanScalar(args[0]);
+    }
+
+    private static ScalarValue AtanScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         return new NumberValue(Math.Atan(n));
     }
@@ -346,7 +386,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Degrees(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, DegreesScalar);
+        return DegreesScalar(args[0]);
+    }
+
+    private static ScalarValue DegreesScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         return new NumberValue(n * 180.0 / Math.PI);
     }
@@ -354,7 +400,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue Radians(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, RadiansScalar);
+        return RadiansScalar(args[0]);
+    }
+
+    private static ScalarValue RadiansScalar(ScalarValue value)
+    {
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Num;
         return new NumberValue(n * Math.PI / 180.0);
     }

@@ -52,8 +52,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var xlsxCustomViews = XlsxWorkbookMetadataReader.LoadCustomViews(packageStream);
 
         packageStream.Position = 0;
-        using var closedXmlPackageStream = XlsxClosedXmlLoadPackageSanitizer.Create(packageStream);
-        using var xlWorkbook = new XLWorkbook(closedXmlPackageStream);
+        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream);
+        using var closedXmlPackageStream = closedXmlLoad.PackageStream;
+        using var xlWorkbook = closedXmlLoad.Workbook;
         var workbook = new Workbook("Untitled");
         SourcePackages.Remove(workbook);
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
@@ -364,6 +365,38 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             : new MemoryStream();
         stream.CopyTo(packageStream);
         return packageStream;
+    }
+
+    private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithSanitizationFallback(
+        MemoryStream packageStream)
+    {
+        var closedXmlPackageStream = XlsxClosedXmlLoadPackageSanitizer.Create(
+            packageStream,
+            removeUnsupportedConditionalFormatting: false);
+        try
+        {
+            return (closedXmlPackageStream, new XLWorkbook(closedXmlPackageStream));
+        }
+        catch
+        {
+            if (!ReferenceEquals(closedXmlPackageStream, packageStream))
+                closedXmlPackageStream.Dispose();
+
+            packageStream.Position = 0;
+            var fallbackPackageStream = XlsxClosedXmlLoadPackageSanitizer.Create(
+                packageStream,
+                removeUnsupportedConditionalFormatting: true);
+            try
+            {
+                return (fallbackPackageStream, new XLWorkbook(fallbackPackageStream));
+            }
+            catch
+            {
+                if (!ReferenceEquals(fallbackPackageStream, packageStream))
+                    fallbackPackageStream.Dispose();
+                throw;
+            }
+        }
     }
 
 }
