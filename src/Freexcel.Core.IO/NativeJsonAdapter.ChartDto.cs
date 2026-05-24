@@ -43,6 +43,8 @@ public sealed partial class NativeJsonAdapter
         public string? Title { get; set; }
         public string? XAxisTitle { get; set; }
         public string? YAxisTitle { get; set; }
+        public bool HideXAxis { get; set; }
+        public bool HideYAxis { get; set; }
         public CellColor? ChartTitleTextColor { get; set; }
         public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;

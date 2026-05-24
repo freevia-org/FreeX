@@ -184,6 +184,14 @@ Run:
   $runCommand
 
 $runtimeGuidance
+
+Local diagnostics:
+  Freexcel writes local tester diagnostics and crash reports to:
+    %LOCALAPPDATA%\Freexcel\Diagnostics
+
+  These files stay on the tester's machine unless they choose to attach them
+  to an issue report. To disable local diagnostics for a run, start Freexcel
+  with FREEXCEL_DIAGNOSTICS=0 in the environment.
 "@
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 
