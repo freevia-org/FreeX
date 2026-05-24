@@ -170,6 +170,50 @@ public sealed class OpenWorkbookLoaderTests
     }
 
     [Theory]
+    [InlineData(".xls", false)]
+    [InlineData(".xlsb", false)]
+    [InlineData(".xlt", true)]
+    public async Task LoadAsync_DoesNotInspectLegacyBinaryExcelVariants(string extension, bool opensAsTemplate)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        try
+        {
+            var inspected = false;
+            var adapter = new FakeAdapter(stream =>
+            {
+                using var reader = new StreamReader(stream);
+                reader.ReadToEnd().Should().Be("payload");
+                var workbook = new Workbook("Loaded");
+                workbook.AddSheet("Sheet1");
+                return workbook;
+            });
+            var loader = new OpenWorkbookLoader(
+                _ => { },
+                inspectXlsx: _ =>
+                {
+                    inspected = true;
+                    return new XlsxFeatureReport([]);
+                });
+
+            var result = await loader.LoadAsync(
+                tempPath,
+                adapter,
+                extension,
+                new FileFormatDescriptor(extension, "Excel Binary", CanOpen: true, CanSave: false, opensAsTemplate),
+                new ImmediateProgress<OpenProgressUpdate>(_ => { }));
+
+            inspected.Should().BeFalse();
+            result.FeatureReport.Should().BeNull();
+            result.OpenedAsTemplate.Should().Be(opensAsTemplate);
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
+    [Theory]
     [InlineData(".csv")]
     [InlineData(".txt")]
     [InlineData(".tsv")]
