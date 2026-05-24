@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -65,6 +66,7 @@ public sealed class ChartAreaLegendDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartAreaLegendDialogResult FromChart(ChartModel chart) => CreateResult(
@@ -150,6 +152,13 @@ public sealed class ChartAreaLegendDialog : Window
         _legendBorderBox.Text = ChartDialogHelpers.FormatColor(result.LegendBorderColor);
         _legendBorderThicknessBox.Text = result.LegendBorderThickness.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _legendFontSizeBox.Text = result.LegendFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _chartAreaFillBox.Focus();
+        _chartAreaFillBox.SelectAll();
+        Keyboard.Focus(_chartAreaFillBox);
     }
 
     private void Accept()

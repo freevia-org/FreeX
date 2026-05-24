@@ -264,6 +264,10 @@ internal static class XlsxPivotTableWriter
             new XAttribute("indent", Math.Clamp(pivot.CompactRowLabelIndent, 0, 15).ToString(CultureInfo.InvariantCulture)),
             OptionalAttribute("altText", pivot.AltTextTitle),
             OptionalAttribute("altTextSummary", pivot.AltTextDescription),
+            OptionalAttribute("dataCaption", pivot.DataCaption),
+            OptionalAttribute("grandTotalCaption", pivot.GrandTotalCaption),
+            OptionalAttribute("missingCaption", pivot.MissingCaption),
+            OptionalAttribute("errorCaption", pivot.ErrorCaption),
             new XAttribute("reportLayout", ToPivotReportLayoutText(pivot.ReportLayout)),
             new XElement(
                 workbookNs + "location",

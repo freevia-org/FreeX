@@ -9,7 +9,11 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
-    private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells, bool IsCut = false);
+    private record InternalClipboard(
+        GridRange SourceRange,
+        List<(CellAddress Source, Cell Cell)> Cells,
+        string Text,
+        bool IsCut = false);
     private InternalClipboard? _internalClipboard;
 
     private void CancelCopyAndTransientModes()
@@ -70,81 +74,94 @@ public partial class MainWindow
                 clipCells.Add((addr, cell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
             }
         }
-        _internalClipboard = new InternalClipboard(range, clipCells, isCut);
+        _internalClipboard = new InternalClipboard(range, clipCells, text, isCut);
     }
 
     private void ExecutePaste(PasteMode mode = PasteMode.All, PasteSpecialOptions options = default, bool keepColumnWidths = false)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
+        string? currentClipboardText = null;
+        bool currentClipboardTextRead = false;
+
         // If we have an internal clipboard (copied from within this app), use it with formula adjustment
         if (_internalClipboard is { } clip)
         {
-            IWorkbookCommand CreatePasteCommand()
+            currentClipboardText = TryGetClipboardText();
+            currentClipboardTextRead = true;
+            if (!ClipboardPastePlanner.ShouldUseInternalClipboard(clip.Text, currentClipboardText))
             {
-                var currentRange = SheetGrid.SelectedRange ?? range;
-                var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
-                    _workbook,
-                    _currentSheetId,
-                    clip.SourceRange,
-                    clip.Cells,
-                    currentRange.Start,
-                    ClipboardPastePlanner.ToCorePasteMode(mode),
-                    options);
-                var command = keepColumnWidths
-                    ? new CompositeWorkbookCommand(
-                        "Paste Special",
-                        [
-                            pasteCommand,
-                            new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col)
-                        ])
-                    : pasteCommand;
-
-                if (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste(
-                        clip.IsCut,
-                        clip.SourceRange,
-                        currentRange,
-                        mode,
-                        options,
-                        keepColumnWidths))
+                _internalClipboard = null;
+                ClearClipboardVisualState();
+            }
+            else
+            {
+                IWorkbookCommand CreatePasteCommand()
                 {
-                    command = new CompositeWorkbookCommand(
-                        "Cut and Paste",
-                        [
-                            command,
-                            new ClearContentsCommand(clip.SourceRange.Start.Sheet, clip.SourceRange)
-                        ]);
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
+                        _workbook,
+                        _currentSheetId,
+                        clip.SourceRange,
+                        clip.Cells,
+                        currentRange.Start,
+                        ClipboardPastePlanner.ToCorePasteMode(mode),
+                        options);
+                    var command = keepColumnWidths
+                        ? new CompositeWorkbookCommand(
+                            "Paste Special",
+                            [
+                                pasteCommand,
+                                new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col)
+                            ])
+                        : pasteCommand;
+
+                    if (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste(
+                            clip.IsCut,
+                            clip.SourceRange,
+                            currentRange,
+                            mode,
+                            options,
+                            keepColumnWidths))
+                    {
+                        command = new CompositeWorkbookCommand(
+                            "Cut and Paste",
+                            [
+                                command,
+                                new ClearContentsCommand(clip.SourceRange.Start.Sheet, clip.SourceRange)
+                            ]);
+                    }
+
+                    return command;
                 }
 
-                return command;
-            }
+                var title = mode == PasteMode.All && !options.Transpose && options.Operation == PasteSpecialOperation.None
+                    ? "Paste"
+                    : "Paste Special";
 
-            var title = mode == PasteMode.All && !options.Transpose && options.Operation == PasteSpecialOperation.None
-                ? "Paste"
-                : "Paste Special";
+                var pasteOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteCommand);
+                if (!pasteOutcome.Success)
+                {
+                    ShowCommandError(pasteOutcome, title);
+                    return;
+                }
 
-            var pasteOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteCommand);
-            if (!pasteOutcome.Success)
-            {
-                ShowCommandError(pasteOutcome, title);
-                return;
-            }
+                _repeatPostAction = _ =>
+                {
+                    CompletePasteSelection(clip.SourceRange, options);
+                    if (clip.IsCut)
+                        _internalClipboard = null;
+                };
+                if (mode != PasteMode.Formats)
+                    RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
 
-            _repeatPostAction = _ =>
-            {
                 CompletePasteSelection(clip.SourceRange, options);
                 if (clip.IsCut)
                     _internalClipboard = null;
-            };
-            if (mode != PasteMode.Formats)
-                RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
-
-            CompletePasteSelection(clip.SourceRange, options);
-            if (clip.IsCut)
-                _internalClipboard = null;
-            UpdateViewport();
-            RefreshToolbar();
-            return;
+                UpdateViewport();
+                RefreshToolbar();
+                return;
+            }
         }
 
         if (mode == PasteMode.Formats || mode == PasteMode.Formulas)
@@ -154,9 +171,7 @@ public partial class MainWindow
             return;
 
         // Fallback: external clipboard (plain text)
-        string text;
-        try { text = System.Windows.Clipboard.GetText(); }
-        catch { return; }
+        var text = currentClipboardTextRead ? currentClipboardText : TryGetClipboardText();
         if (string.IsNullOrEmpty(text)) return;
 
         var rows = ClipboardSerializer.Deserialize(text);
@@ -185,6 +200,12 @@ public partial class MainWindow
         CompleteExternalPasteSelection(capturedRows);
         UpdateViewport();
         RefreshToolbar();
+    }
+
+    private static string? TryGetClipboardText()
+    {
+        try { return System.Windows.Clipboard.GetText(); }
+        catch { return null; }
     }
 
     private void ExecuteInsertCopiedCells()

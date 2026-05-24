@@ -22,9 +22,20 @@ public sealed class SymbolPickerDialogSourceTests
         source.Should().Contain("Content = \"_Font:\"");
         source.Should().Contain("Content = \"_Subset:\"");
         source.Should().Contain("Recently used symbols");
-        source.Should().Contain("Character code:");
+        source.Should().Contain("Content = \"Character _code:\"");
+        source.Should().Contain("Target = selectedCode");
         source.Should().Contain("from: Unicode (hex)");
         source.Should().Contain("UniformGrid");
+    }
+
+    [Fact]
+    public void Dialog_CharacterCodeGoAction_FocusesAndSelectsCodeEntry()
+    {
+        var source = ReadSymbolPickerDialogSources();
+
+        source.Should().Contain("selectedCode.Focus();");
+        source.Should().Contain("selectedCode.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(selectedCode);");
     }
 
     [Fact]
