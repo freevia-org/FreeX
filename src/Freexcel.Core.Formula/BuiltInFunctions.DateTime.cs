@@ -153,6 +153,12 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
+        if (args.Count > 1 && args[1] is RangeValue returnTypeRange)
+            return MapUnaryTextRange(returnTypeRange, value =>
+            {
+                double rawType = ToNumber(value);
+                return double.IsFinite(rawType) ? WeekdayScalar(args[0], (int)rawType) : ErrorValue.Num;
+            });
         double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
@@ -180,6 +186,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args[1] is RangeValue monthsRange)
+            return MapUnaryTextRange(monthsRange, value =>
+            {
+                double raw = ToNumber(value);
+                if (!double.IsFinite(raw) || raw > int.MaxValue || raw < int.MinValue) return ErrorValue.Num;
+                return EdateScalar(args[0], (int)raw);
+            });
         double rawMonths = ToNumber(args[1]);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue || rawMonths < int.MinValue) return ErrorValue.Num;
         int months = (int)rawMonths;
@@ -338,6 +351,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args[1] is RangeValue monthsRange)
+            return MapUnaryTextRange(monthsRange, value =>
+            {
+                double raw = ToNumber(value);
+                if (!double.IsFinite(raw) || raw > int.MaxValue - 1 || raw < int.MinValue) return ErrorValue.Num;
+                return EomonthScalar(args[0], (int)raw);
+            });
         double rawMonths = ToNumber(args[1]);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue - 1 || rawMonths < int.MinValue) return ErrorValue.Num;
         int months = (int)rawMonths;
@@ -412,6 +432,17 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        if (args[1] is RangeValue daysRange)
+        {
+            if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var rangeHolidays, out var rangeHolidayError))
+                return rangeHolidayError!;
+            return MapUnaryTextRange(daysRange, value =>
+            {
+                double raw = ToNumber(value);
+                if (!double.IsFinite(raw) || raw < int.MinValue + 1 || raw > int.MaxValue) return ErrorValue.Num;
+                return WorkdayScalar(args[0], (int)raw, rangeHolidays);
+            });
+        }
         double rawDays = ToNumber(args[1]);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
