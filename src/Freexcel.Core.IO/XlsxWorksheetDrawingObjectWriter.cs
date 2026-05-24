@@ -187,6 +187,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", pictureIndex + 1),
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
+                        string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
@@ -230,6 +231,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", shapeIndex + 100),
                         new XAttribute("name", DrawingName(textBox.Name, $"TextBox {shapeIndex}")),
+                        string.IsNullOrWhiteSpace(textBox.Title) ? null : new XAttribute("title", textBox.Title),
                         string.IsNullOrWhiteSpace(textBox.AltText) ? null : new XAttribute("descr", textBox.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
                 ToShapePropertiesForDrawingObject(
@@ -264,6 +266,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", shapeIndex + 200),
                         new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
+                        string.IsNullOrWhiteSpace(shape.Title) ? null : new XAttribute("title", shape.Title),
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                 ToShapePropertiesForDrawingObject(
