@@ -1018,11 +1018,17 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double x = ToNumber(args[0]);
         double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
         bool cum = ToBool(args[3]);
         double A = args.Count >= 5 && args[4] is not BlankValue ? ToNumber(args[4]) : 0.0;
         double B = args.Count >= 6 && args[5] is not BlankValue ? ToNumber(args[5]) : 1.0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BetaDistScalar(value, alpha, beta, cum, A, B));
+        return BetaDistScalar(args[0], alpha, beta, cum, A, B);
+    }
+
+    private static ScalarValue BetaDistScalar(ScalarValue xValue, double alpha, double beta, bool cum, double A, double B)
+    {
+        double x = ToNumber(xValue);
         if (alpha <= 0 || beta <= 0 || A >= B) return ErrorValue.Num;
         if (x < A || x > B) return ErrorValue.Num;
         double t = (x - A) / (B - A);
@@ -1037,10 +1043,16 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double prob = ToNumber(args[0]);
         double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
         double A = args.Count >= 4 && args[3] is not BlankValue ? ToNumber(args[3]) : 0.0;
         double B = args.Count >= 5 && args[4] is not BlankValue ? ToNumber(args[4]) : 1.0;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => BetaInvScalar(value, alpha, beta, A, B));
+        return BetaInvScalar(args[0], alpha, beta, A, B);
+    }
+
+    private static ScalarValue BetaInvScalar(ScalarValue probabilityValue, double alpha, double beta, double A, double B)
+    {
+        double prob = ToNumber(probabilityValue);
         if (prob < 0 || prob > 1 || alpha <= 0 || beta <= 0 || A >= B) return ErrorValue.Num;
         return NumberResult(BetaInv(prob, alpha, beta) * (B - A) + A);
     }
