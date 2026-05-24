@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -43,6 +44,7 @@ public sealed class ChartErrorBarsDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartErrorBarsDialogResult FromChart(ChartModel chart) => CreateResult(
@@ -86,6 +88,12 @@ public sealed class ChartErrorBarsDialog : Window
         _directionBox.SelectedItem = result.Direction;
         _valueBox.Text = result.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _endCapsBox.IsChecked = result.EndCaps;
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _showBox.Focus();
+        Keyboard.Focus(_showBox);
     }
 
     private void Accept()

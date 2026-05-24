@@ -157,6 +157,20 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribePdfInitialViewAndOpenMode()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            InitialView: PdfInitialView.OneColumn,
+            OpenMode: PdfOpenMode.FullScreen);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; opens as one continuous column; opens full screen; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
@@ -620,6 +634,35 @@ public class ExportPlannerTests
                 pdf.PageMode.Should().Be(PdfPageMode.UseOutlines);
                 pdf.Internals.Catalog.Elements.GetName("/NonFullScreenPageMode")
                     .Should().Be("/UseOutlines");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_AppliesRequestedInitialViewAndOpenMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    initialView: PdfInitialView.OneColumn,
+                    openMode: PdfOpenMode.FullScreen);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadPageLayout(pdf).Should().Be("/OneColumn");
+                pdf.PageMode.Should().Be(PdfPageMode.FullScreen);
             }
             finally
             {
