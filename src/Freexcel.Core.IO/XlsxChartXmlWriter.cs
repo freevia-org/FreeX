@@ -298,7 +298,34 @@ internal static partial class XlsxChartXmlWriter
                     chartNs,
                     drawingNs));
         if (chart.ShowUpDownBars)
-            yield return new XElement(chartNs + "upDownBars");
+            yield return ToUpDownBarsXml(chart, chartNs, drawingNs);
+    }
+
+    private static XElement ToUpDownBarsXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        var upBarsShape = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            chart.UpBarFillThemeColor,
+            chart.UpBarFillColor,
+            chart.UpBarBorderThemeColor,
+            chart.UpBarBorderColor,
+            chart.UpBarBorderThickness);
+        var downBarsShape = ToShapeProperties(
+            chartNs,
+            drawingNs,
+            chart.DownBarFillThemeColor,
+            chart.DownBarFillColor,
+            chart.DownBarBorderThemeColor,
+            chart.DownBarBorderColor,
+            chart.DownBarBorderThickness);
+
+        return new XElement(chartNs + "upDownBars",
+            chart.UpDownBarGapWidth is { } gapWidth
+                ? new XElement(chartNs + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                : null,
+            upBarsShape is null ? null : new XElement(chartNs + "upBars", upBarsShape),
+            downBarsShape is null ? null : new XElement(chartNs + "downBars", downBarsShape));
     }
 
     private static XElement? ToChartGuideLineShapeProperties(

@@ -1302,7 +1302,14 @@ internal static class XlsxCorpusFixtureFactory
             HighLowLineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
             HighLowLineThickness = 2,
             HighLowLineDashStyle = ChartLineDashStyle.Dash,
-            ShowUpDownBars = true
+            ShowUpDownBars = true,
+            UpDownBarGapWidth = 180,
+            UpBarFillColor = new CellColor(112, 173, 71),
+            UpBarBorderColor = new CellColor(84, 130, 53),
+            UpBarBorderThickness = 1,
+            DownBarFillColor = new CellColor(192, 0, 0),
+            DownBarBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            DownBarBorderThickness = 2
         });
         sheet.Charts.Add(new ChartModel
         {
