@@ -43,6 +43,10 @@ public class FunctionLibraryTests
             range.At(row + 1, 1).Should().Be(expected[row]);
     }
 
+    private static BoolValue True() => new(true);
+
+    private static BoolValue False() => new(false);
+
     // ── IFERROR ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -989,6 +993,23 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void IsFunctions_RangeArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new TextValue("x")),
+            (3, 1, ErrorValue.NA),
+            (4, 1, new BoolValue(true)));
+
+        AssertColumn(_eval.Evaluate("=ISNUMBER(A1:A5)", sheet), True(), False(), False(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISTEXT(A1:A5)", sheet), False(), True(), False(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISERROR(A1:A5)", sheet), False(), False(), True(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISNA(A1:A5)", sheet), False(), False(), True(), False(), False());
+        AssertColumn(_eval.Evaluate("=ISLOGICAL(A1:A5)", sheet), False(), False(), False(), True(), False());
+        AssertColumn(_eval.Evaluate("=ISBLANK(A1:A5)", sheet), False(), False(), False(), False(), True());
+    }
+
+    [Fact]
     public void Trim_RemovesLeadingTrailing()
     {
         var sheet = MakeSheet();
@@ -1922,6 +1943,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUND(1.2345,16)", MakeSheet()).Should().Be(new NumberValue(1.2345));
         _eval.Evaluate("=ROUND(12345,-16)", MakeSheet()).Should().Be(new NumberValue(0));
         _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Rounding_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1.25)),
+            (2, 1, new NumberValue(-1.25)));
+
+        AssertColumn(_eval.Evaluate("=ROUND(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDUP(A1:A2,1)", sheet), new NumberValue(1.3), new NumberValue(-1.3));
+        AssertColumn(_eval.Evaluate("=ROUNDDOWN(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
+        AssertColumn(_eval.Evaluate("=TRUNC(A1:A2,1)", sheet), new NumberValue(1.2), new NumberValue(-1.2));
     }
 
     // ── CEILING ───────────────────────────────────────────────────────────────
