@@ -137,6 +137,22 @@ public sealed class ColorPickerDialogTests
             xaml.Should().Contain(expected);
     }
 
+    [Fact]
+    public void InvalidCustomColor_SelectsCustomTabAndFocusesHexInput()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml.cs"));
+
+        xaml.Should().Contain("<TabControl x:Name=\"ColorTabs\"");
+        xaml.Should().Contain("<TabItem x:Name=\"CustomTab\" Header=\"_Custom\"");
+        source.Should().Contain("FocusInvalidCustomColorInput();");
+        source.Should().Contain("private void FocusInvalidCustomColorInput()");
+        source.Should().Contain("ColorTabs.SelectedItem = CustomTab;");
+        source.Should().Contain("CustomColorTextBox.Focus();");
+        source.Should().Contain("CustomColorTextBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(CustomColorTextBox);");
+    }
+
     [Theory]
     [InlineData("#217346", 0x21, 0x73, 0x46)]
     [InlineData("217346", 0x21, 0x73, 0x46)]
