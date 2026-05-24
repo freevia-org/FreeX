@@ -29,7 +29,9 @@ internal static class PdfDocumentExporter
         PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
         ExportQuality quality = ExportQuality.Standard,
-        IReadOnlyList<PdfBookmark>? bookmarks = null)
+        IReadOnlyList<PdfBookmark>? bookmarks = null,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -39,7 +41,7 @@ internal static class PdfDocumentExporter
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
         var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
-        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks);
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality), bookmarks, initialView, openMode);
     }
 
     internal static double ResolveRasterDpi(ExportQuality quality) =>
@@ -54,7 +56,9 @@ internal static class PdfDocumentExporter
         int firstPageIndex,
         int lastPageIndexInclusive,
         double dpi = StandardDpi,
-        IReadOnlyList<PdfBookmark>? bookmarks = null)
+        IReadOnlyList<PdfBookmark>? bookmarks = null,
+        PdfInitialView initialView = PdfInitialView.SinglePage,
+        PdfOpenMode openMode = PdfOpenMode.Normal)
     {
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
@@ -66,7 +70,7 @@ internal static class PdfDocumentExporter
         using var pdf = new PdfDocument();
         pdf.Info.Creator = "Freexcel";
         ApplyDefaultCatalogMetadata(pdf);
-        ApplyDefaultViewerPreferences(pdf);
+        ApplyDefaultViewerPreferences(pdf, initialView);
         ApplyProperties(pdf, properties);
 
         for (int i = firstPageIndex; i <= lastPageIndexInclusive; i++)
@@ -87,18 +91,19 @@ internal static class PdfDocumentExporter
             gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
         }
 
-        AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
+        var hasBookmarks = AddBookmarks(pdf, bookmarks, firstPageIndex, lastPageIndexInclusive);
+        ApplyOpenMode(pdf, openMode, hasBookmarks);
         pdf.Save(path);
     }
 
-    private static void AddBookmarks(
+    private static bool AddBookmarks(
         PdfDocument pdf,
         IReadOnlyList<PdfBookmark>? bookmarks,
         int firstPageIndex,
         int lastPageIndexInclusive)
     {
         if (bookmarks is null || bookmarks.Count == 0)
-            return;
+            return false;
 
         foreach (var bookmark in bookmarks)
         {
@@ -118,9 +123,11 @@ internal static class PdfDocumentExporter
 
         if (pdf.Outlines.Count > 0)
         {
-            pdf.PageMode = PdfPageMode.UseOutlines;
             pdf.Internals.Catalog.Elements.SetName("/NonFullScreenPageMode", "/UseOutlines");
+            return true;
         }
+
+        return false;
     }
 
     private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
@@ -156,7 +163,7 @@ internal static class PdfDocumentExporter
         GetOrCreateViewerPreferences(pdf).Elements.SetBoolean(displayDocTitleKey, true);
     }
 
-    private static void ApplyDefaultViewerPreferences(PdfDocument pdf)
+    private static void ApplyDefaultViewerPreferences(PdfDocument pdf, PdfInitialView initialView)
     {
         const string printScalingKey = "/PrintScaling";
         const string noPrintScalingName = "/None";
@@ -164,12 +171,29 @@ internal static class PdfDocumentExporter
         const string centerWindowKey = "/CenterWindow";
         const string pickTrayByPdfSizeKey = "/PickTrayByPDFSize";
 
-        pdf.PageLayout = PdfPageLayout.SinglePage;
+        pdf.PageLayout = initialView switch
+        {
+            PdfInitialView.OneColumn => PdfPageLayout.OneColumn,
+            PdfInitialView.TwoColumnLeft => PdfPageLayout.TwoColumnLeft,
+            PdfInitialView.TwoColumnRight => PdfPageLayout.TwoColumnRight,
+            _ => PdfPageLayout.SinglePage
+        };
         var viewerPreferences = GetOrCreateViewerPreferences(pdf);
         viewerPreferences.Elements.SetName(printScalingKey, noPrintScalingName);
         viewerPreferences.Elements.SetBoolean(fitWindowKey, true);
         viewerPreferences.Elements.SetBoolean(centerWindowKey, true);
         viewerPreferences.Elements.SetBoolean(pickTrayByPdfSizeKey, true);
+    }
+
+    private static void ApplyOpenMode(PdfDocument pdf, PdfOpenMode openMode, bool hasBookmarks)
+    {
+        pdf.PageMode = openMode switch
+        {
+            PdfOpenMode.FullScreen => PdfPageMode.FullScreen,
+            PdfOpenMode.Outlines => PdfPageMode.UseOutlines,
+            _ when hasBookmarks => PdfPageMode.UseOutlines,
+            _ => PdfPageMode.UseNone
+        };
     }
 
     private static PdfDictionary GetOrCreateViewerPreferences(PdfDocument pdf)
