@@ -224,6 +224,18 @@ public class PhaseBDistributionTests
     // ── T.INV ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void TDistributionFunctions_RangeFirstArgument_SpillElementwise()
+    {
+        var sheet = MakeSheet((1, 1, 0.0), (2, 1, 1.0));
+
+        AssertColumnApproximately(Eval("T.DIST(A1:A2,10,TRUE)", sheet), Calc("T.DIST(0,10,TRUE)"), Calc("T.DIST(1,10,TRUE)"));
+        AssertColumnApproximately(Eval("T.DIST.RT(A1:A2,10)", sheet), Calc("T.DIST.RT(0,10)"), Calc("T.DIST.RT(1,10)"));
+        AssertColumnApproximately(Eval("T.DIST.2T(A1:A2,10)", sheet), Calc("T.DIST.2T(0,10)"), Calc("T.DIST.2T(1,10)"));
+        AssertColumnApproximately(Eval("T.INV(A1:A2,10)", MakeSheet((1, 1, 0.5), (2, 1, 0.75))), Calc("T.INV(0.5,10)"), Calc("T.INV(0.75,10)"));
+        AssertColumnApproximately(Eval("T.INV.2T(A1:A2,10)", MakeSheet((1, 1, 0.5), (2, 1, 0.25))), Calc("T.INV.2T(0.5,10)"), Calc("T.INV.2T(0.25,10)"));
+    }
+
+    [Fact]
     public void TInv_At0Point5_Returns0()
         => Calc("T.INV(0.5,10)").Should().BeApproximately(0.0, 1e-5);
 
