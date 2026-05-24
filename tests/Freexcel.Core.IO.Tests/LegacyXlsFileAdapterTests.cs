@@ -21,6 +21,12 @@ public sealed class LegacyXlsFileAdapterTests
             format.FormatName == "Excel Binary Workbook" &&
             format.CanOpen &&
             !format.CanSave);
+        adapter.Formats.Should().Contain(format =>
+            format.Extension == ".xlt" &&
+            format.FormatName == "Excel 97-2003 Template" &&
+            format.CanOpen &&
+            !format.CanSave &&
+            format.OpensAsTemplate);
     }
 
     [Fact]
