@@ -62,6 +62,8 @@ public sealed partial class Sheet
             CenterVerticallyOnPage        = CenterVerticallyOnPage,
             PageOrder                     = PageOrder,
             FirstPageNumber               = FirstPageNumber,
+            UsePrinterDefaults            = UsePrinterDefaults,
+            PrintCopies                   = PrintCopies,
             PrintBlackAndWhite            = PrintBlackAndWhite,
             PrintDraftQuality             = PrintDraftQuality,
             PrintQualityDpi               = PrintQualityDpi,

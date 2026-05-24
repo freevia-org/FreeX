@@ -160,6 +160,8 @@ public sealed partial class NativeJsonAdapter
         public bool CenterVerticallyOnPage { get; set; }
         public WorksheetPageOrder? PageOrder { get; set; }
         public int? FirstPageNumber { get; set; }
+        public bool? UsePrinterDefaults { get; set; }
+        public int? PrintCopies { get; set; }
         public bool PrintBlackAndWhite { get; set; }
         public bool PrintDraftQuality { get; set; }
         public int? PrintQualityDpi { get; set; }

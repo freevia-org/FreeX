@@ -229,6 +229,20 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialogInvalidFixedWidthBreaks_ReturnsToStepTwoAndFocusesBreaks()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("FocusInvalidFixedWidthBreaksInput();");
+        source.Should().Contain("private void FocusInvalidFixedWidthBreaksInput()");
+        source.Should().Contain("_wizardStep = 2;");
+        source.Should().Contain("_fixedWidthButton.IsChecked = true;");
+        source.Should().Contain("_fixedWidthBreaksBox.Focus();");
+        source.Should().Contain("_fixedWidthBreaksBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_fixedWidthBreaksBox);");
+    }
+
+    [Fact]
     public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
     {
         TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")

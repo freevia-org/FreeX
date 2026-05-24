@@ -1661,6 +1661,47 @@ public class FunctionLibraryTests
     // ── WEEKDAY ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void DateTimeScalarRangeArguments_SpillElementwise()
+    {
+        var dates = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 7).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 8).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=WEEKDAY(A1:A2,2)", dates), new NumberValue(7), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=WEEKNUM(A1:A2,2)", dates), new NumberValue(1), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=ISOWEEKNUM(A1:A2)", dates), new NumberValue(1), new NumberValue(2));
+
+        var monthEnds = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(A1:A2,1)", monthEnds),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 29).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(A1:A2,1)", monthEnds),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 31).ToOADate()));
+
+        var textDates = MakeSheet(
+            (1, 1, new TextValue("2024-01-07")),
+            (2, 1, new TextValue("not a date")));
+        AssertColumn(
+            _eval.Evaluate("=DATEVALUE(A1:A2)", textDates),
+            new NumberValue(new DateTime(2024, 1, 7).ToOADate()),
+            ErrorValue.Value);
+
+        var textTimes = MakeSheet(
+            (1, 1, new TextValue("01:02:03")),
+            (2, 1, new TextValue("not a time")));
+        AssertColumn(
+            _eval.Evaluate("=TIMEVALUE(A1:A2)", textTimes),
+            new NumberValue(new TimeSpan(1, 2, 3).TotalDays),
+            ErrorValue.Value);
+    }
+
+    [Fact]
     public void Weekday_ReturnType1_SundayIs1()
     {
         // 2024-01-07 is a Sunday
@@ -1917,6 +1958,22 @@ public class FunctionLibraryTests
     }
 
     // ── INT ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void BinaryMath_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=POWER(A1:A2,2)", sheet), new NumberValue(16), new NumberValue(81));
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,2)", sheet), new NumberValue(0), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=LOG(A1:A2,2)", sheet), new NumberValue(2), new NumberValue(Math.Log(9) / Math.Log(2)));
+        AssertColumn(_eval.Evaluate("=QUOTIENT(A1:A2,2)", sheet), new NumberValue(2), new NumberValue(4));
+        AssertColumn(_eval.Evaluate("=CEILING(A1:A2,5)", sheet), new NumberValue(5), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=FLOOR(A1:A2,5)", sheet), new NumberValue(0), new NumberValue(5));
+        AssertColumn(_eval.Evaluate("=MROUND(A1:A2,5)", sheet), new NumberValue(5), new NumberValue(10));
+    }
 
     [Fact]
     public void Int_TruncatesDown()
