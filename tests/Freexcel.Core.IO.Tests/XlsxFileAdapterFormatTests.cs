@@ -21,7 +21,9 @@ public sealed class XlsxFileAdapterFormatTests
         diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
-        sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage)");
+        sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting)");
+        adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream)");
+        sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");
         sanitizerSource.Should().Contain("return sourcePackage;");
     }
 
