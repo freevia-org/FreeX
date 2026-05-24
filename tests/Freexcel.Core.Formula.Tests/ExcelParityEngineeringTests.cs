@@ -86,6 +86,17 @@ public sealed class ExcelParityEngineeringTests
         AssertColumn(_eval.Evaluate("=BIN2HEX(\"1010\",A1:A2)", places), new TextValue("000A"), new TextValue("0000A"));
     }
 
+    [Fact]
+    public void Convert_RangeNumberArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=CONVERT(A1:A2,\"m\",\"cm\")", sheet), new NumberValue(100), new NumberValue(200));
+        AssertColumn(_eval.Evaluate("=CONVERT(A1:A2,\"C\",\"F\")", sheet), new NumberValue(33.8), new NumberValue(35.6));
+    }
+
     [Theory]
     [InlineData("=BIN2DEC(\"102\")")]
     [InlineData("=BIN2DEC(\"10101010101\")")]
