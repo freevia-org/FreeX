@@ -20,6 +20,7 @@ public sealed class PictureModel
     public List<PictureCellSnapshot> Cells { get; } = [];
     public byte[]? ImageBytes { get; set; }
     public string? ContentType { get; set; }
+    public string? Title { get; set; }
     public string? AltText { get; set; }
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;

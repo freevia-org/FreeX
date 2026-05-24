@@ -25,6 +25,7 @@ internal static class NativeJsonVisualDtoMapper
         CropTop = SanitizeCropEdge(picture.CropTop),
         CropRight = SanitizeCropEdge(picture.CropRight),
         CropBottom = SanitizeCropEdge(picture.CropBottom),
+        Title = picture.Title,
         AltText = picture.AltText,
         Cells = picture.Cells.Select(cell => new PictureCellDto
         {
@@ -62,6 +63,7 @@ internal static class NativeJsonVisualDtoMapper
                 CropTop = SanitizeCropEdge(pictureDto.CropTop),
                 CropRight = SanitizeCropEdge(pictureDto.CropRight),
                 CropBottom = SanitizeCropEdge(pictureDto.CropBottom),
+                Title = pictureDto.Title,
                 AltText = pictureDto.AltText
             };
 
@@ -90,6 +92,7 @@ internal static class NativeJsonVisualDtoMapper
         OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
         FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
         OutlineThemeColor = FromThemeColorReference(textBox.OutlineThemeColor),
+        Title = textBox.Title,
         AltText = textBox.AltText
     };
 
@@ -113,6 +116,7 @@ internal static class NativeJsonVisualDtoMapper
                 OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
                 OutlineThemeColor = ToThemeColorReference(textBoxDto.OutlineThemeColor),
+                Title = textBoxDto.Title,
                 AltText = textBoxDto.AltText
             };
         }
@@ -137,6 +141,7 @@ internal static class NativeJsonVisualDtoMapper
         FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
         OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
         HasShadowEffect = shape.HasShadowEffect,
+        Title = shape.Title,
         AltText = shape.AltText
     };
 
@@ -162,6 +167,7 @@ internal static class NativeJsonVisualDtoMapper
                 FillThemeColor = ToThemeColorReference(shapeDto.FillThemeColor),
                 OutlineThemeColor = ToThemeColorReference(shapeDto.OutlineThemeColor),
                 HasShadowEffect = shapeDto.HasShadowEffect,
+                Title = shapeDto.Title,
                 AltText = shapeDto.AltText
             };
         }
@@ -235,6 +241,7 @@ internal class PictureDto
     public double CropRight { get; set; }
     public double CropBottom { get; set; }
     public string? AltText { get; set; }
+    public string? Title { get; set; }
     public List<PictureCellDto> Cells { get; set; } = [];
 }
 
@@ -258,6 +265,7 @@ internal class TextBoxDto
     public string? OutlineColor { get; set; }
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
     public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
+    public string? Title { get; set; }
     public string? AltText { get; set; }
 }
 
@@ -276,6 +284,7 @@ internal class DrawingShapeDto
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
     public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
     public bool HasShadowEffect { get; set; }
+    public string? Title { get; set; }
     public string? AltText { get; set; }
 }
 
