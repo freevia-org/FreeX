@@ -775,6 +775,21 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterRangePicker_RefocusesSelectedInputAfterRequest()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void RequestRangeSelection", StringComparison.Ordinal)..
+            source.IndexOf("private void FocusInitialKeyboardTarget", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("FocusRangeSelectionInput(request.Target);");
+        source.Should().Contain("private static void FocusRangeSelectionInput(TextBox target)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
@@ -967,6 +982,20 @@ public sealed class DataToolDialogTests
         source.Should().Contain("FocusDestinationInput();");
         source.Should().Contain("_referencesList.Focus();");
         source.Should().Contain("_destinationBox.SelectAll();");
+    }
+
+    [Fact]
+    public void ConsolidateDialogInvalidAddReference_RefocusesReferenceWithKeyboardFocus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+        var addHandlerSource = source[
+            source.IndexOf("private void AddReferenceButton_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void DeleteReferenceButton_Click", StringComparison.Ordinal)];
+
+        addHandlerSource.Should().Contain("FocusReferenceInput();");
+        source.Should().Contain("_referenceBox.Focus();");
+        source.Should().Contain("_referenceBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_referenceBox);");
     }
 
     [Fact]

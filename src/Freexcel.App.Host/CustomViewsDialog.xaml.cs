@@ -59,7 +59,7 @@ public sealed partial class CustomViewsDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, new ApplyCustomViewCommand(vm.Name));
         if (!outcome.Success)
         {
-            MessageBox.Show(outcome.ErrorMessage ?? "Could not apply custom view.",
+            MessageBox.Show(this, outcome.ErrorMessage ?? "Could not apply custom view.",
                 "Custom Views", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusViewsList();
             return;
@@ -84,7 +84,7 @@ public sealed partial class CustomViewsDialog : Window
             dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings));
         if (!outcome.Success)
         {
-            MessageBox.Show(outcome.ErrorMessage ?? "Could not save custom view.",
+            MessageBox.Show(this, outcome.ErrorMessage ?? "Could not save custom view.",
                 "Custom Views", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusViewsList();
             return;
@@ -101,7 +101,7 @@ public sealed partial class CustomViewsDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, new DeleteCustomViewCommand(vm.Name));
         if (!outcome.Success)
         {
-            MessageBox.Show(outcome.ErrorMessage ?? "Could not delete custom view.",
+            MessageBox.Show(this, outcome.ErrorMessage ?? "Could not delete custom view.",
                 "Custom Views", MessageBoxButton.OK, MessageBoxImage.Warning);
             FocusViewsList();
         }

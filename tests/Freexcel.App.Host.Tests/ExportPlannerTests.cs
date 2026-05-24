@@ -1628,7 +1628,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_ContainsNativePrintCommandButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
@@ -1638,7 +1638,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialogOpenedFromKeyboard_FocusesPrintButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);");
         source.Should().Contain("private static void FocusInitialKeyboardTarget(Button printButton)");
@@ -1685,7 +1685,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("PrintSettingsPlan settings");
@@ -1702,7 +1702,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("showMargins?.Invoke()");
         source.Should().Contain("showPageSetup?.Invoke()");
@@ -1714,7 +1714,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_ExposesPageEntryAndStatus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"_Page:\"");
         source.Should().Contain("pageNumberBox");
@@ -1726,7 +1726,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_ExposesHonestPrinterCopiesAndStatusSurface()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("Content = \"Pr_inter:\"");
         source.Should().Contain("Content = \"_Copies:\"");
@@ -1771,6 +1771,12 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetBoolean("/DisplayDocTitle", false) == true;
+
+    private static string ReadPrintPreviewDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
 
     private static string? ReadPrintScaling(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements

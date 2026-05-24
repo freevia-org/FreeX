@@ -23,6 +23,19 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Fact]
+    public void DateAndTime_RangeFirstArgument_SpillElementwise()
+    {
+        var years = Sheet((1, 1, 2024), (2, 1, 2025));
+        var hours = Sheet((1, 1, 1), (2, 1, 13));
+
+        AssertColumn(_eval.Evaluate("=DATE(A1:A2,1,15)", years), new NumberValue(45306), new NumberValue(45672));
+        AssertColumn(
+            _eval.Evaluate("=TIME(A1:A2,30,0)", hours),
+            new NumberValue(0.0625),
+            new NumberValue(0.5625));
+    }
+
     [Theory]
     [InlineData("=DATE(1900,0,31)")]
     [InlineData("=DATE(1900,-1,62)")]
@@ -261,5 +274,20 @@ public sealed class ExcelParityDateSerialTests
         result.Value.Should().BeApproximately(expected, 1e-12);
     }
 
-    private static Sheet Sheet() => new(SheetId.New(), "S");
+    private static void AssertColumn(ScalarValue value, params ScalarValue[] expected)
+    {
+        var range = value.Should().BeOfType<RangeValue>().Subject;
+        range.Cells.GetLength(0).Should().Be(expected.Length);
+        range.Cells.GetLength(1).Should().Be(1);
+        for (int row = 0; row < expected.Length; row++)
+            range.Cells[row, 0].Should().Be(expected[row]);
+    }
+
+    private static Sheet Sheet(params (int Row, int Column, double Value)[] values)
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        foreach (var (row, column, value) in values)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)row, (uint)column), new NumberValue(value));
+        return sheet;
+    }
 }

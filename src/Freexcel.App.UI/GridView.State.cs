@@ -1,11 +1,23 @@
+using System.Windows;
 using System.Windows.Threading;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.UI;
 
+public enum ObjectKind { None, Picture, Shape, TextBox }
+
 public partial class GridView
 {
     private enum ResizeTarget { None, Row, Column }
+
+    private enum ObjectDragKind { None, Move, ResizeSE, ResizeE, ResizeS }
+
+    private Guid _selectedObjectId;
+    private ObjectKind _selectedObjectKind;
+    private ObjectDragKind _objectDragKind;
+    private Point _objectDragStartPos;
+    private Rect _objectDragStartRect;
+    private CellAddress _objectDragStartAnchor;
 
     private Dictionary<(uint Row, uint Col), GridRange> _mergeLookup = [];
     private ResizeTarget _resizeTarget = ResizeTarget.None;
