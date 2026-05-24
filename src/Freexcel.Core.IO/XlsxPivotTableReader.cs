@@ -111,7 +111,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -171,6 +171,7 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "pageOverThenDown"),
             Math.Max(0, XlsxXmlAttributeReader.ReadIntAttribute(root, "pageWrap") ?? 0),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDrill", defaultValue: true),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDrill", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyWidthHeightFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveFormatting", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "itemPrintTitles") || XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldPrintTitles"),
@@ -501,6 +502,7 @@ internal static partial class XlsxPivotTableReader
             PageOverThenDown = pending.PageOverThenDown,
             PageWrap = pending.PageWrap,
             ShowExpandCollapseButtons = pending.ShowExpandCollapseButtons,
+            EnableDrill = pending.EnableDrill,
             AutofitColumnsOnUpdate = pending.AutofitColumnsOnUpdate,
             PreserveFormattingOnUpdate = pending.PreserveFormattingOnUpdate,
             PrintTitles = pending.PrintTitles,
@@ -580,6 +582,7 @@ internal static partial class XlsxPivotTableReader
         bool PageOverThenDown,
         int PageWrap,
         bool ShowExpandCollapseButtons,
+        bool EnableDrill,
         bool AutofitColumnsOnUpdate,
         bool PreserveFormattingOnUpdate,
         bool PrintTitles,

@@ -804,6 +804,17 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartSeriesFormatDialogOpenedFromKeyboard_FocusesSeriesSelector()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartSeriesFormatDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_seriesBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_seriesBox);");
+    }
+
+    [Fact]
     public void ChartDialogs_LabelEditableHelperControlsWithTargets()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
