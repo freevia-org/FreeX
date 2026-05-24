@@ -145,6 +145,20 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void InsertChartDialogOpenedFromKeyboard_FocusesRecommendedGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var dialogSource = source[
+            source.IndexOf("public sealed class InsertChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record ChangeChartTypeDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_recommendedGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_recommendedGallery);");
+    }
+
+    [Fact]
     public void ChangeChartTypeDialog_PreselectsCurrentTypeAndBuildsResult()
     {
         StaTestRunner.Run(() =>
@@ -154,6 +168,18 @@ public sealed class ChartDialogTests
             dialog.SelectedChartType.Should().Be(ChartType.Bar);
         });
         ChangeChartTypeDialog.CreateResult(ChartType.Area).ChartType.Should().Be(ChartType.Area);
+    }
+
+    [Fact]
+    public void ChangeChartTypeDialogOpenedFromKeyboard_FocusesSubtypeGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTypeDialogs.cs"));
+        var dialogSource = source[source.IndexOf("public sealed class ChangeChartTypeDialog", StringComparison.Ordinal)..];
+
+        dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
+        dialogSource.Should().Contain("_subtypeGallery.Focus();");
+        dialogSource.Should().Contain("Keyboard.Focus(_subtypeGallery);");
     }
 
     [Fact]
