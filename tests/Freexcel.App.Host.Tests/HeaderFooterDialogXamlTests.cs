@@ -199,6 +199,18 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void PictureFormatDialogInvalidSize_RefocusesAndSelectsInvalidSizeBox()
+    {
+        var source = ReadHeaderFooterDialogSource();
+
+        source.Should().Contain("FocusInvalidSizeInput();");
+        source.Should().Contain("private void FocusInvalidSizeInput()");
+        source.Should().Contain("FocusAndSelect(string.IsNullOrWhiteSpace(_widthBox.Text) ? _widthBox : _heightBox);");
+        source.Should().Contain("private static void FocusAndSelect(TextBox box)");
+        source.Should().Contain("Keyboard.Focus(box);");
+    }
+
+    [Fact]
     public void PictureFormatDialog_CalculatesLockedAspectSize()
     {
         HeaderFooterPictureFormatDialog.CalculateLockedAspectHeight(200, originalWidth: 100, originalHeight: 50)
