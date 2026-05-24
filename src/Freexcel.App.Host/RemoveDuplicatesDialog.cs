@@ -79,6 +79,16 @@ public sealed partial class RemoveDuplicatesDialog : Window
         Keyboard.Focus(_hasHeadersBox);
     }
 
+    private void FocusFirstColumnChoice()
+    {
+        var firstColumnBox = _boxes.FirstOrDefault();
+        if (firstColumnBox is null)
+            return;
+
+        firstColumnBox.Focus();
+        Keyboard.Focus(firstColumnBox);
+    }
+
     private void RefreshColumnLabels()
     {
         var labels = _hasHeadersBox.IsChecked == true ? _headerColumns : _genericColumns;
@@ -118,6 +128,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         if (Result.SelectedColumnOffsets.Count == 0)
         {
             MessageBox.Show(this, "Select at least one column.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusFirstColumnChoice();
             return;
         }
         DialogResult = true;

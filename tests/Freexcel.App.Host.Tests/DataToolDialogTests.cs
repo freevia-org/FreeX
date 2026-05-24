@@ -1397,6 +1397,18 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Keyboard.Focus(_hasHeadersBox);");
     }
 
+    [Fact]
+    public void RemoveDuplicatesDialogInvalidColumnSelection_FocusesColumnChoice()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+
+        source.Should().Contain("FocusFirstColumnChoice();");
+        source.Should().Contain("private void FocusFirstColumnChoice()");
+        source.Should().Contain("_boxes.FirstOrDefault()");
+        source.Should().Contain("firstColumnBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(firstColumnBox);");
+    }
+
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
         where T : DependencyObject
     {

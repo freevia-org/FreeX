@@ -1864,6 +1864,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SQRT(A1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void UnaryMath_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-4)),
+            (2, 1, new NumberValue(9)));
+
+        AssertColumn(_eval.Evaluate("=ABS(A1:A2)", sheet), new NumberValue(4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SQRT(A1:A2)", sheet), ErrorValue.Num, new NumberValue(3));
+        AssertColumn(_eval.Evaluate("=INT(A1:A2)", sheet), new NumberValue(-4), new NumberValue(9));
+        AssertColumn(_eval.Evaluate("=SIGN(A1:A2)", sheet), new NumberValue(-1), new NumberValue(1));
+    }
+
     // ── INT ───────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -3094,6 +3107,20 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
         _eval.Evaluate("=TAN(A1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void UnaryTrig_RangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0)),
+            (2, 1, new NumberValue(0)));
+
+        AssertColumn(_eval.Evaluate("=SIN(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=COS(A1:A2)", sheet), new NumberValue(1), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=TAN(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=DEGREES(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=RADIANS(A1:A2)", sheet), new NumberValue(0), new NumberValue(0));
     }
 
     [Fact] public void Asin_One_ReturnsHalfPi() =>
