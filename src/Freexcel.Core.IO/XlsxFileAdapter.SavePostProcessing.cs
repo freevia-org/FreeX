@@ -91,7 +91,7 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetCodeNameWriter.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.GetUsedCells().Any(pair => pair.Value.IgnoreFormulaError)))
+        if (workbook.Sheets.Any(sheet => sheet.EnumerateCells().Any(pair => pair.Cell.IgnoreFormulaError)))
         {
             packageStream.Position = 0;
             XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook);

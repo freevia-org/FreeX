@@ -22,15 +22,13 @@ public sealed partial class XlsxFileAdapter
             if (sheet.TabColor is { } tabColor)
                 xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
-            foreach (var pair in sheet.GetUsedCells())
+            foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                var cell = pair.Value;
-
                 // Skip blank cells that carry no style
                 if (cell.Value is BlankValue && !cell.HasFormula && cell.StyleId == StyleId.Default)
                     continue;
 
-                var xlCell = xlSheet.Cell((int)pair.Key.Row, (int)pair.Key.Col);
+                var xlCell = xlSheet.Cell((int)address.Row, (int)address.Col);
 
                 if (cell.HasFormula)
                 {
