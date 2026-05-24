@@ -288,7 +288,10 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<IReadOnlyList<ScalarValue>> grandTotalRows,
         uint outputRow)
     {
-        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{subtotalKey.Values[0]} Total"));
+        var captionItem = subtotalKey.Values.Count == 0
+            ? ""
+            : subtotalKey.Values[^1];
+        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
             SetPivotValueCell(
                 workbook,
