@@ -307,6 +307,113 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return changed;
     }
 
+    private static bool MergeWorksheetCellNativeMetadata(
+        XElement? sourceSheetData,
+        Func<IReadOnlyDictionary<string, XElement>> getTargetCellsByAddress,
+        ZipArchive targetArchive,
+        XNamespace workbookNs)
+    {
+        if (sourceSheetData is null)
+            return false;
+
+        var changed = false;
+        IReadOnlyDictionary<string, XElement>? targetCellsByAddress = null;
+        IReadOnlyList<string>? targetSharedStrings = null;
+        foreach (var sourceCell in sourceSheetData.Descendants(workbookNs + "c"))
+        {
+            var address = sourceCell.Attribute("r")?.Value;
+            if (string.IsNullOrWhiteSpace(address))
+                continue;
+
+            var hasCellMetadata = HasPreservableCellNativeMetadata(sourceCell, workbookNs);
+            var sourceFormula = sourceCell.Element(workbookNs + "f");
+            var hasFormulaMetadata = sourceFormula?.HasAttributes == true;
+            var sourceInlineString = string.Equals(sourceCell.Attribute("t")?.Value, "inlineStr", StringComparison.OrdinalIgnoreCase)
+                ? sourceCell.Element(workbookNs + "is")
+                : null;
+            var hasInlineStringMetadata = sourceInlineString is not null &&
+                                          HasRichInlineStringMetadata(sourceInlineString, workbookNs);
+            if (!hasCellMetadata && !hasFormulaMetadata && !hasInlineStringMetadata)
+                continue;
+
+            targetCellsByAddress ??= getTargetCellsByAddress();
+            if (targetCellsByAddress.Count == 0)
+                return changed;
+
+            if (!targetCellsByAddress.TryGetValue(address, out var targetCell))
+                continue;
+
+            if (hasCellMetadata)
+            {
+                foreach (var attribute in sourceCell.Attributes())
+                {
+                    if (targetCell.Attribute(attribute.Name) is not null)
+                        continue;
+
+                    targetCell.SetAttributeValue(attribute.Name, attribute.Value);
+                    changed = true;
+                }
+
+                if (XlsxNativeXmlMerger.MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
+                    changed = true;
+
+                if (MergeMissingNativeChildren(
+                        sourceCell,
+                        targetCell,
+                        child =>
+                            child.Name != workbookNs + "f" &&
+                            child.Name != workbookNs + "v" &&
+                            child.Name != workbookNs + "is" &&
+                            child.Name != workbookNs + "extLst"))
+                {
+                    changed = true;
+                }
+            }
+
+            if (hasInlineStringMetadata && targetCell.Element(workbookNs + "f") is null)
+            {
+                targetSharedStrings ??= LoadSharedStringPlainText(targetArchive, workbookNs);
+                var sourcePlainText = ReadInlineStringPlainText(sourceInlineString!, workbookNs);
+                if (!string.IsNullOrEmpty(sourcePlainText) &&
+                    string.Equals(sourcePlainText, ReadCellPlainText(targetCell, targetSharedStrings, workbookNs), StringComparison.Ordinal))
+                {
+                    targetCell.SetAttributeValue("t", "inlineStr");
+                    targetCell.Elements(workbookNs + "v").Remove();
+                    targetCell.Elements(workbookNs + "is").Remove();
+                    targetCell.Add(new XElement(sourceInlineString!));
+                    changed = true;
+                }
+            }
+
+            if (hasFormulaMetadata)
+            {
+                var targetFormula = targetCell.Element(workbookNs + "f");
+                if (targetFormula is null ||
+                    !string.Equals(
+                        NormalizeFormulaXmlText(sourceFormula!.Value),
+                        NormalizeFormulaXmlText(targetFormula.Value),
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                foreach (var attribute in sourceFormula!.Attributes())
+                {
+                    if (attribute.IsNamespaceDeclaration)
+                        continue;
+
+                    if (string.Equals(targetFormula.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+                        continue;
+
+                    targetFormula.SetAttributeValue(attribute.Name, attribute.Value);
+                    changed = true;
+                }
+            }
+        }
+
+        return changed;
+    }
+
     private static bool HasCellAddress(XElement cell) =>
         !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value);
 
