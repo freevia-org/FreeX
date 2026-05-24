@@ -1,4 +1,6 @@
 using FluentAssertions;
+using System.IO;
+using System.Text.RegularExpressions;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -99,5 +101,23 @@ public sealed class RibbonCommandPresentationPlannerTests
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
 
         icon.Kind.Should().Be(expectedKind);
+    }
+
+    [Fact]
+    public void MainRibbonCommandTitles_MapToSemanticIcons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var ribbonXaml = xaml[
+            xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal)..xaml.IndexOf("<Grid Grid.Row=\"3\"", StringComparison.Ordinal)];
+        var genericTitles = Regex
+            .Matches(ribbonXaml, "local:RibbonTooltip.Title=\"(?<title>[^\"]+)\"")
+            .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .Where(title => !title.StartsWith("Excluded ", StringComparison.Ordinal))
+            .Where(title => RibbonCommandPresentationPlanner.GetIcon(title).Kind == RibbonCommandIconKind.Generic)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        genericTitles.Should().BeEmpty("visible ribbon commands should use a specific semantic icon rather than the generic fallback");
     }
 }
