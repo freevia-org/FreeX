@@ -230,7 +230,6 @@ public static partial class BuiltInFunctions
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         if (lookupArr.RowCount != 1 && lookupArr.ColCount != 1) return ErrorValue.Value;
 
-        var lookupValue = args[0];
         var lookupFlat = lookupArr.Flatten();
         double rawMatchMode  = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
         double rawSearchMode = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
@@ -239,7 +238,14 @@ public static partial class BuiltInFunctions
         int searchMode = (int)rawSearchMode;
         if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
         if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
+        if (args[0] is RangeValue lookupValueRange)
+            return MapUnaryTextRange(lookupValueRange, value => XmatchScalar(value, lookupFlat, matchMode, searchMode));
 
+        return XmatchScalar(args[0], lookupFlat, matchMode, searchMode);
+    }
+
+    private static ScalarValue XmatchScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, int matchMode, int searchMode)
+    {
         var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
         if (searchMode is -1 or -2) indices.Reverse();
 
@@ -414,7 +420,14 @@ public static partial class BuiltInFunctions
         int searchMode = (int)rawXSearchMode; // 1=first-to-last
         if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
         if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
+        if (args[0] is RangeValue lookupValueRange)
+            return MapUnaryTextRange(lookupValueRange, value => XlookupScalar(value, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode));
 
+        return XlookupScalar(lookupValue, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
+    }
+
+    private static ScalarValue XlookupScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, RangeValue returnArr, bool lookupIsVertical, ScalarValue ifNotFound, int matchMode, int searchMode)
+    {
         var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
         if (searchMode is -1 or -2) indices.Reverse();
 
