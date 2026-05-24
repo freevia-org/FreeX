@@ -51,6 +51,18 @@ public partial class ConditionalFormatDialog : Window
     private ConditionalFormat? _existingRule;
     private StackPanel _iconSetThresholdPanel = new();
     private List<(ComboBox TypeBox, TextBox ValueBox)> _iconSetThresholdRows = [];
+    private ComboBox? _formatStyleBox;
+    private bool _ignoreFormatStyleChange;
+
+    private static readonly string[] FormatStyleLabels =
+        ["Data Bar", "2-Color Scale", "3-Color Scale", "Icon Set"];
+
+    private string CurrentFormatStyleLabel => _ruleType switch
+    {
+        "Icon Set"    => "Icon Set",
+        "Color Scale" => _colorScaleUseThreeColorBox?.IsChecked == true ? "3-Color Scale" : "2-Color Scale",
+        _             => "Data Bar"
+    };
 
     private static readonly (string Label, Color FillColor, Color? FontColor, bool Bold)[] ColorOptions =
     [
@@ -426,6 +438,27 @@ public partial class ConditionalFormatDialog : Window
         Keyboard.Focus(target);
     }
 
+    private void FormatStyleBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_ignoreFormatStyleChange || sender is not ComboBox cb || cb.SelectedItem is not string label)
+            return;
+
+        var newType = label switch
+        {
+            "2-Color Scale" => "Color Scale",
+            "3-Color Scale" => "Color Scale",
+            "Icon Set"      => "Icon Set",
+            _               => "Data Bar"
+        };
+        RefreshRuleDescription(newType);
+        if (label == "3-Color Scale" && _colorScaleUseThreeColorBox is not null)
+        {
+            _ignoreFormatStyleChange = true;
+            _colorScaleUseThreeColorBox.IsChecked = true;
+            _ignoreFormatStyleChange = false;
+        }
+    }
+
     private static Label CreateAccessLabel(string content, Control target) =>
         new() { Content = content, Target = target, Padding = new Thickness(0) };
 
@@ -443,6 +476,23 @@ public partial class ConditionalFormatDialog : Window
         var isColorScale = ruleType is "Color Scale";
         var isDuplicateValues = ruleType is "Duplicate Values";
         var isDateOccurring = ruleType is "Date Occurring";
+
+        if (isDataBar || isColorScale || isIconSet)
+        {
+            _formatStyleBox = new ComboBox
+            {
+                Margin = new Thickness(0, 4, 0, 12),
+                ItemsSource = FormatStyleLabels,
+                SelectedItem = CurrentFormatStyleLabel
+            };
+            _formatStyleBox.SelectionChanged += FormatStyleBox_SelectionChanged;
+            inner.Children.Add(CreateAccessLabel("_Format Style:", _formatStyleBox));
+            inner.Children.Add(_formatStyleBox);
+        }
+        else
+        {
+            _formatStyleBox = null;
+        }
 
         if (isFormula)
         {
