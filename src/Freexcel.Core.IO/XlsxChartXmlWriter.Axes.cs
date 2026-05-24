@@ -212,6 +212,9 @@ internal static partial class XlsxChartXmlWriter
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
             ToBooleanAxisValueXml("noMultiLvlLbl", chart.XAxisNoMultiLevelLabels, chartNs),
             ToAxisLabelAlignmentXml(chart.XAxisLabelAlignment, chartNs),
+            ToDateAxisUnitXml("baseTimeUnit", chart.XAxisIsDateAxis ? chart.XAxisBaseTimeUnit : null, chartNs),
+            ToDateAxisUnitXml("majorTimeUnit", chart.XAxisIsDateAxis ? chart.XAxisMajorTimeUnit : null, chartNs),
+            ToDateAxisUnitXml("minorTimeUnit", chart.XAxisIsDateAxis ? chart.XAxisMinorTimeUnit : null, chartNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
@@ -406,6 +409,19 @@ internal static partial class XlsxChartXmlWriter
 
     private static string ToXlsxAxisLabelAlignment(ChartAxisLabelAlignment alignment) =>
         alignment == ChartAxisLabelAlignment.Right ? "r" : "l";
+
+    private static XElement? ToDateAxisUnitXml(string elementName, ChartDateAxisUnit? unit, XNamespace chartNs) =>
+        unit is null
+            ? null
+            : new XElement(chartNs + elementName, new XAttribute("val", ToXlsxDateAxisUnit(unit.Value)));
+
+    private static string ToXlsxDateAxisUnit(ChartDateAxisUnit unit) =>
+        unit switch
+        {
+            ChartDateAxisUnit.Days => "days",
+            ChartDateAxisUnit.Years => "years",
+            _ => "months"
+        };
 
     private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format) =>
         format switch
