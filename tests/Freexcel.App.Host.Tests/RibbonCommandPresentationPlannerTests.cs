@@ -13,6 +13,8 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Excluded Share", "Share", RibbonCommandLayoutKind.Large)]
     [InlineData("Get Add-ins", "Get Add-ins", RibbonCommandLayoutKind.Large)]
     [InlineData("My Add-ins", "My Add-ins", RibbonCommandLayoutKind.Large)]
+    [InlineData("3D Map", "3D Map", RibbonCommandLayoutKind.Large)]
+    [InlineData("Macros", "Macros", RibbonCommandLayoutKind.Large)]
     [InlineData("Contact Support", "Contact Support", RibbonCommandLayoutKind.Large)]
     [InlineData("Show Training", "Show Training", RibbonCommandLayoutKind.Large)]
     [InlineData("What's New", "What's New", RibbonCommandLayoutKind.Large)]
