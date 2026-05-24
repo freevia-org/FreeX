@@ -262,7 +262,8 @@ public sealed class RibbonTabParityTests
         ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
             "Help Online",
             "Contact Support",
-            "Send Feedback",
+            "Report Issue",
+            "Copy Diagnostics",
             "Show Training",
             "What's New",
             "About Freexcel");

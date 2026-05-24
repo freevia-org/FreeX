@@ -3084,10 +3084,14 @@
                                         local:RibbonTooltip.Title="Contact Support"
                                         local:RibbonTooltip.KeyTip="CS"
                                         local:RibbonTooltip.Description="Contact support for Freexcel. In-app support is not yet implemented."/>
-                                <Button Content="Send Feedback"  Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                        local:RibbonTooltip.Title="Send Feedback"
+                                <Button Content="Report Issue"  Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                        local:RibbonTooltip.Title="Report Issue"
                                         local:RibbonTooltip.KeyTip="FE"
-                                        local:RibbonTooltip.Description="Send suggestions or report issues with Freexcel."/>
+                                        local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
+                                <Button Content="Copy Diagnostics" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
+                                        local:RibbonTooltip.Title="Copy Diagnostics"
+                                        local:RibbonTooltip.KeyTip="DG"
+                                        local:RibbonTooltip.Description="Copy safe app version, runtime, OS, and session diagnostics for tester reports."/>
                                 <Button Content="Show Training" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Show Training"
                                         local:RibbonTooltip.KeyTip="TR"
