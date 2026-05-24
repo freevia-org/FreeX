@@ -232,9 +232,10 @@ internal static partial class DelimitedTextWorkbookReader
 
     private static ScalarValue CoerceValue(string field)
     {
-        if (string.Equals(field, "TRUE", StringComparison.OrdinalIgnoreCase))
+        var trimmed = field.Trim();
+        if (string.Equals(trimmed, "TRUE", StringComparison.OrdinalIgnoreCase))
             return new BoolValue(true);
-        if (string.Equals(field, "FALSE", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(trimmed, "FALSE", StringComparison.OrdinalIgnoreCase))
             return new BoolValue(false);
         if (TryReadError(field, out var error))
             return error;

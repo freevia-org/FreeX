@@ -64,6 +64,19 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForWhitespacePaddedBooleans()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(" TRUE \t\" false \"\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new BoolValue(true));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForPercentages()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
