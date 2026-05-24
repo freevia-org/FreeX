@@ -144,22 +144,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     sheet.SetStyleOnly(row, col, workbook.RegisterStyle(style));
             }
 
-            foreach (var xlCell in xlSheet.CellsUsed(XLCellsUsedOptions.All))
-            {
-                try
-                {
-                    var comment = xlCell.GetComment();
-                    if (comment.Length == 0) continue;
-
-                    var addr = new CellAddress(sheet.Id, (uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber);
-                    sheet.Comments[addr] = comment.Text;
-                }
-                catch
-                {
-                    // Skip cells without comments or comments ClosedXML cannot expose.
-                }
-            }
-
             foreach (var hyperlink in xlSheet.Hyperlinks)
             {
                 try
@@ -183,24 +167,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 {
                     // Skip hyperlinks ClosedXML cannot expose.
                 }
-            }
-
-            foreach (var row in xlSheet.RowsUsed(XLCellsUsedOptions.AllFormats))
-            {
-                var rowNumber = (uint)row.RowNumber();
-                if (row.Height > 0)
-                    sheet.RowHeights[rowNumber] = row.Height * (96.0 / 72.0);
-                if (row.IsHidden)
-                    sheet.HiddenRows.Add(rowNumber);
-            }
-
-            foreach (var col in xlSheet.ColumnsUsed(XLCellsUsedOptions.AllFormats))
-            {
-                var colNumber = (uint)col.ColumnNumber();
-                if (col.Width > 0)
-                    sheet.ColumnWidths[colNumber] = col.Width;
-                if (col.IsHidden)
-                    sheet.HiddenCols.Add(colNumber);
             }
 
             if (xmlLayout is { } layout)

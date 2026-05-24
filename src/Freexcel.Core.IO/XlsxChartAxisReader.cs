@@ -191,6 +191,11 @@ internal static class XlsxChartAxisReader
         var showLabels = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value != "none";
         var axisLine = ReadAxisLine(axisElement.Element(ChartNs + "spPr"));
         var crossing = ReadAxisCrossing(axisElement);
+        var displayUnit = FromXlsxAxisDisplayUnit(
+            axisElement.Element(ChartNs + "dispUnits")?
+                .Element(ChartNs + "builtInUnit")?
+                .Attribute("val")?
+                .Value);
 
         if (useXAxis)
         {
@@ -208,6 +213,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisCrosses = crossing.Crosses;
             chart.XAxisCrossesAt = crossing.CrossesAt;
             chart.XAxisCrossBetween = crossing.CrossBetween;
+            chart.XAxisDisplayUnit = displayUnit;
             return;
         }
 
@@ -225,6 +231,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisCrosses = crossing.Crosses;
         chart.YAxisCrossesAt = crossing.CrossesAt;
         chart.YAxisCrossBetween = crossing.CrossBetween;
+        chart.YAxisDisplayUnit = displayUnit;
     }
 
     private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart)
@@ -396,6 +403,21 @@ internal static class XlsxChartAxisReader
             "days" => ChartDateAxisUnit.Days,
             "months" => ChartDateAxisUnit.Months,
             "years" => ChartDateAxisUnit.Years,
+            _ => null
+        };
+
+    private static ChartAxisDisplayUnit? FromXlsxAxisDisplayUnit(string? value) =>
+        value switch
+        {
+            "hundreds" => ChartAxisDisplayUnit.Hundreds,
+            "thousands" => ChartAxisDisplayUnit.Thousands,
+            "tenThousands" => ChartAxisDisplayUnit.TenThousands,
+            "hundredThousands" => ChartAxisDisplayUnit.HundredThousands,
+            "millions" => ChartAxisDisplayUnit.Millions,
+            "tenMillions" => ChartAxisDisplayUnit.TenMillions,
+            "hundredMillions" => ChartAxisDisplayUnit.HundredMillions,
+            "billions" => ChartAxisDisplayUnit.Billions,
+            "trillions" => ChartAxisDisplayUnit.Trillions,
             _ => null
         };
 

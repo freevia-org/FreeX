@@ -203,6 +203,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             XAxisCrosses = chart.XAxisCrosses,
             XAxisCrossesAt = chart.XAxisCrossesAt,
             XAxisCrossBetween = chart.XAxisCrossBetween,
+            XAxisDisplayUnit = chart.XAxisDisplayUnit,
             YAxisMinimum = chart.YAxisMinimum,
             YAxisMaximum = chart.YAxisMaximum,
             YAxisMajorUnit = chart.YAxisMajorUnit,
@@ -226,6 +227,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             YAxisCrosses = chart.YAxisCrosses,
             YAxisCrossesAt = chart.YAxisCrossesAt,
             YAxisCrossBetween = chart.YAxisCrossBetween,
+            YAxisDisplayUnit = chart.YAxisDisplayUnit,
             DataTable = chart.DataTable is null
                 ? null
                 : new ChartDataTableModel
