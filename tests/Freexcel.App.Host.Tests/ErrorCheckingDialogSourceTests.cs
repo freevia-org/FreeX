@@ -58,6 +58,18 @@ public sealed class ErrorCheckingDialogSourceTests
     }
 
     [Fact]
+    public void ErrorCheckingDialogOpenedFromKeyboard_FocusesIssueList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("private void FocusInitialKeyboardTarget()");
+        source.Should().Contain("_listView.Focus();");
+        source.Should().Contain("Keyboard.Focus(_listView);");
+        source.Should().Contain("NavigateSelected();");
+    }
+
+    [Fact]
     public void ErrorCheckingDialog_UsesExcelLikeErrorHelpAndActionStructure()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
