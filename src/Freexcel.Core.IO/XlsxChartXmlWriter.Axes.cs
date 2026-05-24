@@ -21,6 +21,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisMajorUnit,
                 chart.XAxisMinorUnit,
                 chart.XAxisLogScale,
+                chart.XAxisReverseOrder,
                 chart.XAxisNumberFormat,
                 chart.ShowXAxisMajorGridlines,
                 chart.ShowXAxisMinorGridlines,
@@ -32,6 +33,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisLineColor,
                 chart.XAxisLineThickness,
                 chart.ShowXAxisLabels,
+                chart.XAxisTickLabelPosition,
                 chart.XAxisLabelTextColor,
                 chart.XAxisLabelFontSize,
                 chart.XAxisLabelAngle,
@@ -55,6 +57,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
+                chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
                 chart.ShowYAxisMajorGridlines,
                 chart.ShowYAxisMinorGridlines,
@@ -66,6 +69,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
+                chart.YAxisTickLabelPosition,
                 chart.YAxisLabelTextColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
@@ -92,6 +96,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisMajorUnit,
                     chart.YAxisMinorUnit,
                     chart.YAxisLogScale,
+                    chart.YAxisReverseOrder,
                     chart.YAxisNumberFormat,
                     false,
                     false,
@@ -103,6 +108,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisLineColor,
                     chart.YAxisLineThickness,
                     chart.ShowYAxisLabels,
+                    chart.YAxisTickLabelPosition,
                     chart.YAxisLabelTextColor,
                     chart.YAxisLabelFontSize,
                     chart.YAxisLabelAngle,
@@ -131,6 +137,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisMajorUnit,
             chart.YAxisMinorUnit,
             chart.YAxisLogScale,
+            chart.YAxisReverseOrder,
             chart.YAxisNumberFormat,
             chart.ShowYAxisMajorGridlines,
             chart.ShowYAxisMinorGridlines,
@@ -142,6 +149,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLineColor,
             chart.YAxisLineThickness,
             chart.ShowYAxisLabels,
+            chart.YAxisTickLabelPosition,
             chart.YAxisLabelTextColor,
             chart.YAxisLabelFontSize,
             chart.YAxisLabelAngle,
@@ -169,6 +177,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
+                chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
                 false,
                 false,
@@ -180,6 +189,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
+                chart.YAxisTickLabelPosition,
                 chart.YAxisLabelTextColor,
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
@@ -203,7 +213,7 @@ internal static partial class XlsxChartXmlWriter
         new(chartNs + (chart.XAxisIsDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
-                new XElement(chartNs + "orientation", new XAttribute("val", "minMax"))),
+                new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", "b")),
             ToAxisTitleXml(chart.XAxisTitle, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
@@ -211,7 +221,7 @@ internal static partial class XlsxChartXmlWriter
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
-            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
             ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
             ToUnsignedAxisValueXml("tickMarkSkip", chart.XAxisTickMarkSkip, chartNs),
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
@@ -235,6 +245,7 @@ internal static partial class XlsxChartXmlWriter
         double? majorUnit,
         double? minorUnit,
         bool logScale,
+        bool reverseOrder,
         ChartDataLabelNumberFormat numberFormat,
         bool showMajorGridlines,
         bool showMinorGridlines,
@@ -246,6 +257,7 @@ internal static partial class XlsxChartXmlWriter
         CellColor? lineColor,
         double lineThickness,
         bool showLabels,
+        ChartAxisTickLabelPosition tickLabelPosition,
         CellColor? labelTextColor,
         double labelFontSize,
         double labelAngle,
@@ -263,7 +275,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
                 logScale ? new XElement(chartNs + "logBase", new XAttribute("val", "10")) : null,
-                new XElement(chartNs + "orientation", new XAttribute("val", "minMax")),
+                new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(reverseOrder))),
                 ToAxisBoundXml("max", maximum, chartNs),
                 ToAxisBoundXml("min", minimum, chartNs)),
             new XElement(chartNs + "delete", new XAttribute("val", "0")),
@@ -278,7 +290,7 @@ internal static partial class XlsxChartXmlWriter
             ToAxisUnitXml("minorUnit", minorUnit, chartNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
-            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels, tickLabelPosition))),
             ToAxisDisplayUnitXml(displayUnit, chartNs),
             ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
@@ -344,8 +356,21 @@ internal static partial class XlsxChartXmlWriter
             _ => "out"
         };
 
-    private static string ToXlsxTickLabelPosition(bool showLabels) =>
-        showLabels ? "nextTo" : "none";
+    private static string ToXlsxAxisOrientation(bool reverseOrder) =>
+        reverseOrder ? "maxMin" : "minMax";
+
+    private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
+    {
+        if (!showLabels)
+            return "none";
+
+        return position switch
+        {
+            ChartAxisTickLabelPosition.Low => "low",
+            ChartAxisTickLabelPosition.High => "high",
+            _ => "nextTo"
+        };
+    }
 
     private static XElement ToAxisCrossesXml(ChartAxisCrosses crosses, double? crossesAt, XNamespace chartNs)
     {

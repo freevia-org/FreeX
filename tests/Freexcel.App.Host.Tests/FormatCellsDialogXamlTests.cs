@@ -289,6 +289,11 @@ public sealed class FormatCellsDialogXamlTests
                     "m/d/yyyy",
                     "h:mm AM/PM"
                 });
+
+                categories.SelectedItem = "Special";
+                types.Items.Cast<string>().Should().Contain("000-00-0000");
+                FormatCellsDialog.ResolveNumberFormat("000-00-0000", 0)
+                    .Should().Be("000-00-0000");
             }
             finally
             {

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Freexcel.Core.Model;
 
@@ -40,6 +41,7 @@ public partial class PivotLabelFilterDialog : Window
         if (value.Length == 0)
         {
             MessageBox.Show(this, "Enter a label filter value.", "Label Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidLabelValue(LabelFilterValueBox);
             return;
         }
 
@@ -48,6 +50,7 @@ public partial class PivotLabelFilterDialog : Window
         if (kind == PivotLabelFilterKind.Between && value2.Length == 0)
         {
             MessageBox.Show(this, "Enter an ending label filter value.", "Label Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusInvalidLabelValue(LabelFilterValue2Box);
             return;
         }
 
@@ -59,5 +62,12 @@ public partial class PivotLabelFilterDialog : Window
     {
         LabelFilterKindBox.Focus();
         Keyboard.Focus(LabelFilterKindBox);
+    }
+
+    private void FocusInvalidLabelValue(TextBox target)
+    {
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 }

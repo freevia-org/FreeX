@@ -49,6 +49,8 @@ public enum ChartBubbleSizeRepresents { Area, Width }
 
 public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
+public enum ChartAxisTickLabelPosition { NextTo, Low, High }
+
 public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
 
 public enum ChartAxisCrossBetween { Between, MidCategory }
@@ -299,6 +301,7 @@ public sealed class ChartModel
     public double? XAxisMajorUnit { get; set; }
     public double? XAxisMinorUnit { get; set; }
     public bool XAxisLogScale { get; set; }
+    public bool XAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public bool ShowXAxisMajorGridlines { get; set; }
     public bool ShowXAxisMinorGridlines { get; set; }
@@ -309,6 +312,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
     public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowXAxisLabels { get; set; } = true;
+    public ChartAxisTickLabelPosition XAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
     public CellColor? XAxisLabelTextColor { get; set; }
     public WorkbookThemeColorReference? XAxisLabelTextThemeColor { get; set; }
     public double XAxisLabelFontSize { get; set; } = 11;
@@ -332,6 +336,7 @@ public sealed class ChartModel
     public double? YAxisMajorUnit { get; set; }
     public double? YAxisMinorUnit { get; set; }
     public bool YAxisLogScale { get; set; }
+    public bool YAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public bool ShowYAxisMajorGridlines { get; set; }
     public bool ShowYAxisMinorGridlines { get; set; }
@@ -341,6 +346,7 @@ public sealed class ChartModel
     public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
     public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
     public bool ShowYAxisLabels { get; set; } = true;
+    public ChartAxisTickLabelPosition YAxisTickLabelPosition { get; set; } = ChartAxisTickLabelPosition.NextTo;
     public CellColor? YAxisLabelTextColor { get; set; }
     public WorkbookThemeColorReference? YAxisLabelTextThemeColor { get; set; }
     public double YAxisLabelFontSize { get; set; } = 11;
