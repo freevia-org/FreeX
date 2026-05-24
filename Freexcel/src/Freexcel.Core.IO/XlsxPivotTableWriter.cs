@@ -258,6 +258,7 @@ internal static class XlsxPivotTableWriter
             new XAttribute("pageOverThenDown", pivot.PageOverThenDown ? "1" : "0"),
             new XAttribute("pageWrap", Math.Max(0, pivot.PageWrap).ToString(CultureInfo.InvariantCulture)),
             new XAttribute("showDrill", pivot.ShowExpandCollapseButtons ? "1" : "0"),
+            new XAttribute("enableDrill", pivot.EnableDrill ? "1" : "0"),
             new XAttribute("itemPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("printDrill", pivot.PrintExpandCollapseButtons ? "1" : "0"),
