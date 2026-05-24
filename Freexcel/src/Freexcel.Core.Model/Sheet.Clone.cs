@@ -174,6 +174,7 @@ public sealed partial class Sheet
                 AutofitColumnsOnUpdate = pt.AutofitColumnsOnUpdate,
                 PreserveFormattingOnUpdate = pt.PreserveFormattingOnUpdate,
                 ShowExpandCollapseButtons = pt.ShowExpandCollapseButtons,
+                EnableDrill = pt.EnableDrill,
                 PrintTitles = pt.PrintTitles,
                 PrintExpandCollapseButtons = pt.PrintExpandCollapseButtons,
                 AltTextTitle = pt.AltTextTitle,

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
@@ -59,6 +60,7 @@ public sealed class ChartSeriesFormatDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent(seriesCount);
         Load(Result);
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public static ChartSeriesFormatDialogResult FromChart(ChartModel chart, int seriesCount)
@@ -110,6 +112,12 @@ public sealed class ChartSeriesFormatDialog : Window
         _dashBox.SelectedItem = result.DashStyle is null ? "(none)" : result.DashStyle.Value;
         _markerBox.SelectedItem = result.MarkerStyle is null ? "(none)" : result.MarkerStyle.Value;
         _markerSizeBox.Text = ChartDialogHelpers.FormatNullable(result.MarkerSize);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        _seriesBox.Focus();
+        Keyboard.Focus(_seriesBox);
     }
 
     private void Accept()
