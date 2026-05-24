@@ -98,6 +98,7 @@ public sealed class WatchWindowDialog : Window
         root.Children.Add(_listView);
 
         Refresh();
+        Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
     public void Refresh()
@@ -138,6 +139,15 @@ public sealed class WatchWindowDialog : Window
     {
         if (_listView.SelectedItem is WatchWindowRow row)
             _navigateTo(row.Address);
+    }
+
+    private void FocusInitialKeyboardTarget()
+    {
+        if (_rows.Count > 0 && _listView.SelectedIndex < 0)
+            _listView.SelectedIndex = 0;
+
+        _listView.Focus();
+        Keyboard.Focus(_listView);
     }
 
     private sealed record WatchWindowRow(
