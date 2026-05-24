@@ -244,6 +244,12 @@ internal static class XlsxChartAxisReader
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisNoMultiLevelLabels = ReadBool(axisElement.Element(ChartNs + "noMultiLvlLbl")?.Attribute("val")?.Value);
         chart.XAxisLabelAlignment = FromXlsxAxisLabelAlignment(axisElement.Element(ChartNs + "lblAlgn")?.Attribute("val")?.Value);
+        if (axisElement.Name == ChartNs + "dateAx")
+        {
+            chart.XAxisBaseTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "baseTimeUnit")?.Attribute("val")?.Value);
+            chart.XAxisMajorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "majorTimeUnit")?.Attribute("val")?.Value);
+            chart.XAxisMinorTimeUnit = FromXlsxDateAxisUnit(axisElement.Element(ChartNs + "minorTimeUnit")?.Attribute("val")?.Value);
+        }
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
     }
 
@@ -382,6 +388,15 @@ internal static class XlsxChartAxisReader
             "l" => ChartAxisLabelAlignment.Left,
             "r" => ChartAxisLabelAlignment.Right,
             _ => ChartAxisLabelAlignment.Center
+        };
+
+    private static ChartDateAxisUnit? FromXlsxDateAxisUnit(string? value) =>
+        value switch
+        {
+            "days" => ChartDateAxisUnit.Days,
+            "months" => ChartDateAxisUnit.Months,
+            "years" => ChartDateAxisUnit.Years,
+            _ => null
         };
 
     private readonly record struct AxisLineProperties(CellColor? Color, double? Thickness);
