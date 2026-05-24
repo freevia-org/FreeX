@@ -33,6 +33,9 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("Move-Item -LiteralPath $launchExePath -Destination $artifactExePath");
         script.Should().Contain("Remove-Item -LiteralPath $publishDir -Recurse -Force");
         script.Should().Contain("Write-Host \"Created $artifactExePath\"");
+        script.Should().Contain("Local diagnostics:");
+        script.Should().Contain("%LOCALAPPDATA%\\Freexcel\\Diagnostics");
+        script.Should().Contain("FREEXCEL_DIAGNOSTICS=0");
     }
 
     [Fact]
