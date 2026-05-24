@@ -35,6 +35,38 @@ public sealed class FileSavePlannerTests
         target.Path.Should().Be("Book.FXJSON");
     }
 
+    [Theory]
+    [InlineData("Book.xlsm")]
+    [InlineData("Template.xltx")]
+    [InlineData("Template.xltm")]
+    [InlineData("Legacy.xls")]
+    [InlineData("Binary.xlsb")]
+    [InlineData("LegacyTemplate.xlt")]
+    public void TryResolveExistingPath_RealExcelAdaptersRejectOpenOnlyFormats(string currentFilePath)
+    {
+        var resolved = FileSavePlanner.TryResolveExistingPath(
+            currentFilePath,
+            [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter()],
+            out var target);
+
+        resolved.Should().BeFalse();
+        target.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryResolveExistingPath_RealExcelAdaptersResolveXlsxAndCsv()
+    {
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter() };
+
+        FileSavePlanner.TryResolveExistingPath("Book.xlsx", adapters, out var xlsxTarget).Should().BeTrue();
+        xlsxTarget.Should().NotBeNull();
+        xlsxTarget!.Adapter.Should().BeOfType<XlsxFileAdapter>();
+
+        FileSavePlanner.TryResolveExistingPath("Data.csv", adapters, out var csvTarget).Should().BeTrue();
+        csvTarget.Should().NotBeNull();
+        csvTarget!.Adapter.Should().BeOfType<CsvFileAdapter>();
+    }
+
     private sealed class FakeAdapter(IReadOnlyList<FileFormatDescriptor> formats) : IFileAdapter
     {
         public string Extension => formats[0].Extension;
