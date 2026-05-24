@@ -385,21 +385,25 @@ public sealed class MainWindowSourceHygieneTests
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
         var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
         var dataSourcePath = Path.Combine(appHostDirectory, "MainWindow.DataCommands.cs");
+        var scenarioSourcePath = Path.Combine(appHostDirectory, "MainWindow.ScenarioCommands.cs");
 
         File.Exists(dataSourcePath).Should().BeTrue();
+        File.Exists(scenarioSourcePath).Should().BeTrue();
         var dataSource = File.ReadAllText(dataSourcePath);
+        var scenarioSource = File.ReadAllText(scenarioSourcePath);
 
         mainSource.Should().NotContain("private void GetDataBtn_Click(");
         mainSource.Should().NotContain("private void TextToColumnsBtn_Click(");
         mainSource.Should().NotContain("private void AdvancedFilterBtn_Click(");
         mainSource.Should().NotContain("private void ScenariosBtn_Click(");
         mainSource.Should().NotContain("private void DataTableBtn_Click(");
+        dataSource.Should().NotContain("private void ScenariosBtn_Click(");
 
         dataSource.Should().Contain("private void GetDataBtn_Click(");
         dataSource.Should().Contain("private void TextToColumnsBtn_Click(");
         dataSource.Should().Contain("private void AdvancedFilterBtn_Click(");
-        dataSource.Should().Contain("private void ScenariosBtn_Click(");
         dataSource.Should().Contain("private void DataTableBtn_Click(");
+        scenarioSource.Should().Contain("private void ScenariosBtn_Click(");
     }
 
     [Fact]
@@ -1796,12 +1800,12 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ScenarioShow_IsRepeatableForF4WithoutReopeningDialog()
     {
-        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+        var scenarioSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ScenarioCommands.cs"));
 
-        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
-        dataSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
-        dataSource.Should().Contain("SetActiveCell(first);");
-        dataSource.Should().Contain("EnsureCellVisible(first);");
+        scenarioSource.Should().Contain("_commandBus.ExecuteRepeatable(_workbook.Id, () => new ApplyScenarioCommand(name))");
+        scenarioSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        scenarioSource.Should().Contain("SetActiveCell(first);");
+        scenarioSource.Should().Contain("EnsureCellVisible(first);");
     }
 
     [Fact]
