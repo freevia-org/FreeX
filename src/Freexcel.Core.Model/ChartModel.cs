@@ -310,6 +310,8 @@ public sealed class ChartModel
     public double? XAxisLogBase { get; set; }
     public bool XAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? XAxisNumberFormatCode { get; set; }
+    public bool? XAxisNumberFormatSourceLinked { get; set; }
     public bool ShowXAxisMajorGridlines { get; set; }
     public bool ShowXAxisMinorGridlines { get; set; }
     public bool XAxisIsDateAxis { get; set; }
@@ -347,6 +349,8 @@ public sealed class ChartModel
     public double? YAxisLogBase { get; set; }
     public bool YAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? YAxisNumberFormatCode { get; set; }
+    public bool? YAxisNumberFormatSourceLinked { get; set; }
     public bool ShowYAxisMajorGridlines { get; set; }
     public bool ShowYAxisMinorGridlines { get; set; }
     public CellColor? YAxisMajorGridlineColor { get; set; }

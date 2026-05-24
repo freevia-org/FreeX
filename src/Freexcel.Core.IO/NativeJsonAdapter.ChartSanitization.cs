@@ -35,6 +35,7 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMajorUnit = ClampPositiveAxisUnit(chart.XAxisMajorUnit);
         chart.XAxisMinorUnit = ClampPositiveAxisUnit(chart.XAxisMinorUnit);
         chart.XAxisNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.XAxisNumberFormatCode = string.IsNullOrWhiteSpace(chart.XAxisNumberFormatCode) ? null : chart.XAxisNumberFormatCode;
         chart.XAxisGridlineThickness = Math.Clamp(chart.XAxisGridlineThickness, 0.25, 10);
         chart.XAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMajorTickStyle, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMinorTickStyle, ChartAxisTickStyle.None);
@@ -47,6 +48,7 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisMajorUnit = ClampPositiveAxisUnit(chart.YAxisMajorUnit);
         chart.YAxisMinorUnit = ClampPositiveAxisUnit(chart.YAxisMinorUnit);
         chart.YAxisNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.YAxisNumberFormatCode = string.IsNullOrWhiteSpace(chart.YAxisNumberFormatCode) ? null : chart.YAxisNumberFormatCode;
         chart.YAxisGridlineThickness = Math.Clamp(chart.YAxisGridlineThickness, 0.25, 10);
         chart.YAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMajorTickStyle, ChartAxisTickStyle.Outside);
         chart.YAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMinorTickStyle, ChartAxisTickStyle.None);
@@ -219,6 +221,8 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMinorUnit = null;
         chart.XAxisLogScale = false;
         chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.XAxisNumberFormatCode = null;
+        chart.XAxisNumberFormatSourceLinked = null;
         chart.ShowXAxisMajorGridlines = false;
         chart.ShowXAxisMinorGridlines = false;
         chart.XAxisMajorGridlineColor = null;
@@ -243,6 +247,8 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisMinorUnit = null;
         chart.YAxisLogScale = false;
         chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.YAxisNumberFormatCode = null;
+        chart.YAxisNumberFormatSourceLinked = null;
         chart.ShowYAxisMajorGridlines = false;
         chart.ShowYAxisMinorGridlines = false;
         chart.YAxisMajorGridlineColor = null;
