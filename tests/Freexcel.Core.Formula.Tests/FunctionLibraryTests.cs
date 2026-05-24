@@ -855,6 +855,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Len_RangeArgument_SpillsElementwiseLengths()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var result = _eval.Evaluate("=LEN(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.Cells[0, 0].Should().Be(new NumberValue(5));
+        result.Cells[1, 0].Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
     public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
     {
         var sheet = MakeSheet();
@@ -871,6 +883,22 @@ public class FunctionLibraryTests
 
         _eval.Evaluate("=LEFT(\"abc\",)", sheet).Should().Be(new TextValue("a"));
         _eval.Evaluate("=RIGHT(\"abc\",)", sheet).Should().Be(new TextValue("c"));
+    }
+
+    [Fact]
+    public void LeftAndRight_RangeTextArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")));
+
+        var left = _eval.Evaluate("=LEFT(A1:A2,2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        left.Cells[0, 0].Should().Be(new TextValue("Ap"));
+        left.Cells[1, 0].Should().Be(new TextValue("Ba"));
+
+        var right = _eval.Evaluate("=RIGHT(A1:A2,3)", sheet).Should().BeOfType<RangeValue>().Subject;
+        right.Cells[0, 0].Should().Be(new TextValue("ple"));
+        right.Cells[1, 0].Should().Be(new TextValue("ana"));
     }
 
     [Fact]
@@ -2686,6 +2714,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xmatch_BinarySearchModes_HandleDuplicateExactMatchesLikeExcel()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(2)), (4, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=XMATCH(2,A1:A4,0,2)", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=XMATCH(2,A1:A4,0,-2)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Xmatch_WildcardMode_MatchesPattern()
     {
         var sheet = MakeSheet(
@@ -4366,6 +4405,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Textjoin_DelimiterRange_CyclesDelimitersBetweenTextItems()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("-")),
+            (1, 2, new TextValue("|")));
+
+        _eval.Evaluate("=TEXTJOIN(A1:B1,TRUE,\"x\",\"y\",\"z\")", sheet)
+            .Should().Be(new TextValue("x-y|z"));
+    }
+
+    [Fact]
     public void Textjoin_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -4676,6 +4726,26 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sequence_BlankLeadingArguments_UseExcelDefaults()
+    {
+        var cols = _eval.Evaluate("=SEQUENCE(,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        cols.RowCount.Should().Be(1);
+        cols.ColCount.Should().Be(2);
+        cols.Cells[0, 0].Should().Be(new NumberValue(1));
+        cols.Cells[0, 1].Should().Be(new NumberValue(2));
+
+        var start = _eval.Evaluate("=SEQUENCE(,,5)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        start.RowCount.Should().Be(1);
+        start.ColCount.Should().Be(1);
+        start.Cells[0, 0].Should().Be(new NumberValue(5));
+
+        var step = _eval.Evaluate("=SEQUENCE(,,,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        step.RowCount.Should().Be(1);
+        step.ColCount.Should().Be(1);
+        step.Cells[0, 0].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Sequence_WithStartAndStep_CountsByTwos()
     {
         var result = _eval.Evaluate("=SEQUENCE(4,1,0,2)", MakeSheet());
@@ -4800,6 +4870,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_BlankIfEmptyArgument_ReturnsCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=FILTER(A1:A1,B1:B1,)", sheet).Should().Be(new ErrorValue("#CALC!"));
+    }
+
+    [Fact]
     public void Iferror_CatchesFilterNoMatchesCalcError()
     {
         var sheet = MakeSheet(
@@ -4859,6 +4939,22 @@ public class FunctionLibraryTests
         var rv = (RangeValue)result;
         rv.RowCount.Should().Be(1);
         rv.Cells[0, 0].Should().Be(new TextValue("keep"));
+    }
+
+    [Fact]
+    public void Filter_BlankIncludeCell_IsFalse()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("included")),
+            (2, 1, new TextValue("blank")),
+            (3, 1, new TextValue("excluded")),
+            (1, 2, new BoolValue(true)),
+            (3, 2, new BoolValue(false)));
+
+        var result = _eval.Evaluate("=FILTER(A1:A3,B1:B3,\"empty\")", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new TextValue("included"));
     }
 
     [Fact]
@@ -6165,11 +6261,43 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void CharAndCode_RangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(65)),
+            (2, 2, new NumberValue(66)));
+
+        var code = _eval.Evaluate("=CODE(A1:A2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        code.Cells[0, 0].Should().Be(new NumberValue(65));
+        code.Cells[1, 0].Should().Be(new NumberValue(66));
+
+        var chars = _eval.Evaluate("=CHAR(B1:B2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        chars.Cells[0, 0].Should().Be(new TextValue("A"));
+        chars.Cells[1, 0].Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
     public void Exact_IsCaseSensitiveAndPropagatesErrors()
     {
         _eval.Evaluate("=EXACT(\"Excel\",\"Excel\")", MakeSheet()).Should().Be(new BoolValue(true));
         _eval.Evaluate("=EXACT(\"Excel\",\"excel\")", MakeSheet()).Should().Be(new BoolValue(false));
         _eval.Evaluate("=EXACT(NA(),\"x\")", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Exact_RangeArgument_SpillsElementwiseComparison()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("x")),
+            (2, 1, new TextValue("y")));
+
+        var result = _eval.Evaluate("=EXACT(A1:A2,\"x\")", sheet).Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new BoolValue(true));
+        result.Cells[1, 0].Should().Be(new BoolValue(false));
     }
 
     [Fact]
@@ -6275,6 +6403,20 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบหกสตางค์"));
         _eval.Evaluate("=BAHTTEXT(-21.5)", MakeSheet())
             .Should().Be(new TextValue("ลบยี่สิบเอ็ดบาทห้าสิบสตางค์"));
+    }
+
+    [Fact]
+    public void Bahttext_RoundsHalfAwayFromZeroAtSatangBoundary()
+    {
+        _eval.Evaluate("=BAHTTEXT(1.005)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งบาทหนึ่งสตางค์"));
+    }
+
+    [Fact]
+    public void Bahttext_OmitsZeroBahtForSatangOnlyAmounts()
+    {
+        _eval.Evaluate("=BAHTTEXT(0.005)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งสตางค์"));
     }
 
     [Fact]
@@ -6533,6 +6675,12 @@ public class FunctionLibraryTests
     [Fact]
     public void ErrorType_Na_Returns7() =>
         _eval.Evaluate("=ERROR.TYPE(NA())", MakeSheet()).Should().Be(new NumberValue(7));
+
+    [Fact]
+    public void ErrorType_GettingDataLiteral_Returns8()
+    {
+        _eval.Evaluate("=ERROR.TYPE(#GETTING_DATA)", MakeSheet()).Should().Be(new NumberValue(8));
+    }
 
     [Fact]
     public void ErrorType_NotAnError_ReturnsNa() =>

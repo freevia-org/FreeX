@@ -348,6 +348,23 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonGroupButtons_ShowDropdownGlyph()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 220);
+
+                harness.CollapsedActiveRibbonGroupsWithoutDropdownGlyph.Should().BeEmpty(
+                    $"{tab} collapsed group buttons should visibly advertise their overflow menu like Excel");
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonScrollViewers_DefaultToHiddenHorizontalScrollBarsInXaml()
     {
         var xaml = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -392,6 +409,17 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
                 .Select(button => new CollapsedGroupKeyTip(RibbonTooltip.GetTitle(button) ?? "", RibbonTooltip.GetKeyTip(button) ?? ""))
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.GroupName) && !string.IsNullOrWhiteSpace(pair.KeyTip))
+                .ToList();
+
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupsWithoutDropdownGlyph =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(button => System.Windows.Documents.AdornerLayer.GetAdornerLayer(button)
+                    ?.GetAdorners(button)
+                    ?.Any(adorner => adorner.GetType().Name == "RibbonCollapsedGroupChevronAdorner") != true)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
         public IReadOnlyList<ContextMenu> CollapsedRibbonGroupMenus =>
@@ -538,9 +566,10 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Concat(EnumerateLogicalDescendants(tabItem.Content as DependencyObject ?? tabItem))
                     .OfType<StackPanel>()
                     .Distinct()
-                    .OrderByDescending(panel => panel.Children.OfType<Grid>().Count())
+                    .Where(panel => FindVisualAncestor<Button>(panel) is not { Tag: "RibbonCollapsedGroupButton" })
+                    .OrderByDescending(panel => panel.Children.OfType<Grid>().Count(IsRibbonGroupGrid))
                     .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                             panel.Children.OfType<Grid>().Any())
+                                             panel.Children.OfType<Grid>().Any(IsRibbonGroupGrid))
                 : null;
 
         public void SetRibbonWidth(double width)
@@ -730,6 +759,26 @@ public sealed class MainWindowAdaptiveRibbonTests
             iconSlot = firstChild;
             return true;
         }
+
+        private static T? FindVisualAncestor<T>(DependencyObject element)
+            where T : DependencyObject
+        {
+            for (var current = System.Windows.Media.VisualTreeHelper.GetParent(element);
+                 current is not null;
+                 current = System.Windows.Media.VisualTreeHelper.GetParent(current))
+            {
+                if (current is T match)
+                    return match;
+            }
+
+            return null;
+        }
+
+        private static bool IsRibbonGroupGrid(Grid grid) =>
+            grid.Children.OfType<Border>().Any(border =>
+                Grid.GetRow(border) == 1 &&
+                border.Child is TextBlock groupLabel &&
+                !string.IsNullOrWhiteSpace(groupLabel.Text));
 
         private static bool IsEffectivelyVisible(DependencyObject element)
         {

@@ -35,7 +35,9 @@ internal static partial class XlsxChartXmlWriter
         || format.FontSize is not null
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null;
+        || format.TextThemeColor is not null
+        || format.IsDeleted is not null
+        || format.Position is not null;
 
     private static XElement ToPointDataLabelXml(
         ChartPointDataLabelFormat format,
@@ -43,6 +45,12 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs) =>
         new(chartNs + "dLbl",
             new XElement(chartNs + "idx", new XAttribute("val", format.PointIndex)),
+            format.IsDeleted is { } isDeleted
+                ? new XElement(chartNs + "delete", new XAttribute("val", isDeleted ? "1" : "0"))
+                : null,
+            format.Position is { } position
+                ? new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(position)))
+                : null,
             ToShapeProperties(
                 chartNs,
                 drawingNs,
@@ -82,6 +90,9 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "trendline",
+            string.IsNullOrWhiteSpace(chart.TrendlineName)
+                ? null
+                : new XElement(chartNs + "name", chart.TrendlineName),
             new XElement(chartNs + "trendlineType",
                 new XAttribute("val", ToXlsxTrendlineType(chart.TrendlineType))),
             chart.TrendlineType == ChartTrendlineType.Polynomial
@@ -90,10 +101,18 @@ internal static partial class XlsxChartXmlWriter
             chart.TrendlineType == ChartTrendlineType.MovingAverage
                 ? new XElement(chartNs + "period", new XAttribute("val", Math.Max(2, chart.TrendlinePeriod)))
                 : null,
+            ToOptionalTrendlineDoubleXml("forward", chart.TrendlineForward, chartNs),
+            ToOptionalTrendlineDoubleXml("backward", chart.TrendlineBackward, chartNs),
+            ToOptionalTrendlineDoubleXml("intercept", chart.TrendlineIntercept, chartNs),
             ToTrendlineShapeProperties(chart, chartNs, drawingNs),
             new XElement(chartNs + "dispEq", new XAttribute("val", chart.ShowTrendlineEquation ? "1" : "0")),
             new XElement(chartNs + "dispRSqr", new XAttribute("val", chart.ShowTrendlineRSquared ? "1" : "0")));
     }
+
+    private static XElement? ToOptionalTrendlineDoubleXml(string name, double? value, XNamespace chartNs) =>
+        value is { } number && double.IsFinite(number)
+            ? new XElement(chartNs + name, new XAttribute("val", number.ToString(CultureInfo.InvariantCulture)))
+            : null;
 
     private static XElement? ToTrendlineShapeProperties(
         ChartModel chart,

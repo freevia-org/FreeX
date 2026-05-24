@@ -19,11 +19,15 @@ internal static class XlsxChartTrendlineErrorBarReader
             return;
 
         chart.ShowLinearTrendline = true;
+        chart.TrendlineName = trendline.Element(ChartNs + "name")?.Value;
         chart.TrendlineType = FromXlsxTrendlineType(trendline.Element(ChartNs + "trendlineType")?.Attribute("val")?.Value);
         if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, out var period))
             chart.TrendlinePeriod = Math.Max(2, period);
         if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, out var order))
             chart.TrendlineOrder = Math.Clamp(order, 2, 6);
+        chart.TrendlineForward = ReadOptionalDouble(trendline.Element(ChartNs + "forward")?.Attribute("val")?.Value);
+        chart.TrendlineBackward = ReadOptionalDouble(trendline.Element(ChartNs + "backward")?.Attribute("val")?.Value);
+        chart.TrendlineIntercept = ReadOptionalDouble(trendline.Element(ChartNs + "intercept")?.Attribute("val")?.Value);
 
         chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
         chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
@@ -280,4 +284,7 @@ internal static class XlsxChartTrendlineErrorBarReader
             "minus" => ChartErrorBarDirection.Minus,
             _ => ChartErrorBarDirection.Both
         };
+
+    private static double? ReadOptionalDouble(string? value) =>
+        XlsxChartScalarReader.ReadOptionalDouble(value);
 }

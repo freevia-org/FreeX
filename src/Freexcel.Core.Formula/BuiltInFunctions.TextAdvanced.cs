@@ -17,31 +17,111 @@ public static partial class BuiltInFunctions
         if (args.Count < 3) return ErrorValue.Value;
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var delimiter = ToText(args[0]);
+        var delimiters = FlattenTextjoinArgument(args[0]);
+        if (delimiters.Error is not null) return delimiters.Error;
         bool ignoreEmpty = ToBool(args[1]);
         var parts = new List<string>();
         for (int i = 2; i < args.Count; i++)
         {
             if (args[i] is ErrorValue e) return e;
-            var t = ToText(args[i]);
-            if (ignoreEmpty && t.Length == 0) continue;
-            parts.Add(t);
+            var values = FlattenTextjoinArgument(args[i]);
+            if (values.Error is not null) return values.Error;
+            foreach (var t in values.Text)
+            {
+                if (ignoreEmpty && t.Length == 0) continue;
+                parts.Add(t);
+            }
         }
-        var result = string.Join(delimiter, parts);
+        var result = JoinTextjoinParts(parts, delimiters.Text);
         return result.Length > 32767 ? ErrorValue.Value : new TextValue(result);
+    }
+
+    private static (List<string> Text, ErrorValue? Error) FlattenTextjoinArgument(ScalarValue value)
+    {
+        var text = new List<string>();
+        if (value is RangeValue range)
+        {
+            foreach (var cell in range.Flatten())
+            {
+                if (cell is ErrorValue e) return (text, e);
+                text.Add(ToText(cell));
+            }
+        }
+        else
+        {
+            text.Add(ToText(value));
+        }
+
+        return (text, null);
+    }
+
+    private static string JoinTextjoinParts(IReadOnlyList<string> parts, IReadOnlyList<string> delimiters)
+    {
+        if (parts.Count == 0) return "";
+        if (delimiters.Count == 0) return string.Concat(parts);
+
+        var result = new StringBuilder(parts[0]);
+        for (int i = 1; i < parts.Count; i++)
+        {
+            result.Append(delimiters[(i - 1) % delimiters.Count]);
+            result.Append(parts[i]);
+        }
+
+        return result.ToString();
     }
 
     private static ScalarValue Exact(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args[0] is RangeValue left || args[1] is RangeValue right)
+            return ExactRange(args[0], args[1]);
+
         return new BoolValue(string.Equals(ToText(args[0]), ToText(args[1]), StringComparison.Ordinal));
     }
+
+    private static ScalarValue ExactRange(ScalarValue left, ScalarValue right)
+    {
+        var leftRange = left as RangeValue;
+        var rightRange = right as RangeValue;
+        int rows = leftRange?.RowCount ?? rightRange?.RowCount ?? 1;
+        int cols = leftRange?.ColCount ?? rightRange?.ColCount ?? 1;
+        if (leftRange is not null && !CanBroadcastExactRange(leftRange, rows, cols)) return ErrorValue.Value;
+        if (rightRange is not null && !CanBroadcastExactRange(rightRange, rows, cols)) return ErrorValue.Value;
+
+        var result = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                var l = ExactValueAt(left, r, c);
+                var rr = ExactValueAt(right, r, c);
+                if (l is ErrorValue le) return le;
+                if (rr is ErrorValue re) return re;
+                result[r, c] = new BoolValue(string.Equals(ToText(l), ToText(rr), StringComparison.Ordinal));
+            }
+
+        return new RangeValue(result);
+    }
+
+    private static bool CanBroadcastExactRange(RangeValue range, int rows, int cols) =>
+        (range.RowCount == rows && range.ColCount == cols) || (range.RowCount == 1 && range.ColCount == 1);
+
+    private static ScalarValue ExactValueAt(ScalarValue value, int row, int col) =>
+        value is RangeValue range
+            ? range.Cells[range.RowCount == 1 ? 0 : row, range.ColCount == 1 ? 0 : col]
+            : value;
 
     private static ScalarValue Code(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]);
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, CodeScalar);
+        return CodeScalar(args[0]);
+    }
+
+    private static ScalarValue CodeScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var text = ToText(value);
         if (text.Length == 0) return ErrorValue.Value;
         return new NumberValue(CharToExcelAnsiCode(text[0]));
     }
@@ -49,11 +129,28 @@ public static partial class BuiltInFunctions
     private static ScalarValue Char(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var n = ToNumber(args[0]);
+        if (args[0] is RangeValue range) return MapTextAdvancedRange(range, CharScalar);
+        return CharScalar(args[0]);
+    }
+
+    private static ScalarValue CharScalar(ScalarValue value)
+    {
+        if (value is ErrorValue e) return e;
+        var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Value;
         int code = (int)n;
         if (code <= 0 || code > 255) return ErrorValue.Value;
         return new TextValue(ExcelAnsiCodeToChar(code).ToString());
+    }
+
+    private static RangeValue MapTextAdvancedRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
+    {
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = map(range.Cells[r, c]);
+
+        return new RangeValue(cells);
     }
 
     private static ScalarValue Asc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -82,7 +179,7 @@ public static partial class BuiltInFunctions
         var value = ToNumber(args[0]);
         if (!double.IsFinite(value)) return ErrorValue.Value;
 
-        var rounded = Math.Round(Math.Abs(value), 2, MidpointRounding.AwayFromZero);
+        var rounded = Math.Round(Math.Abs(value) + 1e-12, 2, MidpointRounding.AwayFromZero);
         if (rounded > long.MaxValue) return ErrorValue.Num;
 
         long baht = (long)Math.Floor(rounded);
@@ -95,8 +192,11 @@ public static partial class BuiltInFunctions
 
         var result = new StringBuilder();
         if (value < 0) result.Append("ลบ");
-        result.Append(ThaiNumberToText(baht));
-        result.Append("บาท");
+        if (baht > 0 || satang == 0)
+        {
+            result.Append(ThaiNumberToText(baht));
+            result.Append("บาท");
+        }
         result.Append(satang == 0 ? "ถ้วน" : ThaiNumberToText(satang) + "สตางค์");
         return TextResult(result.ToString());
     }

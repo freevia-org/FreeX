@@ -19,6 +19,7 @@ public sealed partial class NativeJsonAdapter
         }
         chart.PlotAreaBorderThickness = Math.Clamp(chart.PlotAreaBorderThickness, 0, 10);
         chart.LegendBorderThickness = Math.Clamp(chart.LegendBorderThickness, 0, 10);
+        chart.ChartAreaBorderThickness = ClampNullableDouble(chart.ChartAreaBorderThickness, 0, 10);
         chart.LegendFontSize = Math.Clamp(chart.LegendFontSize, 6, 72);
         chart.DoughnutHoleSize = Math.Clamp(chart.DoughnutHoleSize, 0.1, 0.9);
         chart.FirstSliceAngle = NormalizeChartAngle(chart.FirstSliceAngle);
@@ -35,6 +36,7 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMajorUnit = ClampPositiveAxisUnit(chart.XAxisMajorUnit);
         chart.XAxisMinorUnit = ClampPositiveAxisUnit(chart.XAxisMinorUnit);
         chart.XAxisNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.XAxisNumberFormatCode = string.IsNullOrWhiteSpace(chart.XAxisNumberFormatCode) ? null : chart.XAxisNumberFormatCode;
         chart.XAxisGridlineThickness = Math.Clamp(chart.XAxisGridlineThickness, 0.25, 10);
         chart.XAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMajorTickStyle, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMinorTickStyle, ChartAxisTickStyle.None);
@@ -47,6 +49,7 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisMajorUnit = ClampPositiveAxisUnit(chart.YAxisMajorUnit);
         chart.YAxisMinorUnit = ClampPositiveAxisUnit(chart.YAxisMinorUnit);
         chart.YAxisNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.YAxisNumberFormatCode = string.IsNullOrWhiteSpace(chart.YAxisNumberFormatCode) ? null : chart.YAxisNumberFormatCode;
         chart.YAxisGridlineThickness = Math.Clamp(chart.YAxisGridlineThickness, 0.25, 10);
         chart.YAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMajorTickStyle, ChartAxisTickStyle.Outside);
         chart.YAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMinorTickStyle, ChartAxisTickStyle.None);
@@ -61,6 +64,7 @@ public sealed partial class NativeJsonAdapter
         chart.DataLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelPosition, ChartDataLabelPosition.BestFit);
         chart.DataLabelSeparator = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelSeparator, ChartDataLabelSeparator.Comma);
         chart.DataLabelNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelNumberFormat, ChartDataLabelNumberFormat.General);
+        chart.DrawingAnchorKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DrawingAnchorKind, ChartDrawingAnchorKind.Absolute);
         chart.StockSubtype = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.StockSubtype, StockChartSubtype.HighLowClose);
         if (chart.Type != ChartType.Stock)
             chart.StockSubtype = StockChartSubtype.HighLowClose;
@@ -98,6 +102,10 @@ public sealed partial class NativeJsonAdapter
         chart.TrendlineType = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineType, ChartTrendlineType.Linear);
         chart.TrendlinePeriod = Math.Max(2, chart.TrendlinePeriod);
         chart.TrendlineOrder = Math.Clamp(chart.TrendlineOrder, 2, 6);
+        chart.TrendlineName = string.IsNullOrWhiteSpace(chart.TrendlineName) ? null : chart.TrendlineName;
+        chart.TrendlineForward = ClampNullableDouble(chart.TrendlineForward, 0, 1000);
+        chart.TrendlineBackward = ClampNullableDouble(chart.TrendlineBackward, 0, 1000);
+        chart.TrendlineIntercept = chart.TrendlineIntercept is { } intercept && double.IsFinite(intercept) ? intercept : null;
         chart.TrendlineThickness = Math.Clamp(chart.TrendlineThickness, 0.5, 10);
         chart.TrendlineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.TrendlineDashStyle, ChartLineDashStyle.Dash);
         chart.ErrorBarKind = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.ErrorBarKind, ChartErrorBarKind.StandardError);
@@ -128,9 +136,13 @@ public sealed partial class NativeJsonAdapter
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
             chart.ShowLinearTrendline = false;
+            chart.TrendlineName = null;
             chart.TrendlineType = ChartTrendlineType.Linear;
             chart.TrendlinePeriod = 2;
             chart.TrendlineOrder = 2;
+            chart.TrendlineForward = null;
+            chart.TrendlineBackward = null;
+            chart.TrendlineIntercept = null;
             chart.ShowTrendlineEquation = false;
             chart.ShowTrendlineRSquared = false;
             chart.TrendlineColor = null;
@@ -219,6 +231,8 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisMinorUnit = null;
         chart.XAxisLogScale = false;
         chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.XAxisNumberFormatCode = null;
+        chart.XAxisNumberFormatSourceLinked = null;
         chart.ShowXAxisMajorGridlines = false;
         chart.ShowXAxisMinorGridlines = false;
         chart.XAxisMajorGridlineColor = null;
@@ -243,6 +257,8 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisMinorUnit = null;
         chart.YAxisLogScale = false;
         chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.YAxisNumberFormatCode = null;
+        chart.YAxisNumberFormatSourceLinked = null;
         chart.ShowYAxisMajorGridlines = false;
         chart.ShowYAxisMinorGridlines = false;
         chart.YAxisMajorGridlineColor = null;
@@ -307,7 +323,8 @@ public sealed partial class NativeJsonAdapter
                 : null,
             FontSize = format.FontSize is { } fontSize
                 ? Math.Clamp(fontSize, 6, 72)
-                : null
+                : null,
+            Position = NativeJsonValueSanitizer.ValidNullableEnumOrNull(format.Position)
         };
 
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
@@ -318,5 +335,7 @@ public sealed partial class NativeJsonAdapter
         || format.FontSize is not null
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null;
+        || format.TextThemeColor is not null
+        || format.IsDeleted is not null
+        || format.Position is not null;
 }

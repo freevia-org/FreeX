@@ -51,6 +51,8 @@ public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
 public enum ChartAxisTickLabelPosition { NextTo, Low, High }
 
+public enum ChartAxisPosition { Bottom, Top, Left, Right }
+
 public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
 
 public enum ChartAxisCrossBetween { Between, MidCategory }
@@ -71,6 +73,8 @@ public enum ChartAxisDisplayUnit
     Billions,
     Trillions
 }
+
+public enum ChartDrawingAnchorKind { Absolute, OneCell, TwoCell }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
@@ -210,7 +214,9 @@ public sealed record ChartPointDataLabelFormat(
     double? FontSize = null,
     WorkbookThemeColorReference? FillThemeColor = null,
     WorkbookThemeColorReference? BorderThemeColor = null,
-    WorkbookThemeColorReference? TextThemeColor = null)
+    WorkbookThemeColorReference? TextThemeColor = null,
+    bool? IsDeleted = null,
+    ChartDataLabelPosition? Position = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;
@@ -271,6 +277,10 @@ public sealed class ChartModel
     public string? Title { get; set; }
     public string? XAxisTitle { get; set; }
     public string? YAxisTitle { get; set; }
+    public bool HideXAxis { get; set; }
+    public bool HideYAxis { get; set; }
+    public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
+    public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
     public CellColor? ChartTitleTextColor { get; set; }
     public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
     public double ChartTitleFontSize { get; set; } = 16;
@@ -279,6 +289,9 @@ public sealed class ChartModel
     public double AxisTitleFontSize { get; set; } = 12;
     public CellColor? ChartAreaFillColor { get; set; }
     public WorkbookThemeColorReference? ChartAreaFillThemeColor { get; set; }
+    public CellColor? ChartAreaBorderColor { get; set; }
+    public WorkbookThemeColorReference? ChartAreaBorderThemeColor { get; set; }
+    public double? ChartAreaBorderThickness { get; set; }
     public CellColor? PlotAreaFillColor { get; set; }
     public WorkbookThemeColorReference? PlotAreaFillThemeColor { get; set; }
     public CellColor? PlotAreaBorderColor { get; set; }
@@ -301,8 +314,11 @@ public sealed class ChartModel
     public double? XAxisMajorUnit { get; set; }
     public double? XAxisMinorUnit { get; set; }
     public bool XAxisLogScale { get; set; }
+    public double? XAxisLogBase { get; set; }
     public bool XAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? XAxisNumberFormatCode { get; set; }
+    public bool? XAxisNumberFormatSourceLinked { get; set; }
     public bool ShowXAxisMajorGridlines { get; set; }
     public bool ShowXAxisMinorGridlines { get; set; }
     public bool XAxisIsDateAxis { get; set; }
@@ -331,13 +347,17 @@ public sealed class ChartModel
     public double? XAxisCrossesAt { get; set; }
     public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
     public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
+    public double? XAxisCustomDisplayUnit { get; set; }
     public double? YAxisMinimum { get; set; }
     public double? YAxisMaximum { get; set; }
     public double? YAxisMajorUnit { get; set; }
     public double? YAxisMinorUnit { get; set; }
     public bool YAxisLogScale { get; set; }
+    public double? YAxisLogBase { get; set; }
     public bool YAxisReverseOrder { get; set; }
     public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public string? YAxisNumberFormatCode { get; set; }
+    public bool? YAxisNumberFormatSourceLinked { get; set; }
     public bool ShowYAxisMajorGridlines { get; set; }
     public bool ShowYAxisMinorGridlines { get; set; }
     public CellColor? YAxisMajorGridlineColor { get; set; }
@@ -357,6 +377,7 @@ public sealed class ChartModel
     public double? YAxisCrossesAt { get; set; }
     public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
     public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
+    public double? YAxisCustomDisplayUnit { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
     public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;
@@ -381,9 +402,13 @@ public sealed class ChartModel
     public double DataLabelFontSize { get; set; } = 11;
     public double DataLabelAngle { get; set; }
     public bool ShowLinearTrendline { get; set; }
+    public string? TrendlineName { get; set; }
     public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
     public int TrendlinePeriod { get; set; } = 2;
     public int TrendlineOrder { get; set; } = 2;
+    public double? TrendlineForward { get; set; }
+    public double? TrendlineBackward { get; set; }
+    public double? TrendlineIntercept { get; set; }
     public bool ShowTrendlineEquation { get; set; }
     public bool ShowTrendlineRSquared { get; set; }
     public CellColor? TrendlineColor { get; set; }
@@ -436,9 +461,13 @@ public sealed class ChartModel
     public double Top    { get; set; } = 50;
     public double Width  { get; set; } = 400;
     public double Height { get; set; } = 300;
+    public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
 
     public CellColor? ResolveChartAreaFillColor(WorkbookTheme theme) =>
         ChartAreaFillThemeColor?.Resolve(theme) ?? ChartAreaFillColor;
+
+    public CellColor? ResolveChartAreaBorderColor(WorkbookTheme theme) =>
+        ChartAreaBorderThemeColor?.Resolve(theme) ?? ChartAreaBorderColor;
 
     public CellColor? ResolvePlotAreaFillColor(WorkbookTheme theme) =>
         PlotAreaFillThemeColor?.Resolve(theme) ?? PlotAreaFillColor;

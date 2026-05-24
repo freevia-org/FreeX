@@ -5757,6 +5757,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedColumnChartOneCellAnchorPackagePart()
+    {
+        var workbook = new Workbook("ChartOneCellAnchorPreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, useOneCellAnchor: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+        drawingXml.Root!.Element(spreadsheetDrawingNs + "oneCellAnchor").Should().NotBeNull();
+        drawingXml.Root.Element(spreadsheetDrawingNs + "absoluteAnchor").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_ReadsEmbeddedColumnChartAbsoluteAnchorPackagePart()
     {
         var workbook = new Workbook("ChartPackageLoad");
@@ -7229,6 +7262,66 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartAreaBorderPackageFormatting()
+    {
+        var workbook = new Workbook("ChartAreaBorderPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:spPr>
+                <a:solidFill><a:srgbClr val="F4F4F4"/></a:solidFill>
+                <a:ln w="31750"><a:solidFill><a:srgbClr val="D95319"/></a:solidFill></a:ln>
+              </c:spPr>
+              <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ChartAreaBorderColor.Should().Be(new CellColor(217, 83, 25));
+        loadedChart.ChartAreaBorderThickness.Should().BeApproximately(2.5, 0.01);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var line = chartXml.Root!.Element(chartNs + "spPr")!.Element(drawingNs + "ln")!;
+        line.Attribute("w")!.Value.Should().Be("31750");
+        line.Element(drawingNs + "solidFill")!.Element(drawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("D95319");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartAxisTitlesPackagePart()
     {
         var workbook = new Workbook("ChartAxisTitlesPackageSave");
@@ -7320,6 +7413,82 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartValueAxisCustomNumberFormatPackagePart()
+    {
+        var workbook = new Workbook("ChartValueAxisCustomNumberFormatPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1200));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(2400));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(3600));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="48650112"/>
+                    <c:axId val="48672768"/>
+                  </c:barChart>
+                  <c:catAx>
+                    <c:axId val="48650112"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:axPos val="b"/>
+                    <c:crossAx val="48672768"/>
+                    <c:crosses val="autoZero"/>
+                  </c:catAx>
+                  <c:valAx>
+                    <c:axId val="48672768"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:axPos val="l"/>
+                    <c:numFmt formatCode="#,##0.0 &quot;kg&quot;" sourceLinked="0"/>
+                    <c:crossAx val="48650112"/>
+                    <c:crosses val="autoZero"/>
+                  </c:valAx>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.YAxisNumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+        loadedChart.YAxisNumberFormatSourceLinked.Should().BeFalse();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var valueAxisNumberFormat = chartXml.Root!
+            .Element(chartNs + "chart")!
+            .Element(chartNs + "plotArea")!
+            .Element(chartNs + "valAx")!
+            .Element(chartNs + "numFmt")!;
+        valueAxisNumberFormat.Attribute("formatCode")!.Value.Should().Be("#,##0.0 \"kg\"");
+        valueAxisNumberFormat.Attribute("sourceLinked")!.Value.Should().Be("0");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartValueAxisScalePackagePart()
     {
         var workbook = new Workbook("ChartValueAxisScalePackageSave");
@@ -7360,6 +7529,52 @@ public partial class FileAdapterSmokeTests
         loadedChart.YAxisMinorUnit.Should().Be(5);
         loadedChart.YAxisLogScale.Should().BeTrue();
         loadedChart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartValueAxisLogBasePackagePart()
+    {
+        var workbook = new Workbook("ChartValueAxisLogBasePackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(16));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(32));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            YAxisLogScale = true,
+            YAxisLogBase = 2,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + "valAx")
+                .Single()
+                .Element(chartNs + "scaling")!
+                .Element(chartNs + "logBase")!
+                .Attribute("val")!
+                .Value.Should().Be("2");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.YAxisLogScale.Should().BeTrue();
+        loadedChart.YAxisLogBase.Should().Be(2);
     }
 
     [Fact]
@@ -7412,6 +7627,106 @@ public partial class FileAdapterSmokeTests
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.XAxisReverseOrder.Should().BeTrue();
         loadedChart.YAxisReverseOrder.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartAxisDeletedPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisDeletedPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            HideXAxis = true,
+            HideYAxis = true,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + "catAx")
+                .Single()
+                .Element(chartNs + "delete")!
+                .Attribute("val")!
+                .Value.Should().Be("1");
+            chartXml.Descendants(chartNs + "valAx")
+                .Single()
+                .Element(chartNs + "delete")!
+                .Attribute("val")!
+                .Value.Should().Be("1");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.HideXAxis.Should().BeTrue();
+        loadedChart.HideYAxis.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartAxisPositionPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisPositionPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            XAxisPosition = ChartAxisPosition.Top,
+            YAxisPosition = ChartAxisPosition.Right,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + "catAx")
+                .Single()
+                .Element(chartNs + "axPos")!
+                .Attribute("val")!
+                .Value.Should().Be("t");
+            chartXml.Descendants(chartNs + "valAx")
+                .Single()
+                .Element(chartNs + "axPos")!
+                .Attribute("val")!
+                .Value.Should().Be("r");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.XAxisPosition.Should().Be(ChartAxisPosition.Top);
+        loadedChart.YAxisPosition.Should().Be(ChartAxisPosition.Right);
     }
 
     [Fact]
@@ -8021,6 +8336,67 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartPointDataLabelDeleteAndPositionPackagePart()
+    {
+        var workbook = new Workbook("ChartPointDataLabelMetadataPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                      <c:dLbls>
+                        <c:dLbl>
+                          <c:idx val="1"/>
+                          <c:delete val="1"/>
+                          <c:dLblPos val="outEnd"/>
+                        </c:dLbl>
+                      </c:dLbls>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartPointDataLabelFormat(0, 1, IsDeleted: true, Position: ChartDataLabelPosition.OutsideEnd));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var label = chartXml.Descendants(chartNs + "dLbl").Should().ContainSingle().Subject;
+        label.Element(chartNs + "delete")!.Attribute("val")!.Value.Should().Be("1");
+        label.Element(chartNs + "dLblPos")!.Attribute("val")!.Value.Should().Be("outEnd");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesEmbeddedChartTrendlinePackagePart()
     {
         var workbook = new Workbook("ChartTrendlinePackageSave");
@@ -8065,6 +8441,78 @@ public partial class FileAdapterSmokeTests
         loadedChart.TrendlineColor.Should().Be(new CellColor(217, 83, 25));
         loadedChart.TrendlineThickness.Should().Be(2.5);
         loadedChart.TrendlineDashStyle.Should().Be(ChartLineDashStyle.Dot);
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesEmbeddedChartTrendlineMetadataPackagePart()
+    {
+        var workbook = new Workbook("ChartTrendlineMetadataPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                      <c:trendline>
+                        <c:name>Linear Sales</c:name>
+                        <c:trendlineType val="linear"/>
+                        <c:forward val="1.5"/>
+                        <c:backward val="0.5"/>
+                        <c:intercept val="2.25"/>
+                        <c:dispEq val="1"/>
+                        <c:dispRSqr val="1"/>
+                      </c:trendline>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.TrendlineName.Should().Be("Linear Sales");
+        loadedChart.TrendlineForward.Should().Be(1.5);
+        loadedChart.TrendlineBackward.Should().Be(0.5);
+        loadedChart.TrendlineIntercept.Should().Be(2.25);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var trendline = chartXml.Root!
+            .Descendants(chartNs + "trendline")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        trendline.Element(chartNs + "name")!.Value.Should().Be("Linear Sales");
+        trendline.Element(chartNs + "forward")!.Attribute("val")!.Value.Should().Be("1.5");
+        trendline.Element(chartNs + "backward")!.Attribute("val")!.Value.Should().Be("0.5");
+        trendline.Element(chartNs + "intercept")!.Attribute("val")!.Value.Should().Be("2.25");
     }
 
     [Fact]
@@ -8448,6 +8896,49 @@ public partial class FileAdapterSmokeTests
         var loaded = new XlsxFileAdapter().Load(saved);
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.YAxisDisplayUnit.Should().Be(ChartAxisDisplayUnit.Millions);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedChartValueAxisCustomDisplayUnitPackagePart()
+    {
+        var workbook = new Workbook("ChartAxisCustomDisplayUnitPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(2500));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(5000));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(7500));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            YAxisCustomDisplayUnit = 2500,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2))
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            var displayUnits = chartXml.Descendants(chartNs + "valAx")
+                .Single()
+                .Element(chartNs + "dispUnits")!;
+            displayUnits.Element(chartNs + "builtInUnit").Should().BeNull();
+            displayUnits.Element(chartNs + "custUnit")!.Attribute("val")!.Value.Should().Be("2500");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.YAxisCustomDisplayUnit.Should().Be(2500);
     }
 
     [Fact]

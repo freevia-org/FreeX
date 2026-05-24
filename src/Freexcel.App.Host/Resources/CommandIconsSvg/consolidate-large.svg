@@ -1,10 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  
-  <rect x="5.6" y="6.4" width="8.8" height="8.8" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="17.6" y="6.4" width="8.8" height="8.8" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="11.52" y="17.6" width="8.96" height="8.96" stroke-width="1.6" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M13.6 13.6 L15.2 17.28" stroke-width="1.28" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <polygon points="11.47 14.72 15.2 17.28 15.87 12.8" fill="#107c41"/>
-  <path d="M19.2 13.6 L16.8 17.28" stroke-width="1.28" fill="none" stroke="#242424" stroke-linecap="round" stroke-linejoin="round"/>
-  <polygon points="16.89 12.75 16.8 17.28 20.91 15.37" fill="#107c41"/>
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#1f1f1f;stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke}.r{fill:none;stroke:#1f1f1f;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.g{fill:#217346}.g2{fill:#8fd19e}.b{fill:#5b9bd5}.o{fill:#f4b183}.y{fill:#ffd966}.rd{fill:#d83b01}.p{fill:#8064a2}.w{fill:#fff}.k{fill:#1f1f1f}.f{fill:#f7f7f7}.t{font-family:'Segoe UI',Arial,sans-serif;fill:#1f1f1f;font-weight:500;text-anchor:middle;dominant-baseline:central}
+    </style>
+  </defs>
+  <rect class="f s" x="5.6" y="6.4" width="8.8" height="8.8" stroke-width="1"/>
+  <rect class="f s" x="17.6" y="6.4" width="8.8" height="8.8" stroke-width="1"/>
+  <rect class="f s" x="11.52" y="17.6" width="8.96" height="8.96" stroke-width="1"/>
+  <path class="r" d="M13.6 13.6 L15.2 17.28" stroke-width="1"/>
+  <polygon class="g" points="11.47 14.72 15.2 17.28 15.87 12.8"/>
+  <path class="r" d="M19.2 13.6 L16.8 17.28" stroke-width="1"/>
+  <polygon class="g" points="16.89 12.75 16.8 17.28 20.91 15.37"/>
 </svg>

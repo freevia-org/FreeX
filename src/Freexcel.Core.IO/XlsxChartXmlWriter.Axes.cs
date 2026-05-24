@@ -15,14 +15,18 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisTitle,
                 CategoryAxisId,
                 ValueAxisId,
-                "b",
+                ToXlsxAxisPosition(chart.XAxisPosition, "b"),
+                chart.HideXAxis,
                 chart.XAxisMinimum,
                 chart.XAxisMaximum,
                 chart.XAxisMajorUnit,
                 chart.XAxisMinorUnit,
                 chart.XAxisLogScale,
+                chart.XAxisLogBase,
                 chart.XAxisReverseOrder,
                 chart.XAxisNumberFormat,
+                chart.XAxisNumberFormatCode,
+                chart.XAxisNumberFormatSourceLinked,
                 chart.ShowXAxisMajorGridlines,
                 chart.ShowXAxisMinorGridlines,
                 chart.XAxisMajorGridlineColor,
@@ -45,20 +49,25 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisCrossesAt,
                 chart.XAxisCrossBetween,
                 chart.XAxisDisplayUnit,
+                chart.XAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs);
             yield return ToValueAxisXml(
                 chart.YAxisTitle,
                 ValueAxisId,
                 CategoryAxisId,
-                "l",
+                ToXlsxAxisPosition(chart.YAxisPosition, "l"),
+                chart.HideYAxis,
                 chart.YAxisMinimum,
                 chart.YAxisMaximum,
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
+                chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
+                chart.YAxisNumberFormatCode,
+                chart.YAxisNumberFormatSourceLinked,
                 chart.ShowYAxisMajorGridlines,
                 chart.ShowYAxisMinorGridlines,
                 chart.YAxisMajorGridlineColor,
@@ -81,6 +90,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
                 chart.YAxisDisplayUnit,
+                chart.YAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs);
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
@@ -91,13 +101,17 @@ internal static partial class XlsxChartXmlWriter
                     SecondaryValueAxisId,
                     CategoryAxisId,
                     "r",
+                    chart.HideYAxis,
                     chart.YAxisMinimum,
                     chart.YAxisMaximum,
                     chart.YAxisMajorUnit,
                     chart.YAxisMinorUnit,
                     chart.YAxisLogScale,
+                    chart.YAxisLogBase,
                     chart.YAxisReverseOrder,
                     chart.YAxisNumberFormat,
+                    chart.YAxisNumberFormatCode,
+                    chart.YAxisNumberFormatSourceLinked,
                     false,
                     false,
                     null,
@@ -120,6 +134,7 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisCrossesAt,
                     chart.YAxisCrossBetween,
                     chart.YAxisDisplayUnit,
+                    chart.YAxisCustomDisplayUnit,
                     chartNs,
                     drawingNs);
             }
@@ -131,14 +146,18 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisTitle,
             ValueAxisId,
             CategoryAxisId,
-            "l",
+            ToXlsxAxisPosition(chart.YAxisPosition, "l"),
+            chart.HideYAxis,
             chart.YAxisMinimum,
             chart.YAxisMaximum,
             chart.YAxisMajorUnit,
             chart.YAxisMinorUnit,
             chart.YAxisLogScale,
+            chart.YAxisLogBase,
             chart.YAxisReverseOrder,
             chart.YAxisNumberFormat,
+            chart.YAxisNumberFormatCode,
+            chart.YAxisNumberFormatSourceLinked,
             chart.ShowYAxisMajorGridlines,
             chart.ShowYAxisMinorGridlines,
             chart.YAxisMajorGridlineColor,
@@ -161,6 +180,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisCrossesAt,
             chart.YAxisCrossBetween,
             chart.YAxisDisplayUnit,
+            chart.YAxisCustomDisplayUnit,
             chartNs,
             drawingNs);
 
@@ -172,13 +192,17 @@ internal static partial class XlsxChartXmlWriter
                 SecondaryValueAxisId,
                 CategoryAxisId,
                 "r",
+                chart.HideYAxis,
                 chart.YAxisMinimum,
                 chart.YAxisMaximum,
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
                 chart.YAxisLogScale,
+                chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
                 chart.YAxisNumberFormat,
+                chart.YAxisNumberFormatCode,
+                chart.YAxisNumberFormatSourceLinked,
                 false,
                 false,
                 null,
@@ -201,6 +225,7 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
                 chart.YAxisDisplayUnit,
+                chart.YAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs);
         }
@@ -214,8 +239,8 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
-            new XElement(chartNs + "delete", new XAttribute("val", "0")),
-            new XElement(chartNs + "axPos", new XAttribute("val", "b")),
+            new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
+            new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxAxisPosition(chart.XAxisPosition, "b"))),
             ToAxisTitleXml(chart.XAxisTitle, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
@@ -240,13 +265,17 @@ internal static partial class XlsxChartXmlWriter
         int axisId,
         int crossAxisId,
         string axisPosition,
+        bool hidden,
         double? minimum,
         double? maximum,
         double? majorUnit,
         double? minorUnit,
         bool logScale,
+        double? logBase,
         bool reverseOrder,
         ChartDataLabelNumberFormat numberFormat,
+        string? numberFormatCode,
+        bool? numberFormatSourceLinked,
         bool showMajorGridlines,
         bool showMinorGridlines,
         CellColor? majorGridlineColor,
@@ -269,21 +298,22 @@ internal static partial class XlsxChartXmlWriter
         double? crossesAt,
         ChartAxisCrossBetween? crossBetween,
         ChartAxisDisplayUnit? displayUnit,
+        double? customDisplayUnit,
         XNamespace chartNs,
         XNamespace drawingNs) =>
         new(chartNs + "valAx",
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
-                logScale ? new XElement(chartNs + "logBase", new XAttribute("val", "10")) : null,
+                logScale ? new XElement(chartNs + "logBase", new XAttribute("val", ToXlsxLogBase(logBase))) : null,
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(reverseOrder))),
                 ToAxisBoundXml("max", maximum, chartNs),
                 ToAxisBoundXml("min", minimum, chartNs)),
-            new XElement(chartNs + "delete", new XAttribute("val", "0")),
+            new XElement(chartNs + "delete", new XAttribute("val", hidden ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
             ToAxisTitleXml(title, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
             new XElement(chartNs + "numFmt",
-                new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat)),
-                new XAttribute("sourceLinked", numberFormat == ChartDataLabelNumberFormat.General ? "1" : "0")),
+                new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
+                new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
             ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
             ToAxisUnitXml("majorUnit", majorUnit, chartNs),
@@ -291,7 +321,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels, tickLabelPosition))),
-            ToAxisDisplayUnitXml(displayUnit, chartNs),
+            ToAxisDisplayUnitXml(displayUnit, customDisplayUnit, chartNs),
             ToAxisLabelTextProperties(labelTextThemeColor, labelTextColor, labelFontSize, labelAngle, chartNs, drawingNs),
             ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
@@ -358,6 +388,16 @@ internal static partial class XlsxChartXmlWriter
 
     private static string ToXlsxAxisOrientation(bool reverseOrder) =>
         reverseOrder ? "maxMin" : "minMax";
+
+    private static string ToXlsxAxisPosition(ChartAxisPosition position, string fallback) =>
+        position switch
+        {
+            ChartAxisPosition.Bottom => "b",
+            ChartAxisPosition.Top => "t",
+            ChartAxisPosition.Left => "l",
+            ChartAxisPosition.Right => "r",
+            _ => fallback
+        };
 
     private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
     {
@@ -426,6 +466,14 @@ internal static partial class XlsxChartXmlWriter
             ? new XElement(chartNs + elementName, new XAttribute("val", Math.Max(numeric, double.Epsilon).ToString(CultureInfo.InvariantCulture)))
             : null;
 
+    private static string ToXlsxLogBase(double? value)
+    {
+        var numeric = value is { } candidate && double.IsFinite(candidate)
+            ? Math.Clamp(candidate, 2, 1000)
+            : 10;
+        return numeric.ToString(CultureInfo.InvariantCulture);
+    }
+
     private static XElement? ToUnsignedAxisValueXml(string elementName, int value, XNamespace chartNs) =>
         value > 0
             ? new XElement(chartNs + elementName, new XAttribute("val", value.ToString(CultureInfo.InvariantCulture)))
@@ -455,11 +503,17 @@ internal static partial class XlsxChartXmlWriter
             _ => "months"
         };
 
-    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, XNamespace chartNs) =>
-        unit is null
+    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, double? customUnit, XNamespace chartNs)
+    {
+        if (customUnit is { } customNumeric && double.IsFinite(customNumeric) && customNumeric > 0)
+            return new XElement(chartNs + "dispUnits",
+                new XElement(chartNs + "custUnit", new XAttribute("val", customNumeric.ToString(CultureInfo.InvariantCulture))));
+
+        return unit is null
             ? null
             : new XElement(chartNs + "dispUnits",
                 new XElement(chartNs + "builtInUnit", new XAttribute("val", ToXlsxAxisDisplayUnit(unit.Value))));
+    }
 
     private static string ToXlsxAxisDisplayUnit(ChartAxisDisplayUnit unit) =>
         unit switch
@@ -484,4 +538,12 @@ internal static partial class XlsxChartXmlWriter
             ChartDataLabelNumberFormat.Percent => "0%",
             _ => "General"
         };
+
+    private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format, string? formatCode) =>
+        string.IsNullOrWhiteSpace(formatCode)
+            ? ToXlsxNumberFormatCode(format)
+            : formatCode;
+
+    private static string ToXlsxNumberFormatSourceLinked(ChartDataLabelNumberFormat format, bool? sourceLinked) =>
+        (sourceLinked ?? format == ChartDataLabelNumberFormat.General) ? "1" : "0";
 }

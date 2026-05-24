@@ -43,6 +43,10 @@ public sealed partial class NativeJsonAdapter
         public string? Title { get; set; }
         public string? XAxisTitle { get; set; }
         public string? YAxisTitle { get; set; }
+        public bool HideXAxis { get; set; }
+        public bool HideYAxis { get; set; }
+        public ChartAxisPosition XAxisPosition { get; set; } = ChartAxisPosition.Bottom;
+        public ChartAxisPosition YAxisPosition { get; set; } = ChartAxisPosition.Left;
         public CellColor? ChartTitleTextColor { get; set; }
         public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;
@@ -51,6 +55,9 @@ public sealed partial class NativeJsonAdapter
         public double AxisTitleFontSize { get; set; } = 12;
         public CellColor? ChartAreaFillColor { get; set; }
         public ThemeColorReferenceDto? ChartAreaFillThemeColor { get; set; }
+        public CellColor? ChartAreaBorderColor { get; set; }
+        public ThemeColorReferenceDto? ChartAreaBorderThemeColor { get; set; }
+        public double? ChartAreaBorderThickness { get; set; }
         public CellColor? PlotAreaFillColor { get; set; }
         public ThemeColorReferenceDto? PlotAreaFillThemeColor { get; set; }
         public CellColor? PlotAreaBorderColor { get; set; }
@@ -73,8 +80,11 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisMajorUnit { get; set; }
         public double? XAxisMinorUnit { get; set; }
         public bool XAxisLogScale { get; set; }
+        public double? XAxisLogBase { get; set; }
         public bool XAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+        public string? XAxisNumberFormatCode { get; set; }
+        public bool? XAxisNumberFormatSourceLinked { get; set; }
         public bool ShowXAxisMajorGridlines { get; set; }
         public bool ShowXAxisMinorGridlines { get; set; }
         public bool XAxisIsDateAxis { get; set; }
@@ -103,13 +113,17 @@ public sealed partial class NativeJsonAdapter
         public double? XAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
         public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
+        public double? XAxisCustomDisplayUnit { get; set; }
         public double? YAxisMinimum { get; set; }
         public double? YAxisMaximum { get; set; }
         public double? YAxisMajorUnit { get; set; }
         public double? YAxisMinorUnit { get; set; }
         public bool YAxisLogScale { get; set; }
+        public double? YAxisLogBase { get; set; }
         public bool YAxisReverseOrder { get; set; }
         public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+        public string? YAxisNumberFormatCode { get; set; }
+        public bool? YAxisNumberFormatSourceLinked { get; set; }
         public bool ShowYAxisMajorGridlines { get; set; }
         public bool ShowYAxisMinorGridlines { get; set; }
         public CellColor? YAxisMajorGridlineColor { get; set; }
@@ -129,6 +143,7 @@ public sealed partial class NativeJsonAdapter
         public double? YAxisCrossesAt { get; set; }
         public ChartAxisCrossBetween? YAxisCrossBetween { get; set; }
         public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
+        public double? YAxisCustomDisplayUnit { get; set; }
         public ChartDataTableModel? DataTable { get; set; }
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
@@ -161,9 +176,13 @@ public sealed partial class NativeJsonAdapter
         public double DataLabelFontSize { get; set; } = 11;
         public double DataLabelAngle { get; set; }
         public bool ShowLinearTrendline { get; set; }
+        public string? TrendlineName { get; set; }
         public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
         public int TrendlinePeriod { get; set; } = 2;
         public int TrendlineOrder { get; set; } = 2;
+        public double? TrendlineForward { get; set; }
+        public double? TrendlineBackward { get; set; }
+        public double? TrendlineIntercept { get; set; }
         public bool ShowTrendlineEquation { get; set; }
         public bool ShowTrendlineRSquared { get; set; }
         public CellColor? TrendlineColor { get; set; }
@@ -216,6 +235,7 @@ public sealed partial class NativeJsonAdapter
         public double Top { get; set; } = 50;
         public double Width { get; set; } = 400;
         public double Height { get; set; } = 300;
+        public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.Absolute;
     }
 
     private sealed class ChartSurfaceFormatDto

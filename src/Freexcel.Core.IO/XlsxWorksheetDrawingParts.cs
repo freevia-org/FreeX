@@ -46,6 +46,7 @@ internal sealed record XlsxShapePackagePart(
     bool HasShadowEffect);
 
 internal sealed record XlsxDrawingAnchor(
+    ChartDrawingAnchorKind Kind,
     uint FromRowZeroBased,
     uint FromColumnZeroBased,
     double FromRowOffset,

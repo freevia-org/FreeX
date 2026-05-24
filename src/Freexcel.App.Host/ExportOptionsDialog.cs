@@ -17,6 +17,7 @@ internal sealed class ExportOptionsDialog : Window
     private readonly ComboBox _bookmarkModeBox = new() { Width = 180, IsEnabled = false };
     private readonly ComboBox _initialViewBox = new() { Width = 180 };
     private readonly ComboBox _openModeBox = new() { Width = 180 };
+    private readonly TextBox _pdfLanguageBox = new() { Width = 88, Text = ExportPlanner.DefaultPdfLanguage };
     private readonly RadioButton _standardQualityButton = new() { Content = "_Standard", IsChecked = true };
     private readonly RadioButton _minimumSizeButton = new() { Content = "_Minimum size" };
     private readonly RadioButton _allPagesButton = new() { Content = "_All", GroupName = "PageRange", IsChecked = true };
@@ -30,7 +31,7 @@ internal sealed class ExportOptionsDialog : Window
     {
         Title = "Export Options";
         Width = 430;
-        Height = 376;
+        Height = 404;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -89,6 +90,10 @@ internal sealed class ExportOptionsDialog : Window
         openModePanel.Children.Add(new Label { Content = "Open _mode:", Target = _openModeBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         openModePanel.Children.Add(_openModeBox);
         stack.Children.Add(openModePanel);
+        var pdfLanguagePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+        pdfLanguagePanel.Children.Add(new Label { Content = "PDF _language:", Target = _pdfLanguageBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        pdfLanguagePanel.Children.Add(_pdfLanguageBox);
+        stack.Children.Add(pdfLanguagePanel);
         stack.Children.Add(_bitmapTextBox);
         stack.Children.Add(_standardQualityButton);
         stack.Children.Add(_minimumSizeButton);
@@ -128,7 +133,8 @@ internal sealed class ExportOptionsDialog : Window
                 GetSelectedBookmarkMode(),
                 GetSelectedInitialView(),
                 GetSelectedOpenMode(),
-                _bitmapTextBox.IsChecked == true);
+                _bitmapTextBox.IsChecked == true,
+                _pdfLanguageBox.Text);
             DialogResult = true;
         };
         buttons.Children.Add(ok);
@@ -171,7 +177,8 @@ internal sealed class ExportOptionsDialog : Window
         PdfBookmarkMode bookmarkMode = PdfBookmarkMode.None,
         PdfInitialView initialView = PdfInitialView.SinglePage,
         PdfOpenMode openMode = PdfOpenMode.Normal,
-        bool bitmapTextWhenFontsMayNotBeEmbedded = false) =>
+        bool bitmapTextWhenFontsMayNotBeEmbedded = false,
+        string? pdfLanguage = ExportPlanner.DefaultPdfLanguage) =>
         new(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
@@ -187,7 +194,8 @@ internal sealed class ExportOptionsDialog : Window
                     : PdfBookmarkMode.None,
             Enum.IsDefined(initialView) ? initialView : PdfInitialView.SinglePage,
             Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal,
-            bitmapTextWhenFontsMayNotBeEmbedded);
+            bitmapTextWhenFontsMayNotBeEmbedded,
+            ExportPlanner.NormalizePdfLanguage(pdfLanguage));
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
         _bookmarkModeBox.SelectedIndex switch

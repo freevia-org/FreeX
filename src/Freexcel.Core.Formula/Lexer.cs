@@ -9,7 +9,7 @@ namespace Freexcel.Core.Formula;
 public sealed class Lexer
 {
     private static readonly string[] KnownErrors =
-        ["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NULL!", "#N/A", "#NUM!", "#SPILL!", "#CALC!"];
+        ["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NULL!", "#N/A", "#NUM!", "#SPILL!", "#CALC!", "#GETTING_DATA"];
 
     static Lexer()
     {

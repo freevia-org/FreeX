@@ -142,7 +142,8 @@ public sealed partial class SetChartLayoutCommand
                 : null,
             FontSize = format.FontSize is { } fontSize
                 ? ClampFinite(fontSize, 6, 72)
-                : null
+                : null,
+            Position = ValidNullableEnumOrNull(format.Position)
         };
 
     private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
@@ -153,7 +154,9 @@ public sealed partial class SetChartLayoutCommand
         || format.FontSize is not null
         || format.FillThemeColor is not null
         || format.BorderThemeColor is not null
-        || format.TextThemeColor is not null;
+        || format.TextThemeColor is not null
+        || format.IsDeleted is not null
+        || format.Position is not null;
 
     private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
     {

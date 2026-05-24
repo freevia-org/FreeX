@@ -172,6 +172,19 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribePdfLanguageWhenNotDefault()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfLanguage: "uk-UA");
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF language uk-UA.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
@@ -194,6 +207,19 @@ public class ExportPlannerTests
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should().Be("Entire workbook; standard quality; document properties are included; bookmarks are PDF-only.");
+    }
+
+    [Fact]
+    public void ExportOptions_DescribeWithXpsFormatExplainsPdfOnlyLanguage()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.EntireWorkbook,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfLanguage: "uk-UA");
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Entire workbook; standard quality; document properties are not included; PDF language is PDF-only.");
     }
 
     [Fact]
@@ -231,7 +257,8 @@ public class ExportPlannerTests
                 ignorePrintAreas: true,
                 pageRange: new ExportPageRange(3, 3),
                 quality: ExportQuality.MinimumSize,
-                createBookmarks: true)
+                createBookmarks: true,
+                pdfLanguage: " uk-UA ")
             .Should()
             .Be(new ExportOptions(
                 ExportContentScope.EntireWorkbook,
@@ -241,7 +268,8 @@ public class ExportPlannerTests
                 PageRange: new ExportPageRange(3, 3),
                 Quality: ExportQuality.MinimumSize,
                 CreateBookmarks: true,
-                BookmarkMode: PdfBookmarkMode.SheetNames));
+                BookmarkMode: PdfBookmarkMode.SheetNames,
+                PdfLanguage: "uk-UA"));
     }
 
     [Fact]
@@ -259,6 +287,8 @@ public class ExportPlannerTests
             "Content = \"_Ignore print areas\"",
             "Content = \"Create _PDF bookmarks using sheet names\"",
             "Content = \"_Bitmap text when fonts may not be embedded\"",
+            "Content = \"PDF _language:\"",
+            "Target = _pdfLanguageBox",
             "Content = \"_Standard\"",
             "Content = \"_Minimum size\"",
             "Content = \"_All\"",
@@ -581,6 +611,28 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesRequestedCatalogLanguage()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, pdfLanguage: "uk-UA");
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Internals.Catalog.Elements.GetString("/Lang").Should().Be("uk-UA");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesRequestedPageRange()
     {
         StaTestRunner.Run(() =>
@@ -705,6 +757,60 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Freexcel PDF 1");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedTextBlocks()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateNestedTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Nested PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForInlineTextBlocks()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateInlineTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Inline PDF Text");
             }
             finally
             {
@@ -889,6 +995,47 @@ public class ExportPlannerTests
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
 
+    private static FixedDocument CreateNestedTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new Border
+        {
+            Margin = new System.Windows.Thickness(12),
+            Child = new TextBlock { Text = "Nested PDF Text" }
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateInlineTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new Run("Inline "));
+        text.Inlines.Add(new Run("PDF Text"));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
     private static FixedDocument CreateDocument(int pageCount)
     {
         var document = new FixedDocument();
@@ -1050,6 +1197,7 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("CreatePdfBookmarks(options)");
         printExport.Should().Contain("includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded");
+        printExport.Should().Contain("pdfLanguage: options.PdfLanguage");
         printExport.Should().Contain("options.EffectiveBookmarkMode");
         printExport.Should().Contain(": sheet.Name");
         printExport.Should().Contain("BuildPrintTitleBookmark(sheet)");

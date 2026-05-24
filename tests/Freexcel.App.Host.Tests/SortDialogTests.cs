@@ -75,7 +75,7 @@ public sealed class SortDialogTests
     [Fact]
     public void DialogLayout_ExposesExcelCustomSortFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var source = ReadSortDialogSource();
         var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.Planning.cs"));
 
         source.Should().Contain("My data has _headers");
@@ -100,7 +100,7 @@ public sealed class SortDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesFirstSortLevel()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var source = ReadSortDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -337,7 +337,7 @@ public sealed class SortDialogTests
     [Fact]
     public void SortOptionsDialog_ExposesExcelOptionsAsRealChoices()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var source = ReadSortDialogSource();
         var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
 
         optionsSource.Should().Contain("Title = \"Sort Options\"");
@@ -352,7 +352,7 @@ public sealed class SortDialogTests
     [Fact]
     public void SortOptionsDialogOpenedFromKeyboard_FocusesCaseSensitiveChoice()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var source = ReadSortDialogSource();
         var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
 
         optionsSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -372,4 +372,11 @@ public sealed class SortDialogTests
             new SortColumnChoice("Row 4", 1),
             new SortColumnChoice("Row 5", 2));
     }
+
+    private static string ReadSortDialogSource() =>
+        string.Join(Environment.NewLine, new[]
+        {
+            "SortDialog.cs",
+            "SortOptionsDialog.cs"
+        }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 }

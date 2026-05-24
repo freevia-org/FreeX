@@ -37,10 +37,10 @@ internal static class PdfTextOverlayExtractor
             y += frameworkElement.Margin.Top;
         }
 
-        if (element is TextBlock textBlock && !string.IsNullOrEmpty(textBlock.Text))
+        if (element is TextBlock textBlock && ExtractText(textBlock) is { Length: > 0 } text)
         {
             overlays.Add(new PdfTextOverlay(
-                textBlock.Text,
+                text,
                 x,
                 y,
                 textBlock.FontSize,
@@ -55,6 +55,36 @@ internal static class PdfTextOverlayExtractor
             foreach (UIElement child in panel.Children)
                 Extract(child, x, y, overlays);
         }
+        else if (element is Decorator { Child: UIElement decoratorChild })
+        {
+            Extract(decoratorChild, x, y, overlays);
+        }
+        else if (element is ContentControl { Content: UIElement contentChild })
+        {
+            Extract(contentChild, x, y, overlays);
+        }
+    }
+
+    private static string ExtractText(TextBlock textBlock)
+    {
+        if (!string.IsNullOrEmpty(textBlock.Text))
+            return textBlock.Text;
+
+        var parts = new List<string>();
+        foreach (var inline in textBlock.Inlines)
+        {
+            switch (inline)
+            {
+                case Run run:
+                    parts.Add(run.Text);
+                    break;
+                case LineBreak:
+                    parts.Add("\n");
+                    break;
+            }
+        }
+
+        return string.Concat(parts);
     }
 
     private static double ReadLeft(UIElement element)

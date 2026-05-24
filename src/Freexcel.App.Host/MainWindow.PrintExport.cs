@@ -82,17 +82,29 @@ public partial class MainWindow
                 CreatePdfBookmarks(options),
                 options.InitialView,
                 options.OpenMode,
-                includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded);
+                includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded,
+                pdfLanguage: options.PdfLanguage);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
                 "Export PDF",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
+            RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
+            {
+                ["format"] = "pdf",
+                ["scope"] = options.Scope.ToString()
+            });
             return true;
         }
         catch (Exception ex)
         {
+            RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
+            {
+                ["format"] = "pdf",
+                ["scope"] = options.Scope.ToString(),
+                ["reason"] = ex.GetType().Name
+            });
             MessageBox.Show(
                 $"Failed to save PDF file:\n{ex.Message}",
                 "Export Error",
@@ -155,10 +167,21 @@ public partial class MainWindow
                     MessageBoxImage.Information);
             }
 
+            RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
+            {
+                ["format"] = "xps",
+                ["scope"] = options.Scope.ToString()
+            });
             return true;
         }
         catch (Exception ex)
         {
+            RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
+            {
+                ["format"] = "xps",
+                ["scope"] = options.Scope.ToString(),
+                ["reason"] = ex.GetType().Name
+            });
             MessageBox.Show(
                 $"Failed to save XPS file:\n{ex.Message}",
                 "Export Error",
