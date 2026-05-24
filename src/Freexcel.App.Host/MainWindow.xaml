@@ -2389,7 +2389,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
-                                            local:RibbonTooltip.Title="Sort Ascending"
+                                            local:RibbonTooltip.Title="Sort A to Z"
                                             local:RibbonTooltip.KeyTip="SA"
                                             local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z).">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -2398,7 +2398,7 @@
                                         </StackPanel>
                                     </Button>
                                     <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
-                                            local:RibbonTooltip.Title="Sort Descending"
+                                            local:RibbonTooltip.Title="Sort Z to A"
                                             local:RibbonTooltip.KeyTip="SD"
                                             local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A).">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
