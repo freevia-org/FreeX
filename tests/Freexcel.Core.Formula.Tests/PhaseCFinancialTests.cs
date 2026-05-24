@@ -407,6 +407,20 @@ public class PhaseCFinancialTests
     // ── DOLLARDE / DOLLARFR ───────────────────────────────────────────────
 
     [Fact]
+    public void DepreciationFunctions_RangePeriodArgument_SpillElementwise()
+    {
+        var periods = new[] { (1, 1, 1.0), (2, 1, 2.0) };
+
+        AssertApproxColumn(EvalWithData("SLN(2400,300,A1:A2)", (1, 1, 10.0), (2, 1, 20.0)), Calc("SLN(2400,300,10)"), Calc("SLN(2400,300,20)"));
+        AssertApproxColumn(EvalWithData("SYD(30000,7500,10,A1:A2)", periods), Calc("SYD(30000,7500,10,1)"), Calc("SYD(30000,7500,10,2)"));
+        AssertApproxColumn(EvalWithData("DDB(2400,300,10,A1:A2)", periods), Calc("DDB(2400,300,10,1)"), Calc("DDB(2400,300,10,2)"));
+        AssertApproxColumn(EvalWithData("DB(1000000,100000,6,A1:A2,7)", periods), Calc("DB(1000000,100000,6,1,7)"), Calc("DB(1000000,100000,6,2,7)"));
+        AssertApproxColumn(EvalWithData("VDB(2400,300,10,0,A1:A2)", periods), Calc("VDB(2400,300,10,0,1)"), Calc("VDB(2400,300,10,0,2)"));
+        AssertApproxColumn(EvalWithData("AMORDEGRC(2400,43831,44197,300,A1:A2,0.2,0)", periods), Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORDEGRC(2400,43831,44197,300,2,0.2,0)"));
+        AssertApproxColumn(EvalWithData("AMORLINC(2400,43831,44197,300,A1:A2,0.3,0)", periods), Calc("AMORLINC(2400,43831,44197,300,1,0.3,0)"), Calc("AMORLINC(2400,43831,44197,300,2,0.3,0)"));
+    }
+
+    [Fact]
     public void Dollarde_FractionalDollar()
     {
         // DOLLARDE(1.02, 32) = 1 + 2/32 = 1.0625
