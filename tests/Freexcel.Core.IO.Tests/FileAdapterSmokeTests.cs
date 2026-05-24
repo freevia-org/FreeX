@@ -9454,6 +9454,69 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_PreservesChartErrorBarAxisDirection()
+    {
+        var workbook = new Workbook("ChartErrorBarAxisDirectionPackagePreserve");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("X"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Y"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, chartXml: """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:scatterChart>
+                    <c:scatterStyle val="lineMarker"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:xVal><c:numRef><c:f>Sheet1!$A$2:$A$4</c:f></c:numRef></c:xVal>
+                      <c:yVal><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:yVal>
+                      <c:errBars>
+                        <c:errDir val="x"/>
+                        <c:errBarType val="plus"/>
+                        <c:errValType val="fixedVal"/>
+                        <c:val val="1.25"/>
+                      </c:errBars>
+                    </c:ser>
+                  </c:scatterChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.ErrorBarAxisDirection.Should().Be(ChartErrorBarAxisDirection.X);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        chartXml.Descendants(chartNs + "errBars")
+            .Single()
+            .Element(chartNs + "errDir")!
+            .Attribute("val")!
+            .Value
+            .Should()
+            .Be("x");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesLineChartGuideMetadata()
     {
         var workbook = new Workbook("ChartLineGuidesPackageSave");

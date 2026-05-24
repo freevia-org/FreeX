@@ -307,6 +307,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             TrendlineDashStyle = chart.TrendlineDashStyle,
             ShowErrorBars = chart.ShowErrorBars,
             ErrorBarKind = chart.ErrorBarKind,
+            ErrorBarAxisDirection = chart.ErrorBarAxisDirection,
             ErrorBarDirection = chart.ErrorBarDirection,
             ErrorBarValue = chart.ErrorBarValue,
             ErrorBarPlusRangeFormula = chart.ErrorBarPlusRangeFormula,

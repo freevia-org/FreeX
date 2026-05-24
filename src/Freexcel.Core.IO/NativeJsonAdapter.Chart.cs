@@ -200,6 +200,7 @@ public sealed partial class NativeJsonAdapter
                 TrendlineDashStyle = chartDto.TrendlineDashStyle,
                 ShowErrorBars = chartDto.ShowErrorBars,
                 ErrorBarKind = chartDto.ErrorBarKind,
+                ErrorBarAxisDirection = chartDto.ErrorBarAxisDirection,
                 ErrorBarDirection = chartDto.ErrorBarDirection,
                 ErrorBarValue = chartDto.ErrorBarValue,
                 ErrorBarPlusRangeFormula = chartDto.ErrorBarPlusRangeFormula,
