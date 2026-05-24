@@ -5,9 +5,20 @@ namespace Freexcel.Core.Commands;
 internal static class PivotStylePaletteResolver
 {
     public static PivotStylePalette Resolve(string styleName)
+        => Resolve(styleName, WorkbookTheme.Office);
+
+    public static PivotStylePalette Resolve(string styleName, WorkbookTheme theme)
     {
+        ArgumentNullException.ThrowIfNull(theme);
+
         if (string.IsNullOrWhiteSpace(styleName))
             return LightPalette();
+
+        if (!ReferenceEquals(theme, WorkbookTheme.Office) &&
+            TryResolveThemedPalette(styleName, theme, out var themedPalette))
+        {
+            return themedPalette;
+        }
 
         return styleName switch
         {
@@ -24,6 +35,55 @@ internal static class PivotStylePaletteResolver
                 MediumPalette(new CellColor(91, 155, 213), new CellColor(221, 235, 247), new CellColor(221, 235, 247), new CellColor(234, 243, 252), new CellColor(157, 195, 230)),
             _ => LightPalette()
         };
+    }
+
+    private static bool TryResolveThemedPalette(string styleName, WorkbookTheme theme, out PivotStylePalette palette)
+    {
+        if (string.Equals(styleName, "PivotStyleMedium2", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(styleName, "PivotStyleMedium9", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(styleName, "PivotStyleDark7", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent1);
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent2);
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleMedium4", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent6);
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleMedium17", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent5);
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleDark4", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Dark2);
+            return true;
+        }
+
+        palette = LightPalette();
+        return false;
+    }
+
+    private static PivotStylePalette ThemedMediumPalette(WorkbookTheme theme, WorkbookThemeColorSlot slot)
+    {
+        var accent = theme.ResolveColor(slot);
+        return MediumPalette(
+            accent,
+            theme.ResolveColor(slot, 0.8),
+            theme.ResolveColor(slot, 0.7),
+            theme.ResolveColor(slot, 0.9),
+            theme.ResolveColor(slot, 0.5));
     }
 
     private static PivotStylePalette LightPalette() =>
