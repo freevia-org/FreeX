@@ -133,6 +133,24 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Fact]
+    public void PivotValueFieldSettingsDialogInvalidInputs_SelectRelevantTabAndField()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+
+        xaml.Should().Contain("<TabControl x:Name=\"ValueFieldTabs\"");
+        xaml.Should().Contain("<TabItem x:Name=\"ShowValuesAsTab\" Header=\"Show Values _As\"");
+        xaml.Should().Contain("<TabItem x:Name=\"NumberFormatTab\" Header=\"_Number Format\"");
+        source.Should().Contain("FocusInvalidNumberFormatInput();");
+        source.Should().Contain("FocusInvalidShowValuesAsInput(baseFieldIndex);");
+        source.Should().Contain("ValueFieldTabs.SelectedItem = NumberFormatTab;");
+        source.Should().Contain("ValueFieldTabs.SelectedItem = ShowValuesAsTab;");
+        source.Should().Contain("FocusAndSelect(NumberFormatBox);");
+        source.Should().Contain("FocusAndSelect(BaseItemBox);");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotValueFieldSettingsDialog_HidesBaseFieldsUntilShowValuesAsNeedsThem()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
