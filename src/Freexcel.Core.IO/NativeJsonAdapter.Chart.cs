@@ -200,6 +200,8 @@ public sealed partial class NativeJsonAdapter
                 ErrorBarKind = chartDto.ErrorBarKind,
                 ErrorBarDirection = chartDto.ErrorBarDirection,
                 ErrorBarValue = chartDto.ErrorBarValue,
+                ErrorBarPlusRangeFormula = chartDto.ErrorBarPlusRangeFormula,
+                ErrorBarMinusRangeFormula = chartDto.ErrorBarMinusRangeFormula,
                 ErrorBarEndCaps = chartDto.ErrorBarEndCaps,
                 ErrorBarColor = chartDto.ErrorBarColor,
                 ErrorBarThemeColor = ToThemeColorReference(chartDto.ErrorBarThemeColor),
