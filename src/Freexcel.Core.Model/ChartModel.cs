@@ -164,7 +164,10 @@ public sealed record ChartSeriesFormat(
     double? MarkerSize = null,
     WorkbookThemeColorReference? FillThemeColor = null,
     WorkbookThemeColorReference? StrokeThemeColor = null,
-    bool? Smooth = null)
+    bool? Smooth = null,
+    CellColor? MarkerBorderColor = null,
+    WorkbookThemeColorReference? MarkerBorderThemeColor = null,
+    double? MarkerBorderThickness = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;

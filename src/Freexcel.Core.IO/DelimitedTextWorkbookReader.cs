@@ -39,6 +39,8 @@ internal static class DelimitedTextWorkbookReader
                 var address = new CellAddress(sheet.Id, row, (uint)(i + 1));
                 if (!fields[i].WasQuoted && TryReadFormula(field, out var formulaText))
                     sheet.SetCell(address, Cell.FromFormula(formulaText));
+                else if (ShouldPreserveQuotedFormulaLikeText(fields[i]))
+                    sheet.SetCell(address, new TextValue(field));
                 else
                     sheet.SetCell(address, CoerceValue(field));
             }
@@ -150,6 +152,19 @@ internal static class DelimitedTextWorkbookReader
 
     internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
 
+    private static bool ShouldPreserveQuotedFormulaLikeText(DelimitedTextField field)
+    {
+        if (!field.WasQuoted || field.Value.Length == 0)
+            return false;
+
+        return field.Value[0] switch
+        {
+            '=' or '@' => true,
+            '+' or '-' => double.TryParse(field.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out _),
+            _ => false
+        };
+    }
+
     private static TextReader CreateTextReader(Stream stream)
     {
         using var memory = new MemoryStream();
@@ -167,6 +182,25 @@ internal static class DelimitedTextWorkbookReader
             bytes[2] == 0xBF)
         {
             return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        }
+
+        if (bytes.Length >= 4 &&
+            bytes[0] == 0xFF &&
+            bytes[1] == 0xFE &&
+            bytes[2] == 0x00 &&
+            bytes[3] == 0x00)
+        {
+            return Encoding.UTF32.GetString(bytes, 4, bytes.Length - 4);
+        }
+
+        if (bytes.Length >= 4 &&
+            bytes[0] == 0x00 &&
+            bytes[1] == 0x00 &&
+            bytes[2] == 0xFE &&
+            bytes[3] == 0xFF)
+        {
+            return new UTF32Encoding(bigEndian: true, byteOrderMark: true)
+                .GetString(bytes, 4, bytes.Length - 4);
         }
 
         if (bytes.Length >= 2 &&
@@ -255,6 +289,19 @@ internal static class DelimitedTextWorkbookReader
                 "yyyy-MM-ddTHH:mm",
                 "yyyy-MM-ddTHH:mm:ss",
                 "yyyy-MM-ddTHH:mm:ss.FFFFFFF",
+                "yyyy/M/d",
+                "yyyy/M/d H:mm",
+                "yyyy/M/d H:mm:ss",
+                "yyyy/M/d H:mm:ss.FFFFFFF",
+                "yyyy/M/d HH:mm",
+                "yyyy/M/d HH:mm:ss",
+                "yyyy/M/d HH:mm:ss.FFFFFFF",
+                "yyyy/M/dTH:mm",
+                "yyyy/M/dTH:mm:ss",
+                "yyyy/M/dTH:mm:ss.FFFFFFF",
+                "yyyy/M/dTHH:mm",
+                "yyyy/M/dTHH:mm:ss",
+                "yyyy/M/dTHH:mm:ss.FFFFFFF",
                 "M/d/yyyy",
                 "M/d/yyyy H:mm",
                 "M/d/yyyy H:mm:ss",
@@ -265,6 +312,16 @@ internal static class DelimitedTextWorkbookReader
                 "M/d/yyyy h:mm tt",
                 "M/d/yyyy h:mm:ss tt",
                 "M/d/yyyy h:mm:ss.FFFFFFF tt",
+                "M-d-yyyy",
+                "M-d-yyyy H:mm",
+                "M-d-yyyy H:mm:ss",
+                "M-d-yyyy H:mm:ss.FFFFFFF",
+                "M-d-yyyy HH:mm",
+                "M-d-yyyy HH:mm:ss",
+                "M-d-yyyy HH:mm:ss.FFFFFFF",
+                "M-d-yyyy h:mm tt",
+                "M-d-yyyy h:mm:ss tt",
+                "M-d-yyyy h:mm:ss.FFFFFFF tt",
                 "M/d/yy",
                 "M/d/yy H:mm",
                 "M/d/yy H:mm:ss",
@@ -275,6 +332,16 @@ internal static class DelimitedTextWorkbookReader
                 "M/d/yy h:mm tt",
                 "M/d/yy h:mm:ss tt",
                 "M/d/yy h:mm:ss.FFFFFFF tt",
+                "M-d-yy",
+                "M-d-yy H:mm",
+                "M-d-yy H:mm:ss",
+                "M-d-yy H:mm:ss.FFFFFFF",
+                "M-d-yy HH:mm",
+                "M-d-yy HH:mm:ss",
+                "M-d-yy HH:mm:ss.FFFFFFF",
+                "M-d-yy h:mm tt",
+                "M-d-yy h:mm:ss tt",
+                "M-d-yy h:mm:ss.FFFFFFF tt",
                 "MMMM d, yyyy",
                 "MMMM d, yyyy H:mm",
                 "MMMM d, yyyy H:mm:ss",
