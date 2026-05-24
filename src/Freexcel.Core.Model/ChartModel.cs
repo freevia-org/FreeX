@@ -53,6 +53,8 @@ public enum ChartAxisCrosses { AutoZero, Minimum, Maximum, Custom }
 
 public enum ChartAxisCrossBetween { Between, MidCategory }
 
+public enum ChartAxisLabelAlignment { Center, Left, Right }
+
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
 public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
@@ -300,6 +302,7 @@ public sealed class ChartModel
     public int XAxisTickMarkSkip { get; set; }
     public int XAxisLabelOffset { get; set; }
     public bool XAxisNoMultiLevelLabels { get; set; }
+    public ChartAxisLabelAlignment XAxisLabelAlignment { get; set; } = ChartAxisLabelAlignment.Center;
     public CellColor? XAxisLineColor { get; set; }
     public double XAxisLineThickness { get; set; } = 1;
     public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;

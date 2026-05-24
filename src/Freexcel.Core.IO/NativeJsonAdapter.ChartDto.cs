@@ -91,6 +91,7 @@ public sealed partial class NativeJsonAdapter
         public int XAxisTickMarkSkip { get; set; }
         public int XAxisLabelOffset { get; set; }
         public bool XAxisNoMultiLevelLabels { get; set; }
+        public ChartAxisLabelAlignment XAxisLabelAlignment { get; set; } = ChartAxisLabelAlignment.Center;
         public CellColor? XAxisLineColor { get; set; }
         public double XAxisLineThickness { get; set; } = 1;
         public ChartAxisCrosses XAxisCrosses { get; set; } = ChartAxisCrosses.AutoZero;
