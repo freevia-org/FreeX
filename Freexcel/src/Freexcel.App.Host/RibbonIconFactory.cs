@@ -116,6 +116,9 @@ public static partial class RibbonIconFactory
             case RibbonCommandIconKind.WindowMaximize:
                 DrawWindowMaximize(canvas, glyphBrush);
                 break;
+            case RibbonCommandIconKind.WindowRestore:
+                DrawWindowRestore(canvas, glyphBrush);
+                break;
             case RibbonCommandIconKind.WindowMinimize:
                 DrawWindowMinimize(canvas, glyphBrush);
                 break;
@@ -353,7 +356,13 @@ public static partial class RibbonIconFactory
 
     private static void DrawWindowMaximize(Canvas canvas, Brush brush)
     {
-        AddRectangle(canvas, 5, 5, 14, 14, brush, radius: 0);
+        AddPath(canvas, "M6,6 H18 V18 H6 Z", brush, 1.33);
+    }
+
+    private static void DrawWindowRestore(Canvas canvas, Brush brush)
+    {
+        AddPath(canvas, "M9,6 H18 V15 H15", brush, 1.33);
+        AddPath(canvas, "M6,9 H15 V18 H6 Z", brush, 1.33);
     }
 
     private static void DrawWindowMinimize(Canvas canvas, Brush brush)

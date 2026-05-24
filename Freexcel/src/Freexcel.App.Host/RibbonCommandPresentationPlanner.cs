@@ -521,6 +521,7 @@ public enum RibbonCommandIconKind
     Window,
     WindowClose,
     WindowMaximize,
+    WindowRestore,
     WindowMinimize,
     Wrap,
     Zoom
