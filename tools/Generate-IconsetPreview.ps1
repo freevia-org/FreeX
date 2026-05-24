@@ -447,7 +447,6 @@ foreach ($row in $rows) {
 "@)
 }
 
-$generated = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $html = @"
 <!doctype html>
 <html lang="en">
@@ -491,7 +490,7 @@ $html = @"
 <body>
   <header>
     <h1>Freexcel Iconset Preview</h1>
-    <div class="meta">Generated $generated from <code>$SourceInventory</code>. Freexcel columns show current SVG assets from <code>src/Freexcel.App.Host/Resources/CommandIconsSvg</code>. Excel comparison icons are linked by ImageMso name to Spreadsheet1's Microsoft Office ImageMso gallery for review reference.</div>
+    <div class="meta">Generated from <code>$SourceInventory</code>. Freexcel columns show current SVG assets from <code>src/Freexcel.App.Host/Resources/CommandIconsSvg</code>. Excel comparison icons are linked by ImageMso name to Spreadsheet1's Microsoft Office ImageMso gallery for review reference.</div>
   </header>
   <main>
     <table>
