@@ -4800,6 +4800,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_BlankIfEmptyArgument_ReturnsCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=FILTER(A1:A1,B1:B1,)", sheet).Should().Be(new ErrorValue("#CALC!"));
+    }
+
+    [Fact]
     public void Iferror_CatchesFilterNoMatchesCalcError()
     {
         var sheet = MakeSheet(
