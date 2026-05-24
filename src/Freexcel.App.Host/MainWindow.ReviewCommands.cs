@@ -383,7 +383,49 @@ public partial class MainWindow
 
     private void SendFeedbackBtn_Click(object sender, RoutedEventArgs e)
     {
+        var context = CreateIssueReportContext();
+        _diagnostics?.RecordEvent("report_issue_opened", new Dictionary<string, string?>
+        {
+            ["source"] = "help"
+        });
+
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = AppInfo.FeedbackUrl, UseShellExecute = true });
+        { FileName = AppIssueReporter.CreateIssueUrl(context), UseShellExecute = true });
+    }
+
+    private void CopyDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var context = CreateIssueReportContext();
+        var diagnosticsText = AppIssueReporter.CreateDiagnosticsText(context);
+
+        try
+        {
+            System.Windows.Clipboard.SetText(diagnosticsText);
+            _diagnostics?.RecordEvent("diagnostics_copied", new Dictionary<string, string?>
+            {
+                ["source"] = "help"
+            });
+            ShowOwnedMessage(
+                "Diagnostics copied to the clipboard.",
+                "Copy Diagnostics",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            ShowOwnedMessage(
+                $"Could not copy diagnostics to the clipboard:\n{ex.Message}",
+                "Copy Diagnostics",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private AppIssueReportContext CreateIssueReportContext()
+    {
+        return AppIssueReporter.CreateContext(
+            AppInfo.FeedbackUrl,
+            _diagnosticsMetadata,
+            _diagnosticsOptions.IsEnabled);
     }
 }
