@@ -471,9 +471,15 @@ public static partial class BuiltInFunctions
             : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e) return e;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        double x = ToNumber(args[1]);
+        var sigArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapBinaryMathArgs(args[1], sigArg, (xValue, sigValue) => PercentrankIncScalar(rv, xValue, sigValue));
+    }
+
+    private static ScalarValue PercentrankIncScalar(RangeValue rv, ScalarValue xValue, ScalarValue sigValue)
+    {
+        double x = ToNumber(xValue);
         if (!double.IsFinite(x)) return ErrorValue.Num;
-        double rawSig = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 3;
+        double rawSig = sigValue is not BlankValue ? ToNumber(sigValue) : 3;
         if (!double.IsFinite(rawSig) || rawSig > int.MaxValue) return ErrorValue.Num;
         int sig = (int)rawSig;
         if (sig < 1) return ErrorValue.Num;
