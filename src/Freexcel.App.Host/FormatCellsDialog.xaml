@@ -87,8 +87,9 @@
                     <Label Grid.Row="0" Grid.Column="0" Content="_Font:" Target="{Binding ElementName=DlgFontNameBox}" Padding="0" Margin="0,4,8,2"/>
                     <Label Grid.Row="0" Grid.Column="1" Content="Font _style:" Target="{Binding ElementName=DlgFontStyleList}" Padding="0" Margin="0,4,8,2"/>
                     <Label Grid.Row="0" Grid.Column="2" Content="_Size:" Target="{Binding ElementName=DlgFontSizeBox}" Padding="0" Margin="0,4,0,2"/>
-                    <ComboBox x:Name="DlgFontNameBox" Grid.Row="1" Grid.Column="0" Height="24" VerticalAlignment="Top" Margin="0,0,8,0"
-                              SelectionChanged="FontPreviewInput_Changed"/>
+                    <ComboBox x:Name="DlgFontNameBox" Grid.Row="1" Grid.Column="0" IsEditable="True" IsTextSearchEnabled="True"
+                              Height="24" VerticalAlignment="Top" Margin="0,0,8,0"
+                              SelectionChanged="FontPreviewInput_Changed" TextBoxBase.TextChanged="FontPreviewInput_Changed"/>
                     <ListBox x:Name="DlgFontStyleList" Grid.Row="1" Grid.Column="1" Height="96" Margin="0,0,8,0"
                              SelectionChanged="FontStyleList_SelectionChanged"/>
                     <ComboBox x:Name="DlgFontSizeBox" Grid.Row="1" Grid.Column="2" IsEditable="True" Height="24" VerticalAlignment="Top"
