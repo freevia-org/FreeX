@@ -261,6 +261,23 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesSource()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotTableDataSourceDialog",
+            "internal static class PivotDialogLayout");
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid PivotTable source range.\", _sourceBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("FocusRangeSelectionInput(target);");
+        commandSource.Should().Contain("sheetId: sheet.Id");
+    }
+
+    [Fact]
     public void PivotTableDataSourceReferencePicker_RaisesRangeSelectionRequest()
     {
         StaTestRunner.Run(() =>
