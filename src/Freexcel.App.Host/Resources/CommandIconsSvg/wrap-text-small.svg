@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Wrap Text" shape-rendering="crispEdges">
-<rect width="20" height="20" fill="none"/>
-<rect x="3" y="5" width="14" height="1" fill="#242424"/>
-<rect x="3" y="9" width="10" height="1" fill="#242424"/>
-<path d="M13.5 9.5h1.5c2 0 2 4 0 4H9" fill="none" stroke="#242424" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M11 11.5l-3 2 3 2" fill="none" stroke="#242424" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="3" y="13" width="4" height="1" fill="#242424"/>
-</svg>

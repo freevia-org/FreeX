@@ -90,17 +90,17 @@ public sealed class RibbonIconFactorySvgTests
 
         var homeCommands = new[]
         {
-            "paste-large.svg",
-            "conditional-formatting-large.svg",
-            "format-as-table-large.svg",
-            "cell-styles-large.svg",
-            "insert-large.svg",
-            "delete-large.svg",
-            "format-large.svg",
-            "autosum-large.svg",
-            "fill-large.svg",
-            "clear-large.svg",
-            "sort-large.svg",
+            "paste.svg",
+            "conditional-formatting.svg",
+            "format-as-table.svg",
+            "cell-styles.svg",
+            "insert.svg",
+            "delete.svg",
+            "format.svg",
+            "autosum.svg",
+            "fill.svg",
+            "clear.svg",
+            "sort.svg",
             "find.svg"
         };
 
@@ -150,5 +150,24 @@ public sealed class RibbonIconFactorySvgTests
 
         placeholderFiles.Should().BeEmpty(
             "size-specific ribbon icons should be deliberately drawn or absent so the base SVG can be used as the fallback");
+    }
+
+    [Fact]
+    public void CommandIconAssets_UseBaseSvgAsSingleSourceOfMeaning()
+    {
+        var iconDirectory = Path.Combine(
+            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Freexcel.App.Host.csproj"))!,
+            "Resources",
+            "CommandIconsSvg");
+
+        var sizeSpecificFiles = Directory
+            .EnumerateFiles(iconDirectory, "*.svg")
+            .Where(path => path.EndsWith("-small.svg", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("-large.svg", StringComparison.OrdinalIgnoreCase))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        sizeSpecificFiles.Should().BeEmpty(
+            "ribbon command icons should not change visual meaning between small, base, and large previews");
     }
 }
