@@ -47,6 +47,11 @@ public sealed class WorksheetSheetFormatMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetDimensionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 public sealed class WorksheetPageMarginsMetadataModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -174,6 +179,9 @@ public sealed partial class Sheet
 
     /// <summary>Native Excel sheetFormatPr metadata not yet modeled as editable fields.</summary>
     public WorksheetSheetFormatMetadataModel? SheetFormatMetadata { get; set; }
+
+    /// <summary>Native Excel dimension metadata not yet modeled as editable fields.</summary>
+    public WorksheetDimensionMetadataModel? DimensionMetadata { get; set; }
 
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public uint FrozenRows { get; set; } = 0;
