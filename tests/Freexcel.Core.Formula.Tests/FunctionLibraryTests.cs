@@ -7617,6 +7617,33 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(-1234.56));
 
     [Fact]
+    public void Numbervalue_SameShapeSeparatorArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1.234,56")),
+            (2, 1, new TextValue("1 234.5")),
+            (1, 2, new TextValue(",")),
+            (2, 2, new TextValue(".")),
+            (1, 3, new TextValue(".")),
+            (2, 3, new TextValue(" ")));
+
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(1234.56), new NumberValue(1234.5));
+    }
+
+    [Fact]
+    public void Numbervalue_MismatchedSeparatorArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1.234,56")),
+            (2, 1, new TextValue("1 234.5")),
+            (1, 2, new TextValue(",")),
+            (1, 3, new TextValue(".")));
+
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:C1,\".\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Numbervalue_InvalidSeparators_ReturnsValueError() =>
         _eval.Evaluate("=NUMBERVALUE(\"1.234\",\".\",\".\")", MakeSheet())
             .Should().Be(ErrorValue.Value);
