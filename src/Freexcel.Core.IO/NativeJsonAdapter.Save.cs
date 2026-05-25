@@ -212,6 +212,10 @@ public sealed partial class NativeJsonAdapter
                     .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
                     .Select(ToCommentDto)
                     .ToList(),
+                ThreadedComments = s.ThreadedComments
+                    .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
+                    .Select(ToThreadedCommentDto)
+                    .ToList(),
                 Hyperlinks = s.Hyperlinks
                     .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
                     .Select(pair => ToHyperlinkDto(s, pair))

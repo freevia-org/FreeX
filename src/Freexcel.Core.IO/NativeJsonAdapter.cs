@@ -206,6 +206,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 if (TryLoadComment(commentDto, sheet.Id) is { } comment)
                     sheet.Comments[comment.Address] = comment.Text;
             }
+            foreach (var threadedCommentDto in sDto.ThreadedComments ?? [])
+            {
+                if (TryLoadThreadedComment(threadedCommentDto, sheet.Id) is { } comment)
+                    sheet.ThreadedComments[comment.Address] = comment.Comment;
+            }
             foreach (var hyperlinkDto in sDto.Hyperlinks ?? [])
             {
                 if (TryLoadHyperlink(hyperlinkDto, sheet.Id) is { } hyperlink)
