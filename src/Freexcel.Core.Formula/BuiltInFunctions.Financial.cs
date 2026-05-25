@@ -158,13 +158,11 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate  = ToNumber(args[0]);
         double nper  = ToNumber(args[2]);
         double pv    = ToNumber(args[3]);
         double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
         double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
-        if (args[1] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => IpmtScalar(rate, value, nper, pv, fv, type));
-        return IpmtScalar(rate, args[1], nper, pv, fv, type);
+        return MapBinaryMathArgs(args[0], args[1], (rateValue, periodValue) => IpmtScalar(ToNumber(rateValue), periodValue, nper, pv, fv, type));
     }
 
     private static ScalarValue IpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
@@ -184,13 +182,11 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ppmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double rate  = ToNumber(args[0]);
         double nper  = ToNumber(args[2]);
         double pv    = ToNumber(args[3]);
         double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
         double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
-        if (args[1] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => PpmtScalar(rate, value, nper, pv, fv, type));
-        return PpmtScalar(rate, args[1], nper, pv, fv, type);
+        return MapBinaryMathArgs(args[0], args[1], (rateValue, periodValue) => PpmtScalar(ToNumber(rateValue), periodValue, nper, pv, fv, type));
     }
 
     private static ScalarValue PpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)

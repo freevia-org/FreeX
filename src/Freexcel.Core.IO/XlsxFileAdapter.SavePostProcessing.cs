@@ -58,7 +58,7 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
         }
 
-        if (workbook.IsStructureProtected)
+        if (workbook.IsStructureProtected || workbook.ProtectionMetadata is not null)
         {
             packageStream.Position = 0;
             XlsxWorkbookMetadataWriter.SaveProtection(packageStream, workbook);
