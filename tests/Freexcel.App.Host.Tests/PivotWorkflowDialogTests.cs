@@ -762,6 +762,24 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialogInvalidNumericOptions_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotTableOptionsDialog.cs",
+            "public sealed partial class PivotTableOptionsDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a compact row label indent from 0 to 15.\", _compactIndentBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter page fields per column from 0 to 255.\", _pageWrapBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("_tabs.SelectedItem = _layoutTab;");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_ExposesAccessKeysForModeledCheckboxes()
     {
         var source = ReadPivotWorkflowSource();

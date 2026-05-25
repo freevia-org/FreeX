@@ -90,6 +90,8 @@ public sealed partial class PivotTableOptionsDialog : Window
     private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
     private readonly TextBox _altTextTitleBox = new();
     private readonly TextBox _altTextDescriptionBox = new() { AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private readonly TabControl _tabs = new() { Margin = new Thickness(0, 0, 0, 12) };
+    private readonly TabItem _layoutTab = new() { Header = "Layout & Format" };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
@@ -110,17 +112,17 @@ public sealed partial class PivotTableOptionsDialog : Window
     private DockPanel CreateContent()
     {
         var root = new DockPanel { Margin = new Thickness(16) };
-        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 12) };
-        DockPanel.SetDock(tabs, Dock.Top);
+        DockPanel.SetDock(_tabs, Dock.Top);
 
-        tabs.Items.Add(new TabItem { Header = "Layout & Format", Content = CreateLayoutAndFormatTab() });
-        tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
-        tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
-        tabs.Items.Add(new TabItem { Header = "Printing", Content = CreatePrintingTab() });
-        tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
-        tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateAltTextTab() });
+        _layoutTab.Content = CreateLayoutAndFormatTab();
+        _tabs.Items.Add(_layoutTab);
+        _tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
+        _tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
+        _tabs.Items.Add(new TabItem { Header = "Printing", Content = CreatePrintingTab() });
+        _tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
+        _tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateAltTextTab() });
 
-        root.Children.Add(tabs);
+        root.Children.Add(_tabs);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         return root;
     }
@@ -295,6 +297,9 @@ public sealed partial class PivotTableOptionsDialog : Window
 
     private void Accept()
     {
+        if (!ValidateInputs())
+            return;
+
         Result = CreateResult(
             _rowGrandTotalsBox.IsChecked == true,
             _columnGrandTotalsBox.IsChecked == true,
@@ -336,6 +341,35 @@ public sealed partial class PivotTableOptionsDialog : Window
             PageFieldLayoutForLabel(_pageFieldLayoutBox.SelectedItem?.ToString()),
             ParsePageWrap(_pageWrapBox.Text));
         DialogResult = true;
+    }
+
+    private bool ValidateInputs()
+    {
+        if (!int.TryParse(_compactIndentBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var compactIndent)
+            || compactIndent is < 0 or > 15)
+        {
+            ShowInvalidInputWarning("Enter a compact row label indent from 0 to 15.", _compactIndentBox);
+            return false;
+        }
+
+        if (!int.TryParse(_pageWrapBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pageWrap)
+            || pageWrap is < 0 or > 255)
+        {
+            ShowInvalidInputWarning("Enter page fields per column from 0 to 255.", _pageWrapBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        _tabs.SelectedItem = _layoutTab;
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
     }
 
     private void FocusInitialKeyboardTarget()
