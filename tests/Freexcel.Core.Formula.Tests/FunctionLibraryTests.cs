@@ -4529,6 +4529,17 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void Percentile_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)), (4, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(0)), (2, 2, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=PERCENTILE(A1:A4,B1:B2)", sheet), new NumberValue(1), new NumberValue(4));
+    }
+
     [Fact] public void PercentileExc_Middle_ReturnsInterpolated()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
@@ -4545,6 +4556,17 @@ public class FunctionLibraryTests
     [Fact] public void PercentileExc_RangeArgumentError_PropagatesError()
     {
         _eval.Evaluate("=PERCENTILE.EXC(NA(),0.4)", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void PercentileExc_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)), (4, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(0.4)), (2, 2, new NumberValue(0.6)));
+
+        AssertColumn(_eval.Evaluate("=PERCENTILE.EXC(A1:A4,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
     }
 
     [Fact] public void Quartile_Q1_Returns25th()
@@ -4578,6 +4600,17 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
         _eval.Evaluate("=QUARTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Quartile_QuartRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)), (4, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(0)), (2, 2, new NumberValue(4)));
+
+        AssertColumn(_eval.Evaluate("=QUARTILE(A1:A4,B1:B2)", sheet), new NumberValue(1), new NumberValue(4));
     }
 
     [Fact] public void Geomean_TwoNumbers_ReturnsGeometricMean()
