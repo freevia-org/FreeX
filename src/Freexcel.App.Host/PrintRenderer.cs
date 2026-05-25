@@ -264,47 +264,6 @@ public static partial class PrintRenderer
         return clone;
     }
 
-    private sealed class WorkbookDocumentPaginator : DocumentPaginator
-    {
-        private readonly IReadOnlyList<DocumentPaginator> _paginators;
-        private Size _pageSize;
-
-        public WorkbookDocumentPaginator(IReadOnlyList<DocumentPaginator> paginators)
-        {
-            _paginators = paginators;
-            _pageSize = paginators.FirstOrDefault()?.PageSize ?? new Size(8.27 * 96.0, 11.69 * 96.0);
-        }
-
-        public override bool IsPageCountValid => _paginators.All(paginator => paginator.IsPageCountValid);
-
-        public override int PageCount => _paginators.Sum(paginator => paginator.PageCount);
-
-        public override Size PageSize
-        {
-            get => _pageSize;
-            set => _pageSize = value;
-        }
-
-        public override IDocumentPaginatorSource? Source => null;
-
-        public override DocumentPage GetPage(int pageNumber)
-        {
-            if (pageNumber < 0)
-                throw new ArgumentOutOfRangeException(nameof(pageNumber));
-
-            var offset = pageNumber;
-            foreach (var paginator in _paginators)
-            {
-                if (offset < paginator.PageCount)
-                    return paginator.GetPage(offset);
-
-                offset -= paginator.PageCount;
-            }
-
-            throw new ArgumentOutOfRangeException(nameof(pageNumber));
-        }
-    }
-
     private static (double Width, double Height) GetPaperSizeInches(WorksheetPaperSize paperSize) =>
         paperSize switch
         {
@@ -312,25 +271,4 @@ public static partial class PrintRenderer
             WorksheetPaperSize.Legal => (8.5, 14.0),
             _ => (8.27, 11.69)
         };
-}
-
-/// <summary>
-/// Minimal UIElement wrapper that hosts an arbitrary <see cref="DrawingVisual"/>
-/// inside a <see cref="FixedPage"/>.
-/// </summary>
-internal sealed class VisualHost : UIElement
-{
-    public Visual? Visual { get; init; }
-    public IReadOnlyList<PdfTextOverlay> TextOverlays { get; init; } = [];
-
-    protected override int VisualChildrenCount => Visual != null ? 1 : 0;
-
-    protected override Visual GetVisualChild(int index)
-    {
-        if (index != 0 || Visual == null)
-            throw new ArgumentOutOfRangeException(nameof(index));
-        return Visual;
-    }
-
-    protected override void OnRender(DrawingContext drawingContext) { }
 }
