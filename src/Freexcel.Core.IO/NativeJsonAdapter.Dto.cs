@@ -301,6 +301,7 @@ public sealed partial class NativeJsonAdapter
         public bool? ApplyOutlineStyles { get; set; }
         public WorksheetSheetFormatMetadataDto? SheetFormatMetadata { get; set; }
         public WorksheetDimensionMetadataDto? DimensionMetadata { get; set; }
+        public WorksheetSheetPropertiesMetadataDto? SheetPropertiesMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -415,6 +416,12 @@ public sealed partial class NativeJsonAdapter
     private class WorksheetDimensionMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetSheetPropertiesMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
     }
 
     private class WorksheetPageMarginsMetadataDto
