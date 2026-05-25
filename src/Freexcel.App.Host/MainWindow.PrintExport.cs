@@ -21,7 +21,7 @@ public partial class MainWindow
             settings,
             showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
             showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()),
-            refreshPreview: BuildActiveSheetPrintPreview,
+            refreshPreviewWithSettings: BuildActiveSheetPrintPreview,
             sheetId: _currentSheetId,
             sheet: sheet,
             executeCommand: cmd => TryExecuteCommand(cmd, "Print Settings"))
@@ -31,14 +31,14 @@ public partial class MainWindow
         dialog.ShowDialog();
     }
 
-    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview()
+    private (FixedDocument Document, PrintSettingsPlan Settings) BuildActiveSheetPrintPreview(PrintPreviewSettings settings)
     {
-        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea);
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var settings = sheet is null
+        var plan = sheet is null
             ? new PrintSettingsPlan(["Print active sheet"])
-            : PrintSettingsPlanner.Build(sheet);
-        return (document, settings);
+            : PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea);
+        return (document, plan);
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)

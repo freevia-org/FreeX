@@ -26,6 +26,7 @@ public sealed partial class PrintPreviewDialog : Window
         Action? showMargins = null,
         Action? showPageSetup = null,
         Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null,
+        Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null,
         SheetId sheetId = default,
         Sheet? sheet = null,
         Action<IWorkbookCommand>? executeCommand = null)
@@ -222,12 +223,15 @@ public sealed partial class PrintPreviewDialog : Window
         toolbar.Items.Add(zoomBox);
         toolbar.Items.Add(new Separator());
         TextBlock? settingsSummaryText = null;
+        var currentPrintPreviewSettings = new PrintPreviewSettings();
         void RefreshPreviewDocument()
         {
-            if (refreshPreview is null)
+            if (refreshPreview is null && refreshPreviewWithSettings is null)
                 return;
 
-            var refreshed = refreshPreview();
+            var refreshed = refreshPreviewWithSettings is not null
+                ? refreshPreviewWithSettings(currentPrintPreviewSettings)
+                : refreshPreview!();
             previewDocument = refreshed.Document;
             viewer.Document = previewDocument;
             totalPages = Math.Max(1, previewDocument.Pages.Count);
@@ -282,7 +286,14 @@ public sealed partial class PrintPreviewDialog : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Background = System.Windows.Media.Brushes.WhiteSmoke
         };
-        settingsScroll.Content = BuildPrintSettingsPanel(sheetId, sheet, executeCommand, RefreshPreviewDocument);
+        settingsScroll.Content = BuildPrintSettingsPanel(
+            sheetId,
+            sheet,
+            executeCommand,
+            RefreshPreviewDocument,
+            refreshPreviewWithSettings is not null
+                ? settings => currentPrintPreviewSettings = settings
+                : null);
         Grid.SetRow(settingsScroll, 1);
         Grid.SetColumn(settingsScroll, 0);
         root.Children.Add(settingsScroll);
