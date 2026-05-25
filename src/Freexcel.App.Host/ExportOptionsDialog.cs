@@ -202,7 +202,7 @@ internal sealed class ExportOptionsDialog : Window
             pageRange,
             Enum.IsDefined(quality) ? quality : ExportQuality.Standard,
             createBookmarks,
-            Enum.IsDefined(bookmarkMode) && bookmarkMode != PdfBookmarkMode.None
+            createBookmarks && Enum.IsDefined(bookmarkMode) && bookmarkMode != PdfBookmarkMode.None
                 ? bookmarkMode
                 : createBookmarks
                     ? PdfBookmarkMode.SheetNames
