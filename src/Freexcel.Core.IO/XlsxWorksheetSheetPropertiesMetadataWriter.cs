@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -40,7 +41,7 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
                     continue;
 
-                sheetProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(sheetProperties, attribute.Key, attribute.Value);
             }
 
             if (sheet.SheetPropertiesMetadata.NativeChildXmls.Count > 0)
@@ -74,4 +75,21 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
 
     private static bool IsModeledSheetPropertiesElement(string name) =>
         name is "tabColor" or "outlinePr" or "pageSetUpPr";
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 }
