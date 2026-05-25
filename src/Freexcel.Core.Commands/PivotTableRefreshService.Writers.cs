@@ -188,11 +188,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<PivotFieldModel> columnFields)
     {
         var start = GetPivotBodyStart(pivotTable);
-        var columnKeys = rows
-            .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .Distinct()
-            .Order(PivotKeyComparer.Instance)
-            .ToList();
+        var columnKeys = BuildColumnKeys(workbook, pivotTable, rows, columnFields);
         columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
         columnKeys = ApplyValueFilters(columnKeys, rows, pivotTable, headers, columnFields);
         columnKeys = ApplySorts(columnKeys, rows, pivotTable, headers, columnFields);
@@ -234,7 +230,9 @@ public static partial class PivotTableRefreshService
                     dataField,
                     pivotTable,
                     headers),
-                    dataField);
+                    dataField,
+                    pivotTable,
+                    isEmptyIntersection: columnRows.Count == 0);
                 outputColumn++;
             }
         }
