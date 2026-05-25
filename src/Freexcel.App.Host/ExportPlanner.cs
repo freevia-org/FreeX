@@ -129,20 +129,32 @@ internal static partial class ExportPlanner
 
     public static string NormalizePdfLanguage(string? pdfLanguage)
     {
-        if (string.IsNullOrWhiteSpace(pdfLanguage))
-            return DefaultPdfLanguage;
+        return TryNormalizePdfLanguage(pdfLanguage, out var normalized, out _)
+            ? normalized
+            : DefaultPdfLanguage;
+    }
 
-        var normalized = pdfLanguage.Trim().Replace('_', '-');
+    public static bool TryNormalizePdfLanguage(string? pdfLanguage, out string normalized, out string? error)
+    {
+        normalized = DefaultPdfLanguage;
+        error = null;
+        if (string.IsNullOrWhiteSpace(pdfLanguage))
+            return true;
+
+        var candidate = pdfLanguage.Trim().Replace('_', '-');
         try
         {
-            var culture = CultureInfo.GetCultureInfo(normalized);
-            return string.IsNullOrWhiteSpace(culture.Name)
-                ? DefaultPdfLanguage
-                : culture.Name;
+            var culture = CultureInfo.GetCultureInfo(candidate);
+            if (string.IsNullOrWhiteSpace(culture.Name))
+                return true;
+
+            normalized = culture.Name;
+            return true;
         }
         catch (CultureNotFoundException)
         {
-            return DefaultPdfLanguage;
+            error = "Enter a valid PDF language tag, for example en-US.";
+            return false;
         }
     }
 
