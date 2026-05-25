@@ -1257,20 +1257,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
+    public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndKeepMapDeferred()
     {
         var source = ReadChartCommandSource();
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
         source.Should().Contain("retained when opening XLSX files");
-        source.Should().NotContain("InsertChartOfType(ChartType.Treemap)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Sunburst)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Histogram)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Pareto)");
-        source.Should().NotContain("InsertChartOfType(ChartType.BoxAndWhisker)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
+        source.Should().Contain("ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap)");
+        source.Should().Contain("ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst)");
+        source.Should().Contain("ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram)");
+        source.Should().Contain("ChartParetoMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Pareto)");
+        source.Should().Contain("ChartBoxAndWhiskerMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.BoxAndWhisker)");
+        source.Should().Contain("ChartWaterfallMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Waterfall)");
+        source.Should().Contain("ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel)");
         source.Should().NotContain("InsertChartOfType(ChartType.Map)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDPie)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDLine)");
@@ -1279,7 +1279,14 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
         source.Should().Contain("InsertChartOfType(ChartType.Surface)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDSurface)");
-        xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Treemap\"      Width=\"72\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartTreemapMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Sunburst\"     Width=\"78\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartSunburstMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Histogram\"    Width=\"82\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartHistogramMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Pareto\"       Width=\"66\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartParetoMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Box Plot\"     Width=\"72\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartBoxAndWhiskerMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Waterfall\"    Width=\"82\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartWaterfallMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Funnel\"       Width=\"66\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartFunnelMenuItem_Click\"");
+        xaml.Should().Contain("Content=\"Map\"          Width=\"58\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"DeferredChartFamilyMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
@@ -1296,6 +1303,13 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Waterfall");
         xaml.Should().Contain("Funnel");
         xaml.Should().Contain("Map");
+        xaml.Should().NotContain("Treemap Chart\" local:RibbonTooltip.KeyTip=\"T7\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
+        xaml.Should().NotContain("Sunburst Chart\" local:RibbonTooltip.KeyTip=\"SU\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
+        xaml.Should().NotContain("Histogram Chart\" local:RibbonTooltip.KeyTip=\"HI\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
+        xaml.Should().NotContain("Pareto Chart\" local:RibbonTooltip.KeyTip=\"PA\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
+        xaml.Should().NotContain("Box and Whisker Chart\" local:RibbonTooltip.KeyTip=\"BW\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
+        xaml.Should().NotContain("Waterfall Chart\" local:RibbonTooltip.KeyTip=\"WF\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
+        xaml.Should().NotContain("Funnel Chart\" local:RibbonTooltip.KeyTip=\"FU\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
         xaml.Should().Contain("3D Pie");
         xaml.Should().Contain("3D Line");
         xaml.Should().Contain("3D Area");
