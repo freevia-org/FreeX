@@ -13100,6 +13100,46 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidAdditionalWorksheetViewNativeAttributeNames()
+    {
+        var workbook = new Workbook("AdditionalSheetViewInvalidNativeAttributeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+        sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+        {
+            Views =
+            [
+                new WorksheetAdditionalViewModel
+                {
+                    WorkbookViewId = "1",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["customSheetViewFlag"] = "kept",
+                        ["bad attribute name"] = "skip"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetView = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .Single(view => view.Attribute("workbookViewId")?.Value == "1");
+        sheetView.Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+        sheetView.Attributes().Select(attribute => attribute.Name.LocalName)
+            .Should().NotContain("bad attribute name");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesExistingWorksheetSheetViewNativeMetadata()
     {
         var workbook = new Workbook("ExistingWorksheetSheetViewMetadata");
