@@ -365,6 +365,8 @@ public class ExportPlannerTests
             "Content = \"_Ignore print areas\"",
             "Content = \"Create _PDF bookmarks using sheet names\"",
             "Content = \"_Bitmap text when fonts may not be embedded\"",
+            "Content = \"PDF/_A compliant (not supported)\"",
+            "Content = \"Document structure _tags (not supported)\"",
             "Content = \"PDF _language:\"",
             "Target = _pdfLanguageBox",
             "Content = \"_Standard\"",

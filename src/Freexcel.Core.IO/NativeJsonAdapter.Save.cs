@@ -161,6 +161,7 @@ public sealed partial class NativeJsonAdapter
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 SortState = ToWorksheetSortStateDto(s.SortState),
+                SingleXmlCells = ToWorksheetSingleXmlCellsDto(s.SingleXmlCells),
                 AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrimaryViewMetadata = FromWorksheetPrimaryViewMetadata(s.PrimaryViewMetadata),
                 PrintArea = s.PrintArea?.ToString(),
@@ -214,7 +215,9 @@ public sealed partial class NativeJsonAdapter
                 FitToPage = s.FitToPage,
                 AutoPageBreaks = s.AutoPageBreaks,
                 RowPageBreaks = s.RowPageBreaks.Where(rowBreak => rowBreak is >= 2 and <= CellAddress.MaxRow).ToList(),
+                RowPageBreaksMetadata = FromWorksheetPageBreaksMetadata(s.RowPageBreaksMetadata),
                 ColumnPageBreaks = s.ColumnPageBreaks.Where(columnBreak => columnBreak is >= 2 and <= CellAddress.MaxCol).ToList(),
+                ColumnPageBreaksMetadata = FromWorksheetPageBreaksMetadata(s.ColumnPageBreaksMetadata),
                 MergedRegions = s.MergedRegions
                     .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)
                     .Select(range => range.ToString())
@@ -559,6 +562,30 @@ public sealed partial class NativeJsonAdapter
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPageBreaksMetadataDto? FromWorksheetPageBreaksMetadata(WorksheetPageBreaksMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var breakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>();
+        foreach (var pair in model.BreakNativeAttributes)
+        {
+            var attributes = CleanNativeAttributesForSave(pair.Value);
+            if (attributes.Count > 0)
+                breakNativeAttributes[pair.Key] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && breakNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetPageBreaksMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            BreakNativeAttributes = breakNativeAttributes
         };
     }
 

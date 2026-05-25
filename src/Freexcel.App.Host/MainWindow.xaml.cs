@@ -46,7 +46,8 @@ public partial class MainWindow : Window
     private readonly ToolbarVisualStateCache _toolbarVisualStateCache = new();
     private ToolbarVisualState? _lastToolbarVisualState;
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
-    private ulong _statusBarStatsRevision;
+    private readonly SparklineValueCache _sparklineValueCache = new();
+    private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;
     private bool _suppressAppViewOptionSync;
     private bool _isOpeningFile;

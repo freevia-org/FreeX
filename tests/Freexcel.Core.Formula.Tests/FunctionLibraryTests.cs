@@ -3568,6 +3568,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xmatch_ModeRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(5)), (4, 1, new NumberValue(7)),
+            (1, 4, new NumberValue(4)), (2, 4, new NumberValue(4)),
+            (1, 5, new NumberValue(-1)), (2, 5, new NumberValue(1)),
+            (1, 6, new NumberValue(1)), (2, 6, new NumberValue(1)), (3, 6, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=XMATCH(D1:D2,A1:A4,E1:E2)", sheet), new NumberValue(2), new NumberValue(3));
+        _eval.Evaluate("=XMATCH(D1:D2,A1:A4,E1:E2,F1:F3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Xmatch_InvalidModes_ReturnValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("A")));

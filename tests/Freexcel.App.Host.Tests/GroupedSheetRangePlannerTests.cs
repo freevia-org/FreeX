@@ -90,6 +90,32 @@ public sealed class GroupedSheetRangePlannerTests
     }
 
     [Fact]
+    public void CloneConditionalFormatForSheet_DropsExistingX14IdNativeChild()
+    {
+        var targetSheet = SheetId.New();
+        var source = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 4, 2)),
+            RuleType = CfRuleType.DataBar,
+            NativeChildXmls =
+            [
+                """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext><ext uri="{FUTURE}" /></extLst>""",
+                """<future xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""
+            ],
+            NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""]
+        };
+
+        var clone = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(source, targetSheet);
+
+        clone.Id.Should().NotBe(source.Id);
+        clone.NativeChildXmls.Should().HaveCount(2);
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("{FUTURE}", StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("future", StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().NotContain(xml => xml.Contains("11111111-2222-3333-4444-555555555555", StringComparison.Ordinal));
+        clone.NativePayloadChildXmls.Should().BeEquivalentTo(source.NativePayloadChildXmls);
+    }
+
+    [Fact]
     public void CloneDataValidationForSheet_RemapsRangeAndCopiesPromptAndErrorFields()
     {
         var targetSheet = SheetId.New();

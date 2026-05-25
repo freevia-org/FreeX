@@ -21,14 +21,20 @@ public sealed class DependencyGraph
     /// </summary>
     public void SetDependencies(CellAddress cell, IEnumerable<CellAddress> precedents)
     {
-        // Remove old dependencies
+        SetDependenciesFromOwnedSet(cell, new HashSet<CellAddress>(precedents));
+    }
+
+    /// <summary>
+    /// Set dependencies using a fresh, caller-owned set that will not be mutated after transfer.
+    /// </summary>
+    internal void SetDependenciesFromOwnedSet(CellAddress cell, HashSet<CellAddress> precedents)
+    {
         ClearDependencies(cell);
 
-        var precSet = new HashSet<CellAddress>(precedents);
-        _precedents[cell] = precSet;
+        _precedents[cell] = precedents;
 
         // Register reverse links
-        foreach (var prec in precSet)
+        foreach (var prec in precedents)
         {
             if (!_dependents.TryGetValue(prec, out var deps))
             {

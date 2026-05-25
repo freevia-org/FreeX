@@ -1380,31 +1380,31 @@
                                             local:RibbonTooltip.Description="Insert a 3D surface chart using the same matrix renderer."/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <Button Content="Treemap"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Treemap"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTreemapMenuItem_Click"
                                             local:RibbonTooltip.Title="Treemap Chart" local:RibbonTooltip.KeyTip="T7"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Sunburst"     Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a treemap chart to compare hierarchical proportions."/>
+                                    <Button Content="Sunburst"     Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSunburstMenuItem_Click"
                                             local:RibbonTooltip.Title="Sunburst Chart" local:RibbonTooltip.KeyTip="SU"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Histogram"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a sunburst chart to compare hierarchical rings."/>
+                                    <Button Content="Histogram"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartHistogramMenuItem_Click"
                                             local:RibbonTooltip.Title="Histogram Chart" local:RibbonTooltip.KeyTip="HI"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a histogram chart to show value distribution."/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <Button Content="Pareto"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Pareto"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartParetoMenuItem_Click"
                                             local:RibbonTooltip.Title="Pareto Chart" local:RibbonTooltip.KeyTip="PA"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Box Plot"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a Pareto chart to rank values with a cumulative line."/>
+                                    <Button Content="Box Plot"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBoxAndWhiskerMenuItem_Click"
                                             local:RibbonTooltip.Title="Box and Whisker Chart" local:RibbonTooltip.KeyTip="BW"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Waterfall"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a box and whisker chart to summarize distributions."/>
+                                    <Button Content="Waterfall"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartWaterfallMenuItem_Click"
                                             local:RibbonTooltip.Title="Waterfall Chart" local:RibbonTooltip.KeyTip="WF"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a waterfall chart to show running value changes."/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <Button Content="Funnel"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Funnel"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFunnelMenuItem_Click"
                                             local:RibbonTooltip.Title="Funnel Chart" local:RibbonTooltip.KeyTip="FU"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a funnel chart to compare staged values."/>
                                     <Button Content="Map"          Width="58"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
                                             local:RibbonTooltip.Title="Map Chart" local:RibbonTooltip.KeyTip="MP"
                                             local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>

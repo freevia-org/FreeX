@@ -39,6 +39,15 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsResult_RejectsEmptyDelimiterSelection()
+    {
+        var act = () => TextToColumnsDialog.CreateResult([]);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Select at least one delimiter.*");
+    }
+
+    [Fact]
     public void TextToColumnsPreview_UsesSelectedTextRows()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -280,6 +289,23 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_customBox.Focus();");
         source.Should().Contain("_customBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_customBox);");
+    }
+
+    [Fact]
+    public void TextToColumnsDialogNoDelimiterSelected_ReturnsToStepTwoAndFocusesDelimiterGroup()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("SelectedDelimiterKinds().Count == 0");
+        source.Should().Contain("FocusInvalidDelimiterSelectionInput();");
+        source.Should().Contain("throw new ArgumentException(\"Select at least one delimiter.\");");
+        source.Should().Contain("case \"Select at least one delimiter.\":");
+        source.Should().Contain("private void FocusInvalidDelimiterSelectionInput()");
+        source.Should().Contain("_wizardStep = 2;");
+        source.Should().Contain("_delimitedButton.IsChecked = true;");
+        source.Should().Contain("_tabBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_tabBox);");
+        source.Should().NotContain("return kinds.Count == 0 ? [TextToColumnsDelimiterKind.Comma] : kinds;");
     }
 
     [Fact]
@@ -971,6 +997,28 @@ public sealed class DataToolDialogTests
         ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("A1:B3", false)]
+    [InlineData("A1:B3; D5:E7", false)]
+    [InlineData("not-a-range", true)]
+    public void ConsolidateDialog_HasPendingReferenceText_IgnoresBlankOrAlreadyListedReferences(
+        string referenceText,
+        bool expected)
+    {
+        ConsolidateDialog.HasPendingReferenceText(["A1:B3", "D5:E7"], referenceText)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void ConsolidateDialog_HasPendingReferenceText_DetectsUnaddedTypedReference()
+    {
+        ConsolidateDialog.HasPendingReferenceText(["A1:B3"], "D5:E7")
+            .Should()
+            .BeTrue();
+    }
+
     [Fact]
     public void ConsolidateDialog_TryAddReference_RejectsMalformedReferenceImmediately()
     {
@@ -1046,6 +1094,20 @@ public sealed class DataToolDialogTests
         source.Should().Contain("FocusDestinationInput();");
         source.Should().Contain("_referencesList.Focus();");
         source.Should().Contain("_destinationBox.SelectAll();");
+    }
+
+    [Fact]
+    public void ConsolidateDialogPendingReference_RequiresAddBeforeOk()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text)");
+        source.Should().Contain("MessageBox.Show(this, \"Add the reference before clicking OK.\"");
+        source.Should().Contain("FocusPendingReferenceInput();");
+        source.Should().Contain("private void FocusPendingReferenceInput()");
+        source.Should().Contain("_referenceBox.Focus();");
+        source.Should().Contain("_referenceBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_referenceBox);");
     }
 
     [Fact]
@@ -1293,6 +1355,51 @@ public sealed class DataToolDialogTests
         error.Should().Be("Enter a valid column input cell.");
     }
 
+    [Theory]
+    [InlineData("B2", "", "Row input cell cannot be inside the data table range.")]
+    [InlineData("", "C3", "Column input cell cannot be inside the data table range.")]
+    public void DataTableDialog_RejectsInputCellInsideTableRange(
+        string rowInputCellText,
+        string columnInputCellText,
+        string expectedError)
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            range,
+            rowInputCellText,
+            columnInputCellText,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be(expectedError);
+    }
+
+    [Fact]
+    public void DataTableDialog_RejectsSameRowAndColumnInputCell()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            range,
+            rowInputCellText: "A1",
+            columnInputCellText: "A1",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Row and column input cells must be different.");
+    }
+
     [Fact]
     public void DataTableDialog_ExposesReferencePickersForCellInputs()
     {
@@ -1333,6 +1440,8 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string? error)");
+        source.Should().Contain("Column input cell cannot be inside the data table range.");
+        source.Should().Contain("Row and column input cells must be different.");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

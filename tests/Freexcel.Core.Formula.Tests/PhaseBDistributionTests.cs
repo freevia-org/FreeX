@@ -169,6 +169,29 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void NormalDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 0.0), (2, 1, 1.0),
+            (1, 2, 0.0), (2, 2, 1.0),
+            (1, 3, 1.0), (2, 3, 1.0),
+            (1, 4, 2.0), (2, 4, 4.0),
+            (1, 5, 1.0), (2, 5, 2.0),
+            (1, 6, 1.0), (2, 6, 2.0));
+
+        AssertColumnApproximately(Eval("NORM.DIST(A1:A2,B1:B2,C1:C2,TRUE)", sheet), 0.5, 0.5);
+        AssertColumnApproximately(Eval("STANDARDIZE(D1:D2,E1:E2,F1:F2)", sheet), 1.0, 1.0);
+
+        var probabilities = MakeSheet(
+            (1, 1, 0.5), (2, 1, 0.8413447460685429),
+            (1, 2, 0.0), (2, 2, 2.0),
+            (1, 3, 1.0), (2, 3, 3.0));
+        AssertColumnApproximately(Eval("NORM.INV(A1:A2,B1:B2,C1:C2)", probabilities), 0.0, 5.0);
+
+        Eval("NORM.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void GammaAndLognormalFunctions_RangeFirstArgument_SpillElementwise()
     {
         var xValues = MakeSheet((1, 1, 1.0), (2, 1, 2.0));

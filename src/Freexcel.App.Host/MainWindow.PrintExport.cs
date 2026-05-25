@@ -60,6 +60,16 @@ public partial class MainWindow
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
         var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
+        if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
+        {
+            MessageBox.Show(
+                publishOptionsError,
+                "Export Options",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         var exported = request.Format == ExportFormat.Pdf
             ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
             : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
@@ -71,6 +81,9 @@ public partial class MainWindow
     {
         try
         {
+            if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var publishOptionsError))
+                throw new InvalidOperationException(publishOptionsError);
+
             var document = RenderExportDocument(options);
             if (!ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count, out var pageRangeError))
                 throw new InvalidOperationException(pageRangeError);
@@ -132,6 +145,9 @@ public partial class MainWindow
     {
         try
         {
+            if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Xps, out var publishOptionsError))
+                throw new InvalidOperationException(publishOptionsError);
+
             var paginator = RenderExportPaginator(options);
 
             // Open the XPS package for write

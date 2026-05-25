@@ -423,7 +423,13 @@ public sealed class ManageConditionalFormatsDialogTests
             TopBottomPercent = true,
             TextRuleText = "urgent",
             DateOccurringPeriod = "last7Days",
-            StopIfTrue = true
+            StopIfTrue = true,
+            NativeAttributes = new Dictionary<string, string> { ["nativeAttr"] = "x" },
+            NativeChildXmls = ["<extLst />"],
+            NativePayloadAttributes = new Dictionary<string, string> { ["payloadAttr"] = "y" },
+            NativePayloadChildXmls = ["<axisColor theme=\"1\" />"],
+            NativeContainerAttributes = new Dictionary<string, string> { ["containerAttr"] = "z" },
+            NativeContainerChildXmls = ["<extLst />"]
         };
 
         var clone = CloneWithPriority(source, 2);
@@ -437,12 +443,39 @@ public sealed class ManageConditionalFormatsDialogTests
         clone.FormatIfTrue.Should().Be(source.FormatIfTrue);
     }
 
-    private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority)
+    [Fact]
+    public void CloneWithPriority_WithNewId_DropsExistingX14IdNativeChild()
+    {
+        var source = new ConditionalFormat
+        {
+            Id = Guid.NewGuid(),
+            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            NativeChildXmls =
+            [
+                """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext><ext uri="{FUTURE}" /></extLst>""",
+                """<future xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""
+            ],
+            NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""]
+        };
+        var newId = Guid.NewGuid();
+
+        var clone = CloneWithPriority(source, 2, newId);
+
+        clone.Id.Should().Be(newId);
+        clone.NativeChildXmls.Should().HaveCount(2);
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("{FUTURE}", StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().Contain(xml => xml.Contains("future", StringComparison.Ordinal));
+        clone.NativeChildXmls.Should().NotContain(xml => xml.Contains("11111111-2222-3333-4444-555555555555", StringComparison.Ordinal));
+        clone.NativePayloadChildXmls.Should().BeEquivalentTo(source.NativePayloadChildXmls);
+    }
+
+    private static ConditionalFormat CloneWithPriority(ConditionalFormat source, int priority, Guid? id = null)
     {
         var method = typeof(ManageConditionalFormatsDialog)
             .GetMethod("CloneWithPriority", BindingFlags.Static | BindingFlags.NonPublic);
         method.Should().NotBeNull();
-        return method!.Invoke(null, [source, priority, null]).Should().BeOfType<ConditionalFormat>().Subject;
+        return method!.Invoke(null, [source, priority, id]).Should().BeOfType<ConditionalFormat>().Subject;
     }
 
     private static T GetControl<T>(ManageConditionalFormatsDialog dialog, string name)

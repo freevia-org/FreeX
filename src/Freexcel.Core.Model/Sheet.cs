@@ -64,6 +64,26 @@ public sealed class WorksheetPrimaryViewMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetPageBreaksMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
+}
+
+public sealed class WorksheetSingleXmlCellsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSingleXmlCellModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetSingleXmlCellModel
+{
+    public int? Id { get; set; }
+    public string? Reference { get; set; }
+    public int? XmlCellPropertyId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 public sealed class WorksheetPageMarginsMetadataModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -237,6 +257,9 @@ public sealed partial class Sheet
     /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
     public WorksheetSortStateModel? SortState { get; set; }
 
+    /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
+    public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
+
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
 
@@ -378,8 +401,14 @@ public sealed partial class Sheet
     /// <summary>Manual row page breaks, stored as the first row after each break.</summary>
     public SortedSet<uint> RowPageBreaks { get; } = [];
 
+    /// <summary>Native Excel rowBreaks metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata { get; set; }
+
     /// <summary>Manual column page breaks, stored as the first column after each break.</summary>
     public SortedSet<uint> ColumnPageBreaks { get; } = [];
+
+    /// <summary>Native Excel colBreaks metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata { get; set; }
 
     /// <summary>Display-only tiled worksheet background image. It is not printed, matching Excel behavior.</summary>
     public WorksheetBackgroundImage? BackgroundImage { get; set; }
