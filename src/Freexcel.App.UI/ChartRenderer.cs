@@ -181,6 +181,21 @@ public static partial class ChartRenderer
         if (chart.Type == ChartType.Histogram)
             return BuildHistogramModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, theme);
 
+        if (chart.Type == ChartType.Pareto)
+            return BuildParetoModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.BoxAndWhisker)
+            return BuildBoxAndWhiskerModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+
+        if (chart.Type == ChartType.Treemap)
+            return BuildTreemapModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Sunburst)
+            return BuildSunburstModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
+        if (chart.Type == ChartType.Funnel)
+            return BuildFunnelModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+
         // Column / Line: one series per data column
         List<DataPoint>? firstSeriesPoints = null;
         for (uint col = dataStartCol; col <= endCol; col++)

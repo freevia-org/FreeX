@@ -52,11 +52,17 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.BoxAndWhisker)]
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
-    [InlineData(ChartType.Map)]
-    public void AdvancedChartTypes_AreRecognizedButNotRenderable(ChartType type)
+    public void AdvancedChartFamilies_AreKnownAndRenderable(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
-        ChartTypeSupport.IsRenderable(type).Should().BeFalse();
+        ChartTypeSupport.IsRenderable(type).Should().BeTrue();
+    }
+
+    [Fact]
+    public void MapChartType_IsKnownButNotRenderable()
+    {
+        ChartTypeSupport.IsKnown(ChartType.Map).Should().BeTrue();
+        ChartTypeSupport.IsRenderable(ChartType.Map).Should().BeFalse();
     }
 
     [Fact]
@@ -385,6 +391,23 @@ public sealed class ChartCommandTests
         sheet.Charts[0].FirstColIsCategories.Should().BeTrue();
     }
 
+    [Fact]
+    public void AddChartCommand_RejectsMapChartType()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+
+        var outcome = new AddChartCommand(sheet.Id, range, ChartType.Map, "Sales").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
+        sheet.Charts.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
@@ -393,8 +416,7 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.BoxAndWhisker)]
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
-    [InlineData(ChartType.Map)]
-    public void AddChartCommand_RejectsDeferredChartFamilies(ChartType type)
+    public void AddChartCommand_AcceptsAdvancedChartFamilies(ChartType type)
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
@@ -405,9 +427,8 @@ public sealed class ChartCommandTests
 
         var outcome = new AddChartCommand(sheet.Id, range, type, "Sales").Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
-        sheet.Charts.Should().BeEmpty();
+        outcome.Success.Should().BeTrue();
+        sheet.Charts.Should().ContainSingle().Which.Type.Should().Be(type);
     }
 
     [Fact]
