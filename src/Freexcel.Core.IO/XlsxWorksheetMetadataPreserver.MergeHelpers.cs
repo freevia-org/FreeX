@@ -152,6 +152,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
     {
         var existingChildrenByKey = targetElement
             .Elements()
+            .Where(shouldRetain)
             .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
