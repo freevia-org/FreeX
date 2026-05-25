@@ -287,6 +287,23 @@ public class ExportPlannerTests
                 PdfLanguage: "uk-UA"));
     }
 
+    [Fact]
+    public void ExportOptionsDialog_CreateResult_IgnoresBookmarkModeWhenBookmarksAreUnchecked()
+    {
+        ExportOptionsDialog.CreateResult(
+                ExportContentScope.ActiveSheet,
+                includeDocumentProperties: false,
+                openAfterPublish: false,
+                createBookmarks: false,
+                bookmarkMode: PdfBookmarkMode.PrintTitles)
+            .Should()
+            .Be(new ExportOptions(
+                ExportContentScope.ActiveSheet,
+                IncludeDocumentProperties: false,
+                OpenAfterPublish: false,
+                BookmarkMode: PdfBookmarkMode.None));
+    }
+
     [Theory]
     [InlineData(" uk_ua ", "uk-UA")]
     [InlineData("EN-us", "en-US")]
