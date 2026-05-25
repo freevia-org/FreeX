@@ -154,6 +154,7 @@ public sealed partial class NativeJsonAdapter
     private class ScenarioDto
     {
         public string Name { get; set; } = "";
+        public string? Comment { get; set; }
         public List<ScenarioCellDto> ChangingCells { get; set; } = [];
     }
 
@@ -325,6 +326,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
         public WorksheetSortStateDto? SortState { get; set; }
         public WorksheetSingleXmlCellsDto? SingleXmlCells { get; set; }
+        public WorksheetCellWatchesMetadataDto? CellWatchesMetadata { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
@@ -452,6 +454,12 @@ public sealed partial class NativeJsonAdapter
         public string? Reference { get; set; }
         public int? XmlCellPropertyId { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetCellWatchesMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private class WorksheetPageMarginsMetadataDto

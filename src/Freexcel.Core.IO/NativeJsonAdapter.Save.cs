@@ -75,6 +75,7 @@ public sealed partial class NativeJsonAdapter
             Scenarios = workbook.Scenarios.Select(scenario => new ScenarioDto
             {
                 Name = scenario.Name,
+                Comment = string.IsNullOrWhiteSpace(scenario.Comment) ? null : scenario.Comment,
                 ChangingCells = scenario.ChangingCells.Select(change =>
                 {
                     var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet));
@@ -162,6 +163,7 @@ public sealed partial class NativeJsonAdapter
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 SortState = ToWorksheetSortStateDto(s.SortState),
                 SingleXmlCells = ToWorksheetSingleXmlCellsDto(s.SingleXmlCells),
+                CellWatchesMetadata = ToWorksheetCellWatchesMetadataDto(s.CellWatchesMetadata),
                 AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrimaryViewMetadata = FromWorksheetPrimaryViewMetadata(s.PrimaryViewMetadata),
                 PrintArea = s.PrintArea?.ToString(),

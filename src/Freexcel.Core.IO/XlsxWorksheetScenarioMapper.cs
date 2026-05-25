@@ -37,7 +37,10 @@ internal static class XlsxWorksheetScenarioMapper
             }
 
             if (supported && changes.Count > 0)
-                scenarios.Add(new WorkbookScenario(name, changes));
+                scenarios.Add(new WorkbookScenario(
+                    name,
+                    changes,
+                    NullIfWhiteSpace(scenario.Attribute("comment")?.Value)));
         }
 
         return scenarios;
@@ -97,14 +100,21 @@ internal static class XlsxWorksheetScenarioMapper
             root.Element(workbookNs + "scenarios")?.Remove();
             InsertScenariosInOrder(root, workbookNs, new XElement(
                 workbookNs + "scenarios",
-                scenariosForSheet.Select(item => new XElement(
-                    workbookNs + "scenario",
-                    new XAttribute("name", item.Scenario.Name),
-                    new XAttribute("count", item.Changes.Count.ToString(CultureInfo.InvariantCulture)),
-                    item.Changes.Select(change => new XElement(
-                        workbookNs + "inputCells",
-                        new XAttribute("r", change.Address.ToA1()),
-                        new XAttribute("val", FormatValue(change.Value))))))));
+                scenariosForSheet.Select(item =>
+                {
+                    var scenario = new XElement(
+                        workbookNs + "scenario",
+                        new XAttribute("name", item.Scenario.Name),
+                        new XAttribute("count", item.Changes.Count.ToString(CultureInfo.InvariantCulture)),
+                        item.Changes.Select(change => new XElement(
+                            workbookNs + "inputCells",
+                            new XAttribute("r", change.Address.ToA1()),
+                            new XAttribute("val", FormatValue(change.Value)))));
+                    if (!string.IsNullOrWhiteSpace(item.Scenario.Comment))
+                        scenario.SetAttributeValue("comment", item.Scenario.Comment);
+
+                    return scenario;
+                })));
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
@@ -155,6 +165,9 @@ internal static class XlsxWorksheetScenarioMapper
 
         return new TextValue(rawValue);
     }
+
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static string FormatValue(ScalarValue value) => value switch
     {
