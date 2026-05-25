@@ -2886,6 +2886,50 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_RangeLookupValueAndMultiColumnReturnArray_SpillsRows()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")), (3, 1, new TextValue("C")),
+            (1, 2, new TextValue("A1")), (1, 3, new TextValue("A2")),
+            (2, 2, new TextValue("B1")), (2, 3, new TextValue("B2")),
+            (3, 2, new TextValue("C1")), (3, 3, new TextValue("C2")),
+            (1, 4, new TextValue("B")), (2, 4, new TextValue("C")));
+
+        var result = _eval.Evaluate("=XLOOKUP(D1:D2,A1:A3,B1:C3)", sheet)
+            .Should().BeOfType<RangeValue>()
+            .Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        result.At(1, 1).Should().Be(new TextValue("B1"));
+        result.At(1, 2).Should().Be(new TextValue("B2"));
+        result.At(2, 1).Should().Be(new TextValue("C1"));
+        result.At(2, 2).Should().Be(new TextValue("C2"));
+    }
+
+    [Fact]
+    public void Xlookup_RowLookupValuesAndMultiRowReturnArray_SpillsColumns()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new TextValue("B")), (1, 3, new TextValue("C")),
+            (2, 1, new TextValue("A1")), (3, 1, new TextValue("A2")),
+            (2, 2, new TextValue("B1")), (3, 2, new TextValue("B2")),
+            (2, 3, new TextValue("C1")), (3, 3, new TextValue("C2")),
+            (5, 1, new TextValue("B")), (5, 2, new TextValue("C")));
+
+        var result = _eval.Evaluate("=XLOOKUP(A5:B5,A1:C1,A2:C3)", sheet)
+            .Should().BeOfType<RangeValue>()
+            .Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(2);
+        result.At(1, 1).Should().Be(new TextValue("B1"));
+        result.At(2, 1).Should().Be(new TextValue("B2"));
+        result.At(1, 2).Should().Be(new TextValue("C1"));
+        result.At(2, 2).Should().Be(new TextValue("C2"));
+    }
+
+    [Fact]
     public void Xlookup_And_Xmatch_TreatScalarLookupArraysAsSingleItemArrays()
     {
         _eval.Evaluate("=XMATCH(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
