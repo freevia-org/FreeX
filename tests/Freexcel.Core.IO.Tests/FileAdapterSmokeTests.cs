@@ -13456,6 +13456,48 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectNativeSelectionWhenActiveCellChanges()
+    {
+        var workbook = new Workbook("ExistingWorksheetSheetViewSelectionChange");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sheet view selection"));
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 1;
+        sheet.ActiveRow = 1;
+        sheet.ActiveCol = 1;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddExistingWorksheetSheetViewChildNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.ActiveRow = 4;
+        loadedSheet.ActiveCol = 4;
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetView = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .Single(element => element.Attribute("workbookViewId")?.Value == "0");
+        var selections = sheetView.Elements(worksheetNs + "selection").ToList();
+        selections.Should().ContainSingle();
+        selections.Single().Attribute("activeCell")!.Value.Should().Be("D4");
+        selections.Single().Attribute("sqref")!.Value.Should().Be("D4");
+        selections.Single().Attribute("customSelectionAttr").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSheetFormatMetadata()
     {
         var workbook = new Workbook("WorksheetSheetFormatMetadata");
