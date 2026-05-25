@@ -102,7 +102,7 @@ internal static class NumberFormatColorMapper
     private static bool TryMapIndexedColor(string token, out string? color)
     {
         color = null;
-        var match = Regex.Match(token, @"^Color(\d+)$", RegexOptions.IgnoreCase);
+        var match = Regex.Match(token, @"^Color\s*(\d+)$", RegexOptions.IgnoreCase);
         if (!match.Success ||
             !int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
             index <= 0 ||
