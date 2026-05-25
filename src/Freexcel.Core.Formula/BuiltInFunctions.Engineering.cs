@@ -403,9 +403,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue rightRange) return MapUnaryTextRange(rightRange, value => BitBinaryScalar(args[0], value, op));
-        if (args[0] is RangeValue leftRange) return MapUnaryTextRange(leftRange, value => BitBinaryScalar(value, args[1], op));
-        return BitBinaryScalar(args[0], args[1], op);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => BitBinaryScalar(left, right, op));
     }
 
     private static ScalarValue BitBinaryScalar(ScalarValue leftValue, ScalarValue rightValue, Func<long, long, long> op)
@@ -425,9 +423,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue shiftRange) return MapUnaryTextRange(shiftRange, value => BitShiftScalar(args[0], value, leftShift));
-        if (args[0] is RangeValue numberRange) return MapUnaryTextRange(numberRange, value => BitShiftScalar(value, args[1], leftShift));
-        return BitShiftScalar(args[0], args[1], leftShift);
+        return MapBinaryMathArgs(args[0], args[1], (number, shift) => BitShiftScalar(number, shift, leftShift));
     }
 
     private static ScalarValue BitShiftScalar(ScalarValue numberValue, ScalarValue shiftValue, bool leftShift)

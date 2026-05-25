@@ -7184,6 +7184,34 @@ public class FunctionLibraryTests
     // ── SQRTPI additional ────────────────────────────────────────────────────
 
     [Fact]
+    public void BitFunctions_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (2, 2, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=BITAND(A1:A2,B1:B2)", sheet), new NumberValue(1), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=BITOR(A1:A2,B1:B2)", sheet), new NumberValue(7), new NumberValue(7));
+        AssertColumn(_eval.Evaluate("=BITXOR(A1:A2,B1:B2)", sheet), new NumberValue(6), new NumberValue(7));
+        AssertColumn(_eval.Evaluate("=BITLSHIFT(A1:A2,B1:B2)", sheet), new NumberValue(40), new NumberValue(12));
+        AssertColumn(_eval.Evaluate("=BITRSHIFT(A1:A2,B1:B2)", sheet), new NumberValue(0), new NumberValue(3));
+    }
+
+    [Fact]
+    public void BitFunctions_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (1, 3, new NumberValue(1)));
+
+        _eval.Evaluate("=BITAND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITXOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITLSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITRSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sqrtpi_One_ReturnsSqrtPi() =>
         _eval.Evaluate("=SQRTPI(1)", MakeSheet())
             .Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(Math.Sqrt(Math.PI), 1e-12);
