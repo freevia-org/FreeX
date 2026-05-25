@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -81,7 +82,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "count", StringComparison.Ordinal))
                 continue;
 
-            changed |= SetAttributeIfDifferent(pageBreaks, XName.Get(attribute.Key), attribute.Value);
+            changed |= TrySetNativeAttribute(pageBreaks, attribute.Key, attribute.Value);
         }
 
         var breaksById = pageBreaks.Elements(WorksheetNs + "brk")
@@ -98,7 +99,7 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "id", StringComparison.Ordinal))
                     continue;
 
-                changed |= SetAttributeIfDifferent(breakElement, XName.Get(attribute.Key), attribute.Value);
+                changed |= TrySetNativeAttribute(breakElement, attribute.Key, attribute.Value);
             }
         }
 
@@ -112,5 +113,21 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
 
         element.SetAttributeValue(name, value);
         return true;
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            return SetAttributeIfDifferent(element, XName.Get(name), value);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }
