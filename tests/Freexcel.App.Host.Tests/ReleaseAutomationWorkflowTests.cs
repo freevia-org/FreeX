@@ -26,7 +26,12 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("actions/upload-artifact@v7");
         workflow.Should().Contain("gh release create");
         workflow.Should().Contain("gh release upload");
-        workflow.Should().Contain("v$versionSlug+$shortSha");
+        workflow.Should().Contain("$releaseStamp = Get-Date -AsUTC -Format \"yyyyMMdd-HHmmss\"");
+        workflow.Should().Contain("$releaseId = \"$versionSlug-$releaseStamp-run${{ github.run_number }}-attempt${{ github.run_attempt }}\"");
+        workflow.Should().Contain("$tag = \"v$releaseId+$shortSha\"");
+        workflow.Should().Contain("$releaseName = \"Freexcel tester $releaseId ($shortSha)\"");
+        workflow.Should().Contain("\"release_id=$releaseId\" >> $env:GITHUB_OUTPUT");
+        workflow.Should().Contain("name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile");
     }
 
     [Fact]
