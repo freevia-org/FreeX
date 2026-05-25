@@ -2231,12 +2231,16 @@ public class ExportPlannerTests
 
         source.Should().Contain("Content = \"Pr_inter:\"");
         source.Should().Contain("Content = \"_Copies:\"");
+        source.Should().Contain("Content = \"C_ollated\"");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
+        source.Should().Contain("collatedBox");
         source.Should().Contain("statusText");
         source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
         source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
+        source.Should().Contain("dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated");
+        source.Should().Contain("collatedBox.IsChecked == true");
         source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("copiesBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(copiesBox);");

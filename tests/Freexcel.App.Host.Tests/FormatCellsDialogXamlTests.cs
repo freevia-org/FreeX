@@ -872,6 +872,49 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("Checked=\"DlgSuperscriptCheck_Checked\"");
+        xaml.Should().Contain("Checked=\"DlgSubscriptCheck_Checked\"");
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var superscript = GetControl<CheckBox>(dialog, "DlgSuperscriptCheck");
+                var subscript = GetControl<CheckBox>(dialog, "DlgSubscriptCheck");
+
+                superscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSuperscriptCheck_Checked", superscript);
+                subscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSubscriptCheck_Checked", subscript);
+
+                superscript.IsChecked.Should().BeFalse();
+                subscript.IsChecked.Should().BeTrue();
+
+                superscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSuperscriptCheck_Checked", superscript);
+
+                superscript.IsChecked.Should().BeTrue();
+                subscript.IsChecked.Should().BeFalse();
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.Superscript.Should().BeTrue();
+                dialog.ResultDiff.Subscript.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_ListsExcelUnderlineOptions()
     {
         var source = ReadFormatCellsDialogSource();

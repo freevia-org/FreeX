@@ -72,6 +72,18 @@ public partial class FormatCellsDialog
         UpdateFontPreview();
     }
 
+    private void DlgSuperscriptCheck_Checked(object sender, RoutedEventArgs e)
+    {
+        DlgSubscriptCheck.IsChecked = false;
+        UpdateFontPreview();
+    }
+
+    private void DlgSubscriptCheck_Checked(object sender, RoutedEventArgs e)
+    {
+        DlgSuperscriptCheck.IsChecked = false;
+        UpdateFontPreview();
+    }
+
     private void EnsureFontNameAvailable(string fontName)
     {
         if (DlgFontNameBox.Items.OfType<string>().Contains(fontName, StringComparer.CurrentCultureIgnoreCase))
