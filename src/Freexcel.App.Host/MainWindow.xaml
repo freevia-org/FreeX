@@ -3431,11 +3431,13 @@
                     BorderThickness="1,0,0,0"
                     Visibility="Collapsed"
                     KeyboardNavigation.TabNavigation="Cycle"
+                    KeyboardNavigation.ControlTabNavigation="Cycle"
                     AutomationProperties.Name="Slicers and Timelines">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
                         <DockPanel LastChildFill="True" Margin="0,0,0,8">
-                            <Button Content="X"
+                            <Button x:Name="SlicerTimelinePaneCloseBtn"
+                                    Content="X"
                                     Width="22"
                                     Height="22"
                                     DockPanel.Dock="Right"

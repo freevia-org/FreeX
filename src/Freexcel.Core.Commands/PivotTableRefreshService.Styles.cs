@@ -36,6 +36,8 @@ public static partial class PivotTableRefreshService
         });
 
         var bodyStart = GetPivotBodyStart(pivotTable);
+        var pageFieldRows = GetPageFieldRowSpan(pivotTable);
+        var pageFieldEndRow = pageFieldRows == 0 ? 0 : pivotTable.TargetRange.Start.Row + pageFieldRows - 1;
         var headerEndRow = bodyStart.Row + (uint)Math.Max(1, pivotTable.ColumnFields.Count) - 1;
         var subtotalRows = new HashSet<uint>();
         var grandTotalRows = new HashSet<uint>();
@@ -64,7 +66,11 @@ public static partial class PivotTableRefreshService
                 continue;
 
             if (row < bodyStart.Row)
+            {
+                if (pageFieldRows > 0 && row <= pageFieldEndRow)
+                    ApplyPivotVisualStyle(workbook, cell, headerStyle);
                 continue;
+            }
 
             if (row <= headerEndRow)
             {

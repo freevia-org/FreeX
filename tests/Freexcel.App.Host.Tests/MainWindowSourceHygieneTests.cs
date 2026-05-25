@@ -1440,13 +1440,32 @@ public sealed class MainWindowSourceHygieneTests
 
         keyboardFocusSource.Should().Contain("ShellFocusTarget.TaskPane");
         keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, PivotFieldListPane)");
-        keyboardFocusSource.Should().Contain("return FocusPivotFieldListPane();");
+        keyboardFocusSource.Should().Contain("return FocusVisibleTaskPane();");
         keyboardFocusSource.Should().Contain("private bool FocusPivotFieldListPane()");
         keyboardFocusSource.Should().Contain("PivotFieldListPane?.Visibility != Visibility.Visible");
         keyboardFocusSource.Should().Contain("PivotFieldListSearchBox.Focus()");
         xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
         xaml.Should().Contain("x:Name=\"PivotFieldListSearchBox\"");
         xaml.Should().Contain("x:Name=\"PivotFieldListCloseBtn\"");
+    }
+
+    [Fact]
+    public void F6ShellFocusCycle_IncludesVisibleSlicerTimelineTaskPane()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, SlicerTimelinePane)");
+        keyboardFocusSource.Should().Contain("private bool FocusVisibleTaskPane()");
+        keyboardFocusSource.Should().Contain("FocusPivotFieldListPane() ||");
+        keyboardFocusSource.Should().Contain("FocusSlicerTimelinePane();");
+        keyboardFocusSource.Should().Contain("private bool FocusSlicerTimelinePane()");
+        keyboardFocusSource.Should().Contain("SlicerTimelinePane?.Visibility != Visibility.Visible");
+        keyboardFocusSource.Should().Contain("SlicerTimelinePaneCloseBtn.Focus()");
+        xaml.Should().Contain("x:Name=\"SlicerTimelinePane\"");
+        xaml.Should().Contain("x:Name=\"SlicerTimelinePaneCloseBtn\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
     }
 
     [Fact]
@@ -1482,6 +1501,27 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
         xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
         xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
+    }
+
+    [Fact]
+    public void FocusedPivotFieldListTaskPane_EscapeReturnsFocusToWorksheet()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var taskPaneNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)",
+            StringComparison.Ordinal);
+        var ribbonNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool IsInsideRibbonSurface(DependencyObject element)",
+            StringComparison.Ordinal);
+
+        taskPaneNavigationStart.Should().BeGreaterThanOrEqualTo(0);
+        ribbonNavigationStart.Should().BeGreaterThan(taskPaneNavigationStart);
+        var taskPaneNavigationSource = keyboardFocusSource[taskPaneNavigationStart..ribbonNavigationStart];
+
+        taskPaneNavigationSource.Should().Contain("if (e.Key == Key.Escape)");
+        taskPaneNavigationSource.Should().Contain("FocusSheetGridIfNeeded();");
+        taskPaneNavigationSource.Should().Contain("e.Handled = true;");
+        taskPaneNavigationSource.Should().Contain("return true;");
     }
 
     [Fact]

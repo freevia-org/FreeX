@@ -93,11 +93,16 @@ public partial class MainWindow
     private bool TryHandleDirectRibbonKeyTip(Key key)
     {
         var token = RibbonKeyTipMode.ToKeyTipToken(key);
-        if (token is null || !TryHandleTopLevelRibbonKeyTip(token))
+        if (token is null)
             return false;
 
-        EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-        return true;
+        if (TryHandleTopLevelRibbonKeyTip(token))
+        {
+            EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+            return true;
+        }
+
+        return TryInvokeTopLevelQatKeyTip(token);
     }
 
     private void ShowKeyTipOverlay(RibbonKeyTipScope scope)

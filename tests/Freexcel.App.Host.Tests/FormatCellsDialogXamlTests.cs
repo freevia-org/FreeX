@@ -346,6 +346,7 @@ public sealed class FormatCellsDialogXamlTests
     [Theory]
     [InlineData("Number", "#,##0.00", "0", "None", 0, "#,##0")]
     [InlineData("Currency", "$#,##0.00", "3", "EUR", 2, "EUR#,##0.000;(EUR#,##0.000)")]
+    [InlineData("Accounting", "$#,##0.00", "1", "GBP", 0, "_(GBP* #,##0.0_);_(GBP* (#,##0.0);_(GBP* \"-\"?_);_(@_)")]
     [InlineData("Accounting", "$#,##0.00", "2", "GBP", 0, "_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)")]
     [InlineData("Percentage", "0.00%", "1", "None", 0, "0.0%")]
     public void FormatCellsDialog_NumberTab_ComposesFormatFromCategoryControls(
@@ -838,6 +839,11 @@ public sealed class FormatCellsDialogXamlTests
                 symbols.SelectedItem = "£";
                 ClickOkForTest(dialog);
                 dialog.ResultDiff!.NumberFormat.Should().Be("_(£* #,##0_);_(£* (#,##0);_(£* \"-\"_);_(@_)");
+
+                decimals.Text = "1";
+                symbols.SelectedItem = "GBP";
+                ClickOkForTest(dialog);
+                dialog.ResultDiff!.NumberFormat.Should().Be("_(GBP* #,##0.0_);_(GBP* (#,##0.0);_(GBP* \"-\"?_);_(@_)");
 
                 categories.SelectedItem = "Percentage";
                 decimals.Text = "4";

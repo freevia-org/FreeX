@@ -20,7 +20,7 @@ public static partial class PrintRenderer
         return (sheet.PageHeader, sheet.PageFooter, sheet.PageHeaderPictures, sheet.PageFooterPictures);
     }
 
-    private static DrawingVisual RenderPageVisual(
+    private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays) RenderPageVisual(
         double pageW,
         double pageH,
         double marginLeft,
@@ -53,6 +53,7 @@ public static partial class PrintRenderer
         int totalPages)
     {
         var visual = new DrawingVisual();
+        var textOverlays = new List<PdfTextOverlay>();
         using var dc = visual.RenderOpen();
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
@@ -130,7 +131,17 @@ public static partial class PrintRenderer
                     Trimming = TextTrimming.CharacterEllipsis
                 };
 
-                dc.DrawText(ft, new Point(x + 2, y + (rowHeight - ft.Height) / 2));
+                var textPoint = new Point(x + 2, y + (rowHeight - ft.Height) / 2);
+                dc.DrawText(ft, textPoint);
+                textOverlays.Add(new PdfTextOverlay(
+                    displayText,
+                    textPoint.X,
+                    textPoint.Y,
+                    PrintFontSize,
+                    "Segoe UI",
+                    Bold: false,
+                    Italic: false,
+                    Colors.Black));
             }
         }
 
@@ -150,7 +161,7 @@ public static partial class PrintRenderer
                 pageH);
         }
 
-        return visual;
+        return (visual, textOverlays);
     }
 
 }

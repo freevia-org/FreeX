@@ -445,9 +445,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue yRange) return MapUnaryTextRange(yRange, value => Atan2Scalar(args[0], value));
-        if (args[0] is RangeValue xRange) return MapUnaryTextRange(xRange, value => Atan2Scalar(value, args[1]));
-        return Atan2Scalar(args[0], args[1]);
+        return MapBinaryMathArgs(args[0], args[1], Atan2Scalar);
     }
 
     private static ScalarValue Atan2Scalar(ScalarValue xValue, ScalarValue yValue)
@@ -607,9 +605,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, value => CombinScalar(args[0], value));
-        if (args[0] is RangeValue nRange) return MapUnaryTextRange(nRange, value => CombinScalar(value, args[1]));
-        return CombinScalar(args[0], args[1]);
+        return MapBinaryMathArgs(args[0], args[1], CombinScalar);
     }
 
     private static ScalarValue CombinScalar(ScalarValue numberValue, ScalarValue chosenValue)
@@ -630,9 +626,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, value => PermutScalar(args[0], value));
-        if (args[0] is RangeValue nRange) return MapUnaryTextRange(nRange, value => PermutScalar(value, args[1]));
-        return PermutScalar(args[0], args[1]);
+        return MapBinaryMathArgs(args[0], args[1], PermutScalar);
     }
 
     private static ScalarValue PermutScalar(ScalarValue numberValue, ScalarValue chosenValue)

@@ -1762,6 +1762,36 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DateDifference_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=DAYS(B1:B2,A1:A2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,0)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 360.0));
+        AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B2)", sheet), new NumberValue(5), new NumberValue(7));
+    }
+
+    [Fact]
+    public void DateDifference_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        _eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void DateTimeSecondRangeArguments_SpillElementwise()
     {
         var offsets = MakeSheet(
@@ -1781,6 +1811,43 @@ public class FunctionLibraryTests
             new NumberValue(new DateTime(2024, 1, 2).ToOADate()),
             new NumberValue(new DateTime(2024, 1, 3).ToOADate()));
         AssertColumn(_eval.Evaluate("=WEEKDAY(DATE(2024,1,7),A1:A2)", offsets), new NumberValue(1), new NumberValue(7));
+    }
+
+    [Fact]
+    public void DateOffset_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 4, 29).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 4, 30).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 1).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 4).ToOADate()));
+    }
+
+    [Fact]
+    public void DateOffset_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -3497,6 +3564,30 @@ public class FunctionLibraryTests
             (2, 1, new NumberValue(6)));
         AssertColumn(_eval.Evaluate("=COMBIN(A1:A2,2)", numbers), new NumberValue(10), new NumberValue(15));
         AssertColumn(_eval.Evaluate("=PERMUT(A1:A2,2)", numbers), new NumberValue(20), new NumberValue(30));
+    }
+
+    [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (2, 2, new NumberValue(5)));
+
+        AssertColumn(_eval.Evaluate("=ATAN2(A1:A2,B1:B2)", sheet), new NumberValue(Math.Atan2(4, 2)), new NumberValue(Math.Atan2(5, 3)));
+        AssertColumn(_eval.Evaluate("=COMBIN(B1:B2,A1:A2)", sheet), new NumberValue(6), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=PERMUT(B1:B2,A1:A2)", sheet), new NumberValue(12), new NumberValue(60));
+    }
+
+    [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
+
+        _eval.Evaluate("=ATAN2(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=COMBIN(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=PERMUT(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -7152,6 +7243,34 @@ public class FunctionLibraryTests
             .Should().Be(ErrorValue.Value);
 
     // ── SQRTPI additional ────────────────────────────────────────────────────
+
+    [Fact]
+    public void BitFunctions_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (2, 2, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=BITAND(A1:A2,B1:B2)", sheet), new NumberValue(1), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=BITOR(A1:A2,B1:B2)", sheet), new NumberValue(7), new NumberValue(7));
+        AssertColumn(_eval.Evaluate("=BITXOR(A1:A2,B1:B2)", sheet), new NumberValue(6), new NumberValue(7));
+        AssertColumn(_eval.Evaluate("=BITLSHIFT(A1:A2,B1:B2)", sheet), new NumberValue(40), new NumberValue(12));
+        AssertColumn(_eval.Evaluate("=BITRSHIFT(A1:A2,B1:B2)", sheet), new NumberValue(0), new NumberValue(3));
+    }
+
+    [Fact]
+    public void BitFunctions_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (1, 3, new NumberValue(1)));
+
+        _eval.Evaluate("=BITAND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITXOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITLSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITRSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Sqrtpi_One_ReturnsSqrtPi() =>
