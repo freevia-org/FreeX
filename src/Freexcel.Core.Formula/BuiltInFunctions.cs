@@ -1303,9 +1303,21 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], ReplaceScalarWithArgs);
+    }
 
-        double rawStart = ToNumber(args[1]);
-        double rawNumChars = ToNumber(args[2]);
+    private static ScalarValue ReplaceScalarWithArgs(
+        ScalarValue value,
+        ScalarValue startValue,
+        ScalarValue numCharsValue,
+        ScalarValue newTextValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (numCharsValue is ErrorValue numCharsError) return numCharsError;
+        if (newTextValue is ErrorValue newTextError) return newTextError;
+        double rawStart = ToNumber(startValue);
+        double rawNumChars = ToNumber(numCharsValue);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
         if (rawStart > int.MaxValue || rawNumChars > int.MaxValue) return ErrorValue.Value;
 
@@ -1313,9 +1325,7 @@ public static partial class BuiltInFunctions
         int numChars = (int)rawNumChars;
         if (startNum < 1 || numChars < 0) return ErrorValue.Value;
 
-        var newText = ToText(args[3]);
-        if (args[0] is RangeValue range) return MapReplaceRange(range, startNum, numChars, newText);
-        return ReplaceText(ToText(args[0]), startNum, numChars, newText);
+        return ReplaceText(ToText(value), startNum, numChars, ToText(newTextValue));
     }
 
     private static RangeValue MapReplaceRange(RangeValue range, int startNum, int numChars, string newText)

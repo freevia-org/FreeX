@@ -538,6 +538,46 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_RowPivotShowsEmptyTextForNoDataSubtotalGroups()
+    {
+        var workbook = new Workbook("PivotShowNoDataSubtotalItemsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            Fields =
+            {
+                new PivotCacheFieldModel("Region", SharedItems: ["East", "North", "West"]),
+                new PivotCacheFieldModel("Quarter", SharedItems: ["Q1", "Q2"]),
+                new PivotCacheFieldModel("Amount")
+            }
+        });
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "H12"),
+            EmptyValueText = "N/A",
+            ShowItemsWithNoDataOnRows = true,
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E8").Should().Be("North Total");
+        Text(sheet, "G8").Should().Be("N/A");
+        Text(sheet, "E11").Should().Be("West Total");
+        Number(sheet, "G11").Should().Be(25);
+        Text(sheet, "E12").Should().Be("Grand Total");
+        Number(sheet, "G12").Should().Be(35);
+    }
+
+    [Fact]
     public void Refresh_MaterializesNestedColumnFieldMatrix()
     {
         var workbook = new Workbook("PivotRefreshTest");
