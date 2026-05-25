@@ -153,64 +153,6 @@ public static partial class PrintRenderer
         return visual;
     }
 
-    private static void DrawPrintHeadings(
-        DrawingContext dc,
-        double marginLeft,
-        double marginTop,
-        PrintGridMeasurement measurement,
-        IReadOnlyList<uint> pageRows,
-        IReadOnlyList<uint> pageColumns)
-    {
-        var headerBrush = new SolidColorBrush(Color.FromRgb(242, 242, 242));
-        var headerPen = new Pen(Brushes.LightGray, 0.5);
-        var typeface = new Typeface("Segoe UI");
-
-        dc.DrawRectangle(headerBrush, headerPen,
-            new Rect(marginLeft, marginTop, measurement.HeaderWidth, measurement.HeaderHeight));
-
-        for (var colIndex = 0; colIndex < pageColumns.Count; colIndex++)
-        {
-            var rect = new Rect(
-                marginLeft + measurement.HeaderWidth + colIndex * measurement.ColumnWidth,
-                marginTop,
-                measurement.ColumnWidth,
-                measurement.HeaderHeight);
-            dc.DrawRectangle(headerBrush, headerPen, rect);
-            DrawCenteredText(dc, CellAddress.NumberToColumnName(pageColumns[colIndex]), rect, typeface);
-        }
-
-        for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
-        {
-            var rect = new Rect(
-                marginLeft,
-                marginTop + measurement.HeaderHeight + rowIndex * measurement.RowHeight,
-                measurement.HeaderWidth,
-                measurement.RowHeight);
-            dc.DrawRectangle(headerBrush, headerPen, rect);
-            DrawCenteredText(dc, pageRows[rowIndex].ToString(CultureInfo.InvariantCulture), rect, typeface);
-        }
-    }
-
-    private static void DrawCenteredText(DrawingContext dc, string text, Rect rect, Typeface typeface)
-    {
-        var ft = new FormattedText(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            PrintFontSize,
-            Brushes.Black,
-            1.0)
-        {
-            MaxTextWidth = Math.Max(1, rect.Width - 4),
-            MaxLineCount = 1,
-            Trimming = TextTrimming.CharacterEllipsis,
-            TextAlignment = TextAlignment.Center
-        };
-
-        dc.DrawText(ft, new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2));
-    }
-
     private static string FormatPrintedCellText(string displayText, WorksheetPrintErrorValue printErrorValue)
     {
         if (!IsErrorDisplayText(displayText))
