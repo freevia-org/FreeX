@@ -51,7 +51,7 @@ public partial class FormatCellsDialog
 
     private bool IsSingleUnderlineSelected()
         => DlgUnderlineStyleBox.SelectedItem is string underline
-            && underline == "Single";
+            && underline is "Single" or "Single Accounting";
 
     private void DlgNormalFontCheck_Checked(object sender, RoutedEventArgs e)
     {
