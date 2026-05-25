@@ -299,6 +299,7 @@ public sealed partial class NativeJsonAdapter
         public bool? OutlineSummaryRight { get; set; }
         public bool? ShowOutlineSymbols { get; set; }
         public bool? ApplyOutlineStyles { get; set; }
+        public WorksheetSheetFormatMetadataDto? SheetFormatMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -397,6 +398,12 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetPrintOptionsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetSheetFormatMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];
