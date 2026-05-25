@@ -41,6 +41,7 @@ public static partial class PivotTableRefreshService
         var calculatedItemTotals = new double[pivotTable.DataFields.Count];
         foreach (var group in groups)
         {
+            var groupRows = group.ToList();
             if (pivotTable.ShowSubtotals && rowFields.Count > 1)
             {
                 var subtotalKey = new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray());
@@ -66,7 +67,7 @@ public static partial class PivotTableRefreshService
                 }
 
                 if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
-                    subtotalRows.AddRange(group);
+                    subtotalRows.AddRange(groupRows);
             }
 
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
@@ -88,14 +89,14 @@ public static partial class PivotTableRefreshService
                     sheet,
                     new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldOutputColumns + (uint)index),
                     DisplayAggregate(
-                        group,
-                        new PivotDisplayContext(retainedRows, group.ToList(), retainedRows),
+                        groupRows,
+                        new PivotDisplayContext(retainedRows, groupRows, retainedRows),
                         pivotTable.DataFields[index],
-                        pivotTable,
-                        headers),
+                    pivotTable,
+                    headers),
                     pivotTable.DataFields[index],
                     pivotTable,
-                    isEmptyIntersection: !group.Any());
+                    isEmptyIntersection: groupRows.Count == 0);
             previousRowKey = group.Key;
             outputRow++;
             if (pivotTable.BlankLineAfterItems &&
