@@ -15312,6 +15312,52 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_FallsBackWhenWorksheetDataConsolidationNativeXmlHasWrongNamespace()
+    {
+        var workbook = new Workbook("DataConsolidationWrongNamespaceFallbackTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.DataConsolidation = new WorksheetDataConsolidationModel
+        {
+            Function = "sum",
+            LeftLabels = true,
+            TopLabels = true,
+            Link = true,
+            NativeXml = "<dataConsolidate xmlns=\"urn:freexcel:wrong\" function=\"count\" wrongNamespace=\"1\" />",
+            NativeAttributes = new Dictionary<string, string> { ["customDataConsolidationFlag"] = "keep" },
+            References =
+            [
+                new WorksheetDataConsolidationReferenceModel
+                {
+                    Reference = "A1:B2",
+                    Sheet = "Data",
+                    NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dataConsolidate = worksheetXml.Root!.Element(worksheetNs + "dataConsolidate");
+        dataConsolidate.Should().NotBeNull();
+        dataConsolidate!.Attribute("function")!.Value.Should().Be("sum");
+        dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1");
+        dataConsolidate.Attribute("topLabels")!.Value.Should().Be("1");
+        dataConsolidate.Attribute("link")!.Value.Should().Be("1");
+        dataConsolidate.Attribute("wrongNamespace").Should().BeNull();
+        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
+        dataConsolidate.Descendants(worksheetNs + "dataRef").Should().ContainSingle()
+            .Which.Attribute("customDataRefFlag")!.Value.Should().Be("keep");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomProperties()
     {
         var workbook = new Workbook("WorksheetCustomPropertiesRetentionTest");
