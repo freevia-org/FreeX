@@ -25,6 +25,7 @@ public sealed partial class NativeJsonAdapter
         public WorkbookAdditionalViewsDto? AdditionalViews { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
+        public WorkbookProtectionMetadataDto? ProtectionMetadata { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
         public WorkbookCalculationMode? CalculationMode { get; set; }
         public bool FullCalculationOnLoad { get; set; }
@@ -73,6 +74,12 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorkbookPropertiesDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorkbookProtectionMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];

@@ -4530,6 +4530,34 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=NPER(A2,-188.71,10000)", rates)).Value);
     }
 
+    [Fact]
+    public void IpmtAndPpmt_SameShapeRateAndPeriodRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05 / 12)), (2, 1, new NumberValue(0.06 / 12)),
+            (1, 2, new NumberValue(1)),         (2, 2, new NumberValue(2)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=IPMT(A1:A2,B1:B2,60,10000)", sheet),
+            ((NumberValue)_eval.Evaluate("=IPMT(A1,B1,60,10000)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=IPMT(A2,B2,60,10000)", sheet)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=PPMT(A1:A2,B1:B2,60,10000)", sheet),
+            ((NumberValue)_eval.Evaluate("=PPMT(A1,B1,60,10000)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=PPMT(A2,B2,60,10000)", sheet)).Value);
+    }
+
+    [Fact]
+    public void IpmtAndPpmt_MismatchedRateAndPeriodRangeShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05 / 12)), (2, 1, new NumberValue(0.06 / 12)),
+            (1, 2, new NumberValue(1)),         (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=IPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=PPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
@@ -7318,6 +7346,30 @@ public class FunctionLibraryTests
         _eval.Evaluate("=BITXOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=BITLSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=BITRSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void EngineeringBaseConversions_SameShapeNumberAndPlacesRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),      (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)),      (2, 2, new NumberValue(5)),
+            (1, 3, new TextValue("101")),    (2, 3, new TextValue("111")),
+            (1, 4, new NumberValue(3)),      (2, 4, new NumberValue(4)));
+
+        AssertTextColumn(_eval.Evaluate("=DEC2BIN(A1:A2,B1:B2)", sheet), "0101", "00110");
+        AssertTextColumn(_eval.Evaluate("=BIN2HEX(C1:C2,D1:D2)", sheet), "005", "0007");
+    }
+
+    [Fact]
+    public void EngineeringBaseConversions_MismatchedNumberAndPlacesRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
+
+        _eval.Evaluate("=DEC2BIN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BIN2HEX(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
