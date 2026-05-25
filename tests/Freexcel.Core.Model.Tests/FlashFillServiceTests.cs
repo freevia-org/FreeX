@@ -143,6 +143,16 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_FullNameLastCommaFirst_ReordersDelimitedNameParts()
+    {
+        var result = FlashFillService.Fill(
+            [("Ada Lovelace", "Lovelace, Ada"), ("Grace Hopper", "Hopper, Grace")],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo(["Turing, Alan"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void FillFromColumns_FirstInitialPeriodLast_CombinesSourceColumns()
     {
         var result = FlashFillService.FillFromColumns(

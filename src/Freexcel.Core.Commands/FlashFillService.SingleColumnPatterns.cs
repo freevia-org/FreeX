@@ -132,6 +132,48 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static Func<string, string?>? TryDelimitedPartReorder(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var sourceDelimiter in Delimiters)
+        {
+            if (!TryDelimitedPartReorder(examples, sourceDelimiter, s => s[1] + ", " + s[0], out var commaFirstPattern))
+                continue;
+
+            return commaFirstPattern;
+        }
+
+        return null;
+    }
+
+    private static bool TryDelimitedPartReorder(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        char sourceDelimiter,
+        Func<string[], string> formatter,
+        out Func<string, string?>? pattern)
+    {
+        pattern = null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitTwoParts(source, sourceDelimiter, out var parts) ||
+                formatter(parts) != expected)
+            {
+                return false;
+            }
+        }
+
+        pattern = source =>
+            TrySplitTwoParts(source, sourceDelimiter, out var parts)
+                ? formatter(parts)
+                : null;
+        return true;
+    }
+
+    private static bool TrySplitTwoParts(string source, char delimiter, out string[] parts)
+    {
+        parts = source.Split(delimiter, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 && parts.All(part => part.Length > 0);
+    }
+
     private static Func<string, string?>? TryInitials(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var delimiter in Delimiters)
