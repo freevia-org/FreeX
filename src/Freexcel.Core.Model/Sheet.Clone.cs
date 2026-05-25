@@ -75,6 +75,13 @@ public sealed partial class Sheet
             PrintDraftQuality             = PrintDraftQuality,
             PrintQualityDpi               = PrintQualityDpi,
             PrintQualityVerticalDpi       = PrintQualityVerticalDpi,
+            PageMarginsMetadata           = PageMarginsMetadata is null
+                ? null
+                : new WorksheetPageMarginsMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PageMarginsMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PageMarginsMetadata.NativeChildXmls]
+                },
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
             PrintOptionsMetadata          = PrintOptionsMetadata is null
@@ -83,6 +90,13 @@ public sealed partial class Sheet
                 {
                     NativeAttributes = new Dictionary<string, string>(PrintOptionsMetadata.NativeAttributes, StringComparer.Ordinal),
                     NativeChildXmls = [.. PrintOptionsMetadata.NativeChildXmls]
+                },
+            HeaderFooterMetadata          = HeaderFooterMetadata is null
+                ? null
+                : new WorksheetHeaderFooterMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(HeaderFooterMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. HeaderFooterMetadata.NativeChildXmls]
                 },
             PageSetupMetadata             = PageSetupMetadata is null
                 ? null
@@ -106,6 +120,12 @@ public sealed partial class Sheet
                 {
                     NativeAttributes = new Dictionary<string, string>(SheetFormatMetadata.NativeAttributes, StringComparer.Ordinal),
                     NativeChildXmls = [.. SheetFormatMetadata.NativeChildXmls]
+                },
+            DimensionMetadata             = DimensionMetadata is null
+                ? null
+                : new WorksheetDimensionMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(DimensionMetadata.NativeAttributes, StringComparer.Ordinal)
                 },
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,

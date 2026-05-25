@@ -31,6 +31,7 @@ public sealed partial class XlsxFileAdapter
         if (layout.DefaultRowHeight is { } defaultRowHeight)
             sheet.DefaultRowHeight = defaultRowHeight;
         sheet.SheetFormatMetadata = layout.SheetFormatMetadata;
+        sheet.DimensionMetadata = layout.DimensionMetadata;
         foreach (var (rowNum, height) in layout.RowHeights)
             sheet.RowHeights[rowNum] = height;
         foreach (var (colNum, width) in layout.ColumnWidths)
@@ -55,8 +56,10 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
             ? null
             : layout.PrintQualityVerticalDpi;
+        sheet.PageMarginsMetadata = layout.PageMarginsMetadata;
         sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
         sheet.PageSetupMetadata = layout.PageSetupMetadata;
+        sheet.HeaderFooterMetadata = layout.HeaderFooterMetadata;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;

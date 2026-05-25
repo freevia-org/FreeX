@@ -300,6 +300,7 @@ public sealed partial class NativeJsonAdapter
         public bool? ShowOutlineSymbols { get; set; }
         public bool? ApplyOutlineStyles { get; set; }
         public WorksheetSheetFormatMetadataDto? SheetFormatMetadata { get; set; }
+        public WorksheetDimensionMetadataDto? DimensionMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -329,6 +330,7 @@ public sealed partial class NativeJsonAdapter
         public PageMarginsDto? PageMargins { get; set; }
         public double? HeaderMargin { get; set; }
         public double? FooterMargin { get; set; }
+        public WorksheetPageMarginsMetadataDto? PageMarginsMetadata { get; set; }
         public bool PrintGridlines { get; set; }
         public bool PrintHeadings { get; set; }
         public WorksheetPrintOptionsMetadataDto? PrintOptionsMetadata { get; set; }
@@ -350,6 +352,7 @@ public sealed partial class NativeJsonAdapter
         public bool DifferentOddEvenHeaderFooter { get; set; }
         public bool? HeaderFooterScaleWithDocument { get; set; }
         public bool? HeaderFooterAlignWithMargins { get; set; }
+        public WorksheetHeaderFooterMetadataDto? HeaderFooterMetadata { get; set; }
         public bool CenterHorizontallyOnPage { get; set; }
         public bool CenterVerticallyOnPage { get; set; }
         public WorksheetPageOrder? PageOrder { get; set; }
@@ -404,6 +407,23 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetSheetFormatMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetDimensionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetPageMarginsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetHeaderFooterMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];

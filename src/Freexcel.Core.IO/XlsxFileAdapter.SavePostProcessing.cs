@@ -326,6 +326,24 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.DimensionMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetDimensionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.PageMarginsMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.HeaderFooterMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetHeaderFooterMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.SmartTags is not null))
         {
             packageStream.Position = 0;

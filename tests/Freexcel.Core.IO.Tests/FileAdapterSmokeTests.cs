@@ -2001,6 +2001,13 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("PageLayoutTest");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.DimensionMetadata = new WorksheetDimensionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeDimensionAttr"] = "kept"
+            }
+        };
         sheet.PrintArea = new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 8, 4));
@@ -2009,6 +2016,17 @@ public partial class FileAdapterSmokeTests
         sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
         sheet.HeaderMargin = 0.35;
         sheet.FooterMargin = 0.45;
+        sheet.PageMarginsMetadata = new WorksheetPageMarginsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["customAttr"] = "page-margins-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePageMarginsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
         sheet.SheetFormatMetadata = new WorksheetSheetFormatMetadataModel
@@ -2039,6 +2057,17 @@ public partial class FileAdapterSmokeTests
         sheet.PrintTitleRows = new WorksheetRepeatRange(1, 2);
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
+        sheet.HeaderFooterMetadata = new WorksheetHeaderFooterMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeHeaderFooterAttr"] = "kept"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativeHeaderFooterChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Page &[Page]", "Right footer");
         sheet.FirstPageHeader = new WorksheetHeaderFooter("First header left", "First header center", "First header right");
         sheet.FirstPageFooter = new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right");
@@ -2080,6 +2109,7 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DimensionMetadata.Should().BeEquivalentTo(sheet.DimensionMetadata);
         loadedSheet.PrintArea.Should().Be(new GridRange(
             new CellAddress(loadedSheet.Id, 2, 2),
             new CellAddress(loadedSheet.Id, 8, 4)));
@@ -2088,6 +2118,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PageMargins.Should().Be(new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1));
         loadedSheet.HeaderMargin.Should().Be(0.35);
         loadedSheet.FooterMargin.Should().Be(0.45);
+        loadedSheet.PageMarginsMetadata.Should().BeEquivalentTo(sheet.PageMarginsMetadata);
         loadedSheet.PrintGridlines.Should().BeTrue();
         loadedSheet.PrintHeadings.Should().BeTrue();
         loadedSheet.SheetFormatMetadata.Should().BeEquivalentTo(sheet.SheetFormatMetadata);
@@ -2095,6 +2126,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
         loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
+        loadedSheet.HeaderFooterMetadata.Should().BeEquivalentTo(sheet.HeaderFooterMetadata);
         loadedSheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Page &[Page]", "Right footer"));
         loadedSheet.FirstPageHeader.Should().Be(new WorksheetHeaderFooter("First header left", "First header center", "First header right"));
         loadedSheet.FirstPageFooter.Should().Be(new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right"));
@@ -12195,6 +12227,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_WritesWorkbookFileRecoveryBeforeWebPublishObjects()
+    {
+        var workbook = new Workbook("WorkbookFileRecoveryOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileRecoveryProperties(source);
+        AddWorkbookWebPublishObjects(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = workbookXml.Root!.Elements().ToList();
+        var recoveryIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "fileRecoveryPr");
+        var webPublishObjectsIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "webPublishObjects");
+
+        recoveryIndex.Should().BeGreaterThanOrEqualTo(0);
+        webPublishObjectsIndex.Should().BeGreaterThan(recoveryIndex);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookSmartTagMetadata()
     {
         var workbook = new Workbook("WorkbookSmartTagRetentionTest");
@@ -13439,7 +13504,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageMarginsMetadata.Should().NotBeNull();
+        loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -13474,7 +13542,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.HeaderFooterMetadata.Should().NotBeNull();
+        loadedSheet.HeaderFooterMetadata!.NativeAttributes.Should().Contain("nativeHeaderFooterAttr", "kept");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -13506,7 +13577,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DimensionMetadata.Should().NotBeNull();
+        loadedSheet.DimensionMetadata!.NativeAttributes.Should().Contain("nativeDimensionAttr", "kept");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -15034,6 +15108,49 @@ public partial class FileAdapterSmokeTests
         sortState.ToString().Should().Contain("descending=\"1\"");
         sortState.ToString().Should().Contain("sortBy=\"cellColor\"");
         sortState.ToString().Should().Contain("customSortConditionFlag=\"keep\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_FallsBackWhenWorksheetSortStateNativeXmlHasWrongNamespace()
+    {
+        var workbook = new Workbook("SortStateWrongNamespaceFallbackTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:A2",
+            CaseSensitive = true,
+            NativeXml = "<sortState xmlns=\"urn:freexcel:wrong\" ref=\"Z1:Z2\" wrongNamespace=\"1\" />",
+            NativeAttributes = new Dictionary<string, string> { ["customSortStateFlag"] = "keep" },
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A2",
+                    Descending = true,
+                    SortBy = "cellColor",
+                    NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sortState = worksheetXml.Root!.Element(worksheetNs + "sortState");
+        sortState.Should().NotBeNull();
+        sortState!.Attribute("ref")!.Value.Should().Be("A1:A2");
+        sortState.Attribute("caseSensitive")!.Value.Should().Be("1");
+        sortState.Attribute("wrongNamespace").Should().BeNull();
+        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep");
+        sortState.Elements(worksheetNs + "sortCondition").Should().ContainSingle()
+            .Which.Attribute("customSortConditionFlag")!.Value.Should().Be("keep");
     }
 
     [Fact]
