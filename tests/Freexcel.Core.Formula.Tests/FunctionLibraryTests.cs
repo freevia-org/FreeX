@@ -2939,6 +2939,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Large_DuplicateValues_CountEachOccurrence()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(8)),
+            (2, 1, new NumberValue(8)),
+            (3, 1, new NumberValue(5)));
+
+        _eval.Evaluate("=LARGE(A1:A3,2)", sheet).Should().Be(new NumberValue(8));
+    }
+
+    [Fact]
     public void Large_KRangeArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
@@ -3005,6 +3016,17 @@ public class FunctionLibraryTests
             (3, 1, new NumberValue(8)),
             (4, 1, new NumberValue(1)));
         _eval.Evaluate("=SMALL(A1:A4,1)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Small_DuplicateValues_CountEachOccurrence()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(1)),
+            (3, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=SMALL(A1:A3,2)", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]

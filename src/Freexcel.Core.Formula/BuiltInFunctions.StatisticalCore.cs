@@ -170,11 +170,11 @@ public static partial class BuiltInFunctions
         var kD = ToNumber(kValue);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
         int k = (int)kD;
-        var (values, err) = CollectRangeNumbers(range);
+        var (values, err) = CollectRangeNumbersForSelection(range);
         if (err is not null) return err;
-        var nums = values!.OrderByDescending(x => x).ToList();
+        var nums = values!;
         if (k < 1 || k > nums.Count) return ErrorValue.Num;
-        return new NumberValue(nums[k - 1]);
+        return new NumberValue(SelectKthSmallest(nums, nums.Count - k));
     }
 
     private static ScalarValue Small(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -193,11 +193,11 @@ public static partial class BuiltInFunctions
         var kD = ToNumber(kValue);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
         int k = (int)kD;
-        var (values, err) = CollectRangeNumbers(range);
+        var (values, err) = CollectRangeNumbersForSelection(range);
         if (err is not null) return err;
-        var nums = values!.OrderBy(x => x).ToList();
+        var nums = values!;
         if (k < 1 || k > nums.Count) return ErrorValue.Num;
-        return new NumberValue(nums[k - 1]);
+        return new NumberValue(SelectKthSmallest(nums, k - 1));
     }
 
     private static ScalarValue Rank(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -324,6 +324,81 @@ public static partial class BuiltInFunctions
             else if (value is DateTimeValue d) list.Add(d.Value);
         }
         return (list, null);
+    }
+
+    private static (List<double>? Nums, ErrorValue? Error) CollectRangeNumbersForSelection(RangeValue range)
+    {
+        var list = new List<double>(range.RowCount * range.ColCount);
+        for (int r = 0; r < range.RowCount; r++)
+        {
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is ErrorValue e) return (null, e);
+                if (value is NumberValue n) list.Add(n.Value);
+                else if (value is DateTimeValue d) list.Add(d.Value);
+            }
+        }
+
+        return (list, null);
+    }
+
+    private static double SelectKthSmallest(List<double> values, int k)
+    {
+        int left = 0;
+        int right = values.Count - 1;
+        var comparer = Comparer<double>.Default;
+
+        while (left < right)
+        {
+            int pivotIndex = left + ((right - left) / 2);
+            var (equalStart, equalEnd) = Partition(values, left, right, pivotIndex, comparer);
+
+            if (k < equalStart)
+                right = equalStart - 1;
+            else if (k > equalEnd)
+                left = equalEnd + 1;
+            else
+                break;
+        }
+
+        return values[k];
+    }
+
+    private static (int EqualStart, int EqualEnd) Partition(List<double> values, int left, int right, int pivotIndex, Comparer<double> comparer)
+    {
+        double pivotValue = values[pivotIndex];
+        int less = left;
+        int current = left;
+        int greater = right;
+
+        while (current <= greater)
+        {
+            int comparison = comparer.Compare(values[current], pivotValue);
+            if (comparison < 0)
+            {
+                Swap(values, less, current);
+                less++;
+                current++;
+            }
+            else if (comparison > 0)
+            {
+                Swap(values, current, greater);
+                greater--;
+            }
+            else
+            {
+                current++;
+            }
+        }
+
+        return (less, greater);
+    }
+
+    private static void Swap(List<double> values, int i, int j)
+    {
+        if (i == j) return;
+        (values[i], values[j]) = (values[j], values[i]);
     }
 
     private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

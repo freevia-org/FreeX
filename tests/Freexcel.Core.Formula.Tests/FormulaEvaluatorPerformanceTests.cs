@@ -75,6 +75,37 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
     }
 
+    [Theory]
+    [InlineData("=LARGE(A1:A100000,10)", 99_991d)]
+    [InlineData("=SMALL(A1:A100000,10)", 10d)]
+    public void LargeAndSmallLargeRanges_AvoidFullSortChurn(string formula, double expected)
+    {
+        AssertLargeRangeSelectionPerformance(formula, expected);
+    }
+
+    private void AssertLargeRangeSelectionPerformance(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-10);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(2_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+    }
+
     private static Sheet MakeNumericSheet()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
