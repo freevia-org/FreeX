@@ -182,6 +182,9 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ShowNotes:
                 ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.OpenHyperlink:
+                TryOpenHyperlink(address);
+                break;
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
                 break;
