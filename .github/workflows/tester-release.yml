@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: Optional release version override, for example 0.5-phase-5
+        description: Optional release version override, for example 0.5
         required: false
         type: string
       prerelease:
@@ -58,12 +58,15 @@ jobs:
             throw "Could not read VersionText from AppInfo.cs"
           }
 
-          $version = "${{ inputs.release_version }}"
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            $version = $versionMatch.Groups["version"].Value
+          $versionLabel = "${{ inputs.release_version }}"
+          if ([string]::IsNullOrWhiteSpace($versionLabel)) {
+            $versionLabel = $versionMatch.Groups["version"].Value
+            $versionLabel = $versionLabel -replace '^Version\s+', ''
+            $versionLabel = $versionLabel -replace '\s*\([^)]*\)\s*$', ''
+            $versionLabel = $versionLabel.Trim()
           }
 
-          $versionSlug = $version.ToLowerInvariant()
+          $versionSlug = $versionLabel.ToLowerInvariant()
           $versionSlug = $versionSlug -replace '^version\s+', ''
           $versionSlug = $versionSlug -replace '[^a-z0-9]+', '-'
           $versionSlug = $versionSlug.Trim('-')
@@ -72,11 +75,14 @@ jobs:
           }
 
           $shortSha = git rev-parse --short=8 HEAD
-          $tag = "v$versionSlug+$shortSha"
-          $releaseName = "Freexcel $version ($shortSha)"
+          $releaseStamp = Get-Date -AsUTC -Format "yyyyMMdd-HHmmss"
+          $releaseId = "$versionSlug-$releaseStamp-run${{ github.run_number }}-attempt${{ github.run_attempt }}"
+          $tag = "v$releaseId+$shortSha"
+          $releaseName = "Freexcel tester $releaseId ($shortSha)"
 
-          "version=$version" >> $env:GITHUB_OUTPUT
+          "version=$versionLabel" >> $env:GITHUB_OUTPUT
           "version_slug=$versionSlug" >> $env:GITHUB_OUTPUT
+          "release_id=$releaseId" >> $env:GITHUB_OUTPUT
           "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "release_name=$releaseName" >> $env:GITHUB_OUTPUT
@@ -108,7 +114,7 @@ jobs:
       - name: Upload versioned artifact
         uses: actions/upload-artifact@v7
         with:
-          name: freexcel-${{ steps.meta.outputs.version_slug }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile
+          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile
           path: artifacts/upload/freexcel-*-win-x64-singlefile.exe
           if-no-files-found: error
 
