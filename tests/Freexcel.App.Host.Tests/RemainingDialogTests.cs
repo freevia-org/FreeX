@@ -355,7 +355,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_ExposesKeyboardAccessKeysForButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
 
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
@@ -364,7 +364,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialogOpenedFromKeyboard_FocusesDefaultButton()
     {
-        var source = ReadClassSource("StatusDialogs.cs", "public sealed class GoalSeekStatusDialog", "public sealed class WorkbookStatisticsDialog");
+        var source = ReadClassSource("GoalSeekStatusDialog.cs", "public sealed class GoalSeekStatusDialog", "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -382,7 +382,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("Target value:");
         source.Should().Contain("Current formula result:");
@@ -411,7 +411,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialogOpenedFromKeyboard_FocusesOkButton()
     {
-        var source = ReadClassSource("StatusDialogs.cs", "public sealed class WorkbookStatisticsDialog", "public sealed class AccessibilityCheckerDialog");
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -441,7 +441,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialogOpenedFromKeyboard_FocusesIssueText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -452,7 +452,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void StatusDialogs_UseSharedExcelStyleButtonRows()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("DialogButtonRowFactory.Create");
         source.Should().NotContain("InsertChartDialog.CreateButtonRow");
@@ -869,11 +869,19 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.Helpers.cs")));
 
+    private static string ReadStatusDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogKeyboardFocus.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs")));
+
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName));
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);
-        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        var end = endMarker.Length == 0 ? source.Length : source.IndexOf(endMarker, start, StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0);
         if (end < 0)
             end = source.Length;
