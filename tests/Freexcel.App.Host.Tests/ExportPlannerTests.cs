@@ -1999,15 +1999,17 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData(null, 1)]
-    [InlineData("", 1)]
-    [InlineData("0", 1)]
-    [InlineData("2", 2)]
-    [InlineData("1000", 999)]
-    [InlineData("not a number", 1)]
-    public void PrintPreviewDialog_NormalizeCopyCount_ClampsToExcelLikeCopiesRange(string? text, int expected)
+    [InlineData(null, false, 0)]
+    [InlineData("", false, 0)]
+    [InlineData("0", false, 0)]
+    [InlineData("2", true, 2)]
+    [InlineData("999", true, 999)]
+    [InlineData("1000", false, 0)]
+    [InlineData("not a number", false, 0)]
+    public void PrintPreviewDialog_TryParseCopyCount_ValidatesExcelCopiesRange(string? text, bool expectedResult, int expectedCopies)
     {
-        PrintPreviewDialog.NormalizeCopyCount(text).Should().Be(expected);
+        PrintPreviewDialog.TryParseCopyCount(text, out var copies).Should().Be(expectedResult);
+        copies.Should().Be(expectedCopies);
     }
 
     [Fact]
@@ -2124,8 +2126,12 @@ public class ExportPlannerTests
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("statusText");
-        source.Should().Contain("NormalizeCopyCount(copiesBox.Text)");
+        source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
+        source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
+        source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("copiesBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
     }

@@ -100,6 +100,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.ApplyOutlineStyles = sDto.ApplyOutlineStyles;
             sheet.SheetFormatMetadata = ToWorksheetSheetFormatMetadata(sDto.SheetFormatMetadata);
             sheet.DimensionMetadata = ToWorksheetDimensionMetadata(sDto.DimensionMetadata);
+            sheet.SheetPropertiesMetadata = ToWorksheetSheetPropertiesMetadata(sDto.SheetPropertiesMetadata);
             foreach (var row in sDto.GroupHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.GroupHiddenRows.Add(row);
@@ -635,6 +636,25 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         return new WorksheetDimensionMetadataModel
         {
             NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorksheetSheetPropertiesMetadataModel? ToWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
         };
     }
 

@@ -26,6 +26,7 @@ public sealed partial class XlsxFileAdapter
         double? DefaultRowHeight,
         WorksheetSheetFormatMetadataModel? SheetFormatMetadata,
         WorksheetDimensionMetadataModel? DimensionMetadata,
+        WorksheetSheetPropertiesMetadataModel? SheetPropertiesMetadata,
         bool FullCalculationOnLoad,
         WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
@@ -270,12 +271,9 @@ public sealed partial class XlsxFileAdapter
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
         var dimension = worksheetXml.Root?.Element(worksheetNs + "dimension");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
-        var pageSetUpPr = worksheetXml.Root?
-            .Element(worksheetNs + "sheetPr")?
-            .Element(worksheetNs + "pageSetUpPr");
-        var outlinePr = worksheetXml.Root?
-            .Element(worksheetNs + "sheetPr")?
-            .Element(worksheetNs + "outlinePr");
+        var sheetPr = worksheetXml.Root?.Element(worksheetNs + "sheetPr");
+        var pageSetUpPr = sheetPr?.Element(worksheetNs + "pageSetUpPr");
+        var outlinePr = sheetPr?.Element(worksheetNs + "outlinePr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
         var headerFooter = worksheetXml.Root?.Element(worksheetNs + "headerFooter");
         var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");
@@ -306,10 +304,7 @@ public sealed partial class XlsxFileAdapter
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
-        var codeName = worksheetXml.Root?
-            .Element(worksheetNs + "sheetPr")?
-            .Attribute("codeName")?
-            .Value;
+        var codeName = sheetPr?.Attribute("codeName")?.Value;
 
         return new SheetXmlLayout(
             hiddenRows,
@@ -330,6 +325,7 @@ public sealed partial class XlsxFileAdapter
                 : null,
             ReadWorksheetSheetFormatMetadata(sheetFormatPr),
             ReadWorksheetDimensionMetadata(dimension),
+            ReadWorksheetSheetPropertiesMetadata(sheetPr),
             XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
@@ -400,6 +396,38 @@ public sealed partial class XlsxFileAdapter
 
         return model.NativeAttributes.Count == 0 ? null : model;
     }
+
+    private static WorksheetSheetPropertiesMetadataModel? ReadWorksheetSheetPropertiesMetadata(XElement? sheetProperties)
+    {
+        if (sheetProperties is null)
+            return null;
+
+        var model = new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeChildXmls = sheetProperties.Elements()
+                .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in sheetProperties.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledSheetPropertiesAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledSheetPropertiesAttribute(string name) =>
+        name is "codeName";
+
+    private static bool IsModeledSheetPropertiesElement(string name) =>
+        name is "tabColor" or "outlinePr" or "pageSetUpPr";
 
     private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
     {

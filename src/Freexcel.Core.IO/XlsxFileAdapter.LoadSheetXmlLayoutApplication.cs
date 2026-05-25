@@ -32,6 +32,7 @@ public sealed partial class XlsxFileAdapter
             sheet.DefaultRowHeight = defaultRowHeight;
         sheet.SheetFormatMetadata = layout.SheetFormatMetadata;
         sheet.DimensionMetadata = layout.DimensionMetadata;
+        sheet.SheetPropertiesMetadata = layout.SheetPropertiesMetadata;
         foreach (var (rowNum, height) in layout.RowHeights)
             sheet.RowHeights[rowNum] = height;
         foreach (var (colNum, width) in layout.ColumnWidths)

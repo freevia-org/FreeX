@@ -332,6 +332,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetDimensionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.SheetPropertiesMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSheetPropertiesMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.PageMarginsMetadata is not null))
         {
             packageStream.Position = 0;

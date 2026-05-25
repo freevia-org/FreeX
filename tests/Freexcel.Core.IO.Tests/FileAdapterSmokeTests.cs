@@ -2008,6 +2008,17 @@ public partial class FileAdapterSmokeTests
                 ["nativeDimensionAttr"] = "kept"
             }
         };
+        sheet.SheetPropertiesMetadata = new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["filterMode"] = "1"
+            },
+            NativeChildXmls =
+            [
+                "<fx:sheetPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"json\" />"
+            ]
+        };
         sheet.PrintArea = new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 8, 4));
@@ -2110,6 +2121,7 @@ public partial class FileAdapterSmokeTests
 
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.DimensionMetadata.Should().BeEquivalentTo(sheet.DimensionMetadata);
+        loadedSheet.SheetPropertiesMetadata.Should().BeEquivalentTo(sheet.SheetPropertiesMetadata);
         loadedSheet.PrintArea.Should().Be(new GridRange(
             new CellAddress(loadedSheet.Id, 2, 2),
             new CellAddress(loadedSheet.Id, 8, 4)));
@@ -14292,6 +14304,9 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.FitToPage.Should().BeTrue();
         loadedSheet.AutoPageBreaks.Should().BeFalse();
+        loadedSheet.SheetPropertiesMetadata.Should().NotBeNull();
+        loadedSheet.SheetPropertiesMetadata!.NativeAttributes.Should().Contain("filterMode", "1");
+        loadedSheet.SheetPropertiesMetadata.NativeChildXmls.Should().HaveCount(2);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14312,6 +14327,44 @@ public partial class FileAdapterSmokeTests
             .Select(element => element.Attribute("id")?.Value)
             .Should()
             .BeEquivalentTo("first", "second");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetSheetPropertiesMetadata()
+    {
+        var workbook = new Workbook("SheetPropertiesMetadataSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sheet properties"));
+        sheet.SheetPropertiesMetadata = new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["filterMode"] = "1",
+                ["codeName"] = "IgnoredModeledCodeName"
+            },
+            NativeChildXmls =
+            [
+                "<fx:sheetPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"authored\" />"
+            ]
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+        sheetPr.Should().NotBeNull();
+        sheetPr!.Attribute("filterMode")!.Value.Should().Be("1");
+        sheetPr.Attribute("codeName").Should().BeNull("codeName is modeled separately");
+        sheetPr.Elements(XName.Get("sheetPrNativeChild", "urn:freexcel:test"))
+            .Single()
+            .Attribute("id")!
+            .Value
+            .Should()
+            .Be("authored");
     }
 
     [Fact]

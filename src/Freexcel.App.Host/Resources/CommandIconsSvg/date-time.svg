@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Date &amp; Time">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><rect stroke="#202124" stroke-width="1.8" x="10.8" y="11.88" width="32.4" height="30.24" rx="2.16" fill="#ffffff"/><rect x="10.8" y="11.88" width="32.4" height="8.64" fill="#dff6dd"/><path d="M18.9 8.64v7.56M35.1 8.64v7.56M17.28 27h5.4M27 27h5.4M17.28 34.56h5.4" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Date &amp; Time" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5" y="6" width="22" height="21" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1"/>
+  <rect x="5" y="6" width="22" height="6" fill="#8fd19e"/>
+  <path d="M11 4V9M21 4V9" fill="none" stroke="#242424" stroke-width="1"/>
+  <text x="13" y="22" font-size="10" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">12</text>
+  <path d="M22 17V22H26" fill="none" stroke="#0078d4" stroke-width="1.5" stroke-linecap="square"/>
 </svg>
-
