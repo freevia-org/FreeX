@@ -220,7 +220,13 @@ public sealed partial class XlsxFileAdapter
         if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
         {
             packageStream.Position = 0;
-            XlsxWorksheetChartWriter.Save(packageStream, workbook, XlsxChartXmlWriter.IsSupportedXlsxChart, XlsxChartXmlWriter.ToChartXml);
+            XlsxWorksheetChartWriter.Save(
+                packageStream,
+                workbook,
+                XlsxChartXmlWriter.IsSupportedXlsxChart,
+                XlsxChartXmlWriter.ToChartXml,
+                XlsxChartXmlWriter.GetContentType,
+                XlsxChartXmlWriter.GetRelationshipType);
         }
 
         if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))
@@ -348,6 +354,12 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.RowPageBreaksMetadata is not null || sheet.ColumnPageBreaksMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPageBreaksMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.HeaderFooterMetadata is not null))

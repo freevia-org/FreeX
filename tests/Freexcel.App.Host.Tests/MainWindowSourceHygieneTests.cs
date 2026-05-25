@@ -1266,20 +1266,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
+    public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndKeepMapDeferred()
     {
         var source = ReadChartCommandSource();
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
         source.Should().Contain("retained when opening XLSX files");
-        source.Should().NotContain("InsertChartOfType(ChartType.Treemap)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Sunburst)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Histogram)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Pareto)");
-        source.Should().NotContain("InsertChartOfType(ChartType.BoxAndWhisker)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
+        source.Should().Contain("ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap)");
+        source.Should().Contain("ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst)");
+        source.Should().Contain("ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram)");
+        source.Should().Contain("ChartParetoMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Pareto)");
+        source.Should().Contain("ChartBoxAndWhiskerMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.BoxAndWhisker)");
+        source.Should().Contain("ChartWaterfallMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Waterfall)");
+        source.Should().Contain("ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel)");
         source.Should().NotContain("InsertChartOfType(ChartType.Map)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDPie)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDLine)");
@@ -1288,7 +1288,14 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
         source.Should().Contain("InsertChartOfType(ChartType.Surface)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDSurface)");
-        xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        AssertChartButtonRoutesTo(xaml, "Treemap", "ChartTreemapMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Sunburst", "ChartSunburstMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Histogram", "ChartHistogramMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Pareto", "ChartParetoMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Box Plot", "ChartBoxAndWhiskerMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Waterfall", "ChartWaterfallMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Funnel", "ChartFunnelMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Map", "DeferredChartFamilyMenuItem_Click", isDeferred: true);
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
@@ -2092,6 +2099,38 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.ChartCommands.cs",
                 "MainWindow.ChartAxisCommands.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static void AssertChartButtonRoutesTo(string xaml, string content, string clickHandler, bool isDeferred)
+    {
+        var button = ExtractButtonElementByContent(xaml, content);
+
+        button.Should().Contain($"Click=\"{clickHandler}\"");
+        button.Should().Contain("Style=\"{StaticResource RibbonBtn}\"");
+        button.Should().Contain("local:RibbonTooltip.Title=");
+
+        if (isDeferred)
+        {
+            button.Should().Contain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+        else
+        {
+            button.Should().NotContain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+    }
+
+    private static string ExtractButtonElementByContent(string xaml, string content)
+    {
+        var contentIndex = xaml.IndexOf($"Content=\"{content}\"", StringComparison.Ordinal);
+        contentIndex.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should be present");
+
+        var start = xaml.LastIndexOf("<Button", contentIndex, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should have a Button start tag");
+
+        var end = xaml.IndexOf("/>", contentIndex, StringComparison.Ordinal);
+        end.Should().BeGreaterThanOrEqualTo(contentIndex, $"the {content} chart button should be self-closing");
+
+        return xaml.Substring(start, end - start + 2);
     }
 
     private static string ReadPivotCommandSource()

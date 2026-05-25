@@ -372,7 +372,9 @@ public sealed partial class NativeJsonAdapter
         public bool? FitToPage { get; set; }
         public bool? AutoPageBreaks { get; set; }
         public List<uint> RowPageBreaks { get; set; } = [];
+        public WorksheetPageBreaksMetadataDto? RowPageBreaksMetadata { get; set; }
         public List<uint> ColumnPageBreaks { get; set; } = [];
+        public WorksheetPageBreaksMetadataDto? ColumnPageBreaksMetadata { get; set; }
         public List<string> MergedRegions { get; set; } = [];
         public List<CommentDto> Comments { get; set; } = [];
         public List<ThreadedCommentDto> ThreadedComments { get; set; } = [];
@@ -429,6 +431,12 @@ public sealed partial class NativeJsonAdapter
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPageBreaksMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
     }
 
     private class WorksheetPageMarginsMetadataDto
@@ -492,6 +500,19 @@ public sealed partial class NativeJsonAdapter
         public RgbColor MaxColor { get; set; } = new(248, 105, 107);
         public bool UseThreeColorScale { get; set; }
         public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
+        public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
+        public string? DataBarMinThresholdValue { get; set; }
+        public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.Max;
+        public string? DataBarMaxThresholdValue { get; set; }
+        public bool DataBarShowValue { get; set; } = true;
+        public int? DataBarMinLength { get; set; }
+        public int? DataBarMaxLength { get; set; }
+        public bool DataBarGradient { get; set; } = true;
+        public bool DataBarBorder { get; set; }
+        public string? DataBarAxisPosition { get; set; }
+        public RgbColor? DataBarAxisColor { get; set; }
+        public RgbColor? DataBarNegativeFillColor { get; set; }
+        public RgbColor? DataBarNegativeBorderColor { get; set; }
         public bool AboveAverage { get; set; } = true;
         public string? FormulaText { get; set; }
         public int TopBottomRank { get; set; } = 10;

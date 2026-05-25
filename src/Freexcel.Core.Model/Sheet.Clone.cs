@@ -152,6 +152,8 @@ public sealed partial class Sheet
                 },
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
+            RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
+            ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
         };
 
         // Collections: column/row dimensions
@@ -355,6 +357,11 @@ public sealed partial class Sheet
                 DataBarMinLength     = cf.DataBarMinLength,
                 DataBarMaxLength     = cf.DataBarMaxLength,
                 DataBarGradient      = cf.DataBarGradient,
+                DataBarBorder        = cf.DataBarBorder,
+                DataBarAxisPosition  = cf.DataBarAxisPosition,
+                DataBarAxisColor     = cf.DataBarAxisColor,
+                DataBarNegativeFillColor = cf.DataBarNegativeFillColor,
+                DataBarNegativeBorderColor = cf.DataBarNegativeBorderColor,
                 AboveAverage         = cf.AboveAverage,
                 FormulaText          = cf.FormulaText,
                 IconSetStyle         = cf.IconSetStyle,
@@ -366,7 +373,7 @@ public sealed partial class Sheet
                 DateOccurringPeriod  = cf.DateOccurringPeriod,
                 StopIfTrue           = cf.StopIfTrue,
                 NativeAttributes     = cf.NativeAttributes,
-                NativeChildXmls      = cf.NativeChildXmls,
+                NativeChildXmls      = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(cf.NativeChildXmls),
                 NativePayloadAttributes = cf.NativePayloadAttributes,
                 NativePayloadChildXmls = cf.NativePayloadChildXmls,
                 NativeContainerAttributes = cf.NativeContainerAttributes,
@@ -408,5 +415,19 @@ public sealed partial class Sheet
         static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
         static GridRange   RemapRange         (GridRange   r, SheetId id) =>
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    }
+
+    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        return new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
+            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
+                pair => pair.Key,
+                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
+        };
     }
 }
