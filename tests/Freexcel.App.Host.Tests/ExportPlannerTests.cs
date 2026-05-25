@@ -2016,7 +2016,8 @@ public class ExportPlannerTests
 
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
-        source.Should().Contain("PrintDocument(document.DocumentPaginator");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage)");
+        source.Should().Contain("PrintDocument(paginator");
     }
 
     [Fact]
@@ -2061,6 +2062,25 @@ public class ExportPlannerTests
     {
         PrintPreviewDialog.TryParsePageNumber(text, totalPages, out var pageNumber).Should().Be(expectedResult);
         pageNumber.Should().Be(expectedPage);
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ResolvesCurrentPagePaginatorForPrintRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var document = new FixedDocument();
+            document.Pages.Add(new PageContent());
+            document.Pages.Add(new PageContent());
+            document.Pages.Add(new PageContent());
+
+            var allPages = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.AllPages, currentPage: 2);
+            var currentPage = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.CurrentPage, currentPage: 2);
+
+            allPages.PageCount.Should().Be(3);
+            currentPage.PageCount.Should().Be(1);
+            currentPage.GetPage(1).Should().Be(DocumentPage.Missing);
+        });
     }
 
     [Fact]
@@ -2222,6 +2242,19 @@ public class ExportPlannerTests
         source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesKeyboardPrintRangeChoices()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_All pages\"");
+        source.Should().Contain("Content = \"Current pa_ge\"");
+        source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage)");
+        source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
+        source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
     }
 
     [Fact]

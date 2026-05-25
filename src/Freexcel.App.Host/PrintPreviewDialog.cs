@@ -79,6 +79,8 @@ public sealed partial class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(statusText, "Print status");
         AutomationProperties.SetHelpText(statusText, "Shows the selected printer, copy count, and preview page count.");
+        var selectedPageRangeMode = PrintPreviewPageRangeMode.AllPages;
+        TextBox pageNumberBox = null!;
         var firstButton = new Button
         {
             Content = "_First Page",
@@ -130,7 +132,18 @@ public sealed partial class PrintPreviewDialog : Window
             }
 
             copiesBox.Text = copies.ToString(CultureInfo.InvariantCulture);
-            ShowNativePrintDialog(previewDocument, printerBox.SelectedItem as PrintQueue, copies);
+            var currentPrintPage = 1;
+            if (selectedPageRangeMode == PrintPreviewPageRangeMode.CurrentPage &&
+                !TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage))
+            {
+                ShowInvalidPageNumberWarning(pageNumberBox, totalPages);
+                return;
+            }
+
+            ShowNativePrintDialog(
+                ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage),
+                printerBox.SelectedItem as PrintQueue,
+                copies);
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
         };
         closeButton.Click += (_, _) => Close();
@@ -154,12 +167,36 @@ public sealed partial class PrintPreviewDialog : Window
         toolbar.Items.Add(copiesBox);
         toolbar.Items.Add(statusText);
         toolbar.Items.Add(new Separator());
+        var allPagesButton = new RadioButton
+        {
+            Content = "_All pages",
+            IsChecked = true,
+            GroupName = "PrintPageRange",
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print every page in the preview."
+        };
+        var currentPageButton = new RadioButton
+        {
+            Content = "Current pa_ge",
+            GroupName = "PrintPageRange",
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print only the page number shown in the Page box."
+        };
+        allPagesButton.Checked += (_, _) => selectedPageRangeMode = PrintPreviewPageRangeMode.AllPages;
+        currentPageButton.Checked += (_, _) => selectedPageRangeMode = PrintPreviewPageRangeMode.CurrentPage;
+        AutomationProperties.SetName(allPagesButton, "All pages");
+        AutomationProperties.SetName(currentPageButton, "Current page");
+        toolbar.Items.Add(allPagesButton);
+        toolbar.Items.Add(currentPageButton);
+        toolbar.Items.Add(new Separator());
         toolbar.Items.Add(firstButton);
         toolbar.Items.Add(previousButton);
         toolbar.Items.Add(nextButton);
         toolbar.Items.Add(lastButton);
         toolbar.Items.Add(new Separator());
-        var pageNumberBox = new TextBox
+        pageNumberBox = new TextBox
         {
             Width = 44,
             Text = "1",
