@@ -50,7 +50,7 @@ internal static class XlsxWorkbookThemeWriter
             try
             {
                 var formatScheme = XElement.Parse(theme.NativeFormatSchemeXml);
-                if (formatScheme.Name.LocalName == "fmtScheme")
+                if (formatScheme.Name == drawingNs + "fmtScheme")
                     return new XElement(formatScheme);
             }
             catch

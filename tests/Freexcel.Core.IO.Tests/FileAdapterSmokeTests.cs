@@ -5988,6 +5988,35 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_IgnoresNativeWorkbookThemeFormatSchemeFromWrongNamespace()
+    {
+        var workbook = new Workbook("ThemeFormatSchemeNamespaceTest");
+        workbook.AddSheet("S1");
+        workbook.Theme = WorkbookTheme.Office
+            .WithEffects("Modeled Effects")
+            .WithNativeFormatSchemeXml("""
+                <fmtScheme xmlns="urn:wrong-theme-namespace" name="Wrong Effects">
+                    <fillStyleLst />
+                </fmtScheme>
+                """);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace wrongNs = "urn:wrong-theme-namespace";
+        var themeElements = themeXml.Root!.Element(drawingNs + "themeElements")!;
+
+        themeElements.Element(wrongNs + "fmtScheme").Should().BeNull();
+        var formatScheme = themeElements.Element(drawingNs + "fmtScheme");
+        formatScheme.Should().NotBeNull();
+        formatScheme!.Attribute("name")!.Value.Should().Be("Modeled Effects");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_ResolvesThemeFontColorAgainstWorkbookTheme()
     {
         var source = new MemoryStream();
