@@ -67,6 +67,7 @@ public sealed partial class XlsxFileAdapter
         WorksheetSmartTagsModel? SmartTags,
         WorksheetDataConsolidationModel? DataConsolidation,
         WorksheetSortStateModel? SortState,
+        WorksheetAdditionalViewsModel? AdditionalViews,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
@@ -289,6 +290,7 @@ public sealed partial class XlsxFileAdapter
         var smartTags = XlsxWorksheetSmartTagMapper.Read(worksheetXml.Root?.Element(worksheetNs + "smartTags"));
         var dataConsolidation = XlsxWorksheetDataConsolidationMapper.Read(worksheetXml.Root?.Element(worksheetNs + "dataConsolidate"));
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
+        var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
@@ -357,6 +359,7 @@ public sealed partial class XlsxFileAdapter
             smartTags,
             dataConsolidation,
             sortState,
+            additionalViews,
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);

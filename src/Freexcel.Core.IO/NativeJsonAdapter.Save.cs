@@ -154,6 +154,7 @@ public sealed partial class NativeJsonAdapter
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 SortState = ToWorksheetSortStateDto(s.SortState),
+                AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
