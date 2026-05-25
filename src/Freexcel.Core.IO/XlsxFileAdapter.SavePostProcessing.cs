@@ -25,6 +25,8 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         XlsxWorkbookMetadataWriter.SaveWorkbookViewProperties(packageStream, workbook);
+        packageStream.Position = 0;
+        XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
 
         if (workbook.FileVersion is not null)
         {
@@ -260,6 +262,9 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        packageStream.Position = 0;
+        XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
 
         if (workbook.FileVersion is not null)
         {

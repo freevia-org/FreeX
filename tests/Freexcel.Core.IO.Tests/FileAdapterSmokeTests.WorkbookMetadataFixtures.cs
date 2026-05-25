@@ -193,7 +193,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("showSheetTabs", "0"),
                 new XAttribute("tabRatio", "700"),
                 new XAttribute("firstSheet", "0"),
-                new XAttribute("activeTab", "0")));
+                new XAttribute("activeTab", "0"),
+                new XAttribute("customWorkbookViewFlag", "kept")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
