@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Documents;
 using FluentAssertions;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
@@ -107,6 +108,37 @@ public sealed class PrintRendererPageSetupTests
                 printRangeOverride: selectedRange);
 
             document.Pages.Should().HaveCount(1);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_WithPrintHeadings_AddsPdfTextOverlaysForRowAndColumnLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Heading overlay export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.PrintHeadings = true;
+            sheet.SetCell(new CellAddress(sheet.Id, 42, 27), new TextValue("Selected"));
+            var selectedRange = new GridRange(
+                new CellAddress(sheet.Id, 42, 27),
+                new CellAddress(sheet.Id, 42, 27));
+
+            var document = PrintRenderer.RenderWorksheet(
+                workbook,
+                sheet.Id,
+                new ViewportService(),
+                printRangeOverride: selectedRange);
+            var page = (FixedPage)document.Pages.Single().Child;
+            var overlays = PdfTextOverlayExtractor.Extract(page);
+
+            overlays.Select(overlay => overlay.Text).Should().Contain(["AA", "42", "Selected"]);
+            var columnHeading = overlays.Single(overlay => overlay.Text == "AA");
+            var rowHeading = overlays.Single(overlay => overlay.Text == "42");
+            var selectedCell = overlays.Single(overlay => overlay.Text == "Selected");
+            columnHeading.X.Should().BeGreaterThan(rowHeading.X);
+            columnHeading.X.Should().BeGreaterThan(selectedCell.X);
+            rowHeading.X.Should().BeGreaterThan(0);
         });
     }
 
