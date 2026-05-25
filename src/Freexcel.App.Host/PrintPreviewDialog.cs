@@ -80,6 +80,19 @@ public sealed partial class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(collatedBox, "Collated");
         AutomationProperties.SetHelpText(collatedBox, "When checked, multiple copies print as collated sets.");
+        var sidesBox = new ComboBox
+        {
+            Width = 178,
+            SelectedIndex = 0,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Choose one-sided or duplex printing when the printer supports it."
+        };
+        sidesBox.Items.Add("Print One Sided");
+        sidesBox.Items.Add("Flip pages on long edge");
+        sidesBox.Items.Add("Flip pages on short edge");
+        AutomationProperties.SetName(sidesBox, "Sides");
+        AutomationProperties.SetHelpText(sidesBox, "Selects one-sided or two-sided duplex printing for the Windows print dialog.");
         var statusText = new TextBlock
         {
             Margin = new Thickness(4, 0, 8, 0),
@@ -169,7 +182,8 @@ public sealed partial class PrintPreviewDialog : Window
                 ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange),
                 printerBox.SelectedItem as PrintQueue,
                 copies,
-                collatedBox.IsChecked == true);
+                collatedBox.IsChecked == true,
+                ResolveSelectedSidesMode(sidesBox));
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
         };
         closeButton.Click += (_, _) => Close();
@@ -192,6 +206,13 @@ public sealed partial class PrintPreviewDialog : Window
         });
         toolbar.Items.Add(copiesBox);
         toolbar.Items.Add(collatedBox);
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Sides:",
+            Target = sidesBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        toolbar.Items.Add(sidesBox);
         toolbar.Items.Add(statusText);
         toolbar.Items.Add(new Separator());
         var allPagesButton = new RadioButton

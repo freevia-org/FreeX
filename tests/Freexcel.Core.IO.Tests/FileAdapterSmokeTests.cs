@@ -12294,6 +12294,115 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidWorkbookMetadataNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorkbookInvalidNativeAttributeTest")
+        {
+            Properties = new WorkbookPropertiesModel
+            {
+                NativeAttributes = new Dictionary<string, string>
+                {
+                    ["validWorkbookPrAttr"] = "keep",
+                    ["invalid workbookPr attr"] = "skip"
+                }
+            },
+            FileVersion = new WorkbookFileVersionModel
+            {
+                AppName = "xl",
+                NativeAttributes = new Dictionary<string, string>
+                {
+                    ["validFileVersionAttr"] = "keep",
+                    ["invalid fileVersion attr"] = "skip"
+                }
+            },
+            FunctionGroups = new WorkbookFunctionGroupsModel
+            {
+                NativeAttributes = new Dictionary<string, string>
+                {
+                    ["validFunctionGroupsAttr"] = "keep",
+                    ["invalid functionGroups attr"] = "skip"
+                },
+                Groups =
+                [
+                    new WorkbookFunctionGroupModel
+                    {
+                        Name = "FreexcelNativeFunctions",
+                        NativeAttributes = new Dictionary<string, string>
+                        {
+                            ["validFunctionGroupAttr"] = "keep",
+                            ["invalid functionGroup attr"] = "skip"
+                        }
+                    }
+                ]
+            },
+            SmartTags = new WorkbookSmartTagMetadataModel
+            {
+                PropertiesNativeAttributes = new Dictionary<string, string>
+                {
+                    ["validSmartTagPrAttr"] = "keep",
+                    ["invalid smartTagPr attr"] = "skip"
+                },
+                TypesNativeAttributes = new Dictionary<string, string>
+                {
+                    ["validSmartTagTypesAttr"] = "keep",
+                    ["invalid smartTagTypes attr"] = "skip"
+                },
+                Types =
+                [
+                    new WorkbookSmartTagTypeModel
+                    {
+                        NamespaceUri = "urn:schemas-microsoft-com:office:smarttags",
+                        Name = "place",
+                        NativeAttributes = new Dictionary<string, string>
+                        {
+                            ["validSmartTagTypeAttr"] = "keep",
+                            ["invalid smartTagType attr"] = "skip"
+                        }
+                    }
+                ]
+            },
+            ProtectionMetadata = new WorkbookProtectionMetadataModel
+            {
+                NativeAttributes = new Dictionary<string, string>
+                {
+                    ["validWorkbookProtectionAttr"] = "keep",
+                    ["invalid workbookProtection attr"] = "skip"
+                }
+            }
+        };
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            NativeAttributes = new Dictionary<string, string>
+            {
+                ["validRecoveryAttr"] = "keep",
+                ["invalid recovery attr"] = "skip"
+            }
+        });
+        workbook.AddSheet("Data");
+
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+
+        var save = () => adapter.Save(workbook, stream);
+
+        save.Should().NotThrow();
+        stream.Position = 0;
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var xml = workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        xml.Should().Contain("validWorkbookPrAttr=\"keep\"");
+        xml.Should().Contain("validFileVersionAttr=\"keep\"");
+        xml.Should().Contain("validRecoveryAttr=\"keep\"");
+        xml.Should().Contain("validFunctionGroupsAttr=\"keep\"");
+        xml.Should().Contain("validFunctionGroupAttr=\"keep\"");
+        xml.Should().Contain("validSmartTagPrAttr=\"keep\"");
+        xml.Should().Contain("validSmartTagTypesAttr=\"keep\"");
+        xml.Should().Contain("validSmartTagTypeAttr=\"keep\"");
+        xml.Should().Contain("validWorkbookProtectionAttr=\"keep\"");
+        xml.Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFileSharing()
     {
         var workbook = new Workbook("WorkbookFileSharingRetentionTest");
