@@ -1900,6 +1900,7 @@ public sealed class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
         backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
+        backstageSource.Should().Contain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
