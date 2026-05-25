@@ -3226,7 +3226,8 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0" LastChildFill="True">
-                        <Button Content="X"
+                        <Button x:Name="PivotFieldListCloseBtn"
+                                Content="X"
                                 Width="22"
                                 Height="22"
                                 DockPanel.Dock="Right"

@@ -70,6 +70,29 @@ public sealed class WorksheetDataConsolidationReferenceModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorksheetSortStateModel
+{
+    public string? Reference { get; set; }
+    public bool? ColumnSort { get; set; }
+    public bool? CaseSensitive { get; set; }
+    public string? SortMethod { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSortConditionModel> Conditions { get; set; } = [];
+}
+
+public sealed class WorksheetSortConditionModel
+{
+    public string? Reference { get; set; }
+    public bool? Descending { get; set; }
+    public string? SortBy { get; set; }
+    public string? CustomList { get; set; }
+    public string? DxfId { get; set; }
+    public string? IconSet { get; set; }
+    public string? IconId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -135,6 +158,9 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet-level Excel data-consolidation metadata loaded from XLSX.</summary>
     public WorksheetDataConsolidationModel? DataConsolidation { get; set; }
+
+    /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
+    public WorksheetSortStateModel? SortState { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;

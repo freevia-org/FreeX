@@ -139,7 +139,7 @@ public partial class MainWindow
     private void CycleShellFocus(bool reverse)
     {
         var current = GetCurrentShellFocusTarget();
-        for (var attempt = 0; attempt < 5; attempt++)
+        for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
         {
             current = ShellFocusCyclePlanner.GetNext(current, reverse);
             if (FocusShellRegion(current))
@@ -173,6 +173,9 @@ public partial class MainWindow
 
             if (IsDescendantOf(focusedElement, StatusBarGrid))
                 return ShellFocusTarget.StatusBar;
+
+            if (IsDescendantOf(focusedElement, PivotFieldListPane))
+                return ShellFocusTarget.TaskPane;
         }
 
         return ShellFocusTarget.Worksheet;
@@ -194,6 +197,9 @@ public partial class MainWindow
 
             case ShellFocusTarget.SheetTabs:
                 return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
+
+            case ShellFocusTarget.TaskPane:
+                return FocusPivotFieldListPane();
 
             case ShellFocusTarget.StatusBar:
                 return FocusStatusBar();
@@ -221,6 +227,16 @@ public partial class MainWindow
     private bool FocusStatusBar()
     {
         return StatusZoomOutButton.Focus() || ZoomSlider.Focus();
+    }
+
+    private bool FocusPivotFieldListPane()
+    {
+        if (PivotFieldListPane?.Visibility != Visibility.Visible)
+            return false;
+
+        return PivotFieldListSearchBox.Focus() ||
+               PivotAvailableFieldsList.Focus() ||
+               PivotFieldListCloseBtn.Focus();
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)

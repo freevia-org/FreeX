@@ -412,7 +412,16 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
         source.Should().Contain("_tabs.SelectedItem = _cropTab;");
         source.Should().Contain("FocusAndSelect(_rotationBox);");
-        source.Should().Contain("FocusAndSelect(_cropLeftBox);");
+        source.Should().Contain("FocusAndSelect(ResolveInvalidSizeInput());");
+        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("FocusAndSelect(ResolveInvalidCropInput(error));");
+        source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
+        source.Should().Contain("return _cropLeftBox;");
+        source.Should().Contain("return _cropTopBox;");
+        source.Should().Contain("return _cropRightBox;");
+        source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("Keyboard.Focus(box);");
     }
 
