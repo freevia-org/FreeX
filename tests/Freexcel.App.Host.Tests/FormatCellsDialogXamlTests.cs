@@ -728,6 +728,16 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_UsesEditableFontNameCombo()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("x:Name=\"DlgFontNameBox\"");
+        xaml.Should().Contain("IsEditable=\"True\"");
+        xaml.Should().Contain("TextBoxBase.TextChanged=\"FontPreviewInput_Changed\"");
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_PopulatesInstalledFontsAndKeepsCustomCurrentFont()
     {
         StaTestRunner.Run(() =>
@@ -743,6 +753,31 @@ public sealed class FormatCellsDialogXamlTests
                 fontBox.SelectedItem.Should().Be(customFont);
                 availableFonts.Should().Contain(Fonts.SystemFontFamilies.Select(f => f.Source));
                 availableFonts.Should().HaveCountGreaterThan(6);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_AppliesTypedFontName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const string typedFont = "Freexcel Typed Font";
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var fontBox = GetControl<ComboBox>(dialog, "DlgFontNameBox");
+                fontBox.SelectedItem = null;
+                fontBox.Text = $"  {typedFont}  ";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontName.Should().Be(typedFont);
             }
             finally
             {

@@ -53,6 +53,15 @@ public partial class FormatCellsDialog
         => DlgUnderlineStyleBox.SelectedItem is string underline
             && underline is "Single" or "Single Accounting";
 
+    private string? ResolveSelectedFontName()
+    {
+        var typed = DlgFontNameBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(typed))
+            return typed;
+
+        return DlgFontNameBox.SelectedItem as string;
+    }
+
     private void DlgNormalFontCheck_Checked(object sender, RoutedEventArgs e)
     {
         var normal = CellStyle.Default;

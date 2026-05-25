@@ -260,11 +260,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
-                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(sourceBlock, targetRoot, workbookNs))
+                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        XlsxWorksheetDiagnosticsMapper.GetModeledIgnoredErrorCells(workbook, sheetName)))
                 {
                     changed = true;
-                    continue;
                 }
+                if (sourceBlock.Name == workbookNs + "ignoredErrors")
+                    continue;
                 if (sourceBlock.Name == workbookNs + "cellWatches" &&
                     XlsxWorksheetDiagnosticsMapper.MergeCellWatches(
                         sourceBlock,
@@ -567,11 +572,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
-                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(sourceBlock, targetRoot, workbookNs))
+                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        XlsxWorksheetDiagnosticsMapper.GetModeledIgnoredErrorCells(workbook, sheetName)))
                 {
                     changed = true;
-                    continue;
                 }
+                if (sourceBlock.Name == workbookNs + "ignoredErrors")
+                    continue;
                 if (sourceBlock.Name == workbookNs + "cellWatches" &&
                     XlsxWorksheetDiagnosticsMapper.MergeCellWatches(
                         sourceBlock,
