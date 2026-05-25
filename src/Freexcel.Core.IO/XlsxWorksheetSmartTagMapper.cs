@@ -119,7 +119,9 @@ internal static class XlsxWorksheetSmartTagMapper
         {
             try
             {
-                return XElement.Parse(model.NativeXml);
+                var nativeElement = XElement.Parse(model.NativeXml);
+                if (nativeElement.Name == WorksheetNs + "smartTags")
+                    return nativeElement;
             }
             catch
             {
