@@ -121,6 +121,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 ? null
                 : NativeJsonValueSanitizer.ValidColumnPaneOrNull(sDto.SplitColumn);
             sheet.AutoFilter = ToWorksheetAutoFilter(sDto.AutoFilter);
+            sheet.SmartTags = ToWorksheetSmartTags(sDto.SmartTags);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }

@@ -144,6 +144,34 @@ public sealed partial class NativeJsonAdapter
         public string? NativeXml { get; set; }
     }
 
+    private class WorksheetSmartTagsDto
+    {
+        public string? NativeXml { get; set; }
+        public List<WorksheetCellSmartTagsDto> Cells { get; set; } = [];
+    }
+
+    private class WorksheetCellSmartTagsDto
+    {
+        public string? Reference { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetCellSmartTagDto> Tags { get; set; } = [];
+    }
+
+    private class WorksheetCellSmartTagDto
+    {
+        public string? Type { get; set; }
+        public bool? Deleted { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetCellSmartTagPropertyDto> Properties { get; set; } = [];
+    }
+
+    private class WorksheetCellSmartTagPropertyDto
+    {
+        public string? Key { get; set; }
+        public string? Value { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
     private class CustomViewDto
     {
         public string Name { get; set; } = "";
@@ -207,6 +235,7 @@ public sealed partial class NativeJsonAdapter
         public uint? SplitRow { get; set; }
         public uint? SplitColumn { get; set; }
         public WorksheetAutoFilterDto? AutoFilter { get; set; }
+        public WorksheetSmartTagsDto? SmartTags { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
