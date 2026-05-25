@@ -33,4 +33,58 @@ public static class FormatCellsInputParser
             ? rotation
             : null;
     }
+
+    public static bool IsSupportedCustomNumberFormat(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var sectionCount = 1;
+        var inQuote = false;
+        var bracketDepth = 0;
+        var trimmed = text.Trim();
+
+        for (var i = 0; i < trimmed.Length; i++)
+        {
+            var character = trimmed[i];
+            if (character == '\\')
+            {
+                i++;
+                continue;
+            }
+
+            if (character == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (inQuote)
+                continue;
+
+            if (character == '[')
+            {
+                bracketDepth++;
+                continue;
+            }
+
+            if (character == ']')
+            {
+                if (bracketDepth == 0)
+                    return false;
+
+                bracketDepth--;
+                continue;
+            }
+
+            if (character == ';' && bracketDepth == 0)
+            {
+                sectionCount++;
+                if (sectionCount > 4)
+                    return false;
+            }
+        }
+
+        return !inQuote && bracketDepth == 0;
+    }
 }

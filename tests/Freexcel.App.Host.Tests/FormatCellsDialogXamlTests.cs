@@ -690,6 +690,8 @@ public sealed class FormatCellsDialogXamlTests
 
         source.Should().Contain("if (!ValidateNumberInputs())");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter decimal places from 0 to 30.\", NumberDecimalPlacesBox);");
+        source.Should().Contain("FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid custom number format.\", NumberFormatCombo);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;");
     }
 
