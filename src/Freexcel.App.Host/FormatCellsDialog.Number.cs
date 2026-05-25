@@ -213,11 +213,7 @@ public partial class FormatCellsDialog
     private string AccountingPattern(int decimals)
     {
         var symbol = SelectedCurrencySymbol();
-        var symbolToken = string.IsNullOrEmpty(symbol) ? "" : symbol;
-        var decimalPattern = DecimalPattern(decimals);
-        var zeroPadding = decimals > 0 ? "??" : "";
-
-        return $"_({symbolToken}* #,##0{decimalPattern}_);_({symbolToken}* (#,##0{decimalPattern});_({symbolToken}* \"-\"{zeroPadding}_);_(@_)";
+        return BuildAccountingFormat(decimals, string.IsNullOrEmpty(symbol) ? "" : symbol);
     }
 
     private static string DecimalPattern(int decimals)
