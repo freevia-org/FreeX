@@ -35,6 +35,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);
         packageStream.Position = 0;
+        var workbookProperties = XlsxWorkbookMetadataReader.LoadWorkbookProperties(packageStream);
+        packageStream.Position = 0;
         var workbookViewProperties = XlsxWorkbookMetadataReader.LoadWorkbookViewProperties(packageStream);
         packageStream.Position = 0;
         var fileSharing = XlsxWorkbookMetadataReader.LoadFileSharing(packageStream);
@@ -76,6 +78,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
+        workbook.Properties = workbookProperties;
         workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
         workbook.SheetTabRatio = workbookViewProperties.SheetTabRatio is { } tabRatio ? Math.Clamp(tabRatio, 0, 1000) : null;
         workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
