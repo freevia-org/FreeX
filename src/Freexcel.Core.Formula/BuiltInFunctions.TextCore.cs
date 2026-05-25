@@ -258,22 +258,32 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue oldTextError) return oldTextError;
         if (args[2] is ErrorValue newTextError) return newTextError;
-        var oldText = ToText(args[1]);
-        var newText = ToText(args[2]);
+        var instanceArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        if (instanceArg is ErrorValue e3) return e3;
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], instanceArg, SubstituteScalarWithArgs);
+    }
 
+    private static ScalarValue SubstituteScalarWithArgs(
+        ScalarValue textValue,
+        ScalarValue oldTextValue,
+        ScalarValue newTextValue,
+        ScalarValue instanceValue)
+    {
+        if (textValue is ErrorValue textError) return textError;
+        if (oldTextValue is ErrorValue oldTextError) return oldTextError;
+        if (newTextValue is ErrorValue newTextError) return newTextError;
+        if (instanceValue is ErrorValue instanceError) return instanceError;
+        var oldText = ToText(oldTextValue);
+        var newText = ToText(newTextValue);
         int? instanceNum = null;
-        if (args.Count > 3 && args[3] is not BlankValue)
+        if (instanceValue is not BlankValue)
         {
-            if (args[3] is ErrorValue e3) return e3;
-            double rawInstanceNum = ToNumber(args[3]);
+            double rawInstanceNum = ToNumber(instanceValue);
             if (!double.IsFinite(rawInstanceNum) || rawInstanceNum > int.MaxValue) return ErrorValue.Value;
             instanceNum = (int)rawInstanceNum;
             if (instanceNum < 1) return ErrorValue.Value;
         }
-
-        if (args[0] is RangeValue range)
-            return MapUnaryTextRange(range, value => SubstituteText(ToText(value), oldText, newText, instanceNum));
-        return SubstituteText(ToText(args[0]), oldText, newText, instanceNum);
+        return SubstituteText(ToText(textValue), oldText, newText, instanceNum);
     }
 
     private static ScalarValue SubstituteText(string text, string oldText, string newText, int? instanceNum)

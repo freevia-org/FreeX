@@ -1184,6 +1184,36 @@ public class FunctionLibraryTests
     // ── FIND ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Substitute_SameShapeTextArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new TextValue("a")),
+            (2, 2, new TextValue("na")),
+            (1, 3, new TextValue("x")),
+            (2, 3, new TextValue("N")),
+            (1, 4, new NumberValue(2)),
+            (2, 4, new NumberValue(1)));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,B1:B2,C1:C2,D1:D2)", sheet), "axbabc", "baNna");
+    }
+
+    [Fact]
+    public void Substitute_MismatchedTextOrInstanceArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new TextValue("a")),
+            (1, 3, new TextValue("x")));
+
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,B1:C1,\"x\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"x\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Substitute_OldTextError_PropagatesError()
     {
         var sheet = MakeSheet();
