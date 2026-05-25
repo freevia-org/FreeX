@@ -1140,6 +1140,144 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_DoesNotWriteSelectableTextOverlayForHiddenText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHiddenTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Visible PDF Text");
+                pdfText.Should().NotContain("Hidden PDF Text");
+                pdfText.Should().NotContain("Collapsed PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForHeaderedContentControlHeaderAndContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateHeaderedContentControlHeaderAndContentDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Header Body PDF Text");
+                pdfText.Should().Contain("Header Title PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForItemsControlElementItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateElementItemsControlDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Element Item PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForRichTextBoxes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateRichTextBoxDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Rich PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForFlowDocumentViewers()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateFlowDocumentViewerDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    properties: null,
+                    pageRange: null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Flow PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
     {
         StaTestRunner.Run(() =>
@@ -1591,6 +1729,119 @@ public class ExportPlannerTests
             FontRenderingEmSize = 12,
             Fill = Brushes.Black,
             Margin = new System.Windows.Thickness(12)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateHiddenTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(200, 120);
+        var page = new FixedPage
+        {
+            Width = 200,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var stack = new StackPanel { Margin = new System.Windows.Thickness(12) };
+        stack.Children.Add(new TextBlock { Text = "Visible PDF Text" });
+        stack.Children.Add(new TextBlock { Text = "Hidden PDF Text", Visibility = System.Windows.Visibility.Hidden });
+        stack.Children.Add(new TextBlock { Text = "Collapsed PDF Text", Visibility = System.Windows.Visibility.Collapsed });
+        page.Children.Add(stack);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateHeaderedContentControlHeaderAndContentDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(220, 120);
+        var page = new FixedPage
+        {
+            Width = 220,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new GroupBox
+        {
+            Header = "Header Title PDF Text",
+            Content = "Header Body PDF Text",
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
+        });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateElementItemsControlDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(220, 120);
+        var page = new FixedPage
+        {
+            Width = 220,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var items = new ListBox
+        {
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0)
+        };
+        items.Items.Add(new TextBlock { Text = "Element Item PDF Text" });
+        page.Children.Add(items);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateRichTextBoxDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var richText = new RichTextBox
+        {
+            Document = new FlowDocument(new Paragraph(new Run("Rich PDF Text"))),
+            Margin = new System.Windows.Thickness(12),
+            BorderThickness = new System.Windows.Thickness(0),
+            Padding = new System.Windows.Thickness(0)
+        };
+        page.Children.Add(richText);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateFlowDocumentViewerDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(180, 120);
+        var page = new FixedPage
+        {
+            Width = 180,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new FlowDocumentScrollViewer
+        {
+            Document = new FlowDocument(new Paragraph(new Run("Flow PDF Text"))),
+            Margin = new System.Windows.Thickness(12),
+            Padding = new System.Windows.Thickness(0)
         });
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);
