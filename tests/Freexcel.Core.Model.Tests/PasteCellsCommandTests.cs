@@ -591,6 +591,57 @@ public sealed class PasteCellsCommandTests
     }
 
     [Fact]
+    public void PasteCommandFactory_ValuesAndNumberFormatsWithAddCopiesNumberFormatOnly()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 2, 1);
+        var sourceStyle = wb.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            NumberFormat = "0.00%"
+        });
+        var destinationStyle = wb.RegisterStyle(new CellStyle
+        {
+            Italic = true,
+            FillColor = new CellColor(255, 255, 0),
+            BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(0, 0, 0)),
+            NumberFormat = "$#,##0"
+        });
+        var sourceCell = Cell.FromValue(new NumberValue(0.25));
+        sourceCell.StyleId = sourceStyle;
+        var destinationCell = Cell.FromValue(new NumberValue(2));
+        destinationCell.StyleId = destinationStyle;
+        sheet.SetCell(source, sourceCell);
+        sheet.SetCell(destination, destinationCell);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(source, source),
+            [(source, sourceCell.Clone())],
+            destination,
+            PasteCellsMode.All,
+            new PasteSpecialOptions(
+                Operation: PasteSpecialOperation.Add,
+                ContentKind: PasteSpecialContentKind.ValuesAndNumberFormats));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.GetCell(destination)!;
+        pasted.FormulaText.Should().BeNull();
+        pasted.Value.Should().Be(new NumberValue(2.25));
+        var style = wb.GetStyle(pasted.StyleId);
+        style.NumberFormat.Should().Be("0.00%");
+        style.Italic.Should().BeTrue();
+        style.FillColor.Should().Be(new CellColor(255, 255, 0));
+        style.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(0, 0, 0)));
+        style.Bold.Should().BeFalse();
+    }
+
+    [Fact]
     public void PasteCommandFactory_ValuesAndSourceFormattingCopiesValueAndFullSourceStyle()
     {
         var wb = new Workbook("test");
