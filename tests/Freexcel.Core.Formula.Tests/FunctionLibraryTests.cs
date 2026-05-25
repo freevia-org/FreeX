@@ -2061,6 +2061,7 @@ public class FunctionLibraryTests
             _eval.Evaluate("=WORKDAY(A1:A2,B1:B2)", sheet),
             new NumberValue(new DateTime(2024, 2, 1).ToOADate()),
             new NumberValue(new DateTime(2024, 3, 4).ToOADate()));
+        AssertColumn(_eval.Evaluate("=WEEKDAY(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(4));
     }
 
     [Fact]
@@ -2075,6 +2076,7 @@ public class FunctionLibraryTests
         _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WEEKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -2220,6 +2222,35 @@ public class FunctionLibraryTests
     }
 
     // ── MOD ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Datedif_SameShapeRangeArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2020, 3, 15).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 11).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2024, 3, 15).ToOADate())),
+            (1, 3, new TextValue("D")),
+            (2, 3, new TextValue("Y")));
+
+        AssertColumn(_eval.Evaluate("=DATEDIF(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(10), new NumberValue(4));
+    }
+
+    [Fact]
+    public void Datedif_MismatchedRangeArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2020, 3, 15).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 11).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 3, 15).ToOADate())),
+            (1, 4, new TextValue("D")),
+            (1, 5, new TextValue("Y")));
+
+        _eval.Evaluate("=DATEDIF(A1:A2,B1:C1,\"D\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DATEDIF(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Datedif_UnitError_PropagatesError()

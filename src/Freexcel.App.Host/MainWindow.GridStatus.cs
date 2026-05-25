@@ -11,6 +11,12 @@ public partial class MainWindow
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
 
+    private void InvalidateStatusBarStats()
+    {
+        _statusBarStatsRevision++;
+        _statusBarStatsCache.Clear();
+    }
+
     private void RefreshStatusBar()
     {
         if (SheetGrid.SelectedRange is not { } range)
@@ -24,7 +30,11 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var stats = StatusBarCalculator.Calculate(sheet, range);
+        var stats = _statusBarStatsCache.GetOrCreate(
+            sheet,
+            range,
+            _statusBarStatsRevision,
+            () => StatusBarCalculator.Calculate(sheet, range));
 
         if (stats.Count == 0)
         {
