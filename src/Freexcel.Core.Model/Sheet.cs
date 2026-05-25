@@ -765,7 +765,16 @@ public sealed partial class Sheet
 
 }
 
-public sealed record WorksheetCustomProperty(string Name, int Id);
+public sealed class WorksheetCustomPropertyMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed record WorksheetCustomProperty(
+    string Name,
+    int Id,
+    WorksheetCustomPropertyMetadataModel? Metadata = null);
 
 public sealed record WorksheetPhoneticProperties(string? FontId, string? Type, string? Alignment);
 
