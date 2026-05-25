@@ -40,6 +40,18 @@ internal static class PdfTextOverlayExtractor
             y += frameworkElement.Margin.Top;
         }
 
+        if (element is VisualHost { TextOverlays.Count: > 0 } visualHost)
+        {
+            foreach (var overlay in visualHost.TextOverlays)
+            {
+                overlays.Add(overlay with
+                {
+                    X = x + overlay.X,
+                    Y = y + overlay.Y
+                });
+            }
+        }
+
         if (element is TextBlock textBlock && ExtractText(textBlock) is { Length: > 0 } text)
         {
             overlays.Add(new PdfTextOverlay(

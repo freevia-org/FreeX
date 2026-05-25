@@ -123,7 +123,7 @@ public static partial class PrintRenderer
                 (uint)pageColumns.Count,
                 sheet.PrintHeadings);
             var (pageHeader, pageFooter, pageHeaderPictures, pageFooterPictures) = ResolveHeaderFooterForPage(sheet, pageNumber);
-            var visual = RenderPageVisual(
+            var (visual, textOverlays) = RenderPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
@@ -156,7 +156,7 @@ public static partial class PrintRenderer
                     totalPages);
             pageNumber++;
 
-            var container = new VisualHost { Visual = visual };
+            var container = new VisualHost { Visual = visual, TextOverlays = textOverlays };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
             fixedPage.Children.Add(container);
             FixedPage.SetLeft(container, 0);
@@ -238,6 +238,7 @@ public static partial class PrintRenderer
         sourcePage.Measure(size);
         sourcePage.Arrange(new Rect(size));
         sourcePage.UpdateLayout();
+        var textOverlays = PdfTextOverlayExtractor.Extract(sourcePage);
 
         var bitmap = new RenderTargetBitmap(
             Math.Max(1, (int)Math.Ceiling(width)),
@@ -255,6 +256,8 @@ public static partial class PrintRenderer
             Width = width,
             Height = height
         });
+        if (textOverlays.Count > 0)
+            fixedPage.Children.Add(new VisualHost { TextOverlays = textOverlays });
 
         var clone = new PageContent();
         ((IAddChild)clone).AddChild(fixedPage);
@@ -318,6 +321,7 @@ public static partial class PrintRenderer
 internal sealed class VisualHost : UIElement
 {
     public Visual? Visual { get; init; }
+    public IReadOnlyList<PdfTextOverlay> TextOverlays { get; init; } = [];
 
     protected override int VisualChildrenCount => Visual != null ? 1 : 0;
 
