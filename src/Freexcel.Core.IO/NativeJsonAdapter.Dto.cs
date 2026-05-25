@@ -352,6 +352,7 @@ public sealed partial class NativeJsonAdapter
         public List<uint> ColumnPageBreaks { get; set; } = [];
         public List<string> MergedRegions { get; set; } = [];
         public List<CommentDto> Comments { get; set; } = [];
+        public List<ThreadedCommentDto> ThreadedComments { get; set; } = [];
         public List<HyperlinkDto> Hyperlinks { get; set; } = [];
         public List<string> AllowEditRanges { get; set; } = [];
         public WorksheetBackgroundDto? BackgroundImage { get; set; }
@@ -473,6 +474,21 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Address { get; set; }
         public string? Text { get; set; }
+    }
+
+    private class ThreadedCommentDto
+    {
+        public string? Address { get; set; }
+        public string? Text { get; set; }
+        public string? Author { get; set; }
+        public bool IsResolved { get; set; }
+        public List<CommentReplyDto> Replies { get; set; } = [];
+    }
+
+    private class CommentReplyDto
+    {
+        public string? Text { get; set; }
+        public string? Author { get; set; }
     }
 
     private class HyperlinkDto

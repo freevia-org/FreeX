@@ -9,6 +9,7 @@ public static partial class PrintRenderer
 {
     private static void DrawPrintedGridCells(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         PrintGridMeasurement measurement,
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
@@ -60,7 +61,17 @@ public static partial class PrintRenderer
                     Trimming = TextTrimming.CharacterEllipsis
                 };
 
-                dc.DrawText(ft, new Point(x + 2, y + (rowHeight - ft.Height) / 2));
+                var textPoint = new Point(x + 2, y + (rowHeight - ft.Height) / 2);
+                dc.DrawText(ft, textPoint);
+                textOverlays.Add(new PdfTextOverlay(
+                    displayText,
+                    textPoint.X,
+                    textPoint.Y,
+                    PrintFontSize,
+                    "Segoe UI",
+                    Bold: false,
+                    Italic: false,
+                    Colors.Black));
             }
         }
     }

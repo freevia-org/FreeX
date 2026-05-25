@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using FluentAssertions;
+using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -784,6 +785,66 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Freexcel PDF 1");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorksheetCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable worksheet export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Worksheet Cell PDF Text"));
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Worksheet Cell PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorkbookCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable workbook export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Workbook Cell PDF Text"));
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Workbook Cell PDF Text");
             }
             finally
             {

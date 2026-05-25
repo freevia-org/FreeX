@@ -19,7 +19,7 @@ public static partial class PrintRenderer
         return (sheet.PageHeader, sheet.PageFooter, sheet.PageHeaderPictures, sheet.PageFooterPictures);
     }
 
-    private static DrawingVisual RenderPageVisual(
+    private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays) RenderPageVisual(
         double pageW,
         double pageH,
         double marginLeft,
@@ -52,6 +52,7 @@ public static partial class PrintRenderer
         int totalPages)
     {
         var visual = new DrawingVisual();
+        var textOverlays = new List<PdfTextOverlay>();
         using var dc = visual.RenderOpen();
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
@@ -91,6 +92,7 @@ public static partial class PrintRenderer
 
         DrawPrintedGridCells(
             dc,
+            textOverlays,
             measurement,
             pageRows,
             pageColumns,
@@ -116,7 +118,7 @@ public static partial class PrintRenderer
                 pageH);
         }
 
-        return visual;
+        return (visual, textOverlays);
     }
 
 }
