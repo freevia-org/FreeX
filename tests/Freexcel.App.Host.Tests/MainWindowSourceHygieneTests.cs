@@ -1657,6 +1657,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenuResolveComment_UsesThreadedCommentResolveCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.ResolveComment:");
+        source.Should().Contain("case WorksheetContextMenuAction.UnresolveComment:");
+        source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        source.Should().Contain("range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)");
+        source.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
+        source.Should().Contain("IsThreadedCommentResolved: threadedComment?.IsResolved == true");
+    }
+
+    [Fact]
     public void ReviewCommentNavigation_IncludesThreadedComments()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));

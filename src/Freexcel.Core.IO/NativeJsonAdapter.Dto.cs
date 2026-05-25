@@ -155,6 +155,9 @@ public sealed partial class NativeJsonAdapter
     {
         public string Name { get; set; } = "";
         public string? Comment { get; set; }
+        public bool Hidden { get; set; }
+        public bool Locked { get; set; }
+        public string? User { get; set; }
         public List<ScenarioCellDto> ChangingCells { get; set; } = [];
     }
 
@@ -327,6 +330,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetSortStateDto? SortState { get; set; }
         public WorksheetSingleXmlCellsDto? SingleXmlCells { get; set; }
         public WorksheetCellWatchesMetadataDto? CellWatchesMetadata { get; set; }
+        public WorksheetIgnoredErrorsMetadataDto? IgnoredErrorsMetadata { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
@@ -462,6 +466,12 @@ public sealed partial class NativeJsonAdapter
         public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
+    private class WorksheetIgnoredErrorsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, Dictionary<string, string>> ErrorNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
     private class WorksheetPageMarginsMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -478,6 +488,13 @@ public sealed partial class NativeJsonAdapter
     {
         public string Name { get; set; } = "";
         public int Id { get; set; }
+        public WorksheetCustomPropertyMetadataDto? Metadata { get; set; }
+    }
+
+    private class WorksheetCustomPropertyMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
     }
 
     private class WorksheetPhoneticPropertiesDto

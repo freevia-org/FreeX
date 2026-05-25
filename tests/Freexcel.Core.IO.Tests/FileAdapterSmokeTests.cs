@@ -560,7 +560,10 @@ public partial class FileAdapterSmokeTests
                 new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
                 new ScenarioCellValue(new CellAddress(sheet.Id, 2, 1), new TextValue("manual"))
             ],
-            "Scenario comment"));
+            "Scenario comment",
+            Hidden: true,
+            Locked: true,
+            User: "FreexcelTest"));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -573,6 +576,9 @@ public partial class FileAdapterSmokeTests
         var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
         scenario.Name.Should().Be("Best Case");
         scenario.Comment.Should().Be("Scenario comment");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.User.Should().Be("FreexcelTest");
         scenario.ChangingCells.Should().Contain(new ScenarioCellValue(
             new CellAddress(loadedSheet.Id, 1, 1),
             new NumberValue(42)));
@@ -14587,6 +14593,9 @@ public partial class FileAdapterSmokeTests
         var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
         scenario.Name.Should().Be("BestCase");
         scenario.Comment.Should().Be("Scenario comment");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.User.Should().Be("FreexcelTest");
         scenario.ChangingCells.Should().ContainSingle()
             .Which.Should().Be(new ScenarioCellValue(
                 new CellAddress(loadedSheet.Id, 1, 1),
@@ -14605,7 +14614,10 @@ public partial class FileAdapterSmokeTests
                 new ScenarioCellValue(new CellAddress(data.Id, 1, 1), new NumberValue(42)),
                 new ScenarioCellValue(new CellAddress(assumptions.Id, 2, 2), new TextValue("manual"))
             ],
-            "Scenario comment"));
+            "Scenario comment",
+            Hidden: true,
+            Locked: true,
+            User: "FreexcelTest"));
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
@@ -14622,6 +14634,9 @@ public partial class FileAdapterSmokeTests
             .Should().ContainSingle().Subject;
         firstScenario.Attribute("name")!.Value.Should().Be("BestCase");
         firstScenario.Attribute("comment")!.Value.Should().Be("Scenario comment");
+        firstScenario.Attribute("hidden")!.Value.Should().Be("1");
+        firstScenario.Attribute("locked")!.Value.Should().Be("1");
+        firstScenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
         firstScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("A1");
         firstScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("42");
         firstScenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
@@ -14634,6 +14649,9 @@ public partial class FileAdapterSmokeTests
             .Should().ContainSingle().Subject;
         secondScenario.Attribute("name")!.Value.Should().Be("BestCase");
         secondScenario.Attribute("comment")!.Value.Should().Be("Scenario comment");
+        secondScenario.Attribute("hidden")!.Value.Should().Be("1");
+        secondScenario.Attribute("locked")!.Value.Should().Be("1");
+        secondScenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
         secondScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("B2");
         secondScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("manual");
     }
@@ -14959,7 +14977,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.IgnoredErrorsMetadata.Should().NotBeNull();
+        loadedSheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["A1"].Should().Contain("twoDigitTextYear", "1");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -14973,6 +14994,108 @@ public partial class FileAdapterSmokeTests
         ignoredErrors!.ToString().Should().Contain("numberStoredAsText=\"1\"");
         ignoredErrors.ToString().Should().Contain("twoDigitTextYear=\"1\"");
         ignoredErrors.ToString().Should().Contain("sqref=\"A1\"");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetIgnoredErrorsMetadata()
+    {
+        var workbook = new Workbook("IgnoredErrorsNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["nativeContainer"] = "kept"
+            },
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["twoDigitTextYear"] = "1",
+                    ["nativeIgnoredError"] = "kept"
+                }
+            }
+        };
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.IgnoredErrorsMetadata.Should().BeEquivalentTo(sheet.IgnoredErrorsMetadata);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetIgnoredErrorsMetadata()
+    {
+        var workbook = new Workbook("IgnoredErrorsMetadataSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["nativeContainer"] = "kept"
+            },
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["twoDigitTextYear"] = "1",
+                    ["nativeIgnoredError"] = "kept"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        var ignoredError = ignoredErrors!.Element(worksheetNs + "ignoredError")!;
+
+        ignoredErrors.Attribute("nativeContainer")!.Value.Should().Be("kept");
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
+        ignoredError.Attribute("twoDigitTextYear")!.Value.Should().Be("1");
+        ignoredError.Attribute("nativeIgnoredError")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotRestoreClearedIgnoredErrors()
+    {
+        var workbook = new Workbook("IgnoredErrorsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A1", ("numberStoredAsText", "1"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        worksheetXml.Root!.Element(worksheetNs + "ignoredErrors").Should().BeNull();
     }
 
     [Fact]
@@ -15857,6 +15980,38 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetSortState()
+    {
+        var workbook = new Workbook("SortStateRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("A"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSortState(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SortState.Should().NotBeNull();
+        loadedSheet.SortState = null;
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "sortState").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDataConsolidation()
     {
         var workbook = new Workbook("DataConsolidationRetentionTest");
@@ -15953,6 +16108,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetDataConsolidation()
+    {
+        var workbook = new Workbook("DataConsolidationRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetDataConsolidation(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DataConsolidation.Should().NotBeNull();
+        loadedSheet.DataConsolidation = null;
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "dataConsolidate").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomProperties()
     {
         var workbook = new Workbook("WorksheetCustomPropertiesRetentionTest");
@@ -16001,7 +16189,46 @@ public partial class FileAdapterSmokeTests
 
         loaded.GetSheetAt(0).CustomProperties.Should()
             .ContainSingle()
-            .Which.Should().Be(new WorksheetCustomProperty("FreexcelNativeProperty", 1));
+            .Which.Should().BeEquivalentTo(new WorksheetCustomProperty(
+                "FreexcelNativeProperty",
+                1,
+                new WorksheetCustomPropertyMetadataModel
+                {
+                    NativeAttributes =
+                    {
+                        ["unsupportedAttr"] = "kept"
+                    }
+                }));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCustomPropertyMetadata()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.CustomProperties.Add(new WorksheetCustomProperty(
+            "FreexcelModeledProperty",
+            7,
+            new WorksheetCustomPropertyMetadataModel
+            {
+                NativeAttributes =
+                {
+                    ["unsupportedAttr"] = "kept"
+                },
+                NativeChildXmls =
+                [
+                    "<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+                ]
+            }));
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        loaded.GetSheetAt(0).CustomProperties.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(sheet.CustomProperties[0]);
     }
 
     [Fact]
@@ -16010,7 +16237,20 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("WorksheetCustomPropertiesSaveTest");
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
-        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty(
+            "FreexcelModeledProperty",
+            7,
+            new WorksheetCustomPropertyMetadataModel
+            {
+                NativeAttributes =
+                {
+                    ["unsupportedAttr"] = "kept"
+                },
+                NativeChildXmls =
+                [
+                    "<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+                ]
+            }));
 
         var saved = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -16027,6 +16267,8 @@ public partial class FileAdapterSmokeTests
 
         customProperty.Attribute("name")!.Value.Should().Be("FreexcelModeledProperty");
         customProperty.Attribute("id")!.Value.Should().Be("7");
+        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
+        customProperty.Elements(XName.Get("customPrChild", "urn:freexcel:test")).Should().ContainSingle();
     }
 
     [Fact]
@@ -20010,6 +20252,7 @@ public partial class FileAdapterSmokeTests
                     worksheetNs + "scenario",
                     new XAttribute("name", "BestCase"),
                     new XAttribute("comment", "Scenario comment"),
+                    new XAttribute("hidden", "1"),
                     new XAttribute("locked", "1"),
                     new XAttribute("count", "1"),
                     new XAttribute("user", "FreexcelTest"),

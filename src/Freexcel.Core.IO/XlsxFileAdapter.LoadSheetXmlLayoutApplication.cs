@@ -191,6 +191,7 @@ public sealed partial class XlsxFileAdapter
                     cell.IgnoreFormulaError = true;
             }
         }
+        sheet.IgnoredErrorsMetadata = layout.IgnoredErrorsMetadata;
         foreach (var watchedCell in layout.CellWatches)
         {
             var address = new CellAddress(sheet.Id, watchedCell.Row, watchedCell.Col);
@@ -207,7 +208,10 @@ public sealed partial class XlsxFileAdapter
                         new CellAddress(sheet.Id, change.Address.Row, change.Address.Col),
                         change.Value))
                     .ToList(),
-                scenario.Comment);
+                scenario.Comment,
+                scenario.Hidden,
+                scenario.Locked,
+                scenario.User);
 
             if (loadedScenarioNames.Add(remappedScenario.Name))
             {

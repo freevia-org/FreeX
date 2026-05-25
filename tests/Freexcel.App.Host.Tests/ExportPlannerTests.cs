@@ -187,6 +187,72 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeUnsupportedPdfPublishOptions()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is not supported; tagged PDF structure is not supported.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_RejectsUnsupportedPdfA()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("PDF/A compliance is not supported by the current PDF exporter.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_RejectsUnsupportedTaggedPdf()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Tagged PDF structure is not supported by the current PDF exporter.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_AllowsPdfOnlyChoicesForXpsSummary()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Xps, out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().BeNull();
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should()
+            .Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is PDF-only and not supported; tagged PDF structure is PDF-only and not supported.");
+    }
+
+    [Fact]
     public void ResolveExportSheetIds_ActiveSheetUsesGroupedVisibleSheetsInWorkbookOrder()
     {
         var workbook = new Workbook("Book");
@@ -395,6 +461,8 @@ public class ExportPlannerTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_activeSheetButton.Focus();");
         source.Should().Contain("Keyboard.Focus(_activeSheetButton);");
+        source.Should().Contain("SizeToContent = SizeToContent.Height;");
+        source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
     }
 
     [Fact]

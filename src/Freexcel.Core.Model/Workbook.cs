@@ -421,7 +421,13 @@ public sealed record WorkbookCustomView(
     bool IncludePrintSettings = true,
     bool IncludeHiddenRowsColumnsAndFilterSettings = true);
 
-public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells, string? Comment = null);
+public sealed record WorkbookScenario(
+    string Name,
+    IReadOnlyList<ScenarioCellValue> ChangingCells,
+    string? Comment = null,
+    bool Hidden = false,
+    bool Locked = false,
+    string? User = null);
 
 public sealed record ScenarioCellValue(CellAddress Address, ScalarValue Value);
 

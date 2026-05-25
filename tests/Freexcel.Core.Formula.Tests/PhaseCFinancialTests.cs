@@ -218,9 +218,28 @@ public class PhaseCFinancialTests
             Calc("RRI(10,100,200)"),
             Calc("RRI(20,100,200)"));
         AssertApproxColumn(
+            EvalWithData("RRI(10,A1:A2,200)", (1, 1, 100.0), (2, 1, 125.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(10,125,200)"));
+        AssertApproxColumn(
+            EvalWithData("RRI(10,100,A1:A2)", (1, 1, 200.0), (2, 1, 250.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(10,100,250)"));
+        AssertApproxColumn(
             EvalWithData("PDURATION(A1:A2,100,200)", (1, 1, 0.1), (2, 1, 0.2)),
             Calc("PDURATION(0.1,100,200)"),
             Calc("PDURATION(0.2,100,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(0.1,A1:A2,200)", (1, 1, 100.0), (2, 1, 125.0)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.1,125,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(0.1,100,A1:A2)", (1, 1, 200.0), (2, 1, 250.0)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.1,100,250)"));
+
+        EvalWithData("RRI(A1:A2,B1:C1,200)", (1, 1, 10.0), (2, 1, 20.0), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("PDURATION(A1:A2,B1:C1,200)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
