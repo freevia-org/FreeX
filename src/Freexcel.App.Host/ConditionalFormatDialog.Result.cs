@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -21,6 +22,12 @@ public partial class ConditionalFormatDialog
         {
             cf.RuleType = CfRuleType.Formula;
             var raw = _formulaBox?.Text.Trim() ?? "";
+            if (raw is "" or "=")
+            {
+                ShowInvalidInputWarning("Enter a formula for this conditional formatting rule.", _formulaBox);
+                return;
+            }
+
             cf.FormulaText = raw.StartsWith('=') ? raw[1..] : raw;
         }
         else
@@ -52,8 +59,22 @@ public partial class ConditionalFormatDialog
                     "Between"      => CfOperator.Between,
                     _              => CfOperator.NotEqual
                 };
-                cf.Value1 = _value1Box.Text.Trim();
-                cf.Value2 = _value2Box.Text.Trim();
+                var value1 = _value1Box.Text.Trim();
+                var value2 = _value2Box.Text.Trim();
+                if (string.IsNullOrWhiteSpace(value1))
+                {
+                    ShowInvalidInputWarning("Enter a value for this conditional formatting rule.", _value1Box);
+                    return;
+                }
+
+                if (cf.Operator == CfOperator.Between && string.IsNullOrWhiteSpace(value2))
+                {
+                    ShowInvalidInputWarning("Enter a maximum value for this conditional formatting rule.", _value2Box);
+                    return;
+                }
+
+                cf.Value1 = value1;
+                cf.Value2 = value2;
             }
             else if (cf.RuleType == CfRuleType.IconSet)
             {
@@ -102,7 +123,14 @@ public partial class ConditionalFormatDialog
             }
             else if (cf.RuleType is CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith)
             {
-                cf.TextRuleText = _value1Box.Text.Trim();
+                var text = _value1Box.Text.Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    ShowInvalidInputWarning("Enter text for this conditional formatting rule.", _value1Box);
+                    return;
+                }
+
+                cf.TextRuleText = text;
             }
             else if (cf.RuleType == CfRuleType.DateOccurring)
             {
@@ -130,5 +158,17 @@ public partial class ConditionalFormatDialog
 
     private static CfThresholdType SelectedThresholdType(ComboBox comboBox, CfThresholdType fallback) =>
         comboBox.SelectedItem is CfThresholdType selected ? selected : fallback;
+
+    private bool ShowInvalidInputWarning(string message, TextBox? target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (target is null)
+            return false;
+
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
+    }
 
 }
