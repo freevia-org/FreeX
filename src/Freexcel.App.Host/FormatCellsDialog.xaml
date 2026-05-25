@@ -121,8 +121,8 @@
                         <WrapPanel Margin="8,6,8,4">
                             <CheckBox x:Name="DlgDoubleUnderlineCheck" Content="_Double underline" Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
                             <CheckBox x:Name="DlgStrikeCheck"    Content="_Strikethrough"    Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
+                            <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="DlgSuperscriptCheck_Checked" Unchecked="FontPreviewInput_Changed"/>
+                            <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript" Checked="DlgSubscriptCheck_Checked" Unchecked="FontPreviewInput_Changed"/>
                         </WrapPanel>
                     </GroupBox>
 
