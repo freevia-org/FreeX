@@ -10,11 +10,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err0) return err0;
         if (args[1] is ErrorValue err1) return err1;
-        var rawDigits = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], RoundScalarWithDigits);
+    }
+
+    private static ScalarValue RoundScalarWithDigits(ScalarValue value, ScalarValue digitsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (digitsValue is ErrorValue digitsError) return digitsError;
+        var rawDigits = ToNumber(digitsValue);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
-        int digits = (int)Math.Truncate(rawDigits);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => RoundScalar(value, digits));
-        return RoundScalar(args[0], digits);
+        return RoundScalar(value, (int)Math.Truncate(rawDigits));
     }
 
     private static ScalarValue RoundScalar(ScalarValue value, int digits)
@@ -308,11 +313,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var rawDigits = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], RounddownScalarWithDigits);
+    }
+
+    private static ScalarValue RounddownScalarWithDigits(ScalarValue value, ScalarValue digitsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (digitsValue is ErrorValue digitsError) return digitsError;
+        var rawDigits = ToNumber(digitsValue);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
-        int digits = (int)Math.Truncate(rawDigits);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => RounddownScalar(value, digits));
-        return RounddownScalar(args[0], digits);
+        return RounddownScalar(value, (int)Math.Truncate(rawDigits));
     }
 
     private static ScalarValue RounddownScalar(ScalarValue value, int digits)
@@ -329,11 +339,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var rawDigits = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], RoundupScalarWithDigits);
+    }
+
+    private static ScalarValue RoundupScalarWithDigits(ScalarValue value, ScalarValue digitsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (digitsValue is ErrorValue digitsError) return digitsError;
+        var rawDigits = ToNumber(digitsValue);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
-        int digits = (int)Math.Truncate(rawDigits);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => RoundupScalar(value, digits));
-        return RoundupScalar(args[0], digits);
+        return RoundupScalar(value, (int)Math.Truncate(rawDigits));
     }
 
     private static ScalarValue RoundupScalar(ScalarValue value, int digits)
@@ -349,16 +364,18 @@ public static partial class BuiltInFunctions
     private static ScalarValue Trunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        int digits = 0;
-        if (args.Count > 1)
-        {
-            if (args[1] is ErrorValue e1) return e1;
-            var rawDigits = ToNumber(args[1]);
-            if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
-            digits = (int)Math.Truncate(rawDigits);
-        }
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => TruncScalar(value, digits));
-        return TruncScalar(args[0], digits);
+        var digitsArg = args.Count > 1 ? args[1] : new NumberValue(0);
+        if (digitsArg is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], digitsArg, TruncScalarWithDigits);
+    }
+
+    private static ScalarValue TruncScalarWithDigits(ScalarValue value, ScalarValue digitsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (digitsValue is ErrorValue digitsError) return digitsError;
+        var rawDigits = ToNumber(digitsValue);
+        if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
+        return TruncScalar(value, (int)Math.Truncate(rawDigits));
     }
 
     private static ScalarValue TruncScalar(ScalarValue value, int digits)

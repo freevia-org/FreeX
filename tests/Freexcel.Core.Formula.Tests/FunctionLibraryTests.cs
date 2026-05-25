@@ -2281,6 +2281,36 @@ public class FunctionLibraryTests
     // ── CEILING ───────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Rounding_SameShapeDigitsArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12.345)),
+            (2, 1, new NumberValue(-12.345)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(-1)));
+
+        AssertColumn(_eval.Evaluate("=ROUND(A1:A2,B1:B2)", sheet), new NumberValue(12.3), new NumberValue(-10));
+        AssertColumn(_eval.Evaluate("=ROUNDUP(A1:A2,B1:B2)", sheet), new NumberValue(12.4), new NumberValue(-20));
+        AssertColumn(_eval.Evaluate("=ROUNDDOWN(A1:A2,B1:B2)", sheet), new NumberValue(12.3), new NumberValue(-10));
+        AssertColumn(_eval.Evaluate("=TRUNC(A1:A2,B1:B2)", sheet), new NumberValue(12.3), new NumberValue(-10));
+    }
+
+    [Fact]
+    public void Rounding_MismatchedDigitsArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12.345)),
+            (2, 1, new NumberValue(-12.345)),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(-1)));
+
+        _eval.Evaluate("=ROUND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUNDUP(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUNDDOWN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TRUNC(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Round_NonFiniteInput_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));

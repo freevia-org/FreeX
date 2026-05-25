@@ -2033,6 +2033,17 @@ public partial class FileAdapterSmokeTests
         sheet.PrintErrorValue = WorksheetPrintErrorValue.Blank;
         sheet.PrintComments = WorksheetPrintComments.AtEnd;
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 2);
+        sheet.PageSetupMetadata = new WorksheetPageSetupMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["customAttr"] = "page-setup-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePageSetupChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.RowPageBreaks.Add(20);
         sheet.ColumnPageBreaks.Add(5);
 
@@ -2076,6 +2087,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Blank);
         loadedSheet.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
         loadedSheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 2));
+        loadedSheet.PageSetupMetadata.Should().BeEquivalentTo(sheet.PageSetupMetadata);
         loadedSheet.RowPageBreaks.Should().Contain(20u);
         loadedSheet.ColumnPageBreaks.Should().Contain(5u);
     }
@@ -13094,7 +13106,11 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageSetupMetadata.Should().NotBeNull();
+        loadedSheet.PageSetupMetadata!.NativeAttributes.Should().Contain("customAttr", "page-setup-native");
+        loadedSheet.PageSetupMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativePageSetupChild", StringComparison.Ordinal));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);

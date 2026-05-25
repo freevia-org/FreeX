@@ -197,6 +197,7 @@ public sealed partial class NativeJsonAdapter
                 PrintQualityVerticalDpi = s.PrintQualityVerticalDpi is > 0 ? s.PrintQualityVerticalDpi : null,
                 PrintErrorValue = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintErrorValue, WorksheetPrintErrorValue.Displayed),
                 PrintComments = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PrintComments, WorksheetPrintComments.None),
+                PageSetupMetadata = FromWorksheetPageSetupMetadata(s.PageSetupMetadata),
                 ScaleToFit = new ScaleToFitDto
                 {
                     ScalePercent = NativeJsonValueSanitizer.ValidScaleToFitOrDefault(s.ScaleToFit, WorksheetScaleToFit.Default).ScalePercent,
@@ -438,6 +439,25 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         return new WorksheetProtectionMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPageSetupMetadataDto? FromWorksheetPageSetupMetadata(WorksheetPageSetupMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = model.NativeChildXmls
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetPageSetupMetadataDto
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
