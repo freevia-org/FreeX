@@ -302,6 +302,22 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void MoveChartDialogInvalidTargetName_ShowsOwnedWarningAndRefocusesTargetBox()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[
+            source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("catch (ArgumentException ex)");
+        dialogSource.Should().Contain("MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        dialogSource.Should().Contain("FocusInvalidTargetName();");
+        dialogSource.Should().Contain("_targetBox.Focus();");
+        dialogSource.Should().Contain("_targetBox.SelectAll();");
+        dialogSource.Should().Contain("Keyboard.Focus(_targetBox);");
+    }
+
+    [Fact]
     public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
     {
         var source = ReadChartDialogSource();
