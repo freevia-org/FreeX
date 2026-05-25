@@ -53,6 +53,12 @@ public sealed class WorksheetPageMarginsMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetHeaderFooterMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -300,6 +306,9 @@ public sealed partial class Sheet
 
     /// <summary>Whether headers and footers align with the configured page margins.</summary>
     public bool HeaderFooterAlignWithMargins { get; set; } = true;
+
+    /// <summary>Native Excel headerFooter metadata not yet modeled as editable fields.</summary>
+    public WorksheetHeaderFooterMetadataModel? HeaderFooterMetadata { get; set; }
 
     /// <summary>Whether the printed grid is centered horizontally within the printable page area.</summary>
     public bool CenterHorizontallyOnPage { get; set; }
