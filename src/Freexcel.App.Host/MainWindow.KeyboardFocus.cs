@@ -113,6 +113,26 @@ public partial class MainWindow
         return true;
     }
 
+    private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is not UIElement focusedElement ||
+            !IsDescendantOf(focusedElement, PivotFieldListPane) ||
+            Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
+        {
+            return false;
+        }
+
+        if (e.Key != Key.Tab)
+            return false;
+
+        var request = new TraversalRequest(Keyboard.Modifiers == ModifierKeys.Shift
+            ? FocusNavigationDirection.Previous
+            : FocusNavigationDirection.Next);
+        focusedElement.MoveFocus(request);
+        e.Handled = true;
+        return true;
+    }
+
     private bool IsInsideRibbonSurface(DependencyObject element)
     {
         for (DependencyObject? current = element; current is not null; current = GetTreeParentForKeyboardFocus(current))
