@@ -509,6 +509,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PasteSpecialExternalText_RoutesToLiteralTextPaste()
+    {
+        var clipboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ClipboardCommands.cs"));
+
+        clipboardSource.Should().Contain("case PasteSpecialAction.ExternalText:");
+        clipboardSource.Should().Contain("externalTextAsText: true");
+        clipboardSource.Should().Contain("preserveText: externalTextAsText");
+    }
+
+    [Fact]
     public void HomeFormattingCommands_LiveOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;

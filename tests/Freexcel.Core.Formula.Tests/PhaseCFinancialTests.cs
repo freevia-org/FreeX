@@ -93,6 +93,41 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void CorePaymentFunctions_TrailingRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("PMT(0.05/12,A1:A2,10000)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("PMT(0.05/12,60,10000)"),
+            Calc("PMT(0.05/12,72,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PV(0.05/12,A1:A2,188.71)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("PV(0.05/12,60,188.71)"),
+            Calc("PV(0.05/12,72,188.71)"));
+        AssertApproxColumn(
+            EvalWithData("FV(0.05/12,A1:A2,-100)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("FV(0.05/12,60,-100)"),
+            Calc("FV(0.05/12,72,-100)"));
+        AssertApproxColumn(
+            EvalWithData("NPER(0.05/12,A1:A2,10000)", (1, 1, -188.71), (2, 1, -200.0)),
+            Calc("NPER(0.05/12,-188.71,10000)"),
+            Calc("NPER(0.05/12,-200,10000)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(A1:A2,B1:B2,10000)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, -188.71), (2, 2, -200.0)),
+            Calc("RATE(60,-188.71,10000)"),
+            Calc("RATE(72,-200,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PMT(0.05/12,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("PMT(0.05/12,60,10000,0,0)"),
+            Calc("PMT(0.05/12,60,10000,500,1)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(60,-188.71,10000,0,0,A1:A2)", (1, 1, 0.01), (2, 1, 0.05)),
+            Calc("RATE(60,-188.71,10000,0,0,0.01)"),
+            Calc("RATE(60,-188.71,10000,0,0,0.05)"));
+
+        EvalWithData("PMT(0.05/12,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Ipmt_PmtEqualsIpmtPlusPpmt_AllPeriods()
     {
         // For a standard loan, PMT = IPMT + PPMT for every period
