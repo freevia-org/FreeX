@@ -188,7 +188,8 @@ public sealed partial class TextToColumnsDialog : Window
                 throw new ArgumentException("Enter a single destination cell, such as F2.");
             }
 
-            if (_fixedWidthButton.IsChecked == true && ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text).Count == 0)
+            if (_fixedWidthButton.IsChecked == true &&
+                !TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _))
             {
                 FocusInvalidFixedWidthBreaksInput();
                 throw new ArgumentException("Enter at least one fixed-width break position.");

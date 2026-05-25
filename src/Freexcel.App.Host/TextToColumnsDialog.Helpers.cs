@@ -65,8 +65,7 @@ public sealed partial class TextToColumnsDialog
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats = null,
         TextToColumnsAdvancedOptions? advancedOptions = null)
     {
-        var positions = ParseFixedWidthBreakPositions(breakPositionsText);
-        if (positions.Count == 0)
+        if (!TryParseFixedWidthBreakPositions(breakPositionsText, int.MaxValue, out var positions))
             throw new ArgumentException("Enter at least one fixed-width break position.", nameof(breakPositionsText));
 
         return new TextToColumnsDialogResult(
@@ -190,4 +189,28 @@ public sealed partial class TextToColumnsDialog
             .Distinct()
             .Order()
             .ToList();
+
+    public static bool TryParseFixedWidthBreakPositions(string? text, int maxLength, out IReadOnlyList<int> positions)
+    {
+        positions = [];
+        var parts = (text ?? string.Empty)
+            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0 || maxLength <= 1)
+            return false;
+
+        var parsedPositions = new List<int>();
+        foreach (var part in parts)
+        {
+            if (!int.TryParse(part, out var position) || position <= 0 || position >= maxLength)
+                return false;
+
+            parsedPositions.Add(position);
+        }
+
+        positions = parsedPositions
+            .Distinct()
+            .Order()
+            .ToList();
+        return positions.Count > 0;
+    }
 }
