@@ -415,6 +415,11 @@ public sealed partial class SetChartLayoutCommand
         chart.SeriesDataLabelFormats = snapshot.SeriesDataLabelFormats?.ToList() ?? [];
         chart.PointDataLabelFormats = snapshot.PointDataLabelFormats?.ToList() ?? [];
         chart.UseComboLineForSecondarySeries = snapshot.UseComboLineForSecondarySeries ?? false;
+        chart.BarGapWidth = snapshot.BarGapWidth;
+        chart.BarOverlap = snapshot.BarOverlap;
+        chart.BubbleScale = snapshot.BubbleScale ?? 100;
+        chart.ShowNegativeBubbles = snapshot.ShowNegativeBubbles ?? false;
+        chart.BubbleSizeRepresents = snapshot.BubbleSizeRepresents ?? ChartBubbleSizeRepresents.Area;
     }
 
     private static double NormalizeAngle(double value)

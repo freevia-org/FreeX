@@ -63,6 +63,7 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuCommand.Separator,
         new("New Comment", WorksheetContextMenuAction.NewComment, AccessHeader: "New Co_mment"),
         new("Edit Comment...", WorksheetContextMenuAction.EditComment, AccessHeader: "_Edit Comment...", IsEnabled: state.HasThreadedComment),
+        BuildThreadedCommentResolveCommand(state),
         new("Delete Comment", WorksheetContextMenuAction.DeleteComment, AccessHeader: "Delete _Comment", IsEnabled: state.HasThreadedComment),
         new("New Note", WorksheetContextMenuAction.NewNote, AccessHeader: "New No_te"),
         new("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
@@ -106,6 +107,11 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuCommand.Separator,
         new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
     ];
+
+    private static WorksheetContextMenuCommand BuildThreadedCommentResolveCommand(WorksheetContextMenuState state) =>
+        state.IsThreadedCommentResolved
+            ? new("Unresolve Comment", WorksheetContextMenuAction.UnresolveComment, AccessHeader: "Un_resolve Comment", IsEnabled: state.HasThreadedComment)
+            : new("Resolve Comment", WorksheetContextMenuAction.ResolveComment, AccessHeader: "Resol_ve Comment", IsEnabled: state.HasThreadedComment);
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildColumnSelectionCommands() =>
     [
@@ -178,6 +184,7 @@ public sealed record WorksheetContextMenuCommand(
 
 public sealed record WorksheetContextMenuState(
     bool HasThreadedComment = false,
+    bool IsThreadedCommentResolved = false,
     bool HasNote = false,
     bool HasHyperlink = false)
 {
@@ -224,6 +231,8 @@ public enum WorksheetContextMenuAction
     AutoFitColumnWidth,
     NewComment,
     EditComment,
+    ResolveComment,
+    UnresolveComment,
     DeleteComment,
     NewNote,
     EditNote,

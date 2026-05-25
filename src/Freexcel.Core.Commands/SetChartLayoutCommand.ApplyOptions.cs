@@ -419,6 +419,16 @@ public sealed partial class SetChartLayoutCommand
         }
         if (options.UseComboLineForSecondarySeries is not null)
             chart.UseComboLineForSecondarySeries = options.UseComboLineForSecondarySeries.Value;
+        if (options.BarGapWidth is not null && ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+            chart.BarGapWidth = Math.Clamp(options.BarGapWidth.Value, 0, 500);
+        if (options.BarOverlap is not null && ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+            chart.BarOverlap = Math.Clamp(options.BarOverlap.Value, -100, 100);
+        if (options.BubbleScale is not null && chart.Type == ChartType.Bubble)
+            chart.BubbleScale = Math.Clamp(options.BubbleScale.Value, 1, 300);
+        if (options.ShowNegativeBubbles is not null && chart.Type == ChartType.Bubble)
+            chart.ShowNegativeBubbles = options.ShowNegativeBubbles.Value;
+        if (options.BubbleSizeRepresents is not null && chart.Type == ChartType.Bubble)
+            chart.BubbleSizeRepresents = ValidEnumOrDefault(options.BubbleSizeRepresents.Value, ChartBubbleSizeRepresents.Area);
         EnforceAxisTitleSupport(chart);
         EnforceAxisBoundsSupport(chart);
         EnforcePieAndDoughnutSupport(chart);

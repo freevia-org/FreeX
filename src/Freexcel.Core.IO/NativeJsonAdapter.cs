@@ -407,7 +407,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 workbook.Scenarios.Add(new WorkbookScenario(
                     scenarioDto.Name,
                     changes,
-                    string.IsNullOrWhiteSpace(scenarioDto.Comment) ? null : scenarioDto.Comment));
+                    string.IsNullOrWhiteSpace(scenarioDto.Comment) ? null : scenarioDto.Comment,
+                    scenarioDto.Hidden,
+                    scenarioDto.Locked,
+                    string.IsNullOrWhiteSpace(scenarioDto.User) ? null : scenarioDto.User));
         }
 
         return workbook;
