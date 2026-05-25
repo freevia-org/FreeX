@@ -76,14 +76,15 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
-    [InlineData("=LARGE(A1:A100000,10)", 99_991d)]
-    [InlineData("=SMALL(A1:A100000,10)", 10d)]
-    public void LargeAndSmallLargeRanges_AvoidFullSortChurn(string formula, double expected)
+    [InlineData("=LARGE(A1:A100000,10)", 99_991d, 2_000_000)]
+    [InlineData("=SMALL(A1:A100000,10)", 10d, 2_000_000)]
+    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 5_000_000)]
+    public void StatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(string formula, double expected, long maxAllocatedBytes)
     {
-        AssertLargeRangeSelectionPerformance(formula, expected);
+        AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
-    private void AssertLargeRangeSelectionPerformance(string formula, double expected)
+    private void AssertLargeRangeSelectionPerformance(string formula, double expected, long maxAllocatedBytes)
     {
         var evaluator = new FormulaEvaluator();
         var sheet = MakeNumericSheet();
@@ -102,7 +103,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-10);
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(2_000_000);
+        allocatedBytes.Should().BeLessThan(maxAllocatedBytes);
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
     }
 

@@ -316,14 +316,37 @@ public static partial class BuiltInFunctions
 
     private static (List<double>? Nums, ErrorValue? Error) CollectRangeNumbers(RangeValue range)
     {
-        var list = new List<double>();
-        foreach (var value in range.Flatten())
+        var (count, err) = CountRangeNumbers(range);
+        if (err is not null) return (null, err);
+
+        var list = new List<double>(count);
+        for (int r = 0; r < range.RowCount; r++)
         {
-            if (value is ErrorValue e) return (null, e);
-            if (value is NumberValue n) list.Add(n.Value);
-            else if (value is DateTimeValue d) list.Add(d.Value);
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is NumberValue n) list.Add(n.Value);
+                else if (value is DateTimeValue d) list.Add(d.Value);
+            }
         }
+
         return (list, null);
+    }
+
+    private static (int Count, ErrorValue? Error) CountRangeNumbers(RangeValue range)
+    {
+        int count = 0;
+        for (int r = 0; r < range.RowCount; r++)
+        {
+            for (int c = 0; c < range.ColCount; c++)
+            {
+                var value = range.Cells[r, c];
+                if (value is ErrorValue e) return (0, e);
+                if (value is NumberValue or DateTimeValue) count++;
+            }
+        }
+
+        return (count, null);
     }
 
     private static (List<double>? Nums, ErrorValue? Error) CollectRangeNumbersForSelection(RangeValue range)
