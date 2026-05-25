@@ -28,6 +28,13 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             if (root is null)
                 continue;
 
+            if (!sheet.IsProtected)
+            {
+                root.Element(worksheetNs + "sheetProtection")?.Remove();
+                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                continue;
+            }
+
             var protection = root.Element(worksheetNs + "sheetProtection");
             if (protection is null)
             {
