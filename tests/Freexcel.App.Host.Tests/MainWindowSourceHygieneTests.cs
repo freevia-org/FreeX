@@ -1433,6 +1433,23 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void F6ShellFocusCycle_IncludesVisiblePivotFieldListTaskPane()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        keyboardFocusSource.Should().Contain("ShellFocusTarget.TaskPane");
+        keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, PivotFieldListPane)");
+        keyboardFocusSource.Should().Contain("return FocusPivotFieldListPane();");
+        keyboardFocusSource.Should().Contain("private bool FocusPivotFieldListPane()");
+        keyboardFocusSource.Should().Contain("PivotFieldListPane?.Visibility != Visibility.Visible");
+        keyboardFocusSource.Should().Contain("PivotFieldListSearchBox.Focus()");
+        xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
+        xaml.Should().Contain("x:Name=\"PivotFieldListSearchBox\"");
+        xaml.Should().Contain("x:Name=\"PivotFieldListCloseBtn\"");
+    }
+
+    [Fact]
     public void FocusedStatusBar_TabTraversalIsNotHijackedByWorksheetMovement()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
