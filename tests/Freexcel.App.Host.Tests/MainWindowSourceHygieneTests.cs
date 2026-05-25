@@ -1485,6 +1485,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FocusedPivotFieldListTaskPane_EscapeReturnsFocusToWorksheet()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var taskPaneNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)",
+            StringComparison.Ordinal);
+        var ribbonNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool IsInsideRibbonSurface(DependencyObject element)",
+            StringComparison.Ordinal);
+
+        taskPaneNavigationStart.Should().BeGreaterThanOrEqualTo(0);
+        ribbonNavigationStart.Should().BeGreaterThan(taskPaneNavigationStart);
+        var taskPaneNavigationSource = keyboardFocusSource[taskPaneNavigationStart..ribbonNavigationStart];
+
+        taskPaneNavigationSource.Should().Contain("if (e.Key == Key.Escape)");
+        taskPaneNavigationSource.Should().Contain("FocusSheetGridIfNeeded();");
+        taskPaneNavigationSource.Should().Contain("e.Handled = true;");
+        taskPaneNavigationSource.Should().Contain("return true;");
+    }
+
+    [Fact]
     public void FocusedRibbon_TabAndArrowKeysRequestFocusTraversal()
     {
         var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
