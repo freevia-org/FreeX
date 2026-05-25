@@ -394,10 +394,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rri(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pv   = ToNumber(args[1]);
-        double fv   = ToNumber(args[2]);
-        if (args[0] is RangeValue nperRange) return MapUnaryTextRange(nperRange, value => RriScalar(value, pv, fv));
-        return RriScalar(args[0], pv, fv);
+        return MapTernaryTextArgs(args[0], args[1], args[2], RriScalar);
+    }
+
+    private static ScalarValue RriScalar(ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue)
+    {
+        double pv = ToNumber(pvValue);
+        double fv = ToNumber(fvValue);
+        return RriScalar(nperValue, pv, fv);
     }
 
     private static ScalarValue RriScalar(ScalarValue nperValue, double pv, double fv)
@@ -413,10 +417,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pduration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pv   = ToNumber(args[1]);
-        double fv   = ToNumber(args[2]);
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PdurationScalar(value, pv, fv));
-        return PdurationScalar(args[0], pv, fv);
+        return MapTernaryTextArgs(args[0], args[1], args[2], PdurationScalar);
+    }
+
+    private static ScalarValue PdurationScalar(ScalarValue rateValue, ScalarValue pvValue, ScalarValue fvValue)
+    {
+        double pv = ToNumber(pvValue);
+        double fv = ToNumber(fvValue);
+        return PdurationScalar(rateValue, pv, fv);
     }
 
     private static ScalarValue PdurationScalar(ScalarValue rateValue, double pv, double fv)
