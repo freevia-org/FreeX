@@ -215,6 +215,8 @@ public class XlsxCorpusRunnerTests
             var before = CapturePackageSummary(source);
             var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
             before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+            var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
+            fixtureContentTypeOverrides.Should().NotBeEmpty(row.Id);
 
             source.Position = 0;
             var workbook = adapter.Load(source);
@@ -229,6 +231,8 @@ public class XlsxCorpusRunnerTests
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
             after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
         }
     }
 
@@ -251,6 +255,8 @@ public class XlsxCorpusRunnerTests
             var before = CapturePackageSummary(source);
             var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
             before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+            var fixtureContentTypeOverrides = ContentTypeOverridesForParts(before, fixtureParts);
+            fixtureContentTypeOverrides.Should().NotBeEmpty(row.Id);
 
             source.Position = 0;
             XlsxFeatureInspector.Inspect(source).HasUnsupportedFeatures.Should().BeFalse(row.Id);
@@ -270,6 +276,8 @@ public class XlsxCorpusRunnerTests
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
             after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(before.CriticalContentTypeOverrides, row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(fixtureContentTypeOverrides, row.Id);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -383,6 +391,19 @@ public class XlsxCorpusRunnerTests
             .Select(entry => entry.FullName.Replace('\\', '/'))
             .Where(IsFidelityCriticalPart)
             .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ContentTypeOverridesForParts(
+        PackagePartSummary package,
+        IReadOnlyList<string> partNames)
+    {
+        var overridePrefixes = partNames
+            .Select(part => "/" + part.TrimStart('/').Replace('\\', '/') + "=>")
+            .ToArray();
+
+        return package.CriticalContentTypeOverrides
+            .Where(entry => overridePrefixes.Any(prefix => entry.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             .ToArray();
     }
 
@@ -1878,6 +1899,9 @@ public class XlsxCorpusRunnerTests
                     .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
                     .SelectMany(ReadRelationshipDetails)
                     .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                ReadCriticalContentTypeOverrides(archive)
+                    .Order(StringComparer.OrdinalIgnoreCase)
                     .ToArray());
         }
         finally
@@ -2050,6 +2074,35 @@ public class XlsxCorpusRunnerTests
                 var targetMode = rel.Attribute("TargetMode")?.Value ?? "";
                 return $"{relsEntry.FullName.Replace('\\', '/')}=>{target}|type={type}|mode={targetMode}";
             })
+            .ToArray() ?? [];
+    }
+
+    private static IEnumerable<string> ReadCriticalContentTypeOverrides(ZipArchive archive)
+    {
+        var entry = archive.GetEntry("[Content_Types].xml");
+        if (entry is null)
+            return [];
+
+        XDocument contentTypesXml;
+        using (var stream = entry.Open())
+            contentTypesXml = XDocument.Load(stream);
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        return contentTypesXml.Root?
+            .Elements(contentTypeNs + "Override")
+            .Select(element => new
+            {
+                PartName = element.Attribute("PartName")?.Value,
+                ContentType = element.Attribute("ContentType")?.Value
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.PartName))
+            .Select(item => new
+            {
+                PartName = item.PartName!.TrimStart('/').Replace('\\', '/'),
+                ContentType = item.ContentType ?? ""
+            })
+            .Where(item => IsFidelityCriticalPart(item.PartName))
+            .Select(item => $"/{item.PartName}=>{item.ContentType}")
             .ToArray() ?? [];
     }
 
@@ -2916,5 +2969,6 @@ public class XlsxCorpusRunnerTests
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
         IReadOnlyList<string> CriticalRelationshipTargets,
-        IReadOnlyList<string> CriticalRelationshipDetails);
+        IReadOnlyList<string> CriticalRelationshipDetails,
+        IReadOnlyList<string> CriticalContentTypeOverrides);
 }
