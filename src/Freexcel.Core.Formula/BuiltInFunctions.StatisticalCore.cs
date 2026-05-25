@@ -327,7 +327,13 @@ public static partial class BuiltInFunctions
             ? range
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e) return e;
-        double k = ToNumber(args[1]);
+        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, kValue => PercentileIncScalar(rv, kValue));
+        return PercentileIncScalar(rv, args[1]);
+    }
+
+    private static ScalarValue PercentileIncScalar(RangeValue rv, ScalarValue kValue)
+    {
+        double k = ToNumber(kValue);
         if (!double.IsFinite(k)) return ErrorValue.Num;
         if (k < 0 || k > 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
@@ -347,7 +353,13 @@ public static partial class BuiltInFunctions
             ? range
             : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e) return e;
-        double k = ToNumber(args[1]);
+        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, kValue => PercentileExcScalar(rv, kValue));
+        return PercentileExcScalar(rv, args[1]);
+    }
+
+    private static ScalarValue PercentileExcScalar(RangeValue rv, ScalarValue kValue)
+    {
+        double k = ToNumber(kValue);
         if (!double.IsFinite(k)) return ErrorValue.Num;
         if (k <= 0 || k >= 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
@@ -369,7 +381,13 @@ public static partial class BuiltInFunctions
             ? range
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e) return e;
-        double rawQuart = ToNumber(args[1]);
+        if (args[1] is RangeValue quartRange) return MapUnaryTextRange(quartRange, quartValue => QuartileIncScalar(rv, quartValue));
+        return QuartileIncScalar(rv, args[1]);
+    }
+
+    private static ScalarValue QuartileIncScalar(RangeValue rv, ScalarValue quartValue)
+    {
+        double rawQuart = ToNumber(quartValue);
         if (!double.IsFinite(rawQuart)) return ErrorValue.Num;
         int quart = (int)rawQuart;
         if (quart < 0 || quart > 4) return ErrorValue.Num;
