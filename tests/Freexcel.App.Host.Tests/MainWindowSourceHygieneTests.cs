@@ -1594,6 +1594,8 @@ public sealed class MainWindowSourceHygieneTests
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
         source.Should().Contain("private void ReviewNewThreadedCommentBtn_Click");
         source.Should().Contain("new SetThreadedCommentCommand(");
+        source.Should().Contain("new UpdateThreadedCommentTextCommand(");
+        source.Should().Contain("result.RootText is not null");
     }
 
     [Fact]

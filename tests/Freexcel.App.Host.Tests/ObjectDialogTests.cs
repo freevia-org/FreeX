@@ -564,6 +564,25 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ThreadedCommentDialog_CreateResult_DistinguishesRootEditFromReply()
+    {
+        var existing = new ThreadedComment("Old root", "Quinn")
+        {
+            Replies = [new CommentReply("Existing reply", "Codex")]
+        };
+
+        ThreadedCommentDialog.CreateResult(null, "  New root  ", "", isResolved: false)
+            .Should()
+            .Be(new ThreadedCommentDialogResult(null, "New root", false));
+        ThreadedCommentDialog.CreateResult(existing, "  Edited root  ", "  Reply text  ", isResolved: true)
+            .Should()
+            .Be(new ThreadedCommentDialogResult("Edited root", "Reply text", true));
+        ThreadedCommentDialog.CreateResult(existing, " Old root ", " ", isResolved: false)
+            .Should()
+            .Be(new ThreadedCommentDialogResult(null, null, false));
+    }
+
+    [Fact]
     public void TextEntryDialogOpenedFromKeyboard_FocusesTextBox()
     {
         var source = ReadClassSource("ObjectDialogs.cs", "public class TextEntryDialog", "");
