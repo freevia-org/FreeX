@@ -1937,6 +1937,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AdvancedFilterDialogApply_IsRepeatableForF4WithoutReopeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataSource.Should().Contain("var result = dialog.Result;");
+        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
+        dataSource.Should().Contain("() => new AdvancedFilterCommand(");
+        dataSource.Should().Contain("result.ListRange");
+        dataSource.Should().Contain("result.CriteriaRange");
+        dataSource.Should().Contain("result.CopyToCell");
+        dataSource.Should().Contain("result.UniqueRecordsOnly");
+        dataSource.Should().Contain("result.CopyToRange");
+        dataSource.Should().NotContain("_commandBus.Execute(\r\n            _workbook.Id,\r\n            new AdvancedFilterCommand(");
+    }
+
+    [Fact]
     public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
