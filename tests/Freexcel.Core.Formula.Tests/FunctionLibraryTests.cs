@@ -1995,11 +1995,14 @@ public class FunctionLibraryTests
             (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
             (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
-            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())),
+            (1, 3, new NumberValue(0)),
+            (2, 3, new NumberValue(3)));
 
         AssertColumn(_eval.Evaluate("=DAYS(B1:B2,A1:A2)", sheet), new NumberValue(4), new NumberValue(8));
         AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
         AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,0)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 360.0));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 365.0));
         AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B2)", sheet), new NumberValue(5), new NumberValue(7));
     }
 
@@ -2010,11 +2013,14 @@ public class FunctionLibraryTests
             (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
             (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
-            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())),
+            (1, 4, new NumberValue(0)),
+            (1, 5, new NumberValue(3)));
 
         _eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 

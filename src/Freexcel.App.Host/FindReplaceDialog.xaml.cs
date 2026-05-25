@@ -212,7 +212,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private bool ShowBlankSearchWarning()
     {
-        StatusLabel.Text = "Enter text in Find what.";
+        MessageBox.Show(this, "Enter text in Find what.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         FocusSearchBox();
         return true;
     }

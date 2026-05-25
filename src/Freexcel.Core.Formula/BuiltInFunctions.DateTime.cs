@@ -591,11 +591,17 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        double rawBasis = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
+        var basisArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], args[1], basisArg, YearfracScalar);
+    }
+
+    private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, ScalarValue basisValue)
+    {
+        double rawBasis = basisValue is not BlankValue ? ToNumber(basisValue) : 0;
         if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
         int basis = (int)rawBasis;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => YearfracScalar(startDate, endDate, basis));
+        return YearfracScalar(startDate, endDate, basis);
     }
 
     private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, int basis)
