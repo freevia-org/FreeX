@@ -14,14 +14,16 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("workflow_dispatch:");
         workflow.Should().Contain("permissions:");
         workflow.Should().Contain("contents: write");
-        workflow.Should().Contain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: \"true\"");
+        workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
+        workflow.Should().Contain("actions/checkout@v6");
+        workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("dotnet restore Freexcel.slnx");
         workflow.Should().Contain("dotnet build Freexcel.slnx --configuration Release --no-restore");
         workflow.Should().Contain("dotnet test Freexcel.slnx --configuration Release --no-build");
         workflow.Should().Contain("tools/Publish-UserTestBuild.ps1");
         workflow.Should().Contain("-PublishMode SingleFile");
         workflow.Should().Contain("Freexcel-latest-win-x64.exe");
-        workflow.Should().Contain("actions/upload-artifact@v4");
+        workflow.Should().Contain("actions/upload-artifact@v7");
         workflow.Should().Contain("gh release create");
         workflow.Should().Contain("gh release upload");
         workflow.Should().Contain("v$versionSlug+$shortSha");
