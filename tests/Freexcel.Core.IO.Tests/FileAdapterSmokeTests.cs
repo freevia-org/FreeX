@@ -4467,6 +4467,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedAdvancedWorkbookProtection()
+    {
+        var workbook = new Workbook("AdvancedWorkbookProtectionRemovalTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedWorkbookProtectionMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        loaded.IsStructureProtected = false;
+        loaded.StructureProtectionPassword = null;
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        workbookXml.Root!.Element(workbookNs + "workbookProtection").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesRevisionWorkbookProtectionPassword()
     {
         var workbook = new Workbook("RevisionWorkbookProtectionRetentionTest");
@@ -12404,7 +12434,8 @@ public partial class FileAdapterSmokeTests
                     ["validWorkbookProtectionAttr"] = "keep",
                     ["invalid workbookProtection attr"] = "skip"
                 }
-            }
+            },
+            IsStructureProtected = true
         };
         workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
         {

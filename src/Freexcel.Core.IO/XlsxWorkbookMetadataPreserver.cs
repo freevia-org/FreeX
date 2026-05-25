@@ -76,7 +76,7 @@ internal static class XlsxWorkbookMetadataPreserver
             changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
-        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs))
+        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs, workbook))
             changed = true;
         if (MergeCalculationProperties(sourceCalculationProperties, targetRoot, workbookNs))
             changed = true;
@@ -224,9 +224,18 @@ internal static class XlsxWorkbookMetadataPreserver
         return changed;
     }
 
-    private static bool MergeWorkbookProtection(XElement? sourceWorkbookProtection, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeWorkbookProtection(
+        XElement? sourceWorkbookProtection,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        Workbook workbook)
     {
         if (sourceWorkbookProtection is null)
+            return false;
+
+        if (!workbook.IsStructureProtected &&
+            string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
+            !HasRevisionProtectionMetadata(workbook.ProtectionMetadata))
             return false;
 
         var targetWorkbookProtection = targetRoot.Element(workbookNs + "workbookProtection");
@@ -281,6 +290,10 @@ internal static class XlsxWorkbookMetadataPreserver
 
         return changed;
     }
+
+    private static bool HasRevisionProtectionMetadata(WorkbookProtectionMetadataModel? metadata) =>
+        metadata?.NativeAttributes.ContainsKey("lockRevision") == true ||
+        metadata?.NativeAttributes.ContainsKey("revisionsPassword") == true;
 
     private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)
     {
