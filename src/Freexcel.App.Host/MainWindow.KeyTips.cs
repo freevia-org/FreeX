@@ -56,6 +56,9 @@ public partial class MainWindow
 
         if (_ribbonKeyTipScope == RibbonKeyTipScope.TopLevel)
         {
+            if (HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence))
+                return;
+
             if (TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence))
                 EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
             else if (TryInvokeTopLevelQatKeyTip(_ribbonKeyTipSequence))
@@ -328,6 +331,12 @@ public partial class MainWindow
 
     private bool HasVisibleCommandKeyTipPrefix(string keyTipPrefix) =>
         RibbonKeyTipRouting.HasKeyTipPrefix(GetRoutableKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
+
+    private bool HasVisibleTopLevelKeyTipLongerPrefix(string keyTipPrefix) =>
+        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(
+            keyTipPrefix,
+            GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
+                .Select(RibbonTooltip.GetKeyTip));
 
     private IEnumerable<FrameworkElement> GetRoutableKeyTipElements(RibbonKeyTipScope scope)
     {

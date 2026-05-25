@@ -248,7 +248,12 @@ public partial class MainWindow
         if (sheet is null || pivotTable is null)
             return;
 
-        var dialog = new PivotTableDataSourceDialog(FormatWorkbookRange(pivotTable.SourceRange)) { Owner = this };
+        var dialog = new PivotTableDataSourceDialog(
+            FormatWorkbookRange(pivotTable.SourceRange),
+            sheetId: sheet.Id,
+            resolveSheetId: sheetName => _workbook.Sheets.FirstOrDefault(item =>
+                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id)
+        { Owner = this };
         if (dialog.ShowDialog() != true ||
             string.IsNullOrWhiteSpace(dialog.Result.SourceRangeText) ||
             !TryParseWorkbookRange(sheet.Id, dialog.Result.SourceRangeText, out var sourceRange))
