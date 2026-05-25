@@ -100,6 +100,13 @@ public sealed partial class Sheet
             OutlineSummaryRight           = OutlineSummaryRight,
             ShowOutlineSymbols            = ShowOutlineSymbols,
             ApplyOutlineStyles            = ApplyOutlineStyles,
+            SheetFormatMetadata           = SheetFormatMetadata is null
+                ? null
+                : new WorksheetSheetFormatMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(SheetFormatMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. SheetFormatMetadata.NativeChildXmls]
+                },
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
             ProtectionMetadata            = ProtectionMetadata is null

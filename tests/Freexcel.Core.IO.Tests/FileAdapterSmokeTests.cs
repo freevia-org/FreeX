@@ -2011,6 +2011,19 @@ public partial class FileAdapterSmokeTests
         sheet.FooterMargin = 0.45;
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
+        sheet.SheetFormatMetadata = new WorksheetSheetFormatMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["zeroHeight"] = "1",
+                ["thickTop"] = "1",
+                ["customSheetFormatAttr"] = "kept"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativeSheetFormatChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PrintOptionsMetadata = new WorksheetPrintOptionsMetadataModel
         {
             NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -2077,6 +2090,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.FooterMargin.Should().Be(0.45);
         loadedSheet.PrintGridlines.Should().BeTrue();
         loadedSheet.PrintHeadings.Should().BeTrue();
+        loadedSheet.SheetFormatMetadata.Should().BeEquivalentTo(sheet.SheetFormatMetadata);
         loadedSheet.PrintOptionsMetadata.Should().BeEquivalentTo(sheet.PrintOptionsMetadata);
         loadedSheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
@@ -13034,7 +13048,14 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SheetFormatMetadata.Should().NotBeNull();
+        loadedSheet.SheetFormatMetadata!.NativeAttributes.Should().Contain("baseColWidth", "12");
+        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("zeroHeight", "1");
+        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("thickTop", "1");
+        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("outlineLevelRow", "3");
+        loadedSheet.SheetFormatMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativeSheetFormatChild", StringComparison.Ordinal));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);

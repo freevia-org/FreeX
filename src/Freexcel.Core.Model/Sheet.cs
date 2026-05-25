@@ -41,6 +41,12 @@ public sealed class WorksheetPrintOptionsMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetSheetFormatMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -153,6 +159,9 @@ public sealed partial class Sheet
 
     /// <summary>Default row height in pixels.</summary>
     public double DefaultRowHeight { get; set; } = 20.0;
+
+    /// <summary>Native Excel sheetFormatPr metadata not yet modeled as editable fields.</summary>
+    public WorksheetSheetFormatMetadataModel? SheetFormatMetadata { get; set; }
 
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public uint FrozenRows { get; set; } = 0;
