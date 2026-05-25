@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Freexcel.Core.Model;
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -16,6 +18,28 @@ public sealed class ScenarioManagerDialogTests
         var items = ScenarioManagerDialog.BuildScenarioItems(workbook);
 
         items.Select(item => item.Name).Should().Equal("Best Case", "Worst Case");
+    }
+
+    [Fact]
+    public void BuildScenarioItems_IncludesChangingCellsAndCommentForEditing()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var first = new CellAddress(sheet.Id, 2, 2);
+        var second = new CellAddress(sheet.Id, 4, 3);
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [
+                new ScenarioCellValue(first, new NumberValue(10)),
+                new ScenarioCellValue(second, new NumberValue(20))
+            ],
+            "Revenue lift"));
+
+        var item = ScenarioManagerDialog.BuildScenarioItems(workbook).Single();
+
+        item.Name.Should().Be("Best Case");
+        item.ChangingCellsText.Should().Be("B2:C4");
+        item.Comment.Should().Be("Revenue lift");
     }
 
     [Theory]
@@ -141,6 +165,37 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("Comment:");
         source.Should().Contain("Add/Edit Scenario");
         source.Should().Contain("_newNameBox.Text = selected.Name");
+        source.Should().Contain("_changingCellsBox.Text = selected.ChangingCellsText");
+        source.Should().Contain("_commentBox.Text = selected.Comment ?? \"\"");
+    }
+
+    [Fact]
+    public void SelectingScenario_PopulatesEditFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("test");
+            var sheet = workbook.AddSheet("Sheet1");
+            workbook.Scenarios.Add(new WorkbookScenario(
+                "Best Case",
+                [
+                    new ScenarioCellValue(new CellAddress(sheet.Id, 2, 2), new NumberValue(10)),
+                    new ScenarioCellValue(new CellAddress(sheet.Id, 3, 4), new NumberValue(20))
+                ],
+                "Use growth plan"));
+
+            var dialog = new ScenarioManagerDialog(workbook, sheet.Id, name => name == sheet.Name ? sheet.Id : null);
+            try
+            {
+                GetField<TextBox>(dialog, "_newNameBox").Text.Should().Be("Best Case");
+                GetField<TextBox>(dialog, "_changingCellsBox").Text.Should().Be("B2:D3");
+                GetField<TextBox>(dialog, "_commentBox").Text.Should().Be("Use growth plan");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -173,5 +228,13 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_scenarioList.Items.Count > 0 ? _scenarioList : _newNameBox");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    private static T GetField<T>(ScenarioManagerDialog dialog, string fieldName)
+        where T : class
+    {
+        var field = typeof(ScenarioManagerDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 }
