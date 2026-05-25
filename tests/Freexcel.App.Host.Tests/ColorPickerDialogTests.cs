@@ -297,6 +297,40 @@ public sealed class ColorPickerDialogTests
     }
 
     [Fact]
+    public void LuminositySlider_UsesInitialColorAsCustomBase()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x40, 0x80, 0xC0);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var slider = (Slider)dialog.FindName("CustomLuminositySlider");
+                var red = (TextBox)dialog.FindName("CustomRedTextBox");
+                var green = (TextBox)dialog.FindName("CustomGreenTextBox");
+                var blue = (TextBox)dialog.FindName("CustomBlueTextBox");
+                var hex = (TextBox)dialog.FindName("CustomColorTextBox");
+                var currentForegroundPreview = (TextBlock)dialog.FindName("CurrentForegroundPreview");
+                var newForegroundPreview = (TextBlock)dialog.FindName("NewForegroundPreview");
+
+                slider.Value = 50;
+
+                dialog.SelectedColor.Should().Be(new CellColor(0x20, 0x40, 0x60));
+                red.Text.Should().Be("32");
+                green.Text.Should().Be("64");
+                blue.Text.Should().Be("96");
+                hex.Text.Should().Be("#204060");
+                GetForegroundPreviewColor(currentForegroundPreview).Should().Be(initialColor);
+                GetForegroundPreviewColor(newForegroundPreview).Should().Be(new CellColor(0x20, 0x40, 0x60));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void Preview_ShowsColorAsForegroundAndBackgroundWithReadableFillText()
     {
         StaTestRunner.Run(() =>
