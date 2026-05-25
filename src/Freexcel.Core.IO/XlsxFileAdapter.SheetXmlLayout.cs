@@ -33,6 +33,7 @@ public sealed partial class XlsxFileAdapter
         uint? ViewLeftCol,
         uint? ActiveRow,
         uint? ActiveCol,
+        WorksheetPrintOptionsMetadataModel? PrintOptionsMetadata,
         WorksheetAutoFilterModel? AutoFilter,
         bool? UsePrinterDefaults,
         int? PrintCopies,
@@ -271,6 +272,7 @@ public sealed partial class XlsxFileAdapter
             .Element(worksheetNs + "sheetPr")?
             .Element(worksheetNs + "outlinePr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
+        var printOptions = worksheetXml.Root?.Element(worksheetNs + "printOptions");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
@@ -328,6 +330,7 @@ public sealed partial class XlsxFileAdapter
             viewTopLeft?.Col,
             activeCell?.Row,
             activeCell?.Col,
+            ReadWorksheetPrintOptionsMetadata(printOptions),
             ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter")),
             ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
@@ -369,6 +372,34 @@ public sealed partial class XlsxFileAdapter
             explicitStyleOnlyCells,
             codeName);
     }
+
+    private static WorksheetPrintOptionsMetadataModel? ReadWorksheetPrintOptionsMetadata(XElement? printOptions)
+    {
+        if (printOptions is null)
+            return null;
+
+        var model = new WorksheetPrintOptionsMetadataModel
+        {
+            NativeChildXmls = printOptions.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in printOptions.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledPrintOptionsAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledPrintOptionsAttribute(string name) =>
+        name is "gridLines" or "headings" or "horizontalCentered" or "verticalCentered";
 
     private static WorksheetPageSetupMetadataModel? ReadWorksheetPageSetupMetadata(XElement? pageSetup)
     {
