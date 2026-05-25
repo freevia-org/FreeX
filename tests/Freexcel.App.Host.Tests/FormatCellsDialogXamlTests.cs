@@ -218,7 +218,7 @@ public sealed class FormatCellsDialogXamlTests
                 });
 
                 FormatCellsDialog.ResolveNumberFormat("Accounting ($#,##0.00)", 3)
-                    .Should().Be("$#,##0.00");
+                    .Should().Be("_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)");
                 FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
                     .Should().Be("# ?/?");
                 FormatCellsDialog.ResolveNumberFormat("Long date ([$-F800])", 0)
@@ -662,6 +662,73 @@ public sealed class FormatCellsDialogXamlTests
         source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidFontSizeWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive font size.\", DlgFontSizeBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, ComboBox target)");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidIndentWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter an indent level from 0 to 15.\", DlgIndentLevelBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidDecimalPlacesWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!ValidateNumberInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter decimal places from 0 to 30.\", NumberDecimalPlacesBox);");
+        source.Should().Contain("FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid custom number format.\", NumberFormatCombo);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidFontColorWithOwnedWarning()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a font color as #RRGGBB or R, G, B.\", DlgFontColorBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidFillColorsWithOwnedWarnings()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a fill color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillColorBox);");
+        source.Should().Contain("if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillPatternColorBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidBorderColorsWithOwnedWarnings()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!ValidateBorderInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a border color as #RRGGBB or R, G, B.\", DlgBorderLineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a top border color as #RRGGBB or R, G, B.\", DlgBorderTopColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a right border color as #RRGGBB or R, G, B.\", DlgBorderRightColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a bottom border color as #RRGGBB or R, G, B.\", DlgBorderBottomColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a left border color as #RRGGBB or R, G, B.\", DlgBorderLeftColorBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;");
     }
 
     [Fact]

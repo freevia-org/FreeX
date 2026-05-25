@@ -102,6 +102,22 @@ public partial class FormatCellsDialog
             : null;
     }
 
+    private static bool TryParseRequiredColor(string text, out CellColor color) =>
+        ColorInputParser.TryParseRgbColorText(text, out color);
+
+    private static bool TryParseOptionalColor(string text, out CellColor? color)
+    {
+        color = null;
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!ColorInputParser.TryParseRgbColorText(text, out var parsed))
+            return false;
+
+        color = parsed;
+        return true;
+    }
+
     private static Brush BrushForColor(CellColor? color, Brush fallback)
         => color is { } rgb
             ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))

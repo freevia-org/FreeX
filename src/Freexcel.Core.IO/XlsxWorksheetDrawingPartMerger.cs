@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace Freexcel.Core.IO;
@@ -110,8 +111,13 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (worksheetEntry is null)
                 return null;
 
-            worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var streamedDrawingRelId = ReadWorksheetDrawingRelId(worksheetEntry, worksheetNs, relNs);
+            if (string.IsNullOrWhiteSpace(streamedDrawingRelId))
+                return null;
+
+            return ResolveWorksheetDrawingPath(archive, worksheetPath, packageRelNs, streamedDrawingRelId);
         }
+
         var drawingRelId = worksheetXml.Root?
             .Element(worksheetNs + "drawing")?
             .Attribute(relNs + "id")?
@@ -119,6 +125,15 @@ internal static class XlsxWorksheetDrawingPartMerger
         if (string.IsNullOrWhiteSpace(drawingRelId))
             return null;
 
+        return ResolveWorksheetDrawingPath(archive, worksheetPath, packageRelNs, drawingRelId);
+    }
+
+    private static string? ResolveWorksheetDrawingPath(
+        ZipArchive archive,
+        string worksheetPath,
+        XNamespace packageRelNs,
+        string drawingRelId)
+    {
         var worksheetRels = XlsxRelationshipReader.LoadTargets(
             archive,
             XlsxPackagePath.GetRelationshipPartPath(worksheetPath),
@@ -127,6 +142,35 @@ internal static class XlsxWorksheetDrawingPartMerger
         return worksheetRels.TryGetValue(drawingRelId, out var drawingPath)
             ? drawingPath
             : null;
+    }
+
+    private static string? ReadWorksheetDrawingRelId(
+        ZipArchiveEntry worksheetEntry,
+        XNamespace worksheetNs,
+        XNamespace relNs)
+    {
+        using var stream = worksheetEntry.Open();
+        using var reader = XmlReader.Create(stream, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true,
+            IgnoreWhitespace = true
+        });
+
+        while (reader.Read())
+        {
+            if (reader.NodeType != XmlNodeType.Element ||
+                !string.Equals(reader.LocalName, "drawing", StringComparison.Ordinal) ||
+                !string.Equals(reader.NamespaceURI, worksheetNs.NamespaceName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return reader.GetAttribute("id", relNs.NamespaceName);
+        }
+
+        return null;
     }
 
     private static void MergeDrawingPart(

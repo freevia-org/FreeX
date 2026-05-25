@@ -426,6 +426,21 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesRange()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+        var chartCommandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+
+        dialogSource.Should().Contain("if (!ValidateInputs())");
+        dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _)");
+        dialogSource.Should().Contain("ShowInvalidInputWarning(\"Enter a valid chart data range.\", _rangeBox);");
+        dialogSource.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
+        chartCommandSource.Should().Contain("sheetId: _currentSheetId");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_InferPreviewEntriesFromChartRange()
     {
         var preview = SelectDataSourceDialog.InferPreviewEntries("Sheet1!$A$1:$C$5", firstColumnIsCategories: true);
@@ -609,7 +624,13 @@ public sealed class ChartDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartFormatDialogs.cs"));
 
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _chartAreaFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _plotAreaFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _plotAreaBorderBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a plot area border width from 0 to 10 points.\", _plotAreaBorderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendTextBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendBorderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend border width from 0 to 10 points.\", _legendBorderThicknessBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend font size from 6 to 72 points.\", _legendFontSizeBox);");
         source.Should().Contain("MessageBox.Show(");
         source.Should().Contain("this,");
@@ -667,6 +688,25 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataLabelsDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDataLabelsDialog.cs"));
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _fillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _borderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _textBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label border width from 0 to 10 points.\", _borderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label font size from 6 to 72 points.\", _fontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label angle from -90 to 90 degrees.\", _angleBox);");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void ChartTrendlineOptionsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartTrendlineOptionsDialog.CreateResult(
@@ -701,6 +741,23 @@ public sealed class ChartDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_showBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
+    public void ChartTrendlineOptionsDialogInvalidInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartTrendlineOptionsDialog.cs"));
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a moving average period from 2 to 255.\", _periodBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a polynomial order from 2 to 6.\", _orderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _colorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a trendline width from 0.5 to 10 points.\", _thicknessBox);");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -752,6 +809,20 @@ public sealed class ChartDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_showBox.Focus();");
         source.Should().Contain("Keyboard.Focus(_showBox);");
+    }
+
+    [Fact]
+    public void ChartErrorBarsDialogInvalidValue_ShowsOwnedWarningAndRefocusesValueBox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartErrorBarsDialog.cs"));
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter an error amount from 0 to 1000.\", _valueBox);");
+        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("this,");
+        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
@@ -819,8 +890,17 @@ public sealed class ChartDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartAxisFormatDialog.cs"));
 
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a numeric minimum value or leave it blank.\", _minimumBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a numeric maximum value or leave it blank.\", _maximumBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive major unit or leave it blank.\", _majorUnitBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive minor unit or leave it blank.\", _minorUnitBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _majorGridColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _minorGridColorBox);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive gridline width.\", _gridlineThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _labelColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a label font size from 6 to 72 points.\", _labelFontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a label angle from -90 to 90 degrees.\", _labelAngleBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _lineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter an axis line width from 0.5 to 10 points.\", _lineThicknessBox);");
         source.Should().Contain("MessageBox.Show(");
         source.Should().Contain("this,");
         source.Should().Contain("MessageBoxImage.Warning");

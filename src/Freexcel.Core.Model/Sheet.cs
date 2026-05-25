@@ -23,6 +23,89 @@ public sealed record HyperlinkMetadata(
 
 public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
 
+public sealed class WorksheetSmartTagsModel
+{
+    public string? NativeXml { get; set; }
+    public List<WorksheetCellSmartTagsModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagsModel
+{
+    public string? Reference { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetCellSmartTagModel> Tags { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagModel
+{
+    public string? Type { get; set; }
+    public bool? Deleted { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetCellSmartTagPropertyModel> Properties { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagPropertyModel
+{
+    public string? Key { get; set; }
+    public string? Value { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetDataConsolidationModel
+{
+    public string? Function { get; set; }
+    public bool? LeftLabels { get; set; }
+    public bool? TopLabels { get; set; }
+    public bool? Link { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetDataConsolidationReferenceModel> References { get; set; } = [];
+}
+
+public sealed class WorksheetDataConsolidationReferenceModel
+{
+    public string? Reference { get; set; }
+    public string? Sheet { get; set; }
+    public string? Name { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetSortStateModel
+{
+    public string? Reference { get; set; }
+    public bool? ColumnSort { get; set; }
+    public bool? CaseSensitive { get; set; }
+    public string? SortMethod { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSortConditionModel> Conditions { get; set; } = [];
+}
+
+public sealed class WorksheetSortConditionModel
+{
+    public string? Reference { get; set; }
+    public bool? Descending { get; set; }
+    public string? SortBy { get; set; }
+    public string? CustomList { get; set; }
+    public string? DxfId { get; set; }
+    public string? IconSet { get; set; }
+    public string? IconId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorksheetAdditionalViewModel
+{
+    public string? WorkbookViewId { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -82,6 +165,18 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet-level Excel AutoFilter metadata loaded from XLSX.</summary>
     public WorksheetAutoFilterModel? AutoFilter { get; set; }
+
+    /// <summary>Worksheet-level Excel smart-tag metadata loaded from XLSX.</summary>
+    public WorksheetSmartTagsModel? SmartTags { get; set; }
+
+    /// <summary>Worksheet-level Excel data-consolidation metadata loaded from XLSX.</summary>
+    public WorksheetDataConsolidationModel? DataConsolidation { get; set; }
+
+    /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
+    public WorksheetSortStateModel? SortState { get; set; }
+
+    /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
+    public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;

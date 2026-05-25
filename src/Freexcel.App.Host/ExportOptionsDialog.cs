@@ -112,7 +112,7 @@ internal sealed class ExportOptionsDialog : Window
                 !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error))
             {
                 MessageBox.Show(this, error, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
-                FocusInvalidPageRangeInput();
+                FocusInvalidPageRangeInput(error);
                 return;
             }
 
@@ -157,13 +157,28 @@ internal sealed class ExportOptionsDialog : Window
         _toPageBox.IsEnabled = enabled;
     }
 
-    private void FocusInvalidPageRangeInput()
+    private void FocusInvalidPageRangeInput(string? error)
     {
         _pagesRangeButton.IsChecked = true;
         SetPageRangeFieldsEnabled(true);
-        _fromPageBox.Focus();
-        _fromPageBox.SelectAll();
-        Keyboard.Focus(_fromPageBox);
+        var target = ResolveInvalidPageRangeInput(error);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private TextBox ResolveInvalidPageRangeInput(string? error)
+    {
+        if (string.Equals(error, "From page must be less than or equal to To page.", StringComparison.Ordinal))
+            return _toPageBox;
+
+        if (int.TryParse(_fromPageBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var fromPage)
+            && fromPage >= 1)
+        {
+            return _toPageBox;
+        }
+
+        return _fromPageBox;
     }
 
     public static ExportOptions CreateResult(

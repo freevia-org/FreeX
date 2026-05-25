@@ -201,15 +201,42 @@ public partial class FormatCellsDialog : Window
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        CellColor? fontColor = TryParseColor(DlgFontColorBox.Text);
-        CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
-        CellColor? fillPatternColor = TryParseColor(DlgFillPatternColorBox.Text);
+        if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
+            ShowInvalidInputWarning("Enter a font color as #RRGGBB or R, G, B.", DlgFontColorBox);
+            return;
+        }
+
+        if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
+            ShowInvalidInputWarning("Enter a fill color as #RRGGBB or R, G, B, or leave it blank.", DlgFillColorBox);
+            return;
+        }
+
+        if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
+            ShowInvalidInputWarning("Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.", DlgFillPatternColorBox);
+            return;
+        }
+
         var fillPatternStyle = SelectedFillPatternStyle();
         bool clearFill = DlgClearFillCheck.IsChecked == true;
+
+        if (!ValidateNumberInputs())
+            return;
 
         string? numFmt = ResolveSelectedNumberFormat();
 
         double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);
+        if (fontSize is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
+            ShowInvalidInputWarning("Enter a positive font size.", DlgFontSizeBox);
+            return;
+        }
 
         CellHAlign? hAlign = null;
         if (DlgHAlignBox.SelectedItem is string ha && Enum.TryParse(ha, out CellHAlign h)) hAlign = h;
@@ -217,6 +244,12 @@ public partial class FormatCellsDialog : Window
         if (DlgVAlignBox.SelectedItem is string va && Enum.TryParse(va, out CellVAlign v)) vAlign = v;
 
         int? indentLevel = FormatCellsInputParser.TryParseIndentLevel(DlgIndentLevelBox.Text);
+        if (indentLevel is null)
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
+            ShowInvalidInputWarning("Enter an indent level from 0 to 15.", DlgIndentLevelBox);
+            return;
+        }
 
         int? textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(DlgTextRotationBox.Text);
         if (textRotation is null)
@@ -225,6 +258,9 @@ public partial class FormatCellsDialog : Window
             ShowInvalidInputWarning("Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.", DlgTextRotationBox);
             return;
         }
+
+        if (!ValidateBorderInputs())
+            return;
 
         CellBorder borderTop = ParseBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, _current.BorderTop);
         CellBorder borderRight = ParseBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, _current.BorderRight);
@@ -278,6 +314,19 @@ public partial class FormatCellsDialog : Window
             MessageBoxImage.Warning);
         target.Focus();
         target.SelectAll();
+        Keyboard.Focus(target);
+        return true;
+    }
+
+    private bool ShowInvalidInputWarning(string message, ComboBox target)
+    {
+        MessageBox.Show(
+            this,
+            message,
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        target.Focus();
         Keyboard.Focus(target);
         return true;
     }

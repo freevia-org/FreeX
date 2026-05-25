@@ -1230,7 +1230,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Pictures" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Picture"
+                                        local:RibbonTooltip.Title="Pictures"
                                         local:RibbonTooltip.KeyTip="IP"
                                         local:RibbonTooltip.Description="Insert a picture from a local image file."/>
                                 <Button Content="Shapes" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
@@ -3084,8 +3084,8 @@
                                         local:RibbonTooltip.Title="Contact Support"
                                         local:RibbonTooltip.KeyTip="CS"
                                         local:RibbonTooltip.Description="Contact support for Freexcel. In-app support is not yet implemented."/>
-                                <Button Content="Report Issue"  Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                        local:RibbonTooltip.Title="Report Issue"
+                                <Button Content="Feedback"  Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                        local:RibbonTooltip.Title="Feedback"
                                         local:RibbonTooltip.KeyTip="FE"
                                         local:RibbonTooltip.Description="Open a prefilled GitHub issue with safe app diagnostics."/>
                                 <Button Content="Copy Diagnostics" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
@@ -3226,7 +3226,8 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0" LastChildFill="True">
-                        <Button Content="X"
+                        <Button x:Name="PivotFieldListCloseBtn"
+                                Content="X"
                                 Width="22"
                                 Height="22"
                                 DockPanel.Dock="Right"

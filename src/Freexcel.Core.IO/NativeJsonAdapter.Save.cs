@@ -26,6 +26,7 @@ public sealed partial class NativeJsonAdapter
                 .OfType<WorkbookFileRecoveryPropertiesDto>()
                 .ToList(),
             FunctionGroups = FromWorkbookFunctionGroups(workbook.FunctionGroups),
+            SmartTags = FromWorkbookSmartTags(workbook.SmartTags),
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = NativeJsonValueSanitizer.ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
@@ -150,6 +151,10 @@ public sealed partial class NativeJsonAdapter
                     ? null
                     : NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.SplitColumn),
                 AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter),
+                SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
+                DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
+                SortState = ToWorksheetSortStateDto(s.SortState),
+                AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
@@ -370,6 +375,58 @@ public sealed partial class NativeJsonAdapter
         return new WorkbookFunctionGroupDto
         {
             Name = name,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorkbookSmartTagMetadataDto? FromWorkbookSmartTags(WorkbookSmartTagMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var propertiesNativeAttributes = CleanNativeAttributesForSave(model.PropertiesNativeAttributes);
+        var typesNativeAttributes = CleanNativeAttributesForSave(model.TypesNativeAttributes);
+        var show = string.IsNullOrWhiteSpace(model.Show) ? null : model.Show;
+        var types = model.Types
+            .Select(FromWorkbookSmartTagType)
+            .OfType<WorkbookSmartTagTypeDto>()
+            .ToList();
+        if (model.Embed is null &&
+            show is null &&
+            propertiesNativeAttributes.Count == 0 &&
+            typesNativeAttributes.Count == 0 &&
+            types.Count == 0)
+        {
+            return null;
+        }
+
+        return new WorkbookSmartTagMetadataDto
+        {
+            Embed = model.Embed,
+            Show = show,
+            PropertiesNativeAttributes = propertiesNativeAttributes,
+            TypesNativeAttributes = typesNativeAttributes,
+            Types = types
+        };
+    }
+
+    private static WorkbookSmartTagTypeDto? FromWorkbookSmartTagType(WorkbookSmartTagTypeModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var namespaceUri = string.IsNullOrWhiteSpace(model.NamespaceUri) ? null : model.NamespaceUri;
+        var name = string.IsNullOrWhiteSpace(model.Name) ? null : model.Name;
+        var url = string.IsNullOrWhiteSpace(model.Url) ? null : model.Url;
+        if (namespaceUri is null && name is null && url is null && nativeAttributes.Count == 0)
+            return null;
+
+        return new WorkbookSmartTagTypeDto
+        {
+            NamespaceUri = namespaceUri,
+            Name = name,
+            Url = url,
             NativeAttributes = nativeAttributes
         };
     }

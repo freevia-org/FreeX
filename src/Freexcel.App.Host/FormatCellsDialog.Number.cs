@@ -22,7 +22,7 @@ public partial class FormatCellsDialog
         new("Currency", "$#,##0.00", "$#,##0.00", "$1,234.56"),
         new("Currency", "$#,##0;[Red]($#,##0)", "$#,##0;[Red]($#,##0)", "$1,235"),
         new("Currency", "$#,##0.00;[Red]($#,##0.00)", "$#,##0.00;[Red]($#,##0.00)", "$1,234.56"),
-        new("Accounting", "Accounting ($#,##0.00)", "$#,##0.00", "$1,234.56"),
+        new("Accounting", "Accounting ($#,##0.00)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "$  1,234.56"),
         new("Accounting", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)", "$  1,235"),
         new("Accounting", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "$  1,234.56"),
         new("Date", "Date (m/d/yyyy)", "m/d/yyyy", "5/21/2026"),
@@ -346,6 +346,30 @@ public partial class FormatCellsDialog
 
         return Math.Clamp(decimals, 0, 30);
     }
+
+    private bool ValidateNumberInputs()
+    {
+        if (NumberDecimalPlacesBox.IsEnabled
+            && (!int.TryParse(NumberDecimalPlacesBox.Text.Trim(), out var decimals) || decimals is < 0 or > 30))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
+            ShowInvalidInputWarning("Enter decimal places from 0 to 30.", NumberDecimalPlacesBox);
+            return false;
+        }
+
+        if (!IsGeneratedNumberFormatCategory(NumberCategoryList.SelectedItem as string)
+            && !FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
+            ShowInvalidInputWarning("Enter a valid custom number format.", NumberFormatCombo);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsGeneratedNumberFormatCategory(string? category) =>
+        category is "Number" or "Currency" or "Accounting" or "Percentage" or "Scientific";
 
     private string SelectedCurrencySymbol()
     {

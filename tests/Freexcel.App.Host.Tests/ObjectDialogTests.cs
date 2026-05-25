@@ -139,7 +139,7 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesHeightInput()
+    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesInvalidSizeInput()
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
@@ -147,7 +147,11 @@ public sealed class ObjectDialogTests
         source.Should().Contain("this,");
         source.Should().Contain("Enter positive width and height values.");
         source.Should().Contain("MessageBoxImage.Warning");
-        source.Should().Contain("FocusInvalidSizeInput(_heightBox);");
+        source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
+        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("private static bool TryParsePositiveSize(string text)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
     }
 
@@ -313,7 +317,7 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void PictureCropDialogInvalidCrop_ShowsOwnedWarningAndRefocusesLeftInput()
+    public void PictureCropDialogInvalidCrop_ShowsOwnedWarningAndRefocusesInvalidCropInput()
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
 
@@ -321,7 +325,12 @@ public sealed class ObjectDialogTests
         source.Should().Contain("this,");
         source.Should().Contain("error ?? \"Enter four crop percentages.\"");
         source.Should().Contain("MessageBoxImage.Warning");
-        source.Should().Contain("FocusInvalidCropInput(_cropLeftBox);");
+        source.Should().Contain("FocusInvalidCropInput(ResolveInvalidCropInput(error));");
+        source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
+        source.Should().Contain("return _cropLeftBox;");
+        source.Should().Contain("return _cropTopBox;");
+        source.Should().Contain("return _cropRightBox;");
+        source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("private static void FocusInvalidCropInput(TextBox textBox)");
     }
 
@@ -412,7 +421,16 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
         source.Should().Contain("_tabs.SelectedItem = _cropTab;");
         source.Should().Contain("FocusAndSelect(_rotationBox);");
-        source.Should().Contain("FocusAndSelect(_cropLeftBox);");
+        source.Should().Contain("FocusAndSelect(ResolveInvalidSizeInput());");
+        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("FocusAndSelect(ResolveInvalidCropInput(error));");
+        source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
+        source.Should().Contain("return _cropLeftBox;");
+        source.Should().Contain("return _cropTopBox;");
+        source.Should().Contain("return _cropRightBox;");
+        source.Should().Contain("return _cropBottomBox;");
         source.Should().Contain("Keyboard.Focus(box);");
     }
 

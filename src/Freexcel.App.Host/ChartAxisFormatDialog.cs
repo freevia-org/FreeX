@@ -229,9 +229,33 @@ public sealed class ChartAxisFormatDialog : Window
             return;
         }
 
+        if (!TryReadNullableDouble(_maximumBox, out var maximum))
+        {
+            ShowInvalidInputWarning("Enter a numeric maximum value or leave it blank.", _maximumBox);
+            return;
+        }
+
+        if (!TryReadNullablePositiveDouble(_majorUnitBox, out var majorUnit))
+        {
+            ShowInvalidInputWarning("Enter a positive major unit or leave it blank.", _majorUnitBox);
+            return;
+        }
+
+        if (!TryReadNullablePositiveDouble(_minorUnitBox, out var minorUnit))
+        {
+            ShowInvalidInputWarning("Enter a positive minor unit or leave it blank.", _minorUnitBox);
+            return;
+        }
+
         if (!TryReadOptionalColor(_majorGridColorBox, out var majorGridColor))
         {
             ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _majorGridColorBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_minorGridColorBox, out var minorGridColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _minorGridColorBox);
             return;
         }
 
@@ -241,27 +265,57 @@ public sealed class ChartAxisFormatDialog : Window
             return;
         }
 
+        if (!TryReadOptionalColor(_labelColorBox, out var labelColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _labelColorBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_labelFontSizeBox, min: 6, max: 72, out var labelFontSize))
+        {
+            ShowInvalidInputWarning("Enter a label font size from 6 to 72 points.", _labelFontSizeBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_labelAngleBox, min: -90, max: 90, out var labelAngle))
+        {
+            ShowInvalidInputWarning("Enter a label angle from -90 to 90 degrees.", _labelAngleBox);
+            return;
+        }
+
+        if (!TryReadOptionalColor(_lineColorBox, out var lineColor))
+        {
+            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _lineColorBox);
+            return;
+        }
+
+        if (!TryReadClampedDouble(_lineThicknessBox, min: 0.5, max: 10, out var lineThickness))
+        {
+            ShowInvalidInputWarning("Enter an axis line width from 0.5 to 10 points.", _lineThicknessBox);
+            return;
+        }
+
         Result = CreateResult(
             _useXAxis,
             minimum,
-            ChartDialogHelpers.ParseNullableDouble(_maximumBox.Text),
-            ChartDialogHelpers.ParseNullableDouble(_majorUnitBox.Text),
-            ChartDialogHelpers.ParseNullableDouble(_minorUnitBox.Text),
+            maximum,
+            majorUnit,
+            minorUnit,
             _logBox.IsChecked == true,
             ChartDialogHelpers.Selected(_numberFormatBox, ChartDataLabelNumberFormat.General),
             _majorGridBox.IsChecked == true,
             _minorGridBox.IsChecked == true,
             majorGridColor,
-            ChartDialogHelpers.ParseColor(_minorGridColorBox.Text),
+            minorGridColor,
             gridlineThickness,
             ChartDialogHelpers.Selected(_majorTickBox, ChartAxisTickStyle.Outside),
             ChartDialogHelpers.Selected(_minorTickBox, ChartAxisTickStyle.None),
             _labelsBox.IsChecked == true,
-            ChartDialogHelpers.ParseColor(_labelColorBox.Text),
-            ChartDialogHelpers.ParseDouble(_labelFontSizeBox.Text, 11),
-            ChartDialogHelpers.ParseDouble(_labelAngleBox.Text, 0),
-            ChartDialogHelpers.ParseColor(_lineColorBox.Text),
-            ChartDialogHelpers.ParseDouble(_lineThicknessBox.Text, 1));
+            labelColor,
+            labelFontSize,
+            labelAngle,
+            lineColor,
+            lineThickness);
         DialogResult = true;
     }
 
@@ -285,6 +339,14 @@ public sealed class ChartAxisFormatDialog : Window
     private static bool TryReadOptionalColor(TextBox textBox, out CellColor? color) =>
         ColorInputParser.TryParseOptionalHexColor(textBox.Text, out color);
 
+    private static bool TryReadNullablePositiveDouble(TextBox textBox, out double? value)
+    {
+        if (!TryReadNullableDouble(textBox, out value))
+            return false;
+
+        return value is null or > 0;
+    }
+
     private static bool TryReadPositiveDouble(TextBox textBox, out double value)
     {
         value = 0;
@@ -295,6 +357,19 @@ public sealed class ChartAxisFormatDialog : Window
                 out value)
             && double.IsFinite(value)
             && value > 0;
+    }
+
+    private static bool TryReadClampedDouble(TextBox textBox, double min, double max, out double value)
+    {
+        value = 0;
+        return double.TryParse(
+                textBox.Text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value)
+            && double.IsFinite(value)
+            && value >= min
+            && value <= max;
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

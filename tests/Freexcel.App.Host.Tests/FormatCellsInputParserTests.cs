@@ -58,4 +58,25 @@ public sealed class FormatCellsInputParserTests
     {
         FormatCellsInputParser.TryParseSupportedTextRotation(input).Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("General")]
+    [InlineData("#,##0.00")]
+    [InlineData("[Red]#,##0.00;[Blue](#,##0.00);\"-\";@")]
+    [InlineData("[$-F800]")]
+    [InlineData("_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)")]
+    public void IsSupportedCustomNumberFormat_AcceptsExcelLikeFormats(string input)
+    {
+        FormatCellsInputParser.IsSupportedCustomNumberFormat(input).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("[Red#,##0.00")]
+    [InlineData("#,##0.00\" total")]
+    [InlineData("0;0;0;@;extra")]
+    public void IsSupportedCustomNumberFormat_RejectsMalformedFormats(string input)
+    {
+        FormatCellsInputParser.IsSupportedCustomNumberFormat(input).Should().BeFalse();
+    }
 }

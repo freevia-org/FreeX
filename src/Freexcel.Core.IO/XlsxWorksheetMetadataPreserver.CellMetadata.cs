@@ -325,15 +325,8 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (string.IsNullOrWhiteSpace(address))
                 continue;
 
-            var hasCellMetadata = HasPreservableCellNativeMetadata(sourceCell, workbookNs);
-            var sourceFormula = sourceCell.Element(workbookNs + "f");
-            var hasFormulaMetadata = sourceFormula?.HasAttributes == true;
-            var sourceInlineString = string.Equals(sourceCell.Attribute("t")?.Value, "inlineStr", StringComparison.OrdinalIgnoreCase)
-                ? sourceCell.Element(workbookNs + "is")
-                : null;
-            var hasInlineStringMetadata = sourceInlineString is not null &&
-                                          HasRichInlineStringMetadata(sourceInlineString, workbookNs);
-            if (!hasCellMetadata && !hasFormulaMetadata && !hasInlineStringMetadata)
+            var nativeMetadata = GetSourceCellNativeMetadata(sourceCell, workbookNs);
+            if (!nativeMetadata.HasAny)
                 continue;
 
             targetCellsByAddress ??= getTargetCellsByAddress();
@@ -343,7 +336,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (!targetCellsByAddress.TryGetValue(address, out var targetCell))
                 continue;
 
-            if (hasCellMetadata)
+            if (nativeMetadata.HasCellMetadata)
             {
                 foreach (var attribute in sourceCell.Attributes())
                 {
@@ -370,34 +363,34 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 }
             }
 
-            if (hasInlineStringMetadata && targetCell.Element(workbookNs + "f") is null)
+            if (nativeMetadata.InlineString is not null && targetCell.Element(workbookNs + "f") is null)
             {
                 targetSharedStrings ??= LoadSharedStringPlainText(targetArchive, workbookNs);
-                var sourcePlainText = ReadInlineStringPlainText(sourceInlineString!, workbookNs);
+                var sourcePlainText = ReadInlineStringPlainText(nativeMetadata.InlineString, workbookNs);
                 if (!string.IsNullOrEmpty(sourcePlainText) &&
                     string.Equals(sourcePlainText, ReadCellPlainText(targetCell, targetSharedStrings, workbookNs), StringComparison.Ordinal))
                 {
                     targetCell.SetAttributeValue("t", "inlineStr");
                     targetCell.Elements(workbookNs + "v").Remove();
                     targetCell.Elements(workbookNs + "is").Remove();
-                    targetCell.Add(new XElement(sourceInlineString!));
+                    targetCell.Add(new XElement(nativeMetadata.InlineString));
                     changed = true;
                 }
             }
 
-            if (hasFormulaMetadata)
+            if (nativeMetadata.Formula is not null)
             {
                 var targetFormula = targetCell.Element(workbookNs + "f");
                 if (targetFormula is null ||
                     !string.Equals(
-                        NormalizeFormulaXmlText(sourceFormula!.Value),
+                        NormalizeFormulaXmlText(nativeMetadata.Formula.Value),
                         NormalizeFormulaXmlText(targetFormula.Value),
                         StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                foreach (var attribute in sourceFormula!.Attributes())
+                foreach (var attribute in nativeMetadata.Formula.Attributes())
                 {
                     if (attribute.IsNamespaceDeclaration)
                         continue;
@@ -412,6 +405,58 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return changed;
+    }
+
+    private static SourceCellNativeMetadata GetSourceCellNativeMetadata(XElement sourceCell, XNamespace workbookNs)
+    {
+        var hasCellMetadata = false;
+        XElement? sourceFormula = null;
+        XElement? sourceInlineString = null;
+        foreach (var attribute in sourceCell.Attributes())
+        {
+            if (!attribute.IsNamespaceDeclaration && !IsModeledCellAttribute(attribute))
+                hasCellMetadata = true;
+        }
+
+        foreach (var child in sourceCell.Elements())
+        {
+            if (child.Name == workbookNs + "f")
+            {
+                if (child.HasAttributes)
+                    sourceFormula = child;
+                continue;
+            }
+
+            if (child.Name == workbookNs + "is")
+            {
+                if (string.Equals(sourceCell.Attribute("t")?.Value, "inlineStr", StringComparison.OrdinalIgnoreCase) &&
+                    HasRichInlineStringMetadata(child, workbookNs))
+                {
+                    sourceInlineString = child;
+                }
+
+                continue;
+            }
+
+            if (child.Name != workbookNs + "v" &&
+                child.Name != workbookNs + "extLst")
+            {
+                hasCellMetadata = true;
+            }
+        }
+
+        if (sourceCell.Element(workbookNs + "extLst") is not null)
+            hasCellMetadata = true;
+
+        return new SourceCellNativeMetadata(hasCellMetadata, sourceFormula, sourceInlineString);
+    }
+
+    private readonly record struct SourceCellNativeMetadata(
+        bool HasCellMetadata,
+        XElement? Formula,
+        XElement? InlineString)
+    {
+        public bool HasAny => HasCellMetadata || Formula is not null || InlineString is not null;
     }
 
     private static bool HasCellAddress(XElement cell) =>

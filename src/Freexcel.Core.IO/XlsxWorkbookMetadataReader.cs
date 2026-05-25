@@ -217,6 +217,30 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static WorkbookSmartTagMetadataModel? LoadSmartTags(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var smartTagProperties = workbookXml.Root?.Element(workbookNs + "smartTagPr");
+            var smartTagTypes = workbookXml.Root?.Element(workbookNs + "smartTagTypes");
+            if (smartTagProperties is null && smartTagTypes is null)
+                return null;
+
+            return ToSmartTags(smartTagProperties, smartTagTypes, workbookNs);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static WorkbookCalculationProperties LoadCalculationProperties(Stream xlsxStream)
     {
         try
@@ -332,6 +356,69 @@ internal static class XlsxWorkbookMetadataReader
         {
             if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName == "name")
                 continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model;
+    }
+
+    private static WorkbookSmartTagMetadataModel ToSmartTags(
+        XElement? smartTagProperties,
+        XElement? smartTagTypes,
+        XNamespace workbookNs)
+    {
+        var model = new WorkbookSmartTagMetadataModel
+        {
+            Embed = smartTagProperties is null ? null : XlsxXmlAttributeReader.ReadNullableBoolAttribute(smartTagProperties, "embed"),
+            Show = smartTagProperties?.Attribute("show")?.Value,
+            Types = smartTagTypes?
+                .Elements(workbookNs + "smartTagType")
+                .Select(ToSmartTagType)
+                .ToList() ?? []
+        };
+
+        if (smartTagProperties is not null)
+        {
+            foreach (var attribute in smartTagProperties.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName is "embed" or "show")
+                    continue;
+
+                model.PropertiesNativeAttributes[attribute.Name.ToString()] = attribute.Value;
+            }
+        }
+
+        if (smartTagTypes is not null)
+        {
+            foreach (var attribute in smartTagTypes.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration)
+                    continue;
+
+                model.TypesNativeAttributes[attribute.Name.ToString()] = attribute.Value;
+            }
+        }
+
+        return model;
+    }
+
+    private static WorkbookSmartTagTypeModel ToSmartTagType(XElement element)
+    {
+        var model = new WorkbookSmartTagTypeModel
+        {
+            NamespaceUri = element.Attribute("namespaceUri")?.Value,
+            Name = element.Attribute("name")?.Value,
+            Url = element.Attribute("url")?.Value
+        };
+
+        foreach (var attribute in element.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                attribute.Name.LocalName is "namespaceUri" or "name" or "url")
+            {
+                continue;
+            }
 
             model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
         }

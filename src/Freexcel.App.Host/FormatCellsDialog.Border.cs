@@ -124,6 +124,46 @@ public partial class FormatCellsDialog
     private CellBorder SelectedBorderLine() =>
         new(SelectedBorderLineStyle(), TryParseColor(DlgBorderLineColorBox.Text) ?? CellColor.Black);
 
+    private bool ValidateBorderInputs()
+    {
+        if (!TryParseRequiredColor(DlgBorderLineColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a border color as #RRGGBB or R, G, B.", DlgBorderLineColorBox);
+            return false;
+        }
+
+        if (!TryParseRequiredColor(DlgBorderTopColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a top border color as #RRGGBB or R, G, B.", DlgBorderTopColorBox);
+            return false;
+        }
+
+        if (!TryParseRequiredColor(DlgBorderRightColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a right border color as #RRGGBB or R, G, B.", DlgBorderRightColorBox);
+            return false;
+        }
+
+        if (!TryParseRequiredColor(DlgBorderBottomColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a bottom border color as #RRGGBB or R, G, B.", DlgBorderBottomColorBox);
+            return false;
+        }
+
+        if (!TryParseRequiredColor(DlgBorderLeftColorBox.Text, out _))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
+            ShowInvalidInputWarning("Enter a left border color as #RRGGBB or R, G, B.", DlgBorderLeftColorBox);
+            return false;
+        }
+
+        return true;
+    }
+
     private void UpdateBorderPreview()
     {
         if (DlgBorderPreviewArea is null)
