@@ -4301,6 +4301,41 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesRevisionWorkbookProtectionPassword()
+    {
+        var workbook = new Workbook("RevisionWorkbookProtectionRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("revision locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddRevisionWorkbookProtectionMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.IsStructureProtected.Should().BeFalse();
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        loaded.ProtectionMetadata!.NativeAttributes.Should().Contain("lockRevision", "1");
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain("revisionsPassword", "9AFB");
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
+        protection.Should().NotBeNull();
+        protection!.Attribute("lockStructure").Should().BeNull();
+        protection.Attribute("lockRevision")!.Value.Should().Be("1");
+        protection.Attribute("revisionsPassword")!.Value.Should().Be("9AFB");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_UnlockedCellStyle()
     {
         var workbook = new Workbook("UnlockedStyleTest");
@@ -19276,6 +19311,24 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("spinCount", "100000"),
                 new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "first")),
                 new XElement(freexcelNs + "workbookProtectionNativeChild", new XAttribute("id", "second"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddRevisionWorkbookProtectionMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Element(workbookNs + "workbookProtection")?.Remove();
+            workbookXml.Root.AddFirst(new XElement(
+                workbookNs + "workbookProtection",
+                new XAttribute("lockRevision", "1"),
+                new XAttribute("revisionsPassword", "9AFB")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
