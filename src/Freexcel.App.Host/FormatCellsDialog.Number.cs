@@ -357,8 +357,19 @@ public partial class FormatCellsDialog
             return false;
         }
 
+        if (!IsGeneratedNumberFormatCategory(NumberCategoryList.SelectedItem as string)
+            && !FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text))
+        {
+            Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
+            ShowInvalidInputWarning("Enter a valid custom number format.", NumberFormatCombo);
+            return false;
+        }
+
         return true;
     }
+
+    private static bool IsGeneratedNumberFormatCategory(string? category) =>
+        category is "Number" or "Currency" or "Accounting" or "Percentage" or "Scientific";
 
     private string SelectedCurrencySymbol()
     {

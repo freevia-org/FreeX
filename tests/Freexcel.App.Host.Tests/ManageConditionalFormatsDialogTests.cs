@@ -126,7 +126,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void AppliesToColumn_UsesEditableRangeTextAndPickerButton()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("typeof(TextBox)");
         source.Should().Contain("typeof(Button)");
@@ -183,7 +183,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void StopIfTrueColumn_UsesEditableTwoWayCheckbox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("typeof(CheckBox)");
         source.Should().Contain("nameof(ConditionalFormat.StopIfTrue)");
@@ -194,7 +194,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void FormatPreviewColumn_ShowsExcelStyleSampleText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Header = \"Format\"");
         source.Should().Contain("typeof(Border)");
@@ -226,7 +226,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void DialogCommands_ExposeKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         foreach (var content in new[]
         {
@@ -251,7 +251,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void ScopeSelector_UsesExcelWorksheetLabelAndDefaultsToSelectionWhenAvailable()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("ScopeSheet     = \"This Worksheet\"");
         source.Should().Contain("ScopeSelection = \"Current Selection\"");
@@ -261,7 +261,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesScopeSelector()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -331,7 +331,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void SelectionGuardCommands_FocusRulesListWhenNoRuleIsSelected()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("FocusRulesList();");
         source.Should().Contain("private void FocusRulesList()");
@@ -374,7 +374,7 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void NewRuleCommand_OpensSingleExcelStyleRuleDialogEntryPoint()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+        var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Content = \"_New Rule...\"");
         source.Should().Contain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
@@ -452,6 +452,12 @@ public sealed class ManageConditionalFormatsDialogTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static string ReadManageConditionalFormatsDialogSource() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.Columns.cs")));
 
     private static ConditionalFormat CreateRule(
         SheetId sheetId,
