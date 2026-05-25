@@ -1669,6 +1669,18 @@ public partial class FileAdapterSmokeTests
         sheet.ShowRulers = false;
         sheet.ZoomPercent = 125;
         sheet.ShowFormulas = true;
+        sheet.PrimaryViewMetadata = new WorksheetPrimaryViewMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["rightToLeft"] = "1",
+                ["showZeros"] = "0"
+            },
+            NativeChildXmls =
+            [
+                "<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"
+            ]
+        };
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -1682,6 +1694,7 @@ public partial class FileAdapterSmokeTests
         loaded.GetSheetAt(0).ShowRulers.Should().BeFalse();
         loaded.GetSheetAt(0).ZoomPercent.Should().Be(125);
         loaded.GetSheetAt(0).ShowFormulas.Should().BeTrue();
+        loaded.GetSheetAt(0).PrimaryViewMetadata.Should().BeEquivalentTo(sheet.PrimaryViewMetadata);
     }
 
     [Fact]
@@ -13014,7 +13027,12 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrimaryViewMetadata.Should().NotBeNull();
+        loadedSheet.PrimaryViewMetadata!.NativeAttributes.Should().Contain("showZeros", "0");
+        loadedSheet.PrimaryViewMetadata.NativeAttributes.Should().Contain("rightToLeft", "1");
+        loadedSheet.PrimaryViewMetadata.NativeChildXmls.Should().Contain(xml => xml.Contains("pivotSelection", StringComparison.Ordinal));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -13032,6 +13050,43 @@ public partial class FileAdapterSmokeTests
         sheetView.Attribute("rightToLeft").Should().NotBeNull();
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1");
         sheetView.Element(worksheetNs + "pivotSelection").Should().NotBeNull();
+        sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetPrimaryViewMetadata()
+    {
+        var workbook = new Workbook("PrimaryViewMetadataSaveTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View metadata"));
+        sheet.PrimaryViewMetadata = new WorksheetPrimaryViewMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["rightToLeft"] = "1",
+                ["showZeros"] = "0",
+                ["zoomScale"] = "42"
+            },
+            NativeChildXmls =
+            [
+                "<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"
+            ]
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetView = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .Single(element => element.Attribute("workbookViewId")?.Value == "0");
+        sheetView.Attribute("rightToLeft")!.Value.Should().Be("1");
+        sheetView.Attribute("showZeros")!.Value.Should().Be("0");
+        sheetView.Attribute("zoomScale").Should().BeNull("zoomScale is modeled separately");
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");
     }
 

@@ -240,6 +240,7 @@ public sealed partial class XlsxFileAdapter
         sheet.DataConsolidation = layout.DataConsolidation;
         sheet.SortState = layout.SortState;
         sheet.AdditionalViews = layout.AdditionalViews;
+        sheet.PrimaryViewMetadata = layout.PrimaryViewMetadata;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
     }
