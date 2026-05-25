@@ -392,7 +392,9 @@ internal static class XlsxWorkbookMetadataWriter
             return;
 
         root.Element(workbookNs + "workbookProtection")?.Remove();
-        if (!workbook.IsStructureProtected && workbook.ProtectionMetadata is null)
+        if (!workbook.IsStructureProtected &&
+            string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
+            !HasRevisionProtectionMetadata(workbook.ProtectionMetadata))
         {
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
             return;
@@ -508,6 +510,10 @@ internal static class XlsxWorkbookMetadataWriter
 
     private static int? ClampWorkbookViewInteger(int? value, int min, int max) =>
         value is { } intValue ? Math.Clamp(intValue, min, max) : null;
+
+    private static bool HasRevisionProtectionMetadata(WorkbookProtectionMetadataModel? metadata) =>
+        metadata?.NativeAttributes.ContainsKey("lockRevision") == true ||
+        metadata?.NativeAttributes.ContainsKey("revisionsPassword") == true;
 
     private static bool TrySetNativeAttribute(XElement element, string name, string value)
     {
