@@ -53,6 +53,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
         packageStream.Position = 0;
+        var workbookProtectionMetadata = XlsxWorkbookMetadataReader.LoadProtectionMetadata(packageStream);
+        packageStream.Position = 0;
         var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
         packageStream.Position = 0;
         var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
@@ -95,6 +97,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.AdditionalViews = additionalViews;
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
+        workbook.ProtectionMetadata = workbookProtectionMetadata;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
