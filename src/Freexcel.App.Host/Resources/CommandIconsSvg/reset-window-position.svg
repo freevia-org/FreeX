@@ -1,28 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Reset Window Position">
-  <defs>
-    <style>
-      .s,.r,.line,.thin,.heavy{fill:none;stroke:#242424;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .g,.green{fill:#107c41}
-      .g2,.palegreen,.green2{fill:#dff6dd}
-      .b,.blue{fill:#0078d4}
-      .o,.orange{fill:#f7630c}
-      .y,.yellow,.paleyellow{fill:#ffb900}
-      .rd,.red{fill:#d32f2f}
-      .p,.purple{fill:#8b5cf6}
-      .w,.paper,.bg{fill:#ffffff}
-      .k,.gray{fill:#242424}
-      .f,.soft{fill:#f3f2f1}
-      .t,.txtb{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:700;text-anchor:middle;dominant-baseline:central}
-      .tm,.txt{font-family:'Segoe UI',Arial,sans-serif;fill:#242424;font-weight:600;text-anchor:middle;dominant-baseline:central}
-      .greenLine{fill:none;stroke:#107c41;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .blueLine{fill:none;stroke:#0078d4;stroke-width:1.0;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-      .grid{fill:none;stroke:#5c5c5c;stroke-width:1.0;stroke-linecap:square;vector-effect:non-scaling-stroke}
-      .paleblue{fill:#dcecff}
-      .palered{fill:#ffd7d7}
-      .none{fill:none}
-</style>
-  </defs>
-  <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.7" x="10.8" y="14.04" width="27" height="18.36"/><path stroke="#202124" stroke-width="1.9" fill="none" d="M37.8 37.8a9.72 9.72 0 1 1 -11.88-14.04"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Reset Window Position" shape-rendering="geometricPrecision">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="3" y="7" width="11" height="17" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <rect x="18" y="7" width="11" height="17" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <path d="M4 11 H13 M19 11 H28" stroke="#107c41" stroke-width="1.5"/>
+  <path d="M6 15 H11 M6 18 H11 M21 15 H26 M21 18 H26" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M18 27 C14 29 10 29 7 26" fill="none" stroke="#0078d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8 23 L7 26 L10 26" fill="none" stroke="#0078d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14 27 H18" stroke="#0078d4" stroke-width="2" stroke-linecap="round"/>
 </svg>
-
