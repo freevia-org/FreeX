@@ -537,6 +537,34 @@ public static partial class BuiltInFunctions
         return new RangeValue(cells);
     }
 
+    private static ScalarValue MapScalarArgs(
+        IReadOnlyList<ScalarValue> args,
+        Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
+    {
+        RangeValue? shape = null;
+        foreach (var arg in args)
+        {
+            if (arg is not RangeValue range) continue;
+            shape ??= range;
+            if (range.RowCount != shape.RowCount || range.ColCount != shape.ColCount)
+                return ErrorValue.Value;
+        }
+
+        if (shape is null) return map(args);
+
+        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+        var scalarArgs = new ScalarValue[args.Count];
+        for (int r = 0; r < shape.RowCount; r++)
+            for (int c = 0; c < shape.ColCount; c++)
+            {
+                for (int i = 0; i < args.Count; i++)
+                    scalarArgs[i] = args[i] is RangeValue range ? range.Cells[r, c] : args[i];
+                cells[r, c] = map(scalarArgs);
+            }
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue MidText(string text, int startNum, int numChars)
     {
         if (ContainsSurrogatePair(text))
