@@ -266,7 +266,7 @@ public sealed class RibbonTabParityTests
         ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
             "Help Online",
             "Contact Support",
-            "Report Issue",
+            "Feedback",
             "Copy Diagnostics",
             "Show Training",
             "What's New",
