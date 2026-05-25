@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Printing;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -2066,6 +2067,17 @@ public class ExportPlannerTests
         pageNumber.Should().Be(expectedPage);
     }
 
+    [Theory]
+    [InlineData(PrintPreviewSidesMode.OneSided, Duplexing.OneSided)]
+    [InlineData(PrintPreviewSidesMode.TwoSidedLongEdge, Duplexing.TwoSidedLongEdge)]
+    [InlineData(PrintPreviewSidesMode.TwoSidedShortEdge, Duplexing.TwoSidedShortEdge)]
+    public void PrintPreviewDialog_MapsExcelSidesChoicesToPrintTicketDuplexing(
+        PrintPreviewSidesMode mode,
+        Duplexing expected)
+    {
+        PrintPreviewDialog.ResolvePrintTicketDuplexing(mode).Should().Be(expected);
+    }
+
     [Fact]
     public void PrintPreviewDialog_ResolvesCurrentPagePaginatorForPrintRange()
     {
@@ -2241,14 +2253,21 @@ public class ExportPlannerTests
         source.Should().Contain("Content = \"Pr_inter:\"");
         source.Should().Contain("Content = \"_Copies:\"");
         source.Should().Contain("Content = \"C_ollated\"");
+        source.Should().Contain("Content = \"_Sides:\"");
+        source.Should().Contain("Print One Sided");
+        source.Should().Contain("Flip pages on long edge");
+        source.Should().Contain("Flip pages on short edge");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("collatedBox");
+        source.Should().Contain("sidesBox");
         source.Should().Contain("statusText");
         source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
         source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
         source.Should().Contain("dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated");
+        source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
+        source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
         source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("copiesBox.SelectAll();");

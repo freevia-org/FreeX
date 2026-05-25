@@ -327,6 +327,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetSortStateDto? SortState { get; set; }
         public WorksheetSingleXmlCellsDto? SingleXmlCells { get; set; }
         public WorksheetCellWatchesMetadataDto? CellWatchesMetadata { get; set; }
+        public WorksheetIgnoredErrorsMetadataDto? IgnoredErrorsMetadata { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
@@ -460,6 +461,12 @@ public sealed partial class NativeJsonAdapter
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private class WorksheetIgnoredErrorsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, Dictionary<string, string>> ErrorNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private class WorksheetPageMarginsMetadataDto

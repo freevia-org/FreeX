@@ -274,7 +274,7 @@ public partial class FormatCellsDialog : Window
             Strikethrough:   DlgStrikeCheck.IsChecked,
             Superscript:     DlgSuperscriptCheck.IsChecked,
             Subscript:       DlgSubscriptCheck.IsChecked,
-            FontName:        DlgFontNameBox.SelectedItem as string,
+            FontName:        ResolveSelectedFontName(),
             FontSize:        fontSize,
             FontColor:       fontColor,
             FillColor:       clearFill ? null : fillColor,
