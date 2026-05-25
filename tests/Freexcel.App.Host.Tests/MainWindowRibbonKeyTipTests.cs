@@ -178,6 +178,26 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void NestedMenuKeyTips_OpenSubmenuScopeBeforeRoutingChildKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.B);
+            harness.HandleKeyTip(Key.C);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemSubmenuIsOpen("Line Color").Should().BeTrue();
+
+            harness.HandleKeyTip(Key.K);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupKeyTip_RoutesThroughVisibleOverflowGroup()
     {
         RunSta(() =>

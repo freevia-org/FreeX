@@ -203,6 +203,8 @@ public class NumberFormatterTests
     [InlineData("[Color56]0.00", 2.5, "2.50", "#333333")]
     [InlineData("[ Red ]0.00", 2.5, "2.50", "#FF0000")]
     [InlineData("[ Color5 ]0.00", 2.5, "2.50", "#0070C0")]
+    [InlineData("[Color 5]0.00", 2.5, "2.50", "#0070C0")]
+    [InlineData("[ Color 56 ]0.00", 2.5, "2.50", "#333333")]
     public void CustomNumberSubset_ReturnsColorFromConditionalSections(
         string format,
         double value,
