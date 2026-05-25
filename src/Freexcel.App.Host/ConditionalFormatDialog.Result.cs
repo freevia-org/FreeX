@@ -124,8 +124,21 @@ public partial class ConditionalFormatDialog
             cf.FormatIfTrue = null;
         }
 
+        if (_existingRule is not null && cf.RuleType != _existingRule.RuleType)
+            ClearNativeConditionalFormatMetadata(cf);
+
         ResultRule = cf;
         DialogResult = true;
+    }
+
+    private static void ClearNativeConditionalFormatMetadata(ConditionalFormat cf)
+    {
+        cf.NativeAttributes = null;
+        cf.NativeChildXmls = null;
+        cf.NativePayloadAttributes = null;
+        cf.NativePayloadChildXmls = null;
+        cf.NativeContainerAttributes = null;
+        cf.NativeContainerChildXmls = null;
     }
 
     private static CfThresholdType SelectedThresholdType(ComboBox comboBox, CfThresholdType fallback) =>
