@@ -31,6 +31,8 @@ public sealed record PivotTableRangeSelectionRequest(
 
 public sealed class PivotTableDialog : Window
 {
+    private readonly Workbook _workbook;
+    private readonly SheetId _sourceSheetId;
     private readonly TextBox _sourceRangeBox = new();
     private readonly TextBox _destinationRangeBox = new();
     private readonly RadioButton _selectTableRangeButton = new() { Content = "Select a _table or range", IsChecked = true };
@@ -48,6 +50,8 @@ public sealed class PivotTableDialog : Window
         GridRange sourceRange,
         Action<PivotTableRangeSelectionRequest>? requestRangeSelection = null)
     {
+        _workbook = workbook;
+        _sourceSheetId = sourceSheetId;
         _requestRangeSelection = requestRangeSelection;
         var sourceRangeText = FormatRange(workbook, sourceSheetId, sourceRange);
         var destinationText = FormatDestination(workbook, sourceSheetId, sourceRange);
@@ -103,6 +107,9 @@ public sealed class PivotTableDialog : Window
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
+            if (!ValidateInputs())
+                return;
+
             Result = CreateResult(
                 _sourceRangeBox.Text,
                 _existingWorksheetButton.IsChecked == true
@@ -212,6 +219,35 @@ public sealed class PivotTableDialog : Window
         RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
+    }
+
+    private bool ValidateInputs()
+    {
+        if (!WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid PivotTable source range.", _sourceRangeBox);
+            return false;
+        }
+
+        if (_existingWorksheetButton.IsChecked == true
+            && (!WorkbookRangeTextCodec.TryParse(_sourceSheetId, _destinationRangeBox.Text, ResolveSheetIdByName, out var destinationRange)
+                || destinationRange.Start.Sheet != _sourceSheetId))
+        {
+            ShowInvalidInputWarning("Enter a destination cell on the active worksheet.", _destinationRangeBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private SheetId? ResolveSheetIdByName(string sheetName) =>
+        _workbook.Sheets.FirstOrDefault(sheet => string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        FocusRangeSelectionInput(target);
+        return false;
     }
 
     private static void FocusRangeSelectionInput(TextBox target)

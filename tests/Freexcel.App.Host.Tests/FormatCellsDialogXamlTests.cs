@@ -690,6 +690,8 @@ public sealed class FormatCellsDialogXamlTests
 
         source.Should().Contain("if (!ValidateNumberInputs())");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter decimal places from 0 to 30.\", NumberDecimalPlacesBox);");
+        source.Should().Contain("FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid custom number format.\", NumberFormatCombo);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;");
     }
 
@@ -713,6 +715,20 @@ public sealed class FormatCellsDialogXamlTests
         source.Should().Contain("if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillPatternColorBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_RejectsInvalidBorderColorsWithOwnedWarnings()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!ValidateBorderInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a border color as #RRGGBB or R, G, B.\", DlgBorderLineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a top border color as #RRGGBB or R, G, B.\", DlgBorderTopColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a right border color as #RRGGBB or R, G, B.\", DlgBorderRightColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a bottom border color as #RRGGBB or R, G, B.\", DlgBorderBottomColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a left border color as #RRGGBB or R, G, B.\", DlgBorderLeftColorBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;");
     }
 
     [Fact]

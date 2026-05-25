@@ -39,6 +39,23 @@ public sealed class WorkbookFunctionGroupModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookSmartTagMetadataModel
+{
+    public bool? Embed { get; set; }
+    public string? Show { get; set; }
+    public Dictionary<string, string> PropertiesNativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> TypesNativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookSmartTagTypeModel> Types { get; set; } = [];
+}
+
+public sealed class WorkbookSmartTagTypeModel
+{
+    public string? NamespaceUri { get; set; }
+    public string? Name { get; set; }
+    public string? Url { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a workbook containing one or more worksheets.
 /// This is the top-level domain object.
@@ -145,6 +162,9 @@ public sealed class Workbook
 
     /// <summary>Excel workbook function-group metadata.</summary>
     public WorkbookFunctionGroupsModel? FunctionGroups { get; set; }
+
+    /// <summary>Excel workbook smart-tag metadata.</summary>
+    public WorkbookSmartTagMetadataModel? SmartTags { get; set; }
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
