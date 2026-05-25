@@ -100,7 +100,9 @@ public static partial class PrintRenderer
         return comments
             .Concat(threadedComments
                 .Where(pair => !comments.ContainsKey(pair.Key))
-                .Select(pair => new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Text)))
+                .Select(pair => new KeyValuePair<CellAddress, string>(
+                    pair.Key,
+                    CommentNavigationPlanner.FormatThreadedComment(pair.Value))))
             .OrderBy(pair => pair.Key.Row)
             .ThenBy(pair => pair.Key.Col);
     }
