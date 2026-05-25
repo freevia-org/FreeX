@@ -46,10 +46,31 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => ModScalar(args[0], ToNumber(value)));
-        var d = ToNumber(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ModScalar(value, d));
-        return ModScalar(args[0], d);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => ModScalar(left, ToNumber(right)));
+    }
+
+    private static ScalarValue MapBinaryMathArgs(
+        ScalarValue left,
+        ScalarValue right,
+        Func<ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        if (left is RangeValue leftRange && right is RangeValue rightRange)
+        {
+            if (leftRange.RowCount != rightRange.RowCount || leftRange.ColCount != rightRange.ColCount)
+                return ErrorValue.Value;
+
+            var cells = new ScalarValue[leftRange.RowCount, leftRange.ColCount];
+            for (int r = 0; r < leftRange.RowCount; r++)
+                for (int c = 0; c < leftRange.ColCount; c++)
+                    cells[r, c] = map(leftRange.Cells[r, c], rightRange.Cells[r, c]);
+            return new RangeValue(cells);
+        }
+
+        if (left is RangeValue lRange)
+            return MapUnaryTextRange(lRange, value => map(value, right));
+        if (right is RangeValue rRange)
+            return MapUnaryTextRange(rRange, value => map(left, value));
+        return map(left, right);
     }
 
     private static ScalarValue ModScalar(ScalarValue value, double d)
@@ -64,10 +85,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => PowerScalar(args[0], ToNumber(value)));
-        var power = ToNumber(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => PowerScalar(value, power));
-        return PowerScalar(args[0], power);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => PowerScalar(left, ToNumber(right)));
     }
 
     private static ScalarValue PowerScalar(ScalarValue value, double power)
@@ -113,10 +131,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => CeilingScalar(args[0], ToNumber(value)));
-        var sig = ToNumber(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => CeilingScalar(value, sig));
-        return CeilingScalar(args[0], sig);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => CeilingScalar(left, ToNumber(right)));
     }
 
     private static ScalarValue CeilingScalar(ScalarValue value, double sig)
@@ -132,10 +147,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => FloorScalar(args[0], ToNumber(value)));
-        var sig = ToNumber(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FloorScalar(value, sig));
-        return FloorScalar(args[0], sig);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => FloorScalar(left, ToNumber(right)));
     }
 
     private static ScalarValue FloorScalar(ScalarValue value, double sig)
@@ -182,10 +194,8 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        if (args.Count > 1 && args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => LogScalar(args[0], ToNumber(value)));
-        var base_ = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 10.0;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => LogScalar(value, base_));
-        return LogScalar(args[0], base_);
+        var baseArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(10.0);
+        return MapBinaryMathArgs(args[0], baseArg, (left, right) => LogScalar(left, ToNumber(right)));
     }
 
     private static ScalarValue LogScalar(ScalarValue value, double base_)
@@ -504,10 +514,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => QuotientScalar(args[0], ToNumber(value)));
-        double d = ToNumber(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => QuotientScalar(value, d));
-        return QuotientScalar(args[0], d);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => QuotientScalar(left, ToNumber(right)));
     }
 
     private static ScalarValue QuotientScalar(ScalarValue value, double d)
@@ -584,10 +591,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue secondRange) return MapUnaryTextRange(secondRange, value => MroundScalar(args[0], ToNumber(value)));
-        double m = ToNumber(args[1]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => MroundScalar(value, m));
-        return MroundScalar(args[0], m);
+        return MapBinaryMathArgs(args[0], args[1], (left, right) => MroundScalar(left, ToNumber(right)));
     }
 
     private static ScalarValue MroundScalar(ScalarValue value, double m)

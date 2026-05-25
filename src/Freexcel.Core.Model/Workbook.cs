@@ -56,6 +56,18 @@ public sealed class WorkbookSmartTagTypeModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorkbookAdditionalViewModel
+{
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a workbook containing one or more worksheets.
 /// This is the top-level domain object.
@@ -165,6 +177,9 @@ public sealed class Workbook
 
     /// <summary>Excel workbook smart-tag metadata.</summary>
     public WorkbookSmartTagMetadataModel? SmartTags { get; set; }
+
+    /// <summary>Additional native Excel workbook-window view metadata loaded from XLSX.</summary>
+    public WorkbookAdditionalViewsModel? AdditionalViews { get; set; }
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
