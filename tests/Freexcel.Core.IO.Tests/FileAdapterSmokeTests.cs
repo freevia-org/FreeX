@@ -2009,6 +2009,17 @@ public partial class FileAdapterSmokeTests
         sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
         sheet.HeaderMargin = 0.35;
         sheet.FooterMargin = 0.45;
+        sheet.PageMarginsMetadata = new WorksheetPageMarginsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["customAttr"] = "page-margins-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePageMarginsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
         sheet.SheetFormatMetadata = new WorksheetSheetFormatMetadataModel
@@ -2088,6 +2099,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PageMargins.Should().Be(new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1));
         loadedSheet.HeaderMargin.Should().Be(0.35);
         loadedSheet.FooterMargin.Should().Be(0.45);
+        loadedSheet.PageMarginsMetadata.Should().BeEquivalentTo(sheet.PageMarginsMetadata);
         loadedSheet.PrintGridlines.Should().BeTrue();
         loadedSheet.PrintHeadings.Should().BeTrue();
         loadedSheet.SheetFormatMetadata.Should().BeEquivalentTo(sheet.SheetFormatMetadata);
@@ -12195,6 +12207,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_WritesWorkbookFileRecoveryBeforeWebPublishObjects()
+    {
+        var workbook = new Workbook("WorkbookFileRecoveryOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileRecoveryProperties(source);
+        AddWorkbookWebPublishObjects(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = workbookXml.Root!.Elements().ToList();
+        var recoveryIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "fileRecoveryPr");
+        var webPublishObjectsIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "webPublishObjects");
+
+        recoveryIndex.Should().BeGreaterThanOrEqualTo(0);
+        webPublishObjectsIndex.Should().BeGreaterThan(recoveryIndex);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookSmartTagMetadata()
     {
         var workbook = new Workbook("WorkbookSmartTagRetentionTest");
@@ -13393,7 +13438,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageMarginsMetadata.Should().NotBeNull();
+        loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
