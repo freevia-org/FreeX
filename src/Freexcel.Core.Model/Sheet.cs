@@ -35,6 +35,12 @@ public sealed class WorksheetPageSetupMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetPrintOptionsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -210,6 +216,9 @@ public sealed partial class Sheet
 
     /// <summary>Whether row and column headings are printed for this worksheet.</summary>
     public bool PrintHeadings { get; set; }
+
+    /// <summary>Native Excel printOptions metadata not yet modeled as editable fields.</summary>
+    public WorksheetPrintOptionsMetadataModel? PrintOptionsMetadata { get; set; }
 
     /// <summary>Worksheet print scaling settings.</summary>
     public WorksheetScaleToFit ScaleToFit { get; set; } = WorksheetScaleToFit.Default;
