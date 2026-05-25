@@ -11740,6 +11740,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetSingleXmlCellsNativeAttributeNames()
+    {
+        var workbook = new Workbook("SingleXmlCellsInvalidNativeAttributeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("mapped"));
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validSingleXmlCellsAttr"] = "kept",
+                ["invalid singleXmlCells attr"] = "skip"
+            },
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1,
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["validSingleXmlCellAttr"] = "cell-kept",
+                        ["invalid singleXmlCell attr"] = "skip"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        xml.Should().Contain("validSingleXmlCellsAttr=\"kept\"");
+        xml.Should().Contain("validSingleXmlCellAttr=\"cell-kept\"");
+        xml.Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
