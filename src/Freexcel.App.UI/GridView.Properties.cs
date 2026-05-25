@@ -142,6 +142,24 @@ public partial class GridView
         set => SetValue(PicturesProperty, value);
     }
 
+    public static readonly DependencyProperty NativeSlicersProperty =
+        DependencyProperty.Register(nameof(NativeSlicers), typeof(IReadOnlyList<SlicerModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<SlicerModel>? NativeSlicers
+    {
+        get => (IReadOnlyList<SlicerModel>?)GetValue(NativeSlicersProperty);
+        set => SetValue(NativeSlicersProperty, value);
+    }
+
+    public static readonly DependencyProperty NativeTimelinesProperty =
+        DependencyProperty.Register(nameof(NativeTimelines), typeof(IReadOnlyList<TimelineModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<TimelineModel>? NativeTimelines
+    {
+        get => (IReadOnlyList<TimelineModel>?)GetValue(NativeTimelinesProperty);
+        set => SetValue(NativeTimelinesProperty, value);
+    }
+
     public static readonly DependencyProperty ObjectDisplayModeProperty =
         DependencyProperty.Register(nameof(ObjectDisplayMode), typeof(GridObjectDisplayMode), typeof(GridView),
             new FrameworkPropertyMetadata(GridObjectDisplayMode.All, FrameworkPropertyMetadataOptions.AffectsRender));

@@ -292,6 +292,12 @@ public partial class MainWindow
         SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
         SheetGrid.WorkbookTheme = _workbook.Theme;
         SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
+        SheetGrid.NativeSlicers = keepObjectData && sheet is not null
+            ? SlicerTimelinePlanner.GetNativeVisualSlicers(_workbook, sheet)
+            : null;
+        SheetGrid.NativeTimelines = keepObjectData && sheet is not null
+            ? SlicerTimelinePlanner.GetNativeVisualTimelines(_workbook, sheet)
+            : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null ? null : SparklineValuePlanner.BuildValues(sheet);
