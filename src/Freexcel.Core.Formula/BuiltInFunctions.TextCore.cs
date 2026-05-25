@@ -14,9 +14,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue formatError) return formatError;
-        var fmt = ToText(args[1]);
-        if (args[0] is RangeValue range) return MapTextFuncRange(range, fmt);
-        return TextFormatValue(args[0], fmt);
+        return MapBinaryMathArgs(args[0], args[1], TextScalarWithFormat);
+    }
+
+    private static ScalarValue TextScalarWithFormat(ScalarValue value, ScalarValue formatValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (formatValue is ErrorValue formatError) return formatError;
+        return TextFormatValue(value, ToText(formatValue));
     }
 
     private static RangeValue MapTextFuncRange(RangeValue range, string fmt)
@@ -317,21 +322,22 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        int startNum = 1;
-        if (args.Count > 2 && args[2] is not BlankValue)
-        {
-            double rawStart = ToNumber(args[2]);
-            if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
-            startNum = (int)rawStart;
-        }
+        var startArg = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(1);
+        if (args[0] is RangeValue || args[1] is RangeValue || startArg is RangeValue)
+            return MapTernaryTextArgs(args[0], args[1], startArg, FindScalarWithArgs);
+        return FindScalarWithArgs(args[0], args[1], startArg);
+    }
+
+    private static ScalarValue FindScalarWithArgs(ScalarValue findValue, ScalarValue withinValue, ScalarValue startValue)
+    {
+        if (findValue is ErrorValue findError) return findError;
+        if (withinValue is ErrorValue withinError) return withinError;
+        if (startValue is ErrorValue startError) return startError;
+        double rawStart = ToNumber(startValue);
+        if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+        int startNum = (int)rawStart;
         if (startNum < 1) return ErrorValue.Value;
-        if (args[0] is RangeValue && args[1] is RangeValue)
-            return MapBinaryMathArgs(args[0], args[1], (findValue, withinValue) => FindText(ToText(findValue), ToText(withinValue), startNum));
-        var findText = ToText(args[0]);
-        if (args[0] is RangeValue findRange)
-            return MapUnaryTextRange(findRange, value => FindText(ToText(value), ToText(args[1]), startNum));
-        if (args[1] is RangeValue range) return MapFindRange(findText, range, startNum);
-        return FindText(findText, ToText(args[1]), startNum);
+        return FindText(ToText(findValue), ToText(withinValue), startNum);
     }
 
     private static RangeValue MapFindRange(string findText, RangeValue range, int startNum)
@@ -370,21 +376,22 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        int startNum = 1;
-        if (args.Count > 2 && args[2] is not BlankValue)
-        {
-            double rawStart = ToNumber(args[2]);
-            if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
-            startNum = (int)rawStart;
-        }
+        var startArg = args.Count > 2 && args[2] is not BlankValue ? args[2] : new NumberValue(1);
+        if (args[0] is RangeValue || args[1] is RangeValue || startArg is RangeValue)
+            return MapTernaryTextArgs(args[0], args[1], startArg, SearchScalarWithArgs);
+        return SearchScalarWithArgs(args[0], args[1], startArg);
+    }
+
+    private static ScalarValue SearchScalarWithArgs(ScalarValue findValue, ScalarValue withinValue, ScalarValue startValue)
+    {
+        if (findValue is ErrorValue findError) return findError;
+        if (withinValue is ErrorValue withinError) return withinError;
+        if (startValue is ErrorValue startError) return startError;
+        double rawStart = ToNumber(startValue);
+        if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+        int startNum = (int)rawStart;
         if (startNum < 1) return ErrorValue.Value;
-        if (args[0] is RangeValue && args[1] is RangeValue)
-            return MapBinaryMathArgs(args[0], args[1], (findValue, withinValue) => SearchText(ToText(findValue), ToText(withinValue), startNum));
-        var findText = ToText(args[0]);
-        if (args[0] is RangeValue findRange)
-            return MapUnaryTextRange(findRange, value => SearchText(ToText(value), ToText(args[1]), startNum));
-        if (args[1] is RangeValue range) return MapSearchRange(findText, range, startNum);
-        return SearchText(findText, ToText(args[1]), startNum);
+        return SearchText(ToText(findValue), ToText(withinValue), startNum);
     }
 
     private static RangeValue MapSearchRange(string findText, RangeValue range, int startNum)
