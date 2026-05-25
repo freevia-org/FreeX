@@ -3530,6 +3530,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (2, 2, new NumberValue(5)));
+
+        AssertColumn(_eval.Evaluate("=ATAN2(A1:A2,B1:B2)", sheet), new NumberValue(Math.Atan2(4, 2)), new NumberValue(Math.Atan2(5, 3)));
+        AssertColumn(_eval.Evaluate("=COMBIN(B1:B2,A1:A2)", sheet), new NumberValue(6), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=PERMUT(B1:B2,A1:A2)", sheet), new NumberValue(12), new NumberValue(60));
+    }
+
+    [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
+
+        _eval.Evaluate("=ATAN2(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=COMBIN(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=PERMUT(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Atan2_NonFiniteInput_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
