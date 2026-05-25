@@ -45,6 +45,12 @@ internal enum PdfOpenMode
     FullScreen
 }
 
+internal enum PdfConformance
+{
+    Standard,
+    PdfA1b
+}
+
 internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
@@ -65,7 +71,9 @@ internal sealed record ExportOptions(
     PdfInitialView InitialView = PdfInitialView.SinglePage,
     PdfOpenMode OpenMode = PdfOpenMode.Normal,
     bool BitmapTextWhenFontsMayNotBeEmbedded = false,
-    string PdfLanguage = ExportPlanner.DefaultPdfLanguage)
+    string PdfLanguage = ExportPlanner.DefaultPdfLanguage,
+    PdfConformance PdfConformance = PdfConformance.Standard,
+    bool IncludeDocumentStructureTags = false)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -206,6 +214,28 @@ internal static partial class ExportPlanner
 
         error = $"Page range starts after the last exportable page ({pageCount}).";
         return false;
+    }
+
+    public static bool TryValidatePublishOptions(ExportOptions options, ExportFormat format, out string? error)
+    {
+        error = null;
+
+        if (format == ExportFormat.Xps)
+            return true;
+
+        if (options.PdfConformance != PdfConformance.Standard)
+        {
+            error = "PDF/A compliance is not supported by the current PDF exporter.";
+            return false;
+        }
+
+        if (options.IncludeDocumentStructureTags)
+        {
+            error = "Tagged PDF structure is not supported by the current PDF exporter.";
+            return false;
+        }
+
+        return true;
     }
 
 }

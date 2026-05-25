@@ -75,6 +75,7 @@ public sealed partial class XlsxFileAdapter
         WorksheetSmartTagsModel? SmartTags,
         WorksheetDataConsolidationModel? DataConsolidation,
         WorksheetSortStateModel? SortState,
+        WorksheetSingleXmlCellsModel? SingleXmlCells,
         WorksheetAdditionalViewsModel? AdditionalViews,
         WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata,
         WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
@@ -305,6 +306,7 @@ public sealed partial class XlsxFileAdapter
         var smartTags = XlsxWorksheetSmartTagMapper.Read(worksheetXml.Root?.Element(worksheetNs + "smartTags"));
         var dataConsolidation = XlsxWorksheetDataConsolidationMapper.Read(worksheetXml.Root?.Element(worksheetNs + "dataConsolidate"));
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
+        var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
@@ -379,6 +381,7 @@ public sealed partial class XlsxFileAdapter
             smartTags,
             dataConsolidation,
             sortState,
+            singleXmlCells,
             additionalViews,
             ReadWorksheetPrimaryViewMetadata(sheetView),
             ReadWorksheetPageBreaksMetadata(rowBreaks, CellAddress.MaxRow),

@@ -241,6 +241,7 @@ public sealed partial class XlsxFileAdapter
         sheet.SmartTags = layout.SmartTags;
         sheet.DataConsolidation = layout.DataConsolidation;
         sheet.SortState = layout.SortState;
+        sheet.SingleXmlCells = layout.SingleXmlCells;
         sheet.AdditionalViews = layout.AdditionalViews;
         sheet.PrimaryViewMetadata = layout.PrimaryViewMetadata;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
