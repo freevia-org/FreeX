@@ -426,10 +426,10 @@ public sealed class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ExposesExcelStyleTabsAndAspectRatioControls()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var source = ReadFormatPictureDialogSources();
         var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
-        source.Should().Contain("public sealed class FormatPictureDialog");
+        source.Should().Contain("public sealed partial class FormatPictureDialog");
         source.Should().Contain("Header = \"_Size\"");
         source.Should().Contain("Header = \"_Crop\"");
         source.Should().Contain("Header = \"_Alt Text\"");
@@ -449,7 +449,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ExposesQuickResetActionsForInitialSizeAndCrop()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var source = ReadFormatPictureDialogSources();
 
         source.Should().Contain("Content = \"Reset _Size\"");
         source.Should().Contain("Content = \"Reset _Crop\"");
@@ -461,7 +461,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void FormatPictureDialogOpenedFromKeyboard_FocusesHeightBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var source = ReadFormatPictureDialogSources();
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -473,7 +473,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void FormatPictureDialogInvalidInput_SelectsRelevantTabAndField()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var source = ReadFormatPictureDialogSources();
 
         source.Should().Contain("private readonly TabControl _tabs = new();");
         source.Should().Contain("private readonly TabItem _sizeTab = new() { Header = \"_Size\" };");
@@ -499,7 +499,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void FormatPictureDialog_ResetActionsRestoreInitialFieldText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs"));
+        var source = ReadFormatPictureDialogSources();
 
         source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture)");
         source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture)");
@@ -674,6 +674,12 @@ public sealed class ObjectDialogTests
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
+
+    private static string ReadFormatPictureDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatPictureDialog.Input.cs")));
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)
     {
