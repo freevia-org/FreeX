@@ -4263,6 +4263,13 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        loaded.ProtectionMetadata!.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("algorithmName", "SHA-512"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("hashValue", "def456"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("saltValue", "salt456"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("spinCount", "100000"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("lockWindows", "1"));
+        loaded.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -5589,6 +5596,21 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("ProtectionNativeTest");
         workbook.IsStructureProtected = true;
         workbook.StructureProtectionPassword = "workbook-secret";
+        workbook.ProtectionMetadata = new WorkbookProtectionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["algorithmName"] = "SHA-512",
+                ["hashValue"] = "def456",
+                ["saltValue"] = "salt456",
+                ["spinCount"] = "100000",
+                ["lockWindows"] = "1"
+            },
+            NativeChildXmls =
+            [
+                "<fx:workbookProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
+            ]
+        };
         var sheet = workbook.AddSheet("S1");
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "sheet-secret";
@@ -5608,6 +5630,7 @@ public partial class FileAdapterSmokeTests
 
         loaded.IsStructureProtected.Should().BeTrue();
         loaded.StructureProtectionPassword.Should().Be("workbook-secret");
+        loaded.ProtectionMetadata.Should().BeEquivalentTo(workbook.ProtectionMetadata);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IsProtected.Should().BeTrue();
         loadedSheet.ProtectionPassword.Should().Be("sheet-secret");
