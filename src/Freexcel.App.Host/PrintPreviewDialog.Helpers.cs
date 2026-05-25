@@ -136,7 +136,8 @@ public sealed partial class PrintPreviewDialog
         SheetId sheetId,
         Sheet? sheet,
         Action<IWorkbookCommand>? executeCommand,
-        Action refreshPreview)
+        Action refreshPreview,
+        Action<PrintPreviewSettings>? setPrintPreviewSettings = null)
     {
         var panel = new StackPanel
         {
@@ -266,6 +267,29 @@ public sealed partial class PrintPreviewDialog
             refreshPreview();
         };
         panel.Children.Add(scaleBox);
+
+        var ignorePrintAreaBox = new CheckBox
+        {
+            Content = "_Ignore print area",
+            IsChecked = false,
+            IsEnabled = sheet?.PrintArea is not null && setPrintPreviewSettings is not null,
+            Margin = new Thickness(0, 6, 0, 4),
+            ToolTip = "Preview and print the active sheet instead of the stored print area."
+        };
+        AutomationProperties.SetName(ignorePrintAreaBox, "Ignore print area");
+        AutomationProperties.SetHelpText(ignorePrintAreaBox, "When checked, the preview prints the active sheet instead of the stored print area.");
+        void ApplyPrintPreviewSettings()
+        {
+            if (setPrintPreviewSettings is null)
+                return;
+
+            setPrintPreviewSettings(new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true));
+            refreshPreview();
+        }
+
+        ignorePrintAreaBox.Checked += (_, _) => ApplyPrintPreviewSettings();
+        ignorePrintAreaBox.Unchecked += (_, _) => ApplyPrintPreviewSettings();
+        panel.Children.Add(ignorePrintAreaBox);
 
         AddSectionLabel("Print Options");
         var gridlinesBox = new CheckBox

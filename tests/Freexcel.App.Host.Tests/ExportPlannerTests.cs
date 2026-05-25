@@ -2088,6 +2088,22 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintSettingsPlanner_SummarizesIgnoredPrintAreaForBackstagePreview()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1")
+        {
+            PrintArea = GridRange.Parse("B2:D10", sheetId)
+        };
+
+        var normal = PrintSettingsPlanner.Build(sheet);
+        var ignored = PrintSettingsPlanner.Build(sheet, ignorePrintArea: true);
+
+        normal.Lines[0].Should().Be("Print selected print area");
+        ignored.Lines[0].Should().Be("Print active sheet (ignore print area)");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
     {
         var source = ReadPrintPreviewDialogSources();
@@ -2097,11 +2113,14 @@ public class ExportPlannerTests
         source.Should().Contain("Action? showMargins = null");
         source.Should().Contain("Action? showPageSetup = null");
         source.Should().Contain("Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null");
+        source.Should().Contain("Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null");
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
         printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
-        printExport.Should().Contain("refreshPreview: BuildActiveSheetPrintPreview");
+        printExport.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
+        printExport.Should().Contain("PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea)");
+        printExport.Should().Contain("PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea)");
     }
 
     [Fact]
@@ -2117,6 +2136,19 @@ public class ExportPlannerTests
         source.Should().Contain("headingsBox.Unchecked +=");
         source.Should().Contain("new SetPrintOptionsCommand(");
         source.Should().Contain("refreshPreview();");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesIgnorePrintAreaBackstageSetting()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_Ignore print area\"");
+        source.Should().Contain("new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true)");
+        source.Should().Contain("ignorePrintAreaBox.Checked +=");
+        source.Should().Contain("ignorePrintAreaBox.Unchecked +=");
+        source.Should().Contain("ToolTip = \"Preview and print the active sheet instead of the stored print area.\"");
+        source.Should().Contain("AutomationProperties.SetName(ignorePrintAreaBox, \"Ignore print area\");");
     }
 
     [Fact]
