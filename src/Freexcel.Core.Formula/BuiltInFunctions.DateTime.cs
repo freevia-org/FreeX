@@ -14,24 +14,32 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (args[0] is RangeValue yearRange)
-        {
-            double rawMonth = ToNumber(args[1]);
-            double rawDay = ToNumber(args[2]);
-            return MapUnaryTextRange(yearRange, value => DateScalar(value, rawMonth, rawDay));
-        }
-        if (args[1] is RangeValue monthRange)
-        {
-            double rawDay = ToNumber(args[2]);
-            return MapUnaryTextRange(monthRange, value => DateScalar(args[0], ToNumber(value), rawDay));
-        }
-        if (args[2] is RangeValue dayRange)
-        {
-            double rawMonth = ToNumber(args[1]);
-            return MapUnaryTextRange(dayRange, value => DateScalar(args[0], rawMonth, ToNumber(value)));
-        }
-        return DateScalar(args[0], ToNumber(args[1]), ToNumber(args[2]));
+        return MapDateTimeTernaryArgs(args, (year, month, day) => DateScalar(year, ToNumber(month), ToNumber(day)));
     }
+
+    private static ScalarValue MapDateTimeTernaryArgs(
+        IReadOnlyList<ScalarValue> args,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        RangeValue? range = args.OfType<RangeValue>().FirstOrDefault();
+        if (range is null) return map(args[0], args[1], args[2]);
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (args[i] is RangeValue argRange &&
+                (argRange.RowCount != range.RowCount || argRange.ColCount != range.ColCount))
+                return ErrorValue.Value;
+        }
+
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                cells[r, c] = map(DateTimeArgAt(args[0], r, c), DateTimeArgAt(args[1], r, c), DateTimeArgAt(args[2], r, c));
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue DateTimeArgAt(ScalarValue value, int row, int col) =>
+        value is RangeValue range ? range.Cells[row, col] : value;
 
     private static ScalarValue DateScalar(ScalarValue yearValue, double rawMonth, double rawDay)
     {
@@ -304,22 +312,7 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (args[0] is RangeValue hourRange)
-        {
-            double rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
-            return MapUnaryTextRange(hourRange, value => TimeScalar(value, rawM, rawS));
-        }
-        if (args[1] is RangeValue minuteRange)
-        {
-            double rawS = ToNumber(args[2]);
-            return MapUnaryTextRange(minuteRange, value => TimeScalar(args[0], ToNumber(value), rawS));
-        }
-        if (args[2] is RangeValue secondRange)
-        {
-            double rawM = ToNumber(args[1]);
-            return MapUnaryTextRange(secondRange, value => TimeScalar(args[0], rawM, ToNumber(value)));
-        }
-        return TimeScalar(args[0], ToNumber(args[1]), ToNumber(args[2]));
+        return MapDateTimeTernaryArgs(args, (hour, minute, second) => TimeScalar(hour, ToNumber(minute), ToNumber(second)));
     }
 
     private static ScalarValue TimeScalar(ScalarValue hourValue, double rawM, double rawS)
