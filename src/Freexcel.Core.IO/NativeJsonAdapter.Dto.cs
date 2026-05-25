@@ -169,6 +169,29 @@ public sealed partial class NativeJsonAdapter
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
+    private class WorksheetSortStateDto
+    {
+        public string? Reference { get; set; }
+        public bool? ColumnSort { get; set; }
+        public bool? CaseSensitive { get; set; }
+        public string? SortMethod { get; set; }
+        public string? NativeXml { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetSortConditionDto> Conditions { get; set; } = [];
+    }
+
+    private class WorksheetSortConditionDto
+    {
+        public string? Reference { get; set; }
+        public bool? Descending { get; set; }
+        public string? SortBy { get; set; }
+        public string? CustomList { get; set; }
+        public string? DxfId { get; set; }
+        public string? IconSet { get; set; }
+        public string? IconId { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
     private class WorksheetCellSmartTagsDto
     {
         public string? Reference { get; set; }
@@ -256,6 +279,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetAutoFilterDto? AutoFilter { get; set; }
         public WorksheetSmartTagsDto? SmartTags { get; set; }
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
+        public WorksheetSortStateDto? SortState { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
