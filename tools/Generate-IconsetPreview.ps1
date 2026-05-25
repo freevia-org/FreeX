@@ -253,14 +253,24 @@ function New-FreexcelIconCell {
         [int]$CssSize
     )
 
-    $fileName = if ($Suffix) { "$Slug-$Suffix.svg" } else { "$Slug.svg" }
-    $relativePath = "../src/Freexcel.App.Host/Resources/CommandIconsSvg/$fileName"
-    $literalPath = Join-Path (Split-Path $PSScriptRoot -Parent) "src\Freexcel.App.Host\Resources\CommandIconsSvg\$fileName"
+    $repoRoot = Split-Path $PSScriptRoot -Parent
+    $requestedFileName = if ($Suffix) { "$Slug-$Suffix.svg" } else { "$Slug.svg" }
+    $fileName = $requestedFileName
+    $literalPath = Join-Path $repoRoot "src\Freexcel.App.Host\Resources\CommandIconsSvg\$fileName"
     if (-not (Test-Path -LiteralPath $literalPath)) {
-        return "<span class=""missing"">missing<br><code>$fileName</code></span>"
+        $baseFileName = "$Slug.svg"
+        $baseLiteralPath = Join-Path $repoRoot "src\Freexcel.App.Host\Resources\CommandIconsSvg\$baseFileName"
+        if (-not $Suffix -or -not (Test-Path -LiteralPath $baseLiteralPath)) {
+            return "<span class=""missing"">missing<br><code>$requestedFileName</code></span>"
+        }
+
+        $fileName = $baseFileName
+        $literalPath = $baseLiteralPath
     }
 
-    return "<div class=""icon-sample""><img src=""$relativePath"" width=""$CssSize"" height=""$CssSize"" alt=""$Label $CssSize px""><code>$fileName</code></div>"
+    $relativePath = "../src/Freexcel.App.Host/Resources/CommandIconsSvg/$fileName"
+    $fallbackLabel = if ($fileName -ne $requestedFileName) { "<code>fallback from $requestedFileName</code>" } else { "" }
+    return "<div class=""icon-sample""><img src=""$relativePath"" width=""$CssSize"" height=""$CssSize"" alt=""$Label $CssSize px""><code>$fileName</code>$fallbackLabel</div>"
 }
 
 function New-AppIconCell {
