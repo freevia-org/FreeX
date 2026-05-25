@@ -23,6 +23,34 @@ public sealed record HyperlinkMetadata(
 
 public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
 
+public sealed class WorksheetSmartTagsModel
+{
+    public string? NativeXml { get; set; }
+    public List<WorksheetCellSmartTagsModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagsModel
+{
+    public string? Reference { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetCellSmartTagModel> Tags { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagModel
+{
+    public string? Type { get; set; }
+    public bool? Deleted { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetCellSmartTagPropertyModel> Properties { get; set; } = [];
+}
+
+public sealed class WorksheetCellSmartTagPropertyModel
+{
+    public string? Key { get; set; }
+    public string? Value { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -82,6 +110,9 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet-level Excel AutoFilter metadata loaded from XLSX.</summary>
     public WorksheetAutoFilterModel? AutoFilter { get; set; }
+
+    /// <summary>Worksheet-level Excel smart-tag metadata loaded from XLSX.</summary>
+    public WorksheetSmartTagsModel? SmartTags { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;

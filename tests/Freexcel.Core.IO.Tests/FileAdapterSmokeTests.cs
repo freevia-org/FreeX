@@ -200,6 +200,50 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetSmartTags()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsNativeJson");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            NativeXml = "<smartTags xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><cellSmartTags r=\"A1\"><cellSmartTag type=\"0\" deleted=\"0\"><cellSmartTagPr key=\"place\" val=\"Seattle\" customSmartTagPropertyFlag=\"keep\" /></cellSmartTag></cellSmartTags></smartTags>",
+            Cells =
+            [
+                new WorksheetCellSmartTagsModel
+                {
+                    Reference = "A1",
+                    Tags =
+                    [
+                        new WorksheetCellSmartTagModel
+                        {
+                            Type = "0",
+                            Deleted = false,
+                            Properties =
+                            [
+                                new WorksheetCellSmartTagPropertyModel
+                                {
+                                    Key = "place",
+                                    Value = "Seattle",
+                                    NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.SmartTags.Should().BeEquivalentTo(sheet.SmartTags);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -14591,6 +14635,29 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SmartTags.Should().NotBeNull();
+        loadedSheet.SmartTags!.Cells.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorksheetCellSmartTagsModel
+        {
+            Reference = "A1",
+            Tags =
+            [
+                new WorksheetCellSmartTagModel
+                {
+                    Type = "0",
+                    Deleted = false,
+                    Properties =
+                    [
+                        new WorksheetCellSmartTagPropertyModel
+                        {
+                            Key = "place",
+                            Value = "Seattle",
+                            NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                        }
+                    ]
+                }
+            ]
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14606,6 +14673,7 @@ public partial class FileAdapterSmokeTests
         smartTags.ToString().Should().Contain("type=\"0\"");
         smartTags.ToString().Should().Contain("key=\"place\"");
         smartTags.ToString().Should().Contain("val=\"Seattle\"");
+        smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
     }
 
     [Fact]
@@ -18571,7 +18639,8 @@ public partial class FileAdapterSmokeTests
                         new XElement(
                             worksheetNs + "cellSmartTagPr",
                             new XAttribute("key", "place"),
-                            new XAttribute("val", "Seattle"))))));
+                            new XAttribute("val", "Seattle"),
+                            new XAttribute("customSmartTagPropertyFlag", "keep"))))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

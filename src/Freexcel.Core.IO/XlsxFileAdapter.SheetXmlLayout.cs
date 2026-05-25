@@ -64,6 +64,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<WorkbookScenario> Scenarios,
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
+        WorksheetSmartTagsModel? SmartTags,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
@@ -283,6 +284,7 @@ public sealed partial class XlsxFileAdapter
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
         var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
+        var smartTags = XlsxWorksheetSmartTagMapper.Read(worksheetXml.Root?.Element(worksheetNs + "smartTags"));
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
@@ -348,6 +350,7 @@ public sealed partial class XlsxFileAdapter
             scenarios,
             customViews,
             customProperties,
+            smartTags,
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
