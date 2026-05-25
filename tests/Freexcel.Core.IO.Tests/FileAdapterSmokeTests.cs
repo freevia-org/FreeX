@@ -14850,7 +14850,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.IgnoredErrorsMetadata.Should().NotBeNull();
+        loadedSheet.IgnoredErrorsMetadata!.ErrorNativeAttributes["A1"].Should().Contain("twoDigitTextYear", "1");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -14864,6 +14867,108 @@ public partial class FileAdapterSmokeTests
         ignoredErrors!.ToString().Should().Contain("numberStoredAsText=\"1\"");
         ignoredErrors.ToString().Should().Contain("twoDigitTextYear=\"1\"");
         ignoredErrors.ToString().Should().Contain("sqref=\"A1\"");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetIgnoredErrorsMetadata()
+    {
+        var workbook = new Workbook("IgnoredErrorsNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["nativeContainer"] = "kept"
+            },
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["twoDigitTextYear"] = "1",
+                    ["nativeIgnoredError"] = "kept"
+                }
+            }
+        };
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.IgnoredErrorsMetadata.Should().BeEquivalentTo(sheet.IgnoredErrorsMetadata);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetIgnoredErrorsMetadata()
+    {
+        var workbook = new Workbook("IgnoredErrorsMetadataSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["nativeContainer"] = "kept"
+            },
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["twoDigitTextYear"] = "1",
+                    ["nativeIgnoredError"] = "kept"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        var ignoredError = ignoredErrors!.Element(worksheetNs + "ignoredError")!;
+
+        ignoredErrors.Attribute("nativeContainer")!.Value.Should().Be("kept");
+        ignoredError.Attribute("sqref")!.Value.Should().Be("A1");
+        ignoredError.Attribute("twoDigitTextYear")!.Value.Should().Be("1");
+        ignoredError.Attribute("nativeIgnoredError")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotRestoreClearedIgnoredErrors()
+    {
+        var workbook = new Workbook("IgnoredErrorsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A1", ("numberStoredAsText", "1"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        worksheetXml.Root!.Element(worksheetNs + "ignoredErrors").Should().BeNull();
     }
 
     [Fact]
