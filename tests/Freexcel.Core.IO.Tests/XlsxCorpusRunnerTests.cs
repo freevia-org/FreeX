@@ -228,6 +228,7 @@ public class XlsxCorpusRunnerTests
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
         }
     }
 
@@ -268,6 +269,7 @@ public class XlsxCorpusRunnerTests
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(before.CriticalRelationshipDetails, row.Id);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -1865,6 +1867,11 @@ public class XlsxCorpusRunnerTests
                     .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
                     .SelectMany(ReadRelationshipTargets)
                     .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                archive.Entries
+                    .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(ReadRelationshipDetails)
+                    .Order(StringComparer.OrdinalIgnoreCase)
                     .ToArray());
         }
         finally
@@ -2016,6 +2023,27 @@ public class XlsxCorpusRunnerTests
             .Where(target => !string.IsNullOrWhiteSpace(target))
             .Where(target => !target!.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
             .Select(target => $"{relsEntry.FullName.Replace('\\', '/')}=>{target!.Replace('\\', '/')}")
+            .ToArray() ?? [];
+    }
+
+    private static IEnumerable<string> ReadRelationshipDetails(ZipArchiveEntry relsEntry)
+    {
+        XDocument relsXml;
+        using (var stream = relsEntry.Open())
+            relsXml = XDocument.Load(stream);
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return relsXml.Root?
+            .Elements(relNs + "Relationship")
+            .Where(rel => !string.IsNullOrWhiteSpace(rel.Attribute("Target")?.Value))
+            .Where(rel => !rel.Attribute("Target")!.Value.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
+            .Select(rel =>
+            {
+                var target = rel.Attribute("Target")!.Value.Replace('\\', '/');
+                var type = rel.Attribute("Type")?.Value ?? "";
+                var targetMode = rel.Attribute("TargetMode")?.Value ?? "";
+                return $"{relsEntry.FullName.Replace('\\', '/')}=>{target}|type={type}|mode={targetMode}";
+            })
             .ToArray() ?? [];
     }
 
@@ -2875,5 +2903,6 @@ public class XlsxCorpusRunnerTests
 
     private sealed record PackagePartSummary(
         IReadOnlyList<string> CriticalParts,
-        IReadOnlyList<string> CriticalRelationshipTargets);
+        IReadOnlyList<string> CriticalRelationshipTargets,
+        IReadOnlyList<string> CriticalRelationshipDetails);
 }
