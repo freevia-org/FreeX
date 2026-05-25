@@ -26,6 +26,12 @@ public sealed class WorkbookFileVersionModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookPropertiesModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorkbookFunctionGroupsModel
 {
     public string? BuiltInGroupCount { get; set; }
@@ -171,6 +177,9 @@ public sealed class Workbook
 
     /// <summary>Excel workbook file-version metadata.</summary>
     public WorkbookFileVersionModel? FileVersion { get; set; }
+
+    /// <summary>Excel workbook property metadata loaded from XLSX workbookPr.</summary>
+    public WorkbookPropertiesModel? Properties { get; set; }
 
     /// <summary>Excel workbook function-group metadata.</summary>
     public WorkbookFunctionGroupsModel? FunctionGroups { get; set; }

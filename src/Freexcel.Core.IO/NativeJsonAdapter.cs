@@ -37,6 +37,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.FileSharing = ToWorkbookFileSharing(dto.FileSharing);
         foreach (var fileRecoveryProperties in (dto.FileRecoveryProperties ?? []).Select(ToWorkbookFileRecoveryProperties).OfType<WorkbookFileRecoveryPropertiesModel>())
             workbook.FileRecoveryProperties.Add(fileRecoveryProperties);
+        workbook.Properties = ToWorkbookProperties(dto.Properties);
         workbook.FunctionGroups = ToWorkbookFunctionGroups(dto.FunctionGroups);
         workbook.SmartTags = ToWorkbookSmartTags(dto.SmartTags);
         workbook.AdditionalViews = ToWorkbookAdditionalViews(dto.AdditionalViews);
@@ -497,6 +498,25 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             BuiltInGroupCount = builtInGroupCount,
             NativeAttributes = nativeAttributes,
             Groups = groups
+        };
+    }
+
+    private static WorkbookPropertiesModel? ToWorkbookProperties(WorkbookPropertiesDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorkbookPropertiesModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
         };
     }
 
