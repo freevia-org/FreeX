@@ -198,7 +198,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
     private static bool MergeScenarioMetadata(XElement sourceScenario, XElement targetScenario, XNamespace workbookNs)
     {
-        var changed = MergeMissingAttributes(sourceScenario, targetScenario, ["name", "count"]);
+        var changed = MergeMissingAttributes(sourceScenario, targetScenario, ["name", "count", "comment"]);
 
         foreach (var sourceChild in sourceScenario.Elements().Where(child => child.Name != workbookNs + "inputCells"))
         {
