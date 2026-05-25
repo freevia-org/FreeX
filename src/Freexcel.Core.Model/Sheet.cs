@@ -93,6 +93,19 @@ public sealed class WorksheetSortConditionModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorksheetAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorksheetAdditionalViewModel
+{
+    public string? WorkbookViewId { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -161,6 +174,9 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
     public WorksheetSortStateModel? SortState { get; set; }
+
+    /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
+    public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
