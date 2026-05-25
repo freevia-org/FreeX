@@ -29,6 +29,35 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ViewportScrollbarMaximums_UsesUsedRangeWithoutMaterializingUsedCells()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+
+        viewportSource.Should().Contain("GetUsedRange()");
+        viewportSource.Should().NotContain("sheet.GetUsedCells()");
+    }
+
+    [Fact]
+    public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+        const string assignment = "SheetGrid.SparklineValues = sheet is null";
+        const string cacheRoute = "_sparklineValueCache.GetOrCreate(";
+        const string directRoute = "SheetGrid.SparklineValues = SparklineValuePlanner.BuildValues(sheet)";
+        const string plannerCall = "SparklineValuePlanner.BuildValues(sheet)";
+        const string cacheCallback = "() => SparklineValuePlanner.BuildValues(sheet)";
+
+        viewportSource.Should().Contain(assignment);
+        viewportSource.Should().Contain(cacheRoute);
+        viewportSource.Should().NotContain(directRoute);
+        viewportSource.Should().Contain(cacheCallback);
+        CountOccurrences(viewportSource, plannerCall).Should().Be(1);
+        viewportSource.IndexOf(cacheRoute, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(viewportSource.IndexOf(plannerCall, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -2145,5 +2174,18 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 }

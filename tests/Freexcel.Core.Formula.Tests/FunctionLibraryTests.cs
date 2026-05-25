@@ -3138,6 +3138,22 @@ public class FunctionLibraryTests
         _eval.Evaluate("=RANK(B1,A1:A2)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void Rank_NumberAndOrderRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(8)),
+            (4, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(5)),
+            (2, 2, new NumberValue(5)),
+            (1, 3, new NumberValue(0)),
+            (2, 3, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=RANK(B1:B2,A1:A4,C1:C2)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
     // ── STDEV ─────────────────────────────────────────────────────────────────
 
     [Fact]

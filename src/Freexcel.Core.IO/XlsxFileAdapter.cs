@@ -409,6 +409,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static MemoryStream CreateLoadPackageStream(Stream stream)
     {
+        if (stream is MemoryStream memoryStream &&
+            memoryStream.CanSeek &&
+            memoryStream.TryGetBuffer(out var sourceBuffer))
+        {
+            var memoryRemainingLength = memoryStream.Length - memoryStream.Position;
+            if (memoryRemainingLength is >= 0 and <= int.MaxValue)
+            {
+                var memoryPackageStream = new MemoryStream(
+                    sourceBuffer.Array!,
+                    sourceBuffer.Offset + (int)memoryStream.Position,
+                    (int)memoryRemainingLength,
+                    writable: false,
+                    publiclyVisible: true);
+                memoryStream.Position = memoryStream.Length;
+                memoryPackageStream.Position = memoryPackageStream.Length;
+                return memoryPackageStream;
+            }
+        }
+
         var remainingLength = stream.CanSeek
             ? Math.Max(0, stream.Length - stream.Position)
             : 0;

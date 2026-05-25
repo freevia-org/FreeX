@@ -152,6 +152,8 @@ public sealed partial class Sheet
                 },
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
+            RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
+            ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
         };
 
         // Collections: column/row dimensions
@@ -413,5 +415,19 @@ public sealed partial class Sheet
         static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
         static GridRange   RemapRange         (GridRange   r, SheetId id) =>
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    }
+
+    private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)
+    {
+        if (metadata is null)
+            return null;
+
+        return new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(metadata.NativeAttributes, StringComparer.Ordinal),
+            BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
+                pair => pair.Key,
+                pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
+        };
     }
 }

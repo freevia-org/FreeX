@@ -196,9 +196,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var rowBreak in sDto.RowPageBreaks ?? [])
                 if (rowBreak is >= 2 and <= CellAddress.MaxRow)
                     sheet.RowPageBreaks.Add(rowBreak);
+            sheet.RowPageBreaksMetadata = ToWorksheetPageBreaksMetadata(sDto.RowPageBreaksMetadata);
             foreach (var columnBreak in sDto.ColumnPageBreaks ?? [])
                 if (columnBreak is >= 2 and <= CellAddress.MaxCol)
                     sheet.ColumnPageBreaks.Add(columnBreak);
+            sheet.ColumnPageBreaksMetadata = ToWorksheetPageBreaksMetadata(sDto.ColumnPageBreaksMetadata);
             foreach (var mergedRegion in sDto.MergedRegions ?? [])
             {
                 if (string.IsNullOrWhiteSpace(mergedRegion))
@@ -675,6 +677,30 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPageBreaksMetadataModel? ToWorksheetPageBreaksMetadata(WorksheetPageBreaksMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var breakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>();
+        foreach (var pair in dto.BreakNativeAttributes ?? [])
+        {
+            var attributes = CleanNativeAttributes(pair.Value);
+            if (attributes.Count > 0)
+                breakNativeAttributes[pair.Key] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && breakNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            BreakNativeAttributes = breakNativeAttributes
         };
     }
 
