@@ -11654,6 +11654,50 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_FallsBackWhenAdditionalWorkbookViewNativeXmlIsNotWorkbookView()
+    {
+        var workbook = new Workbook("AdditionalWorkbookViewFallbackTest")
+        {
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                Views =
+                [
+                    new WorkbookAdditionalViewModel
+                    {
+                        NativeXml = "<notWorkbookView xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" invalid=\"1\" />",
+                        NativeAttributes = new Dictionary<string, string>
+                        {
+                            ["visibility"] = "hidden",
+                            ["tabRatio"] = "700",
+                            ["customWorkbookViewFlag"] = "kept"
+                        }
+                    }
+                ]
+            }
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("fallback view"));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var bookViews = workbookXml.Root!.Element(workbookNs + "bookViews");
+        bookViews.Should().NotBeNull();
+        bookViews!.Element(workbookNs + "notWorkbookView").Should().BeNull();
+
+        var views = bookViews.Elements(workbookNs + "workbookView").ToList();
+        views.Should().HaveCount(2);
+        views.Last().Attribute("visibility")!.Value.Should().Be("hidden");
+        views.Last().Attribute("tabRatio")!.Value.Should().Be("700");
+        views.Last().Attribute("customWorkbookViewFlag")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPrimaryWorkbookViewNativeMetadata()
     {
         var workbook = new Workbook("PrimaryWorkbookViewRetentionTest");
