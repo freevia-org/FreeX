@@ -61,17 +61,43 @@ internal static class XlsxWorksheetAutoFilterMapper
 
     private static void InsertAutoFilter(XElement root, XNamespace worksheetNs, XElement autoFilter)
     {
-        var insertionPoint = root.Element(worksheetNs + "mergeCells") ??
-            root.Element(worksheetNs + "phoneticPr") ??
-            root.Element(worksheetNs + "conditionalFormatting") ??
-            root.Element(worksheetNs + "dataValidations") ??
-            root.Element(worksheetNs + "hyperlinks") ??
-            root.Element(worksheetNs + "printOptions") ??
-            root.Element(worksheetNs + "pageMargins") ??
-            root.Element(worksheetNs + "pageSetup") ??
-            root.Element(worksheetNs + "headerFooter");
+        string[] laterWorksheetElements =
+        [
+            "sortState",
+            "dataConsolidate",
+            "customSheetViews",
+            "mergeCells",
+            "phoneticPr",
+            "conditionalFormatting",
+            "dataValidations",
+            "hyperlinks",
+            "printOptions",
+            "pageMargins",
+            "pageSetup",
+            "headerFooter",
+            "rowBreaks",
+            "colBreaks",
+            "customProperties",
+            "cellWatches",
+            "ignoredErrors",
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == worksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
         if (insertionPoint is not null)
-            insertionPoint.AddAfterSelf(autoFilter);
+            insertionPoint.AddBeforeSelf(autoFilter);
         else
             root.Add(autoFilter);
     }
