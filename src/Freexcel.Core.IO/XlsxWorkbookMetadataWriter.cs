@@ -298,6 +298,8 @@ internal static class XlsxWorkbookMetadataWriter
         var oleSize = root.Element(workbookNs + "oleSize");
         if (oleSize is not null)
             oleSize.AddBeforeSelf(functionGroups);
+        else if (root.Element(workbookNs + "extLst") is { } extensionList)
+            extensionList.AddBeforeSelf(functionGroups);
         else
             root.Add(functionGroups);
 
@@ -362,7 +364,12 @@ internal static class XlsxWorkbookMetadataWriter
             smartTagTypes.Add(element);
         }
 
-        root.Add(smartTagProperties, smartTagTypes);
+        var extensionList = root.Element(workbookNs + "extLst");
+        if (extensionList is not null)
+            extensionList.AddBeforeSelf(smartTagProperties, smartTagTypes);
+        else
+            root.Add(smartTagProperties, smartTagTypes);
+
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
 
         static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
@@ -395,8 +402,7 @@ internal static class XlsxWorkbookMetadataWriter
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) ||
                     string.Equals(attribute.Key, "lockStructure", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Key, "revisionsPassword", StringComparison.Ordinal))
+                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal))
                 {
                     continue;
                 }

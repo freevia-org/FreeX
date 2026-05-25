@@ -169,11 +169,16 @@ public partial class MainWindow
         var current = GetCurrentShellFocusTarget();
         for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
         {
-            current = ShellFocusCyclePlanner.GetNext(current, reverse);
+            current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
             if (FocusShellRegion(current))
                 return;
         }
     }
+
+    private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
+        target != ShellFocusTarget.TaskPane ||
+        PivotFieldListPane?.Visibility == Visibility.Visible ||
+        SlicerTimelinePane?.Visibility == Visibility.Visible;
 
     private ShellFocusTarget GetCurrentShellFocusTarget()
     {
@@ -291,9 +296,6 @@ public partial class MainWindow
     {
         var keyTipKey = GetEffectiveKey(e);
         if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
-            return;
-
-        if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
         if (_ribbonKeyTipMode.IsActive)

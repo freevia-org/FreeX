@@ -153,21 +153,47 @@ public sealed class RibbonIconFactorySvgTests
     }
 
     [Fact]
-    public void CommandIconAssets_UseBaseSvgAsSingleSourceOfMeaning()
+    public void CommandIconAssets_OnlyUseSizeVariantsForPixelCrispAlignmentLines()
     {
         var iconDirectory = Path.Combine(
             Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Freexcel.App.Host.csproj"))!,
             "Resources",
             "CommandIconsSvg");
 
+        var allowedSizeSpecificFiles = new[]
+        {
+            "align-left-small.svg",
+            "align-right-small.svg",
+            "bottom-align-small.svg",
+            "center-small.svg",
+            "decrease-indent-small.svg",
+            "distributed-justify-small.svg",
+            "increase-indent-small.svg",
+            "middle-align-small.svg",
+            "top-align-small.svg"
+        };
+
         var sizeSpecificFiles = Directory
             .EnumerateFiles(iconDirectory, "*.svg")
             .Where(path => path.EndsWith("-small.svg", StringComparison.OrdinalIgnoreCase)
                 || path.EndsWith("-large.svg", StringComparison.OrdinalIgnoreCase))
             .Select(Path.GetFileName)
+            .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        sizeSpecificFiles.Should().BeEmpty(
-            "ribbon command icons should not change visual meaning between small, base, and large previews");
+        sizeSpecificFiles.Should().Equal(allowedSizeSpecificFiles,
+            "only alignment and indentation icons should need size-specific SVGs, so their 1 px rule lines do not get fractionally scaled");
+
+        foreach (var fileName in allowedSizeSpecificFiles)
+        {
+            var smallText = File.ReadAllText(Path.Combine(iconDirectory, fileName));
+            var baseFileName = fileName.Replace("-small.svg", ".svg", StringComparison.OrdinalIgnoreCase);
+            var baseText = File.ReadAllText(Path.Combine(iconDirectory, baseFileName));
+
+            smallText.Should().Contain("height=\"1\"");
+            smallText.Should().NotContain("height=\"2\"");
+            baseText.Should().Contain("height=\"1\"");
+            baseText.Should().NotContain("height=\"2\"");
+        }
     }
 }

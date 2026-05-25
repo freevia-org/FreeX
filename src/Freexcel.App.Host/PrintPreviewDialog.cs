@@ -191,16 +191,17 @@ public sealed partial class PrintPreviewDialog : Window
         toolbar.Items.Add(pageNumberBox);
         toolbar.Items.Add(pageStatusText);
         toolbar.Items.Add(new Separator());
-        toolbar.Items.Add(new Label
-        {
-            Content = "_Zoom:",
-            VerticalAlignment = VerticalAlignment.Center
-        });
         var zoomBox = new ComboBox
         {
             Width = 82,
             SelectedIndex = 2
         };
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Zoom:",
+            Target = zoomBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
         foreach (var zoom in new[] { "50%", "75%", "100%", "125%", "Page Width" })
             zoomBox.Items.Add(zoom);
         zoomBox.SelectionChanged += (_, _) =>

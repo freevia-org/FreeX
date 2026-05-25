@@ -24,4 +24,20 @@ public sealed class ShellFocusCyclePlannerTests
 
         next.Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData(ShellFocusTarget.SheetTabs, false, ShellFocusTarget.StatusBar)]
+    [InlineData(ShellFocusTarget.StatusBar, true, ShellFocusTarget.SheetTabs)]
+    public void GetNextAvailable_SkipsUnavailableTaskPane(
+        ShellFocusTarget current,
+        bool reverse,
+        ShellFocusTarget expected)
+    {
+        var next = ShellFocusCyclePlanner.GetNextAvailable(
+            current,
+            reverse,
+            target => target != ShellFocusTarget.TaskPane);
+
+        next.Should().Be(expected);
+    }
 }

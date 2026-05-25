@@ -114,8 +114,21 @@ public sealed partial class AutoFilterDialog
             VerticalAlignment = System.Windows.VerticalAlignment.Center
         });
         button.Content = content;
-        button.Click += (_, _) => _selectedColorFilter = colorFilter;
+        button.Click += (_, _) => ApplyColorChoice(colorFilter);
         return button;
+    }
+
+    private void ApplyColorChoice(AutoFilterColorFilter colorFilter)
+    {
+        _selectedColorFilter = colorFilter;
+        Result = BuildResult(
+            GetSortDirection(),
+            _allItems,
+            _searchBox.Text,
+            _criteriaBox.Text,
+            colorFilter,
+            _addCurrentSelectionToFilterBox.IsChecked == true);
+        DialogResult = true;
     }
 
     private static Rectangle CreateColorSwatch(AutoFilterColorOption option)

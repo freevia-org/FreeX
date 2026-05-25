@@ -330,6 +330,7 @@ public sealed partial class NativeJsonAdapter
         public double? FooterMargin { get; set; }
         public bool PrintGridlines { get; set; }
         public bool PrintHeadings { get; set; }
+        public WorksheetPrintOptionsMetadataDto? PrintOptionsMetadata { get; set; }
         public RepeatRangeDto? PrintTitleRows { get; set; }
         public RepeatRangeDto? PrintTitleColumns { get; set; }
         public HeaderFooterDto? PageHeader { get; set; }
@@ -360,6 +361,7 @@ public sealed partial class NativeJsonAdapter
         public int? PrintQualityVerticalDpi { get; set; }
         public WorksheetPrintErrorValue? PrintErrorValue { get; set; }
         public WorksheetPrintComments? PrintComments { get; set; }
+        public WorksheetPageSetupMetadataDto? PageSetupMetadata { get; set; }
         public ScaleToFitDto? ScaleToFit { get; set; }
         public bool? FitToPage { get; set; }
         public bool? AutoPageBreaks { get; set; }
@@ -383,6 +385,18 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetProtectionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPageSetupMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPrintOptionsMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];

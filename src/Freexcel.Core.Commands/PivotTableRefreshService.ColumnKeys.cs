@@ -78,11 +78,11 @@ public static partial class PivotTableRefreshService
     {
         var groups = rows
             .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .Cast<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>>()
+            .Select(group => (IGrouping<PivotKey, IReadOnlyList<ScalarValue>>)new PivotRowGroup(group.Key, group.ToList()))
             .ToList();
 
         if (!pivotTable.ShowItemsWithNoDataOnRows || rowFields.Count == 0)
-            return groups;
+            return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
 
         var itemSets = rowFields
             .Select(field => GetFieldItemsWithNoData(workbook, pivotTable, rows, field))
@@ -90,20 +90,10 @@ public static partial class PivotTableRefreshService
         foreach (var key in BuildKeyCombinations(itemSets))
         {
             if (!groups.Any(group => group.Key.Equals(key)))
-                groups.Add(new EmptyPivotGrouping(key));
+                groups.Add(new PivotRowGroup(key, []));
         }
 
         return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
-    }
-
-    private sealed class EmptyPivotGrouping(PivotKey key) : IGrouping<PivotKey, IReadOnlyList<ScalarValue>>
-    {
-        public PivotKey Key { get; } = key;
-
-        public IEnumerator<IReadOnlyList<ScalarValue>> GetEnumerator() =>
-            Enumerable.Empty<IReadOnlyList<ScalarValue>>().GetEnumerator();
-
-        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static IReadOnlyList<string> GetFieldItemsWithNoData(
@@ -158,5 +148,15 @@ public static partial class PivotTableRefreshService
             foreach (var key in BuildKeyCombinations(itemSets, values, depth + 1))
                 yield return key;
         }
+    }
+
+    private sealed class PivotRowGroup(PivotKey key, IReadOnlyList<IReadOnlyList<ScalarValue>> rows)
+        : IGrouping<PivotKey, IReadOnlyList<ScalarValue>>
+    {
+        public PivotKey Key { get; } = key;
+
+        public IEnumerator<IReadOnlyList<ScalarValue>> GetEnumerator() => rows.GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
