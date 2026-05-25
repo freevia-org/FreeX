@@ -4,18 +4,25 @@ namespace Freexcel.App.Host;
 
 public static class OptionsInputParser
 {
-    public static int ParseDefaultFontSizeOrFallback(string input, int fallback)
+    public static bool TryParseDefaultFontSize(string input, out int fontSize)
     {
-        return int.TryParse(input.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
-            ? parsed
-            : fallback;
+        fontSize = 0;
+        if (!int.TryParse(input.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed <= 0)
+            return false;
+
+        fontSize = parsed;
+        return true;
     }
 
-    public static int ParseDefaultSheetCountOrFallback(string input, int fallback)
+    public static bool TryParseDefaultSheetCount(string input, out int sheetCount)
     {
-        return int.TryParse(input.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) &&
-               parsed is >= 1 and <= 255
-            ? parsed
-            : fallback;
+        sheetCount = 0;
+        if (!int.TryParse(input.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed is < 1 or > 255)
+            return false;
+
+        sheetCount = parsed;
+        return true;
     }
 }
