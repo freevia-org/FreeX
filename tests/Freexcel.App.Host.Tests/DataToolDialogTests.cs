@@ -249,6 +249,7 @@ public sealed class DataToolDialogTests
     {
         var source = ReadTextToColumnsDialogSources();
 
+        source.Should().Contain("TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _)");
         source.Should().Contain("FocusInvalidFixedWidthBreaksInput();");
         source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
         source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
@@ -287,6 +288,24 @@ public sealed class DataToolDialogTests
         var result = TextToColumnsDialog.CreateFixedWidthResult("4,8");
         result.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
         result.FixedWidthBreakPositions.Should().Equal(4, 8);
+    }
+
+    [Theory]
+    [InlineData("4,bad", 12)]
+    [InlineData("0,4", 12)]
+    [InlineData("4,12", 12)]
+    [InlineData("", 12)]
+    public void TextToColumnsResult_RejectsInvalidFixedWidthBreakPositions(string text, int maxLength)
+    {
+        TextToColumnsDialog.TryParseFixedWidthBreakPositions(text, maxLength, out var positions).Should().BeFalse();
+        positions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TextToColumnsResult_TryParseFixedWidthBreakPositionsRequiresPreviewRange()
+    {
+        TextToColumnsDialog.TryParseFixedWidthBreakPositions("8, 4; 4", 12, out var positions).Should().BeTrue();
+        positions.Should().Equal(4, 8);
     }
 
     [Fact]
