@@ -349,6 +349,22 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void ChiSqDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 2.0), (2, 1, 5.0),
+            (1, 2, 5.0), (2, 2, 8.0),
+            (1, 3, 0.5), (2, 3, 0.95));
+
+        AssertColumnApproximately(Eval("CHISQ.DIST(A1:A2,B1:B2,TRUE)", sheet), Calc("CHISQ.DIST(2,5,TRUE)"), Calc("CHISQ.DIST(5,8,TRUE)"));
+        AssertColumnApproximately(Eval("CHISQ.DIST.RT(A1:A2,B1:B2)", sheet), Calc("CHISQ.DIST.RT(2,5)"), Calc("CHISQ.DIST.RT(5,8)"));
+        AssertColumnApproximately(Eval("CHISQ.INV(C1:C2,B1:B2)", sheet), Calc("CHISQ.INV(0.5,5)"), Calc("CHISQ.INV(0.95,8)"));
+        AssertColumnApproximately(Eval("CHISQ.INV.RT(C1:C2,B1:B2)", sheet), Calc("CHISQ.INV.RT(0.5,5)"), Calc("CHISQ.INV.RT(0.95,8)"));
+
+        Eval("CHISQ.DIST(A1:A2,B1:C1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void ChiSqDist_RightTailComplementsCdf()
     {
         double cdf = Calc("CHISQ.DIST(5,5,TRUE)");
