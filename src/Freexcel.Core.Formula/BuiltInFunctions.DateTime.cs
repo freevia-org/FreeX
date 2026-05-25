@@ -213,18 +213,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue monthsRange)
-            return MapUnaryTextRange(monthsRange, value =>
-            {
-                double raw = ToNumber(value);
-                if (!double.IsFinite(raw) || raw > int.MaxValue || raw < int.MinValue) return ErrorValue.Num;
-                return EdateScalar(args[0], (int)raw);
-            });
-        double rawMonths = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], EdateScalar);
+    }
+
+    private static ScalarValue EdateScalar(ScalarValue value, ScalarValue monthsValue)
+    {
+        double rawMonths = ToNumber(monthsValue);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue || rawMonths < int.MinValue) return ErrorValue.Num;
-        int months = (int)rawMonths;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => EdateScalar(value, months));
-        return EdateScalar(args[0], months);
+        return EdateScalar(value, (int)rawMonths);
     }
 
     private static ScalarValue EdateScalar(ScalarValue value, int months)
@@ -383,18 +379,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is RangeValue monthsRange)
-            return MapUnaryTextRange(monthsRange, value =>
-            {
-                double raw = ToNumber(value);
-                if (!double.IsFinite(raw) || raw > int.MaxValue - 1 || raw < int.MinValue) return ErrorValue.Num;
-                return EomonthScalar(args[0], (int)raw);
-            });
-        double rawMonths = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], EomonthScalar);
+    }
+
+    private static ScalarValue EomonthScalar(ScalarValue value, ScalarValue monthsValue)
+    {
+        double rawMonths = ToNumber(monthsValue);
         if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue - 1 || rawMonths < int.MinValue) return ErrorValue.Num;
-        int months = (int)rawMonths;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => EomonthScalar(value, months));
-        return EomonthScalar(args[0], months);
+        return EomonthScalar(value, (int)rawMonths);
     }
 
     private static ScalarValue EomonthScalar(ScalarValue value, int months)
@@ -464,25 +456,17 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        if (args[1] is RangeValue daysRange)
-        {
-            if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var rangeHolidays, out var rangeHolidayError))
-                return rangeHolidayError!;
-            return MapUnaryTextRange(daysRange, value =>
-            {
-                double raw = ToNumber(value);
-                if (!double.IsFinite(raw) || raw < int.MinValue + 1 || raw > int.MaxValue) return ErrorValue.Num;
-                return WorkdayScalar(args[0], (int)raw, rangeHolidays);
-            });
-        }
-        double rawDays = ToNumber(args[1]);
-        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
-        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
-        int days = (int)rawDays;
         if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
             return holidayError!;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WorkdayScalar(value, days, holidays));
-        return WorkdayScalar(args[0], days, holidays);
+        return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayScalar(startDate, daysValue, holidays));
+    }
+
+    private static ScalarValue WorkdayScalar(ScalarValue startDate, ScalarValue daysValue, HashSet<DateTime> holidays)
+    {
+        double rawDays = ToNumber(daysValue);
+        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
+        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
+        return WorkdayScalar(startDate, (int)rawDays, holidays);
     }
 
     private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<DateTime> holidays)

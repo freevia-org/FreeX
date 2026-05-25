@@ -1814,6 +1814,43 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DateOffset_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 4, 29).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 4, 30).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 1).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 4).ToOADate()));
+    }
+
+    [Fact]
+    public void DateOffset_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Weekday_ReturnType1_SundayIs1()
     {
         // 2024-01-07 is a Sunday
