@@ -208,9 +208,15 @@ public static partial class BuiltInFunctions
             ? rangeArg
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        var number = ToNumber(args[0]);
+        var orderArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapBinaryMathArgs(args[0], orderArg, (numberValue, orderValue) => RankScalar(range, numberValue, orderValue));
+    }
+
+    private static ScalarValue RankScalar(RangeValue range, ScalarValue numberValue, ScalarValue orderValue)
+    {
+        var number = ToNumber(numberValue);
         if (!double.IsFinite(number)) return ErrorValue.Num;
-        double rawOrder = args.Count > 2 ? ToNumber(args[2]) : 0;
+        double rawOrder = orderValue is not BlankValue ? ToNumber(orderValue) : 0;
         if (!double.IsFinite(rawOrder)) return ErrorValue.Num;
         int order  = (int)rawOrder;
 
@@ -589,9 +595,15 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue range) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        var number = ToNumber(args[0]);
+        var orderArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapBinaryMathArgs(args[0], orderArg, (numberValue, orderValue) => RankAvgScalar(range, numberValue, orderValue));
+    }
+
+    private static ScalarValue RankAvgScalar(RangeValue range, ScalarValue numberValue, ScalarValue orderValue)
+    {
+        var number = ToNumber(numberValue);
         if (!double.IsFinite(number)) return ErrorValue.Num;
-        double rawOrder = args.Count > 2 ? ToNumber(args[2]) : 0;
+        double rawOrder = orderValue is not BlankValue ? ToNumber(orderValue) : 0;
         if (!double.IsFinite(rawOrder)) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(range);
         if (err is not null) return err;
