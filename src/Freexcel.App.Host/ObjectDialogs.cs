@@ -121,6 +121,12 @@ public sealed class HyperlinkDialog : Window
             return false;
         }
 
+        if (linkType == HyperlinkLinkType.EmailAddress && !IsValidEmailAddressTarget(result.Target))
+        {
+            error = "Enter a valid email address.";
+            return false;
+        }
+
         error = null;
         return true;
     }
@@ -178,6 +184,17 @@ public sealed class HyperlinkDialog : Window
         _targetBox.Focus();
         _targetBox.SelectAll();
         Keyboard.Focus(_targetBox);
+    }
+
+    private static bool IsValidEmailAddressTarget(string target)
+    {
+        var address = target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)
+            ? target["mailto:".Length..]
+            : target;
+        return address.IndexOf('@') > 0 &&
+            address.IndexOf('@') == address.LastIndexOf('@') &&
+            address.LastIndexOf('.') > address.IndexOf('@') + 1 &&
+            address.IndexOfAny([' ', '\t', '\r', '\n']) < 0;
     }
 
     private static Grid DialogGrid(int inputRows)
@@ -351,8 +368,39 @@ public sealed class ThreadedCommentDialog : Window
 
     private void SubmitThreadedCommentDialog(ThreadedComment? existing)
     {
-        Result = CreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true);
+        if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))
+        {
+            ShowInvalidThreadedCommentWarning(error ?? "Enter a comment.", _rootBox);
+            return;
+        }
+
+        Result = result;
         DialogResult = true;
+    }
+
+    public static bool TryCreateResult(
+        ThreadedComment? existing,
+        string? rootText,
+        string? replyText,
+        bool isResolved,
+        out ThreadedCommentDialogResult result,
+        out string? error)
+    {
+        result = CreateResult(existing, rootText, replyText, isResolved);
+        if (existing is not null && string.IsNullOrWhiteSpace(rootText))
+        {
+            error = "Enter a comment.";
+            return false;
+        }
+
+        if (existing is null && string.IsNullOrWhiteSpace(result.ReplyText))
+        {
+            error = "Enter a comment.";
+            return false;
+        }
+
+        error = null;
+        return true;
     }
 
     public static ThreadedCommentDialogResult CreateResult(
@@ -407,5 +455,13 @@ public sealed class ThreadedCommentDialog : Window
             Padding = new Thickness(8, 6, 8, 6),
             Margin = new Thickness(0, 0, 0, 4)
         };
+    }
+
+    private void ShowInvalidThreadedCommentWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 }
