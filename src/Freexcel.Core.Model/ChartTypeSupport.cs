@@ -27,7 +27,12 @@ public static class ChartTypeSupport
             or ChartType.ThreeDBar
             or ChartType.ThreeDArea
             or ChartType.Waterfall
-            or ChartType.Histogram;
+            or ChartType.Histogram
+            or ChartType.Pareto
+            or ChartType.BoxAndWhisker
+            or ChartType.Treemap
+            or ChartType.Sunburst
+            or ChartType.Funnel;
 
     public static bool SupportsTrendlines(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.ThreeDLine or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;

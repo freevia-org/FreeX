@@ -124,6 +124,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.SmartTags = ToWorksheetSmartTags(sDto.SmartTags);
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
+            sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }

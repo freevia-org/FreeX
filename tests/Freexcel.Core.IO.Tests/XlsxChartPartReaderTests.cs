@@ -16,7 +16,7 @@ public sealed class XlsxChartPartReaderTests
     [InlineData("boxWhiskerChart", ChartType.BoxAndWhisker)]
     [InlineData("waterfallChart", ChartType.Waterfall)]
     [InlineData("funnelChart", ChartType.Funnel)]
-    public void TryReadSupportedChart_RecognizesDeferredAdvancedChartFamilies(string chartElementName, ChartType expectedType)
+    public void TryReadSupportedChart_RecognizesAdvancedChartFamilies(string chartElementName, ChartType expectedType)
     {
         var sheetId = SheetId.New();
         var chartXml = XDocument.Parse(BuildSingleSeriesChartXml(chartElementName));
@@ -25,7 +25,7 @@ public sealed class XlsxChartPartReaderTests
             .Should().BeTrue();
 
         chart.Type.Should().Be(expectedType);
-        ChartTypeSupport.IsRenderable(chart.Type).Should().Be(chart.Type is ChartType.Surface or ChartType.ThreeDSurface);
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
         chart.DataRange.Should().Be(new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 4, 2)));
@@ -34,7 +34,7 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
-    public void TryReadSupportedChart_RecognizesParetoHistogramAsDeferred()
+    public void TryReadSupportedChart_RecognizesParetoHistogramAsRenderable()
     {
         var sheetId = SheetId.New();
         var chartXml = XDocument.Parse(BuildSingleSeriesChartXml("histogramChart", """<c:paretoLine val="1"/>"""));
@@ -43,7 +43,7 @@ public sealed class XlsxChartPartReaderTests
             .Should().BeTrue();
 
         chart.Type.Should().Be(ChartType.Pareto);
-        ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class XlsxChartPartReaderTests
     [InlineData("cx:boxWhiskerChart", ChartType.BoxAndWhisker)]
     [InlineData("cx:waterfallChart", ChartType.Waterfall)]
     [InlineData("cx:funnelChart", ChartType.Funnel)]
-    public void TryReadSupportedChart_RecognizesDeferredAdvancedChartFamiliesInsideExtensions(
+    public void TryReadSupportedChart_RecognizesAdvancedChartFamiliesInsideExtensions(
         string chartElementName,
         ChartType expectedType)
     {
@@ -118,7 +118,7 @@ public sealed class XlsxChartPartReaderTests
             .Should().BeTrue();
 
         chart.Type.Should().Be(expectedType);
-        ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
         chart.DataRange.Should().Be(new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 4, 2)));
@@ -149,7 +149,7 @@ public sealed class XlsxChartPartReaderTests
             .Should().BeTrue();
 
         chart.Type.Should().Be(ChartType.Treemap);
-        ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
         chart.DataRange.Should().Be(new GridRange(
             new CellAddress(sheetId, 1, 1),
             new CellAddress(sheetId, 4, 2)));

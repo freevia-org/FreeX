@@ -192,6 +192,19 @@ public sealed partial class NativeJsonAdapter
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
+    private class WorksheetAdditionalViewsDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetAdditionalViewDto> Views { get; set; } = [];
+    }
+
+    private class WorksheetAdditionalViewDto
+    {
+        public string? WorkbookViewId { get; set; }
+        public string? NativeXml { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
     private class WorksheetCellSmartTagsDto
     {
         public string? Reference { get; set; }
@@ -280,6 +293,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetSmartTagsDto? SmartTags { get; set; }
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
         public WorksheetSortStateDto? SortState { get; set; }
+        public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }

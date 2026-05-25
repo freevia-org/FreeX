@@ -36,6 +36,7 @@ public sealed partial class Sheet
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
             SortState                     = SortState,
+            AdditionalViews               = AdditionalViews,
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
             PageMargins                   = PageMargins,

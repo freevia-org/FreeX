@@ -194,6 +194,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetAdditionalViewMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.DataConsolidation is not null))
         {
             packageStream.Position = 0;
@@ -301,6 +307,12 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetAdditionalViewMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.DataConsolidation is not null))
