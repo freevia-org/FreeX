@@ -155,7 +155,32 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
-        commands.Single(command => command.Action == WorksheetContextMenuAction.ClearHyperlinks).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Header == "Clear Hyperlinks").IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildCommands_UsesExcelLikeHyperlinkStateCommands()
+    {
+        var withoutLink = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasHyperlink: false));
+        withoutLink.Select(command => command.Header).Should().Contain("Hyperlink...");
+        withoutLink.Select(command => command.Header).Should().NotContain(["Open Hyperlink", "Edit Hyperlink...", "Remove Hyperlink"]);
+
+        var withLink = WorksheetContextMenuPlanner.BuildCommands(
+            state: new WorksheetContextMenuState(HasHyperlink: true));
+
+        withLink.Select(command => command.Header).Should().ContainInOrder(
+            "Open Hyperlink",
+            "Edit Hyperlink...",
+            "Remove Hyperlink",
+            "Format Cells...");
+        withLink.Select(command => command.Header).Should().NotContain("Hyperlink...");
+        withLink.Single(command => command.Header == "Open Hyperlink")
+            .Action.Should().Be(WorksheetContextMenuAction.OpenHyperlink);
+        withLink.Single(command => command.Header == "Edit Hyperlink...")
+            .Action.Should().Be(WorksheetContextMenuAction.Hyperlink);
+        withLink.Single(command => command.Header == "Remove Hyperlink")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearHyperlinks);
     }
 
     [Fact]
@@ -219,7 +244,13 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Row Height",
             "Hide Rows",
             "Unhide Rows",
+            "Format Cells...",
             "Clear Contents");
+        commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Format Cells...",
+                WorksheetContextMenuAction.FormatCells,
+                AccessHeader: "_Format Cells..."));
         commands.Select(command => command.Header).Should().NotContain([
             "Insert Column Left",
             "Delete Column(s)",
@@ -245,7 +276,13 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Column Width",
             "Hide Columns",
             "Unhide Columns",
+            "Format Cells...",
             "Clear Contents");
+        commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Format Cells...",
+                WorksheetContextMenuAction.FormatCells,
+                AccessHeader: "_Format Cells..."));
         commands.Select(command => command.Header).Should().NotContain([
             "Insert Row Above",
             "Delete Row(s)",

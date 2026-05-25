@@ -59,6 +59,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
         packageStream.Position = 0;
+        var indexedColors = XlsxIndexedColorPaletteMapper.Load(packageStream);
+        packageStream.Position = 0;
         var pivotMetadata = XlsxPivotTableReader.Load(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
         var slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageStream);
@@ -110,6 +112,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.MaxCalculationChange = calculationProperties.MaxChange;
         foreach (var (numberFormatId, formatCode) in numberFormatCatalog)
             workbook.NumberFormatCatalog[numberFormatId] = formatCode;
+        foreach (var (index, color) in indexedColors.Colors)
+            workbook.IndexedColors.SetColor(index, color);
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
         foreach (var slicer in slicerTimelineMetadata.Slicers)
@@ -405,6 +409,25 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static MemoryStream CreateLoadPackageStream(Stream stream)
     {
+        if (stream is MemoryStream memoryStream &&
+            memoryStream.CanSeek &&
+            memoryStream.TryGetBuffer(out var sourceBuffer))
+        {
+            var memoryRemainingLength = memoryStream.Length - memoryStream.Position;
+            if (memoryRemainingLength is >= 0 and <= int.MaxValue)
+            {
+                var memoryPackageStream = new MemoryStream(
+                    sourceBuffer.Array!,
+                    sourceBuffer.Offset + (int)memoryStream.Position,
+                    (int)memoryRemainingLength,
+                    writable: false,
+                    publiclyVisible: true);
+                memoryStream.Position = memoryStream.Length;
+                memoryPackageStream.Position = memoryPackageStream.Length;
+                return memoryPackageStream;
+            }
+        }
+
         var remainingLength = stream.CanSeek
             ? Math.Max(0, stream.Length - stream.Position)
             : 0;

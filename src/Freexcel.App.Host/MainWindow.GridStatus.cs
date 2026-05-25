@@ -11,10 +11,11 @@ public partial class MainWindow
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
 
-    private void InvalidateStatusBarStats()
+    private void InvalidateNavigationCaches()
     {
-        _statusBarStatsRevision++;
+        _navigationCacheRevision++;
         _statusBarStatsCache.Clear();
+        _sparklineValueCache.Clear();
     }
 
     private void RefreshStatusBar()
@@ -33,7 +34,7 @@ public partial class MainWindow
         var stats = _statusBarStatsCache.GetOrCreate(
             sheet,
             range,
-            _statusBarStatsRevision,
+            _navigationCacheRevision,
             () => StatusBarCalculator.Calculate(sheet, range));
 
         if (stats.Count == 0)

@@ -188,16 +188,35 @@ public sealed partial class TextToColumnsDialog : Window
                 throw new ArgumentException("Enter a single destination cell, such as F2.");
             }
 
-            if (_fixedWidthButton.IsChecked == true && ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text).Count == 0)
+            if (_fixedWidthButton.IsChecked == true &&
+                !TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _))
             {
                 FocusInvalidFixedWidthBreaksInput();
                 throw new ArgumentException("Enter at least one fixed-width break position.");
+            }
+
+            if (_fixedWidthButton.IsChecked != true && SelectedDelimiterKinds().Count == 0)
+            {
+                FocusInvalidDelimiterSelectionInput();
+                throw new ArgumentException("Select at least one delimiter.");
             }
 
             if (_fixedWidthButton.IsChecked != true && _otherBox.IsChecked == true && string.IsNullOrEmpty(_customBox.Text))
             {
                 FocusInvalidCustomDelimiterInput();
                 throw new ArgumentException("Custom delimiter is required.");
+            }
+
+            if (!TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _))
+            {
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                throw new ArgumentException("Enter a single decimal separator.");
+            }
+
+            if (!TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _))
+            {
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
+                throw new ArgumentException("Enter a single thousands separator.");
             }
 
             Result = _fixedWidthButton.IsChecked == true
@@ -229,8 +248,17 @@ public sealed partial class TextToColumnsDialog : Window
             case "Enter at least one fixed-width break position.":
                 FocusInvalidFixedWidthBreaksInput();
                 break;
+            case "Select at least one delimiter.":
+                FocusInvalidDelimiterSelectionInput();
+                break;
             case "Custom delimiter is required.":
                 FocusInvalidCustomDelimiterInput();
+                break;
+            case "Enter a single decimal separator.":
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                break;
+            case "Enter a single thousands separator.":
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
                 break;
         }
     }

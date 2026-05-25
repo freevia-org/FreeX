@@ -206,6 +206,14 @@ public class PhaseCFinancialTests
             Calc("NOMINAL(0.1,4)"),
             Calc("NOMINAL(0.2,4)"));
         AssertApproxColumn(
+            EvalWithData("EFFECT(A1:A2,B1:B2)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 12.0), (2, 2, 4.0)),
+            Calc("EFFECT(0.1,12)"),
+            Calc("EFFECT(0.2,4)"));
+        AssertApproxColumn(
+            EvalWithData("NOMINAL(A1:A2,B1:B2)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 4.0), (2, 2, 12.0)),
+            Calc("NOMINAL(0.1,4)"),
+            Calc("NOMINAL(0.2,12)"));
+        AssertApproxColumn(
             EvalWithData("RRI(A1:A2,100,200)", (1, 1, 10.0), (2, 1, 20.0)),
             Calc("RRI(10,100,200)"),
             Calc("RRI(20,100,200)"));

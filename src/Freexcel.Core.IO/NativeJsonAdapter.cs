@@ -99,6 +99,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.ShowOutlineSymbols = sDto.ShowOutlineSymbols;
             sheet.ApplyOutlineStyles = sDto.ApplyOutlineStyles;
             sheet.SheetFormatMetadata = ToWorksheetSheetFormatMetadata(sDto.SheetFormatMetadata);
+            sheet.DimensionMetadata = ToWorksheetDimensionMetadata(sDto.DimensionMetadata);
+            sheet.SheetPropertiesMetadata = ToWorksheetSheetPropertiesMetadata(sDto.SheetPropertiesMetadata);
             foreach (var row in sDto.GroupHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.GroupHiddenRows.Add(row);
@@ -129,7 +131,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.SmartTags = ToWorksheetSmartTags(sDto.SmartTags);
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
+            sheet.SingleXmlCells = ToWorksheetSingleXmlCells(sDto.SingleXmlCells);
+            sheet.CellWatchesMetadata = ToWorksheetCellWatchesMetadata(sDto.CellWatchesMetadata);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
+            sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }
@@ -193,9 +198,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var rowBreak in sDto.RowPageBreaks ?? [])
                 if (rowBreak is >= 2 and <= CellAddress.MaxRow)
                     sheet.RowPageBreaks.Add(rowBreak);
+            sheet.RowPageBreaksMetadata = ToWorksheetPageBreaksMetadata(sDto.RowPageBreaksMetadata);
             foreach (var columnBreak in sDto.ColumnPageBreaks ?? [])
                 if (columnBreak is >= 2 and <= CellAddress.MaxCol)
                     sheet.ColumnPageBreaks.Add(columnBreak);
+            sheet.ColumnPageBreaksMetadata = ToWorksheetPageBreaksMetadata(sDto.ColumnPageBreaksMetadata);
             foreach (var mergedRegion in sDto.MergedRegions ?? [])
             {
                 if (string.IsNullOrWhiteSpace(mergedRegion))
@@ -393,7 +400,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
 
             if (changes.Count > 0)
-                workbook.Scenarios.Add(new WorkbookScenario(scenarioDto.Name, changes));
+                workbook.Scenarios.Add(new WorkbookScenario(
+                    scenarioDto.Name,
+                    changes,
+                    string.IsNullOrWhiteSpace(scenarioDto.Comment) ? null : scenarioDto.Comment));
         }
 
         return workbook;
@@ -619,6 +629,83 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetDimensionMetadataModel? ToWorksheetDimensionMetadata(WorksheetDimensionMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        if (nativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetDimensionMetadataModel
+        {
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorksheetSheetPropertiesMetadataModel? ToWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPrimaryViewMetadataModel? ToWorksheetPrimaryViewMetadata(WorksheetPrimaryViewMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetPrimaryViewMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPageBreaksMetadataModel? ToWorksheetPageBreaksMetadata(WorksheetPageBreaksMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var breakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>();
+        foreach (var pair in dto.BreakNativeAttributes ?? [])
+        {
+            var attributes = CleanNativeAttributes(pair.Value);
+            if (attributes.Count > 0)
+                breakNativeAttributes[pair.Key] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && breakNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            BreakNativeAttributes = breakNativeAttributes
         };
     }
 

@@ -18,6 +18,138 @@ public sealed partial class NativeJsonAdapter
                 NativeXml = autoFilter.NativeXml
             };
 
+    private static WorksheetSingleXmlCellsModel? ToWorksheetSingleXmlCells(WorksheetSingleXmlCellsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var cells = (dto.Cells ?? [])
+            .Select(ToWorksheetSingleXmlCell)
+            .OfType<WorksheetSingleXmlCellModel>()
+            .ToList();
+        if (nativeAttributes.Count == 0 && cells.Count == 0)
+            return null;
+
+        return new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = nativeAttributes,
+            Cells = cells
+        };
+    }
+
+    private static WorksheetSingleXmlCellModel? ToWorksheetSingleXmlCell(WorksheetSingleXmlCellDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var reference = string.IsNullOrWhiteSpace(dto.Reference) ? null : dto.Reference;
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        if (dto.Id is null && reference is null && dto.XmlCellPropertyId is null && nativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetSingleXmlCellModel
+        {
+            Id = dto.Id,
+            Reference = reference,
+            XmlCellPropertyId = dto.XmlCellPropertyId,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorksheetSingleXmlCellsDto? ToWorksheetSingleXmlCellsDto(WorksheetSingleXmlCellsModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var cells = model.Cells
+            .Select(ToWorksheetSingleXmlCellDto)
+            .OfType<WorksheetSingleXmlCellDto>()
+            .ToList();
+        if (nativeAttributes.Count == 0 && cells.Count == 0)
+            return null;
+
+        return new WorksheetSingleXmlCellsDto
+        {
+            NativeAttributes = nativeAttributes,
+            Cells = cells
+        };
+    }
+
+    private static WorksheetSingleXmlCellDto? ToWorksheetSingleXmlCellDto(WorksheetSingleXmlCellModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var reference = string.IsNullOrWhiteSpace(model.Reference) ? null : model.Reference;
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        if (model.Id is null && reference is null && model.XmlCellPropertyId is null && nativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetSingleXmlCellDto
+        {
+            Id = model.Id,
+            Reference = reference,
+            XmlCellPropertyId = model.XmlCellPropertyId,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorksheetCellWatchesMetadataModel? ToWorksheetCellWatchesMetadata(WorksheetCellWatchesMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var watchNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in dto.WatchNativeAttributes ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+                continue;
+
+            var attributes = CleanNativeAttributes(pair.Value);
+            if (attributes.Count > 0)
+                watchNativeAttributes[pair.Key.Trim()] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && watchNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            WatchNativeAttributes = watchNativeAttributes
+        };
+    }
+
+    private static WorksheetCellWatchesMetadataDto? ToWorksheetCellWatchesMetadataDto(WorksheetCellWatchesMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var watchNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in model.WatchNativeAttributes)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+                continue;
+
+            var attributes = CleanNativeAttributesForSave(pair.Value);
+            if (attributes.Count > 0)
+                watchNativeAttributes[pair.Key.Trim()] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && watchNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetCellWatchesMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            WatchNativeAttributes = watchNativeAttributes
+        };
+    }
+
     private static WorksheetSmartTagsModel? ToWorksheetSmartTags(WorksheetSmartTagsDto? dto)
     {
         if (dto is null)

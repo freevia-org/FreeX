@@ -75,6 +75,48 @@ internal static class XlsxWorksheetDiagnosticsMapper
         return watchedCells;
     }
 
+    public static WorksheetCellWatchesMetadataModel? ReadCellWatchesMetadata(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        var cellWatches = worksheetXml.Root?.Element(worksheetNs + "cellWatches");
+        if (cellWatches is null)
+            return null;
+
+        var model = new WorksheetCellWatchesMetadataModel();
+        foreach (var attribute in cellWatches.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration)
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        foreach (var cellWatch in cellWatches.Elements(worksheetNs + "cellWatch"))
+        {
+            var reference = cellWatch.Attribute("r")?.Value;
+            if (!IsSupportedCellWatchReference(reference))
+                continue;
+
+            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in cellWatch.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "r", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                attributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            if (attributes.Count > 0)
+                model.WatchNativeAttributes[reference!] = attributes;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.WatchNativeAttributes.Count == 0
+            ? null
+            : model;
+    }
+
     public static void SaveIgnoredErrors(Stream packageStream, Workbook workbook)
     {
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -160,11 +202,37 @@ internal static class XlsxWorksheetDiagnosticsMapper
                 continue;
 
             root.Element(workbookNs + "cellWatches")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "cellWatches",
-                watchedCells.Select(address => new XElement(
-                    workbookNs + "cellWatch",
-                    new XAttribute("r", address.ToA1())))));
+            var cellWatches = new XElement(workbookNs + "cellWatches");
+            foreach (var attribute in sheet.CellWatchesMetadata?.NativeAttributes ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key))
+                    continue;
+
+                cellWatches.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            foreach (var address in watchedCells)
+            {
+                var reference = address.ToA1();
+                var cellWatch = new XElement(workbookNs + "cellWatch", new XAttribute("r", reference));
+                if (sheet.CellWatchesMetadata?.WatchNativeAttributes.TryGetValue(reference, out var attributes) == true)
+                {
+                    foreach (var attribute in attributes)
+                    {
+                        if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                            string.Equals(attribute.Key, "r", StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        cellWatch.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                    }
+                }
+
+                cellWatches.Add(cellWatch);
+            }
+
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, cellWatches);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }

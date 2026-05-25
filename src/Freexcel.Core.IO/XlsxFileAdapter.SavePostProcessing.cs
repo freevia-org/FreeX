@@ -196,6 +196,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.SingleXmlCells is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
         {
             packageStream.Position = 0;
@@ -211,10 +217,22 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         XlsxWorkbookThemeWriter.Save(packageStream, workbook.Theme);
 
+        if (workbook.IndexedColors.Colors.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
+        }
+
         if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
         {
             packageStream.Position = 0;
-            XlsxWorksheetChartWriter.Save(packageStream, workbook, XlsxChartXmlWriter.IsSupportedXlsxChart, XlsxChartXmlWriter.ToChartXml);
+            XlsxWorksheetChartWriter.Save(
+                packageStream,
+                workbook,
+                XlsxChartXmlWriter.IsSupportedXlsxChart,
+                XlsxChartXmlWriter.ToChartXml,
+                XlsxChartXmlWriter.GetContentType,
+                XlsxChartXmlWriter.GetRelationshipType);
         }
 
         if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))
@@ -262,6 +280,12 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        if (workbook.IndexedColors.Colors.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
+        }
 
         packageStream.Position = 0;
         XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
@@ -314,10 +338,34 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.DimensionMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetDimensionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.SheetPropertiesMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSheetPropertiesMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.PrimaryViewMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPrimaryViewMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.PageMarginsMetadata is not null))
         {
             packageStream.Position = 0;
             XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.RowPageBreaksMetadata is not null || sheet.ColumnPageBreaksMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPageBreaksMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.HeaderFooterMetadata is not null))

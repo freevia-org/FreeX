@@ -29,6 +29,35 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ViewportScrollbarMaximums_UsesUsedRangeWithoutMaterializingUsedCells()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+
+        viewportSource.Should().Contain("GetUsedRange()");
+        viewportSource.Should().NotContain("sheet.GetUsedCells()");
+    }
+
+    [Fact]
+    public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
+        const string assignment = "SheetGrid.SparklineValues = sheet is null";
+        const string cacheRoute = "_sparklineValueCache.GetOrCreate(";
+        const string directRoute = "SheetGrid.SparklineValues = SparklineValuePlanner.BuildValues(sheet)";
+        const string plannerCall = "SparklineValuePlanner.BuildValues(sheet)";
+        const string cacheCallback = "() => SparklineValuePlanner.BuildValues(sheet)";
+
+        viewportSource.Should().Contain(assignment);
+        viewportSource.Should().Contain(cacheRoute);
+        viewportSource.Should().NotContain(directRoute);
+        viewportSource.Should().Contain(cacheCallback);
+        CountOccurrences(viewportSource, plannerCall).Should().Be(1);
+        viewportSource.IndexOf(cacheRoute, StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(viewportSource.IndexOf(plannerCall, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -1266,20 +1295,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
+    public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndKeepMapDeferred()
     {
         var source = ReadChartCommandSource();
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
         source.Should().Contain("retained when opening XLSX files");
-        source.Should().NotContain("InsertChartOfType(ChartType.Treemap)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Sunburst)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Histogram)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Pareto)");
-        source.Should().NotContain("InsertChartOfType(ChartType.BoxAndWhisker)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
-        source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
+        source.Should().Contain("ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap)");
+        source.Should().Contain("ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst)");
+        source.Should().Contain("ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram)");
+        source.Should().Contain("ChartParetoMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Pareto)");
+        source.Should().Contain("ChartBoxAndWhiskerMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.BoxAndWhisker)");
+        source.Should().Contain("ChartWaterfallMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Waterfall)");
+        source.Should().Contain("ChartFunnelMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Funnel)");
         source.Should().NotContain("InsertChartOfType(ChartType.Map)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDPie)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDLine)");
@@ -1288,7 +1317,14 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
         source.Should().Contain("InsertChartOfType(ChartType.Surface)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDSurface)");
-        xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        AssertChartButtonRoutesTo(xaml, "Treemap", "ChartTreemapMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Sunburst", "ChartSunburstMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Histogram", "ChartHistogramMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Pareto", "ChartParetoMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Box Plot", "ChartBoxAndWhiskerMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Waterfall", "ChartWaterfallMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Funnel", "ChartFunnelMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Map", "DeferredChartFamilyMenuItem_Click", isDeferred: true);
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
@@ -1594,6 +1630,8 @@ public sealed class MainWindowSourceHygieneTests
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
         source.Should().Contain("private void ReviewNewThreadedCommentBtn_Click");
         source.Should().Contain("new SetThreadedCommentCommand(");
+        source.Should().Contain("new UpdateThreadedCommentTextCommand(");
+        source.Should().Contain("result.RootText is not null");
     }
 
     [Fact]
@@ -1935,6 +1973,39 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AdvancedFilterDialogApply_IsRepeatableForF4WithoutReopeningDialog()
+    {
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        dataSource.Should().Contain("var result = dialog.Result;");
+        dataSource.Should().Contain("_commandBus.ExecuteRepeatable(");
+        dataSource.Should().Contain("() => new AdvancedFilterCommand(");
+        dataSource.Should().Contain("result.ListRange");
+        dataSource.Should().Contain("result.CriteriaRange");
+        dataSource.Should().Contain("result.CopyToCell");
+        dataSource.Should().Contain("result.UniqueRecordsOnly");
+        dataSource.Should().Contain("result.CopyToRange");
+        dataSource.Should().NotContain("_commandBus.Execute(\r\n            _workbook.Id,\r\n            new AdvancedFilterCommand(");
+    }
+
+    [Fact]
+    public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
+
+        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        source.Should().Contain("\"Row Height\",");
+        source.Should().Contain("\"Column Width\",");
+        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
+        source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
+        source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width)");
+        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
+        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
+    }
+
+    [Fact]
     public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
@@ -2059,6 +2130,38 @@ public sealed class MainWindowSourceHygieneTests
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
     }
 
+    private static void AssertChartButtonRoutesTo(string xaml, string content, string clickHandler, bool isDeferred)
+    {
+        var button = ExtractButtonElementByContent(xaml, content);
+
+        button.Should().Contain($"Click=\"{clickHandler}\"");
+        button.Should().Contain("Style=\"{StaticResource RibbonBtn}\"");
+        button.Should().Contain("local:RibbonTooltip.Title=");
+
+        if (isDeferred)
+        {
+            button.Should().Contain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+        else
+        {
+            button.Should().NotContain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+    }
+
+    private static string ExtractButtonElementByContent(string xaml, string content)
+    {
+        var contentIndex = xaml.IndexOf($"Content=\"{content}\"", StringComparison.Ordinal);
+        contentIndex.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should be present");
+
+        var start = xaml.LastIndexOf("<Button", contentIndex, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should have a Button start tag");
+
+        var end = xaml.IndexOf("/>", contentIndex, StringComparison.Ordinal);
+        end.Should().BeGreaterThanOrEqualTo(contentIndex, $"the {content} chart button should be self-closing");
+
+        return xaml.Substring(start, end - start + 2);
+    }
+
     private static string ReadPivotCommandSource()
     {
         return string.Join(
@@ -2071,5 +2174,18 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.PivotDesignCommands.cs",
                 "MainWindow.PivotSlicerTimeline.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 }

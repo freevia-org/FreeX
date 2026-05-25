@@ -47,6 +47,49 @@ public sealed class WorksheetSheetFormatMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetDimensionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetSheetPropertiesMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPrimaryViewMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPageBreaksMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
+}
+
+public sealed class WorksheetCellWatchesMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class WorksheetSingleXmlCellsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSingleXmlCellModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetSingleXmlCellModel
+{
+    public int? Id { get; set; }
+    public string? Reference { get; set; }
+    public int? XmlCellPropertyId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 public sealed class WorksheetPageMarginsMetadataModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -175,6 +218,12 @@ public sealed partial class Sheet
     /// <summary>Native Excel sheetFormatPr metadata not yet modeled as editable fields.</summary>
     public WorksheetSheetFormatMetadataModel? SheetFormatMetadata { get; set; }
 
+    /// <summary>Native Excel dimension metadata not yet modeled as editable fields.</summary>
+    public WorksheetDimensionMetadataModel? DimensionMetadata { get; set; }
+
+    /// <summary>Native Excel sheetPr metadata not yet modeled as editable fields.</summary>
+    public WorksheetSheetPropertiesMetadataModel? SheetPropertiesMetadata { get; set; }
+
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public uint FrozenRows { get; set; } = 0;
 
@@ -214,8 +263,17 @@ public sealed partial class Sheet
     /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
     public WorksheetSortStateModel? SortState { get; set; }
 
+    /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
+    public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
+
+    /// <summary>Native Excel cell watch metadata not yet modeled as editable fields.</summary>
+    public WorksheetCellWatchesMetadataModel? CellWatchesMetadata { get; set; }
+
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
+
+    /// <summary>Native Excel primary sheetView metadata not yet modeled as editable fields.</summary>
+    public WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
@@ -352,8 +410,14 @@ public sealed partial class Sheet
     /// <summary>Manual row page breaks, stored as the first row after each break.</summary>
     public SortedSet<uint> RowPageBreaks { get; } = [];
 
+    /// <summary>Native Excel rowBreaks metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata { get; set; }
+
     /// <summary>Manual column page breaks, stored as the first column after each break.</summary>
     public SortedSet<uint> ColumnPageBreaks { get; } = [];
+
+    /// <summary>Native Excel colBreaks metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata { get; set; }
 
     /// <summary>Display-only tiled worksheet background image. It is not printed, matching Excel behavior.</summary>
     public WorksheetBackgroundImage? BackgroundImage { get; set; }

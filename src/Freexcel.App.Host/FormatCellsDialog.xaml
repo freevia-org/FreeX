@@ -112,16 +112,17 @@
                         <Button Width="22" Height="18" ToolTip="Blue font" Tag="0,112,192" Click="DlgFontColorSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
                         <Button Width="22" Height="18" ToolTip="Purple font" Tag="112,48,160" Click="DlgFontColorSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
                     </UniformGrid>
+                    <CheckBox x:Name="DlgNormalFontCheck" Content="_Normal font" Grid.Row="4" Grid.Column="0" Margin="0,36,8,0" VerticalAlignment="Top" Checked="DlgNormalFontCheck_Checked"/>
 
-                    <GroupBox x:Name="DlgFontEffectsGroup" Grid.Row="4" Grid.Column="0" Margin="0,38,8,0">
+                    <GroupBox x:Name="DlgFontEffectsGroup" Grid.Row="4" Grid.Column="0" Margin="0,64,8,0">
                         <GroupBox.Header>
                             <TextBlock Text="Effects"/>
                         </GroupBox.Header>
                         <WrapPanel Margin="8,6,8,4">
                             <CheckBox x:Name="DlgDoubleUnderlineCheck" Content="_Double underline" Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
                             <CheckBox x:Name="DlgStrikeCheck"    Content="_Strikethrough"    Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
+                            <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="DlgSuperscriptCheck_Checked" Unchecked="FontPreviewInput_Changed"/>
+                            <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript" Checked="DlgSubscriptCheck_Checked" Unchecked="FontPreviewInput_Changed"/>
                         </WrapPanel>
                     </GroupBox>
 

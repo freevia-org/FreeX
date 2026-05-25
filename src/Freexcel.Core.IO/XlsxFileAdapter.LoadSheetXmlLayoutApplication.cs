@@ -31,6 +31,8 @@ public sealed partial class XlsxFileAdapter
         if (layout.DefaultRowHeight is { } defaultRowHeight)
             sheet.DefaultRowHeight = defaultRowHeight;
         sheet.SheetFormatMetadata = layout.SheetFormatMetadata;
+        sheet.DimensionMetadata = layout.DimensionMetadata;
+        sheet.SheetPropertiesMetadata = layout.SheetPropertiesMetadata;
         foreach (var (rowNum, height) in layout.RowHeights)
             sheet.RowHeights[rowNum] = height;
         foreach (var (colNum, width) in layout.ColumnWidths)
@@ -59,6 +61,8 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
         sheet.PageSetupMetadata = layout.PageSetupMetadata;
         sheet.HeaderFooterMetadata = layout.HeaderFooterMetadata;
+        sheet.RowPageBreaksMetadata = layout.RowPageBreaksMetadata;
+        sheet.ColumnPageBreaksMetadata = layout.ColumnPageBreaksMetadata;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;
@@ -193,6 +197,7 @@ public sealed partial class XlsxFileAdapter
             if (!workbook.WatchedCells.Contains(address))
                 workbook.WatchedCells.Add(address);
         }
+        sheet.CellWatchesMetadata = layout.CellWatchesMetadata;
         foreach (var scenario in layout.Scenarios)
         {
             var remappedScenario = new WorkbookScenario(
@@ -201,7 +206,8 @@ public sealed partial class XlsxFileAdapter
                     .Select(change => new ScenarioCellValue(
                         new CellAddress(sheet.Id, change.Address.Row, change.Address.Col),
                         change.Value))
-                    .ToList());
+                    .ToList(),
+                scenario.Comment);
 
             if (loadedScenarioNames.Add(remappedScenario.Name))
             {
@@ -237,7 +243,9 @@ public sealed partial class XlsxFileAdapter
         sheet.SmartTags = layout.SmartTags;
         sheet.DataConsolidation = layout.DataConsolidation;
         sheet.SortState = layout.SortState;
+        sheet.SingleXmlCells = layout.SingleXmlCells;
         sheet.AdditionalViews = layout.AdditionalViews;
+        sheet.PrimaryViewMetadata = layout.PrimaryViewMetadata;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
     }

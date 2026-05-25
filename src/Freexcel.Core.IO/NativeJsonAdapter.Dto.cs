@@ -154,6 +154,7 @@ public sealed partial class NativeJsonAdapter
     private class ScenarioDto
     {
         public string Name { get; set; } = "";
+        public string? Comment { get; set; }
         public List<ScenarioCellDto> ChangingCells { get; set; } = [];
     }
 
@@ -300,6 +301,8 @@ public sealed partial class NativeJsonAdapter
         public bool? ShowOutlineSymbols { get; set; }
         public bool? ApplyOutlineStyles { get; set; }
         public WorksheetSheetFormatMetadataDto? SheetFormatMetadata { get; set; }
+        public WorksheetDimensionMetadataDto? DimensionMetadata { get; set; }
+        public WorksheetSheetPropertiesMetadataDto? SheetPropertiesMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -322,7 +325,10 @@ public sealed partial class NativeJsonAdapter
         public WorksheetSmartTagsDto? SmartTags { get; set; }
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
         public WorksheetSortStateDto? SortState { get; set; }
+        public WorksheetSingleXmlCellsDto? SingleXmlCells { get; set; }
+        public WorksheetCellWatchesMetadataDto? CellWatchesMetadata { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
+        public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
@@ -369,7 +375,9 @@ public sealed partial class NativeJsonAdapter
         public bool? FitToPage { get; set; }
         public bool? AutoPageBreaks { get; set; }
         public List<uint> RowPageBreaks { get; set; } = [];
+        public WorksheetPageBreaksMetadataDto? RowPageBreaksMetadata { get; set; }
         public List<uint> ColumnPageBreaks { get; set; } = [];
+        public WorksheetPageBreaksMetadataDto? ColumnPageBreaksMetadata { get; set; }
         public List<string> MergedRegions { get; set; } = [];
         public List<CommentDto> Comments { get; set; } = [];
         public List<ThreadedCommentDto> ThreadedComments { get; set; } = [];
@@ -409,6 +417,49 @@ public sealed partial class NativeJsonAdapter
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetDimensionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetSheetPropertiesMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPrimaryViewMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPageBreaksMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
+    }
+
+    private class WorksheetSingleXmlCellsDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetSingleXmlCellDto> Cells { get; set; } = [];
+    }
+
+    private class WorksheetSingleXmlCellDto
+    {
+        public int? Id { get; set; }
+        public string? Reference { get; set; }
+        public int? XmlCellPropertyId { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetCellWatchesMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private class WorksheetPageMarginsMetadataDto
@@ -472,6 +523,19 @@ public sealed partial class NativeJsonAdapter
         public RgbColor MaxColor { get; set; } = new(248, 105, 107);
         public bool UseThreeColorScale { get; set; }
         public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
+        public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
+        public string? DataBarMinThresholdValue { get; set; }
+        public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.Max;
+        public string? DataBarMaxThresholdValue { get; set; }
+        public bool DataBarShowValue { get; set; } = true;
+        public int? DataBarMinLength { get; set; }
+        public int? DataBarMaxLength { get; set; }
+        public bool DataBarGradient { get; set; } = true;
+        public bool DataBarBorder { get; set; }
+        public string? DataBarAxisPosition { get; set; }
+        public RgbColor? DataBarAxisColor { get; set; }
+        public RgbColor? DataBarNegativeFillColor { get; set; }
+        public RgbColor? DataBarNegativeBorderColor { get; set; }
         public bool AboveAverage { get; set; } = true;
         public string? FormulaText { get; set; }
         public int TopBottomRank { get; set; } = 10;

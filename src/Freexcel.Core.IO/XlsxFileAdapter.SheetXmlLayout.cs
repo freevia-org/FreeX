@@ -25,6 +25,8 @@ public sealed partial class XlsxFileAdapter
         double? DefaultColumnWidth,
         double? DefaultRowHeight,
         WorksheetSheetFormatMetadataModel? SheetFormatMetadata,
+        WorksheetDimensionMetadataModel? DimensionMetadata,
+        WorksheetSheetPropertiesMetadataModel? SheetPropertiesMetadata,
         bool FullCalculationOnLoad,
         WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
@@ -67,13 +69,18 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<DataValidationNativeMetadata> DataValidationNativeMetadata,
         IgnoredErrorLayout IgnoredErrors,
         IReadOnlyList<CellAddress> CellWatches,
+        WorksheetCellWatchesMetadataModel? CellWatchesMetadata,
         IReadOnlyList<WorkbookScenario> Scenarios,
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
         WorksheetSmartTagsModel? SmartTags,
         WorksheetDataConsolidationModel? DataConsolidation,
         WorksheetSortStateModel? SortState,
+        WorksheetSingleXmlCellsModel? SingleXmlCells,
         WorksheetAdditionalViewsModel? AdditionalViews,
+        WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata,
+        WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
+        WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
@@ -267,17 +274,17 @@ public sealed partial class XlsxFileAdapter
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
+        var dimension = worksheetXml.Root?.Element(worksheetNs + "dimension");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
-        var pageSetUpPr = worksheetXml.Root?
-            .Element(worksheetNs + "sheetPr")?
-            .Element(worksheetNs + "pageSetUpPr");
-        var outlinePr = worksheetXml.Root?
-            .Element(worksheetNs + "sheetPr")?
-            .Element(worksheetNs + "outlinePr");
+        var sheetPr = worksheetXml.Root?.Element(worksheetNs + "sheetPr");
+        var pageSetUpPr = sheetPr?.Element(worksheetNs + "pageSetUpPr");
+        var outlinePr = sheetPr?.Element(worksheetNs + "outlinePr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
         var headerFooter = worksheetXml.Root?.Element(worksheetNs + "headerFooter");
         var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");
         var printOptions = worksheetXml.Root?.Element(worksheetNs + "printOptions");
+        var rowBreaks = worksheetXml.Root?.Element(worksheetNs + "rowBreaks");
+        var colBreaks = worksheetXml.Root?.Element(worksheetNs + "colBreaks");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
@@ -294,20 +301,19 @@ public sealed partial class XlsxFileAdapter
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
         var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
         var cellWatches = XlsxWorksheetDiagnosticsMapper.ReadCellWatches(worksheetXml, worksheetNs);
+        var cellWatchesMetadata = XlsxWorksheetDiagnosticsMapper.ReadCellWatchesMetadata(worksheetXml, worksheetNs);
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
         var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
         var smartTags = XlsxWorksheetSmartTagMapper.Read(worksheetXml.Root?.Element(worksheetNs + "smartTags"));
         var dataConsolidation = XlsxWorksheetDataConsolidationMapper.Read(worksheetXml.Root?.Element(worksheetNs + "dataConsolidate"));
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
+        var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
         var cachedFormulaErrors = ReadCachedFormulaErrors(worksheetXml, worksheetNs);
         var explicitStyleOnlyCells = ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
-        var codeName = worksheetXml.Root?
-            .Element(worksheetNs + "sheetPr")?
-            .Attribute("codeName")?
-            .Value;
+        var codeName = sheetPr?.Attribute("codeName")?.Value;
 
         return new SheetXmlLayout(
             hiddenRows,
@@ -327,6 +333,8 @@ public sealed partial class XlsxFileAdapter
                 ? defaultRowHeightPoints * (96.0 / 72.0)
                 : null,
             ReadWorksheetSheetFormatMetadata(sheetFormatPr),
+            ReadWorksheetDimensionMetadata(dimension),
+            ReadWorksheetSheetPropertiesMetadata(sheetPr),
             XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
@@ -369,16 +377,148 @@ public sealed partial class XlsxFileAdapter
             dataValidationNativeMetadata,
             ignoredErrors,
             cellWatches,
+            cellWatchesMetadata,
             scenarios,
             customViews,
             customProperties,
             smartTags,
             dataConsolidation,
             sortState,
+            singleXmlCells,
             additionalViews,
+            ReadWorksheetPrimaryViewMetadata(sheetView),
+            ReadWorksheetPageBreaksMetadata(rowBreaks, CellAddress.MaxRow),
+            ReadWorksheetPageBreaksMetadata(colBreaks, CellAddress.MaxCol),
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
+    }
+
+    private static WorksheetDimensionMetadataModel? ReadWorksheetDimensionMetadata(XElement? dimension)
+    {
+        if (dimension is null)
+            return null;
+
+        var model = new WorksheetDimensionMetadataModel();
+        foreach (var attribute in dimension.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "ref", StringComparison.Ordinal))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 ? null : model;
+    }
+
+    private static WorksheetSheetPropertiesMetadataModel? ReadWorksheetSheetPropertiesMetadata(XElement? sheetProperties)
+    {
+        if (sheetProperties is null)
+            return null;
+
+        var model = new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeChildXmls = sheetProperties.Elements()
+                .Where(element => !IsModeledSheetPropertiesElement(element.Name.LocalName))
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in sheetProperties.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledSheetPropertiesAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledSheetPropertiesAttribute(string name) =>
+        name is "codeName";
+
+    private static bool IsModeledSheetPropertiesElement(string name) =>
+        name is "tabColor" or "outlinePr" or "pageSetUpPr";
+
+    private static WorksheetPrimaryViewMetadataModel? ReadWorksheetPrimaryViewMetadata(XElement? sheetView)
+    {
+        if (sheetView is null)
+            return null;
+
+        var model = new WorksheetPrimaryViewMetadataModel
+        {
+            NativeChildXmls = sheetView.Elements()
+                .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in sheetView.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledPrimaryViewAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledPrimaryViewAttribute(string name) =>
+        name is "workbookViewId" or "view" or "showGridLines" or "showRowColHeaders" or "showRuler" or
+            "zoomScale" or "showFormulas" or "topLeftCell";
+
+    private static bool IsModeledPrimaryViewElement(string name) =>
+        name is "pane";
+
+    private static WorksheetPageBreaksMetadataModel? ReadWorksheetPageBreaksMetadata(XElement? pageBreaks, uint maxBreakId)
+    {
+        if (pageBreaks is null)
+            return null;
+
+        var model = new WorksheetPageBreaksMetadataModel();
+        foreach (var attribute in pageBreaks.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "count", StringComparison.Ordinal))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        foreach (var breakElement in pageBreaks.Elements().Where(element => string.Equals(element.Name.LocalName, "brk", StringComparison.Ordinal)))
+        {
+            if (!TryReadPageBreakId(breakElement, maxBreakId, out var id))
+                continue;
+
+            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in breakElement.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "id", StringComparison.Ordinal))
+                    continue;
+
+                attributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            if (attributes.Count > 0)
+                model.BreakNativeAttributes[id] = attributes;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.BreakNativeAttributes.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool TryReadPageBreakId(XElement breakElement, uint maxBreakId, out uint id)
+    {
+        id = 0;
+        return uint.TryParse(breakElement.Attribute("id")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out id) &&
+            id >= 2 &&
+            id <= maxBreakId;
     }
 
     private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)

@@ -61,14 +61,18 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw)) return ErrorValue.Num;
-
         var (mask, maskErr) = ParseWeekendMask(args.Count > 2 ? args[2] : BlankValue.Instance);
         if (maskErr is not null) return maskErr;
         if (!TryCollectHolidays(args.Count > 3 ? args[3] : null, out var holidays, out var holidayError))
             return holidayError!;
 
+        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysIntlScalar(startDate, endDate, mask!, holidays));
+    }
+
+    private static ScalarValue NetworkdaysIntlScalar(ScalarValue startDate, ScalarValue endDate, bool[] mask, HashSet<DateTime> holidays)
+    {
+        if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt = endRaw.Date;
         int sign = startDt <= endDt ? 1 : -1;
@@ -78,7 +82,7 @@ public static partial class BuiltInFunctions
         int count = 0;
         for (var d = lo; d <= hi; d = d.AddDays(1))
         {
-            if (mask![ExcelDowToMonIndex(d)]) continue;
+            if (mask[ExcelDowToMonIndex(d)]) continue;
             if (holidays.Contains(d.Date)) continue;
             count++;
         }
@@ -91,23 +95,28 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        if (!TryOADateToDateTime(args[0], out var current)) return ErrorValue.Num;
-        double rawDays = ToNumber(args[1]);
-        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
-        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
-        int days = (int)rawDays;
-
         var (mask, maskErr) = ParseWeekendMask(args.Count > 2 ? args[2] : BlankValue.Instance);
         if (maskErr is not null) return maskErr;
         if (!TryCollectHolidays(args.Count > 3 ? args[3] : null, out var holidays, out var holidayError))
             return holidayError!;
+
+        return MapBinaryMathArgs(args[0], args[1], (startDate, daysValue) => WorkdayIntlScalar(startDate, daysValue, mask!, holidays));
+    }
+
+    private static ScalarValue WorkdayIntlScalar(ScalarValue startDate, ScalarValue daysValue, bool[] mask, HashSet<DateTime> holidays)
+    {
+        if (!TryOADateToDateTime(startDate, out var current)) return ErrorValue.Num;
+        double rawDays = ToNumber(daysValue);
+        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
+        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
+        int days = (int)rawDays;
 
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         while (remaining > 0)
         {
             current = current.AddDays(sign);
-            if (mask![ExcelDowToMonIndex(current)]) continue;
+            if (mask[ExcelDowToMonIndex(current)]) continue;
             if (holidays.Contains(current.Date)) continue;
             remaining--;
         }

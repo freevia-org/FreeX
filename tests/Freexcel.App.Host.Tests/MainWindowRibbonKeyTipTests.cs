@@ -141,6 +141,34 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ContextualPivotKeyTips_WaitForJaBeforeSelectingAnalyzeTab()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.ShowPivotContextualTabs();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.J);
+
+            harness.SelectedRibbonTabHeader.Should().NotBe("Draw", "visible JA/JD contextual keytips should keep J as a prefix");
+            harness.KeyTipScope.Should().Be("TopLevel");
+
+            harness.HandleKeyTip(Key.A);
+
+            harness.SelectedRibbonTabHeader.Should().Be("PivotTable Analyze");
+            harness.KeyTipScope.Should().Be("Commands");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.J);
+            harness.HandleKeyTip(Key.D);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Design");
+            harness.KeyTipScope.Should().Be("Commands");
+        });
+    }
+
+    [Fact]
     public void CrossTabMenuKeyTips_RouteThroughStaticRibbonMenus()
     {
         RunSta(() =>
@@ -213,6 +241,27 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveMenuItemSubmenuIsOpen("Line Color").Should().BeTrue();
 
             harness.HandleKeyTip(Key.K);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public void ConditionalFormattingNestedMenuKeyTips_RoutePrefixedChildChoices()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.L);
+            harness.HandleKeyTip(Key.I);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemSubmenuIsOpen("Icon Sets").Should().BeTrue();
+            harness.ActiveMenuItemGestureText("3 Arrows").Should().Be("I3");
+
+            harness.HandleKeyTip(Key.D3);
 
             harness.KeyTipScope.Should().Be("None");
             harness.OverlayBadgeTexts.Should().BeEmpty();
@@ -364,6 +413,17 @@ public sealed class MainWindowRibbonKeyTipTests
                 .Select(element => RibbonTooltip.GetTitle(element) ?? element.Name ?? element.GetType().Name)
                 .ToList();
             return elements;
+        }
+
+        public void ShowPivotContextualTabs()
+        {
+            if (_window.FindName("PivotTableAnalyzeTab") is TabItem analyzeTab)
+                analyzeTab.Visibility = Visibility.Visible;
+            if (_window.FindName("PivotTableDesignTab") is TabItem designTab)
+                designTab.Visibility = Visibility.Visible;
+
+            _window.UpdateLayout();
+            PumpDispatcher();
         }
 
         private ContextMenu? ActiveMenu => _activeMenuField.GetValue(_window) as ContextMenu;

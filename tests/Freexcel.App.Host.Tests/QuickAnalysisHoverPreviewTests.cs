@@ -19,4 +19,14 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("SheetGrid.QuickAnalysisPreviewRange = preview.Range");
         source.Should().Contain("SheetGrid.QuickAnalysisPreviewRange = null");
     }
+
+    [Fact]
+    public void QuickAnalysisHoverAndKeyboardFocus_SetAndClearGridPreviewVisual()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind)");
+        source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None");
+        source.Should().Contain("private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(");
+    }
 }

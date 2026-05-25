@@ -10,7 +10,24 @@ public sealed record AutoFilterMenuPlan(
     string HeaderText,
     AutoFilterMenuFilterKind FilterKind,
     IReadOnlyList<AutoFilterMenuEntry> Entries,
-    IReadOnlyList<AutoFilterColorOption>? ColorOptions = null);
+    IReadOnlyList<AutoFilterColorOption>? ColorOptions = null,
+    IReadOnlyList<AutoFilterMenuSection>? Sections = null)
+{
+    public IReadOnlyList<AutoFilterMenuSection> Sections { get; init; } = Sections ?? [];
+}
+
+public sealed record AutoFilterMenuSection(
+    AutoFilterMenuSectionKind Kind,
+    string Label,
+    IReadOnlyList<AutoFilterMenuEntry> Entries);
+
+public enum AutoFilterMenuSectionKind
+{
+    Sort,
+    FilterCommands,
+    Search,
+    Checklist
+}
 
 public enum AutoFilterColorFilterKind
 {
@@ -29,20 +46,30 @@ public sealed record AutoFilterMenuEntry(
     string Header,
     AutoFilterMenuEntryKind Kind,
     IReadOnlyList<string> CriteriaSuggestions,
-    string Value)
+    string Value,
+    IReadOnlyList<AutoFilterMenuEntry> Children)
 {
     public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind)
-        : this(header, kind, [], header)
+        : this(header, kind, [], header, [])
     {
     }
 
     public AutoFilterMenuEntry(string header, AutoFilterMenuEntryKind kind, IReadOnlyList<string> criteriaSuggestions)
-        : this(header, kind, criteriaSuggestions, header)
+        : this(header, kind, criteriaSuggestions, header, [])
+    {
+    }
+
+    public AutoFilterMenuEntry(
+        string header,
+        AutoFilterMenuEntryKind kind,
+        IReadOnlyList<string> criteriaSuggestions,
+        string value)
+        : this(header, kind, criteriaSuggestions, value, [])
     {
     }
 
     public AutoFilterMenuEntry(AutoFilterChecklistItem item)
-        : this(item.DisplayText, AutoFilterMenuEntryKind.ChecklistItem, [], item.Value)
+        : this(item.DisplayText, AutoFilterMenuEntryKind.ChecklistItem, [], item.Value, [])
     {
     }
 }
@@ -62,6 +89,7 @@ public enum AutoFilterMenuEntryKind
     ClearFilter,
     FilterByColor,
     FilterFamily,
+    FilterFamilyCommand,
     Search,
     SelectAll,
     ChecklistItem
@@ -165,9 +193,9 @@ public static class AutoFilterDropdownPlanner
         var filterKind = DetectFilterKind(sheet, plan);
         var filterEntry = filterKind switch
         {
-            AutoFilterMenuFilterKind.Number => new AutoFilterMenuEntry("Number Filters", AutoFilterMenuEntryKind.FilterFamily, NumberFilterCriteria),
-            AutoFilterMenuFilterKind.Date => new AutoFilterMenuEntry("Date Filters", AutoFilterMenuEntryKind.FilterFamily, DateFilterCriteria),
-            _ => new AutoFilterMenuEntry("Text Filters", AutoFilterMenuEntryKind.FilterFamily, TextFilterCriteria)
+            AutoFilterMenuFilterKind.Number => new AutoFilterMenuEntry("Number Filters", AutoFilterMenuEntryKind.FilterFamily, NumberFilterCriteria, "Number Filters", CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Number)),
+            AutoFilterMenuFilterKind.Date => new AutoFilterMenuEntry("Date Filters", AutoFilterMenuEntryKind.FilterFamily, DateFilterCriteria, "Date Filters", CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Date)),
+            _ => new AutoFilterMenuEntry("Text Filters", AutoFilterMenuEntryKind.FilterFamily, TextFilterCriteria, "Text Filters", CreateFilterFamilyChildren(AutoFilterMenuFilterKind.Text))
         };
 
         var entries = new List<AutoFilterMenuEntry>
@@ -187,7 +215,91 @@ public static class AutoFilterDropdownPlanner
         entries.AddRange(CreateChecklistItems(sheet, plan)
             .Select(item => new AutoFilterMenuEntry(item)));
 
-        return new AutoFilterMenuPlan(headerText, filterKind, entries, CollectColorOptions(workbook, sheet, plan));
+        return new AutoFilterMenuPlan(
+            headerText,
+            filterKind,
+            entries,
+            CollectColorOptions(workbook, sheet, plan),
+            CreateSections(entries));
+    }
+
+    private static IReadOnlyList<AutoFilterMenuEntry> CreateFilterFamilyChildren(AutoFilterMenuFilterKind filterKind)
+    {
+        IReadOnlyList<(string Label, string Prefix)> options = filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number =>
+            [
+                ("Equals", "="),
+                ("Does Not Equal", "<>"),
+                ("Greater Than", ">"),
+                ("Greater Than Or Equal To", ">="),
+                ("Less Than", "<"),
+                ("Less Than Or Equal To", "<="),
+                ("Between", "between:"),
+                ("Top 10", "top:"),
+                ("Bottom 10", "bottom:"),
+                ("Top 10 Percent", "toppercent:"),
+                ("Bottom 10 Percent", "bottompercent:"),
+                ("Above Average", "above average"),
+                ("Below Average", "below average"),
+                ("Blanks", "blank"),
+                ("Non-Blanks", "nonblank")
+            ],
+            AutoFilterMenuFilterKind.Date =>
+            [
+                ("Equals", "date="),
+                ("Does Not Equal", "date<>"),
+                ("After", "date>"),
+                ("On Or After", "date>="),
+                ("Before", "date<"),
+                ("On Or Before", "date<="),
+                ("Between", "datebetween:"),
+                ("Blanks", "blank"),
+                ("Non-Blanks", "nonblank")
+            ],
+            _ =>
+            [
+                ("Equals", "text="),
+                ("Does Not Equal", "text<>"),
+                ("Contains", "contains:"),
+                ("Does Not Contain", "notcontains:"),
+                ("Begins With", "begins:"),
+                ("Ends With", "ends:"),
+                ("Blanks", "blank"),
+                ("Non-Blanks", "nonblank")
+            ]
+        };
+
+        return options
+            .Select(option => new AutoFilterMenuEntry(
+                option.Label,
+                AutoFilterMenuEntryKind.FilterFamilyCommand,
+                [option.Prefix],
+                option.Prefix))
+            .ToList();
+    }
+
+    private static IReadOnlyList<AutoFilterMenuSection> CreateSections(IReadOnlyList<AutoFilterMenuEntry> entries)
+    {
+        return
+        [
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.Sort,
+                "Sort",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.SortAscending or AutoFilterMenuEntryKind.SortDescending).ToList()),
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.FilterCommands,
+                "Filter",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.ClearFilter or AutoFilterMenuEntryKind.FilterByColor or AutoFilterMenuEntryKind.FilterFamily).ToList()),
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.Search,
+                "Search",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.Search or AutoFilterMenuEntryKind.SelectAll).ToList()),
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.Checklist,
+                "Values",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.ChecklistItem).ToList())
+        ];
     }
 
     private static IReadOnlyList<AutoFilterColorOption> CollectColorOptions(

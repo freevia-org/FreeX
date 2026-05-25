@@ -42,6 +42,24 @@ public sealed partial class TextToColumnsDialog
         Keyboard.Focus(_customBox);
     }
 
+    private void FocusInvalidDelimiterSelectionInput()
+    {
+        _wizardStep = 2;
+        _delimitedButton.IsChecked = true;
+        UpdateWizardStep();
+        _tabBox.Focus();
+        Keyboard.Focus(_tabBox);
+    }
+
+    private void FocusInvalidAdvancedSeparatorInput(TextBox textBox)
+    {
+        _wizardStep = 3;
+        UpdateWizardStep();
+        textBox.Focus();
+        textBox.SelectAll();
+        Keyboard.Focus(textBox);
+    }
+
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
 

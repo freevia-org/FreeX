@@ -345,6 +345,35 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void InsertSlicerDialog_TryCreateResult_RejectsBlankFieldOrCaption()
+    {
+        InsertSlicerDialog.TryCreateResult(" ", "Region Slicer", out _, out var fieldError)
+            .Should()
+            .BeFalse();
+        fieldError.Should().Be("Select a field to connect.");
+
+        InsertSlicerDialog.TryCreateResult("Region", " ", out _, out var captionError)
+            .Should()
+            .BeFalse();
+        captionError.Should().Be("Enter a slicer caption.");
+    }
+
+    [Fact]
+    public void InsertSlicerDialog_AcceptWarnsAndRefocusesInvalidInput()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertSlicerDialog",
+            "public sealed record InsertTimelineDialogResult");
+
+        source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter slicer options.\"");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("textBox.SelectAll();");
+    }
+
+    [Fact]
     public void InsertSlicerDialog_ExposesExcelLikeFieldSelectionShell()
     {
         var source = ReadPivotWorkflowSource();
@@ -376,6 +405,35 @@ public sealed class PivotWorkflowDialogTests
         InsertTimelineDialog.CreateResult("  Order Date  ", "  Order Date Timeline  ")
             .Should()
             .Be(new InsertTimelineDialogResult("Order Date", "Order Date Timeline"));
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_TryCreateResult_RejectsBlankDateFieldOrCaption()
+    {
+        InsertTimelineDialog.TryCreateResult(" ", "Order Date Timeline", out _, out var fieldError)
+            .Should()
+            .BeFalse();
+        fieldError.Should().Be("Select a date field to connect.");
+
+        InsertTimelineDialog.TryCreateResult("Order Date", " ", out _, out var captionError)
+            .Should()
+            .BeFalse();
+        captionError.Should().Be("Enter a timeline caption.");
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_AcceptWarnsAndRefocusesInvalidInput()
+    {
+        var source = ReadClassSource(
+            "PivotSlicerTimelineDialogs.cs",
+            "public sealed class InsertTimelineDialog",
+            "");
+
+        source.Should().Contain("if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter timeline options.\"");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().Contain("textBox.SelectAll();");
     }
 
     [Fact]

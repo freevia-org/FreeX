@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
+using Freexcel.App.UI;
 
 namespace Freexcel.App.Host;
 
@@ -39,7 +40,7 @@ public partial class MainWindow
         }
 
         menu.Opened += QuickAnalysisMenu_Opened;
-        menu.Closed += (_, _) => SheetGrid.QuickAnalysisPreviewRange = null;
+        menu.Closed += (_, _) => ClearQuickAnalysisPreview();
 
         string? currentGroup = null;
         foreach (var option in options)
@@ -284,12 +285,19 @@ public partial class MainWindow
 
         var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
         SheetGrid.QuickAnalysisPreviewRange = preview.Range;
+        SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind);
         StatusReadyText.Text = preview.StatusText;
     }
 
     private void ClearQuickAnalysisPreview()
     {
         SheetGrid.QuickAnalysisPreviewRange = null;
+        SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None;
         StatusReadyText.Text = "Ready";
     }
+
+    private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
+        kind == QuickAnalysisPreviewVisualKind.DataBars
+            ? GridQuickAnalysisPreviewVisualKind.DataBars
+            : GridQuickAnalysisPreviewVisualKind.None;
 }

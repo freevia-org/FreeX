@@ -116,11 +116,23 @@ public partial class OptionsDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (!OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
+        {
+            ShowInvalidInputWarning("Enter a positive default font size.", OptDefaultFontSize);
+            return;
+        }
+
+        if (!OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount))
+        {
+            ShowInvalidInputWarning("Enter the number of sheets to include from 1 to 255.", OptSheetCount);
+            return;
+        }
+
         var opts = new FreexcelOptions
         {
             DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
-            DefaultFontSize   = OptionsInputParser.ParseDefaultFontSizeOrFallback(OptDefaultFontSize.Text, _opts.DefaultFontSize),
-            DefaultSheetCount = OptionsInputParser.ParseDefaultSheetCountOrFallback(OptSheetCount.Text, _opts.DefaultSheetCount),
+            DefaultFontSize   = defaultFontSize,
+            DefaultSheetCount = defaultSheetCount,
             UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
             AutoCalculate     = OptCalcAuto.IsChecked == true,
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
@@ -153,6 +165,18 @@ public partial class OptionsDialog : Window
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private bool ShowInvalidInputWarning(string message, Control target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        if (target is TextBox textBox)
+            textBox.SelectAll();
+        else if (target is ComboBox comboBox)
+            comboBox.Focus();
+        Keyboard.Focus(target);
+        return true;
+    }
 
     private void AutoCorrectOptionsButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.AutoCorrectOptions());

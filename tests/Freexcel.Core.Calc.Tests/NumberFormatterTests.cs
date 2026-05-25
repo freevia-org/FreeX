@@ -217,9 +217,23 @@ public class NumberFormatterTests
         Assert.Equal(expectedColor, result.ColorHex);
     }
 
+    [Fact]
+    public void CustomNumberSubset_UsesWorkbookIndexedColorPaletteOverride()
+    {
+        var palette = new WorkbookIndexedColorPalette();
+        palette.SetColor(5, CellColor.FromArgb(1, 2, 3));
+
+        var result = NumberFormatter.FormatWithColor(new NumberValue(12.5), "[Color 5]0.0", palette);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Equal("#010203", result.ColorHex);
+    }
+
     [Theory]
     [InlineData("[Color9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
+    [InlineData("[Color 9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
     [InlineData("0;0;0;[Red]@", 0, "hello", "#FF0000")]
+    [InlineData("0;0;0;[Color 3]@", 0, "hello", "#FF0000")]
     public void CustomNumberSubset_ReturnsColorFromDateAndTextSections(
         string format,
         double numericValue,

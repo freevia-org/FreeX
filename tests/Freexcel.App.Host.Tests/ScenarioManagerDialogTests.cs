@@ -33,6 +33,67 @@ public sealed class ScenarioManagerDialogTests
         action.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(ScenarioManagerAction.Add, true)]
+    [InlineData(ScenarioManagerAction.Edit, true)]
+    [InlineData(ScenarioManagerAction.Save, true)]
+    [InlineData(ScenarioManagerAction.Show, false)]
+    [InlineData(ScenarioManagerAction.Delete, false)]
+    [InlineData(ScenarioManagerAction.List, false)]
+    [InlineData(ScenarioManagerAction.Report, false)]
+    public void RequiresScenarioName_OnlyRequiresNamesForSaveActions(ScenarioManagerAction action, bool expected)
+    {
+        ScenarioManagerDialog.RequiresScenarioName(action).Should().Be(expected);
+    }
+
+    [Fact]
+    public void TryValidateScenarioName_RejectsBlankName()
+    {
+        ScenarioManagerDialog.TryValidateScenarioName(" ", out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a scenario name.");
+    }
+
+    [Fact]
+    public void TryValidateScenarioName_AcceptsNonBlankName()
+    {
+        ScenarioManagerDialog.TryValidateScenarioName(" Best Case ", out var error)
+            .Should()
+            .BeTrue(error);
+    }
+
+    [Fact]
+    public void TryValidateChangingCells_AllowsBlankToUseCurrentSelectionFallback()
+    {
+        ScenarioManagerDialog.TryValidateChangingCells(" ", SheetId.New(), _ => null, out var error)
+            .Should()
+            .BeTrue(error);
+    }
+
+    [Fact]
+    public void TryValidateChangingCells_RejectsInvalidTypedReference()
+    {
+        var sheetId = SheetId.New();
+
+        ScenarioManagerDialog.TryValidateChangingCells("not a range", sheetId, _ => null, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a valid changing cells reference.");
+    }
+
+    [Fact]
+    public void TryValidateChangingCells_AcceptsValidTypedReference()
+    {
+        var sheetId = SheetId.New();
+
+        ScenarioManagerDialog.TryValidateChangingCells("Sheet1!A1:B2", sheetId, name => name == "Sheet1" ? sheetId : null, out var error)
+            .Should()
+            .BeTrue(error);
+    }
+
     [Fact]
     public void DialogSource_UsesExcelLikeScenarioListAndSideButtons()
     {
@@ -92,6 +153,13 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("public string? CommentText");
         source.Should().Contain("ChangingCellsText = _changingCellsBox.Text");
         source.Should().Contain("CommentText = _commentBox.Text");
+        source.Should().Contain("if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _newNameBox);");
+        source.Should().Contain("!TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _changingCellsBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("target.SelectAll();");
+        handlerSource.Should().Contain("new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName)");
         handlerSource.Should().Contain("SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
     }

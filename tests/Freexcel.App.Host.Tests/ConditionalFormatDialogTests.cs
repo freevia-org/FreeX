@@ -712,6 +712,37 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void ExistingRule_WhenRuleTypeChanges_DropsNativeMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                NativeChildXmls =
+                [
+                    """<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><ext uri="{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"><x14:id xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">{11111111-2222-3333-4444-555555555555}</x14:id></ext></extLst>"""
+                ],
+                NativePayloadChildXmls = ["""<axisColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" theme="1" />"""],
+                NativeContainerChildXmls = ["""<extLst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />"""]
+            };
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            RefreshRuleDescriptionForTest(dialog, "Color Scale");
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.ColorScale);
+            dialog.ResultRule.NativeChildXmls.Should().BeNull();
+            dialog.ResultRule.NativePayloadChildXmls.Should().BeNull();
+            dialog.ResultRule.NativeContainerChildXmls.Should().BeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void IconSetRule_CreatesThresholdsForSelectedIconCount()
     {
         StaTestRunner.Run(() =>
@@ -898,6 +929,13 @@ public sealed class ConditionalFormatDialogTests
             // The handler creates ResultRule before setting DialogResult. Direct modeless invocation in
             // tests reaches WPF's modal-only postcondition after the behavior under test runs.
         }
+    }
+
+    private static void RefreshRuleDescriptionForTest(ConditionalFormatDialog dialog, string ruleType)
+    {
+        var method = typeof(ConditionalFormatDialog).GetMethod("RefreshRuleDescription", BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        method!.Invoke(dialog, [ruleType]);
     }
 
     private static GridRange RangeFor(SheetId sheetId) =>

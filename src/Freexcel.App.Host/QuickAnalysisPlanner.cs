@@ -97,7 +97,9 @@ public static class QuickAnalysisPlanner
             previewRange,
             option.PreviewKind,
             option.Label,
-            option.PreviewText);
+            option.PreviewText,
+            option.Command,
+            option.PreviewVisual);
     }
 }
 
@@ -136,7 +138,9 @@ public sealed record QuickAnalysisHoverPreview(
     GridRange Range,
     QuickAnalysisPreviewKind PreviewKind,
     string Label,
-    string StatusText);
+    string StatusText,
+    QuickAnalysisCommand Command,
+    QuickAnalysisPreviewVisual PreviewVisual);
 
 public enum QuickAnalysisPreviewKind
 {
