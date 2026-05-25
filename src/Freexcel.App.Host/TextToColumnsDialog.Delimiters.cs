@@ -91,7 +91,7 @@ public sealed partial class TextToColumnsDialog
         if (_commaBox.IsChecked == true)
             kinds.Add(TextToColumnsDelimiterKind.Comma);
 
-        return kinds.Count == 0 ? [TextToColumnsDelimiterKind.Comma] : kinds;
+        return kinds;
     }
 
     public static TextToColumnsRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>

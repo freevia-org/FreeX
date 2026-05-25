@@ -300,7 +300,12 @@ public partial class MainWindow
             : null;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
-        SheetGrid.SparklineValues = sheet is null ? null : SparklineValuePlanner.BuildValues(sheet);
+        SheetGrid.SparklineValues = sheet is null
+            ? null
+            : _sparklineValueCache.GetOrCreate(
+                sheet,
+                _navigationCacheRevision,
+                () => SparklineValuePlanner.BuildValues(sheet));
         SheetGrid.MergedRegions = sheet?.MergedRegions;
         SheetGrid.WorksheetViewMode = sheet?.ViewMode ?? WorksheetViewMode.Normal;
         SheetGrid.ShowGridLines = sheet?.ShowGridlines ?? true;
@@ -531,16 +536,17 @@ public partial class MainWindow
             currentScrollValue,
             absoluteLimit);
 
+    public static (uint UsedMaxRow, uint UsedMaxCol) CalculateUsedRangeExtents(Sheet? sheet)
+    {
+        var usedRange = sheet?.GetUsedRange();
+        return usedRange is null
+            ? (1u, 1u)
+            : (usedRange.Value.End.Row, usedRange.Value.End.Col);
+    }
+
     private void UpdateScrollbarMaximums(Sheet? sheet)
     {
-        // Compute the farthest cell with data
-        uint usedMaxRow = 1, usedMaxCol = 1;
-        if (sheet != null)
-            foreach (var (addr, _) in sheet.GetUsedCells())
-            {
-                if (addr.Row > usedMaxRow) usedMaxRow = addr.Row;
-                if (addr.Col > usedMaxCol) usedMaxCol = addr.Col;
-            }
+        var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
 
         var vp = SheetGrid.Viewport;
         uint visRows = (uint)Math.Max(10, vp is null ? 40 : CountScrollableRows(vp, sheet));

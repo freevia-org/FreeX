@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -70,5 +71,33 @@ public sealed class StatusBarCalculatorTests
         stats.Average.Should().Be(20);
         stats.Min.Should().Be(10);
         stats.Max.Should().Be(30);
+    }
+
+    [Fact]
+    public void Benchmark_RepeatedWholeColumnStatusCalculations()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 100_000; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), Cell.FromValue(new NumberValue(row * 2)));
+        }
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var cache = new StatusBarStatsCache();
+        _ = cache.GetOrCreate(sheet, range, revision: 1, () => StatusBarCalculator.Calculate(sheet, range));
+
+        var sw = Stopwatch.StartNew();
+        StatusBarCalculator.Stats stats = null!;
+        for (var i = 0; i < 25; i++)
+            stats = cache.GetOrCreate(sheet, range, revision: 1, () => StatusBarCalculator.Calculate(sheet, range));
+        sw.Stop();
+
+        Console.WriteLine($"Repeated cached whole-column status refreshes: {sw.ElapsedMilliseconds}ms for 25 runs");
+        stats.Count.Should().Be(100_000);
+        stats.Sum.Should().Be(5_000_050_000d);
     }
 }

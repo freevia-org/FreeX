@@ -4938,10 +4938,12 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedRule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
-        loadedRule.NativePayloadAttributes.Should().ContainKey("border").WhoseValue.Should().Be("1");
-        loadedRule.NativePayloadAttributes.Should().ContainKey("axisPosition").WhoseValue.Should().Be("middle");
-        loadedRule.NativePayloadChildXmls.Should().Contain(xml => xml.Contains("negativeFillColor", StringComparison.Ordinal));
-        loadedRule.NativePayloadChildXmls.Should().Contain(xml => xml.Contains("axisColor", StringComparison.Ordinal));
+        loadedRule.DataBarBorder.Should().BeTrue();
+        loadedRule.DataBarAxisPosition.Should().Be("middle");
+        loadedRule.DataBarNegativeFillColor.Should().Be(new RgbColor(255, 0, 0));
+        loadedRule.DataBarAxisColor.Should().Be(new RgbColor(0, 0, 0));
+        loadedRule.NativePayloadAttributes.Should().BeNull();
+        loadedRule.NativePayloadChildXmls.Should().BeNull();
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -11572,6 +11574,11 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SingleXmlCells.Should().NotBeNull();
+        loadedSheet.SingleXmlCells!.Cells.Should().ContainSingle(cell =>
+            cell.Id == 1 &&
+            cell.Reference == "A1" &&
+            cell.XmlCellPropertyId == 1);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11582,6 +11589,86 @@ public partial class FileAdapterSmokeTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("singleXmlCells");
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("xmlCellPrId=\"1\"");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetSingleXmlCells()
+    {
+        var workbook = new Workbook("SingleXmlCellsNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeSingleXmlCellsAttr"] = "kept"
+            },
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1,
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["nativeSingleXmlCellAttr"] = "cell-kept"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+
+        loaded.GetSheetAt(0).SingleXmlCells.Should().BeEquivalentTo(sheet.SingleXmlCells);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetSingleXmlCells()
+    {
+        var workbook = new Workbook("SingleXmlCellsSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("mapped"));
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeSingleXmlCellsAttr"] = "kept"
+            },
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1,
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["nativeSingleXmlCellAttr"] = "cell-kept"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        singleXmlCells.Should().NotBeNull();
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept");
+        var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell").Should().ContainSingle().Which;
+        singleXmlCell.Attribute("id")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("r")!.Value.Should().Be("A1");
+        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept");
     }
 
     [Fact]
@@ -13366,6 +13453,48 @@ public partial class FileAdapterSmokeTests
         selections.Should().ContainSingle();
         selections.Single().Attribute("customSelectionAttr").Should().NotBeNull();
         selections.Single().Attribute("customSelectionAttr")!.Value.Should().Be("selection-native");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectNativeSelectionWhenActiveCellChanges()
+    {
+        var workbook = new Workbook("ExistingWorksheetSheetViewSelectionChange");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sheet view selection"));
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 1;
+        sheet.ActiveRow = 1;
+        sheet.ActiveCol = 1;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddExistingWorksheetSheetViewChildNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.ActiveRow = 4;
+        loadedSheet.ActiveCol = 4;
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetView = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .Single(element => element.Attribute("workbookViewId")?.Value == "0");
+        var selections = sheetView.Elements(worksheetNs + "selection").ToList();
+        selections.Should().ContainSingle();
+        selections.Single().Attribute("activeCell")!.Value.Should().Be("D4");
+        selections.Single().Attribute("sqref")!.Value.Should().Be("D4");
+        selections.Single().Attribute("customSelectionAttr").Should().BeNull();
     }
 
     [Fact]

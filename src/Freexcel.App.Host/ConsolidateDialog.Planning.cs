@@ -14,6 +14,20 @@ public sealed partial class ConsolidateDialog
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
         string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
 
+    public static bool HasPendingReferenceText(IEnumerable<string> existingReferences, string? referenceText)
+    {
+        var pendingReferences = SplitSourceRangeText(referenceText ?? "");
+        if (pendingReferences.Count == 0)
+            return false;
+
+        var existing = existingReferences
+            .Select(item => item.Trim())
+            .Where(item => item.Length > 0)
+            .ToList();
+        return pendingReferences.Any(pending =>
+            !existing.Contains(pending, StringComparer.OrdinalIgnoreCase));
+    }
+
     public static bool TryAddReference(
         SheetId sheetId,
         IEnumerable<string> existingReferences,

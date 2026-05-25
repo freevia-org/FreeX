@@ -334,10 +334,14 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
-        bool cum = ToBool(args[3]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormDistScalar(value, mean, stdev, cum));
-        return NormDistScalar(args[0], mean, stdev, cum);
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], NormDistScalar);
+    }
+
+    private static ScalarValue NormDistScalar(ScalarValue xValue, ScalarValue meanValue, ScalarValue stdevValue, ScalarValue cumulativeValue)
+    {
+        double mean = ToNumber(meanValue), stdev = ToNumber(stdevValue);
+        bool cum = ToBool(cumulativeValue);
+        return NormDistScalar(xValue, mean, stdev, cum);
     }
 
     private static ScalarValue NormDistScalar(ScalarValue xValue, double mean, double stdev, bool cum)
@@ -353,9 +357,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => NormInvScalar(value, mean, stdev));
-        return NormInvScalar(args[0], mean, stdev);
+        return MapTernaryTextArgs(args[0], args[1], args[2], NormInvScalar);
+    }
+
+    private static ScalarValue NormInvScalar(ScalarValue probabilityValue, ScalarValue meanValue, ScalarValue stdevValue)
+    {
+        double mean = ToNumber(meanValue), stdev = ToNumber(stdevValue);
+        return NormInvScalar(probabilityValue, mean, stdev);
     }
 
     private static ScalarValue NormInvScalar(ScalarValue probabilityValue, double mean, double stdev)
@@ -399,9 +407,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => StandardizeScalar(value, mean, stdev));
-        return StandardizeScalar(args[0], mean, stdev);
+        return MapTernaryTextArgs(args[0], args[1], args[2], StandardizeScalar);
+    }
+
+    private static ScalarValue StandardizeScalar(ScalarValue xValue, ScalarValue meanValue, ScalarValue stdevValue)
+    {
+        double mean = ToNumber(meanValue), stdev = ToNumber(stdevValue);
+        return StandardizeScalar(xValue, mean, stdev);
     }
 
     private static ScalarValue StandardizeScalar(ScalarValue xValue, double mean, double stdev)

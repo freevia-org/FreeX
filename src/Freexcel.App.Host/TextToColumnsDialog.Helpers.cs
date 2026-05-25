@@ -43,7 +43,7 @@ public sealed partial class TextToColumnsDialog
     {
         var kinds = delimiterKinds.Distinct().ToList();
         if (kinds.Count == 0)
-            kinds.Add(TextToColumnsDelimiterKind.Comma);
+            throw new ArgumentException("Select at least one delimiter.", nameof(delimiterKinds));
 
         var delimiters = string.Concat(kinds.Select(kind => CreateResult(kind, customDelimiter).Delimiter));
         var primaryKind = kinds.Contains(TextToColumnsDelimiterKind.Custom)

@@ -413,11 +413,16 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var returnTypeArg = args.Count > 1 ? args[1] : BlankValue.Instance;
+        return MapBinaryMathArgs(args[0], returnTypeArg, WeeknumScalar);
+    }
+
+    private static ScalarValue WeeknumScalar(ScalarValue value, ScalarValue returnTypeValue)
+    {
+        double rawReturnType = returnTypeValue is not BlankValue ? ToNumber(returnTypeValue) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeeknumScalar(value, returnType));
-        return WeeknumScalar(args[0], returnType);
+        return WeeknumScalar(value, returnType);
     }
 
     private static ScalarValue WeeknumScalar(ScalarValue value, int returnType)

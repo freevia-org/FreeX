@@ -195,6 +195,12 @@ public sealed partial class TextToColumnsDialog : Window
                 throw new ArgumentException("Enter at least one fixed-width break position.");
             }
 
+            if (_fixedWidthButton.IsChecked != true && SelectedDelimiterKinds().Count == 0)
+            {
+                FocusInvalidDelimiterSelectionInput();
+                throw new ArgumentException("Select at least one delimiter.");
+            }
+
             if (_fixedWidthButton.IsChecked != true && _otherBox.IsChecked == true && string.IsNullOrEmpty(_customBox.Text))
             {
                 FocusInvalidCustomDelimiterInput();
@@ -241,6 +247,9 @@ public sealed partial class TextToColumnsDialog : Window
                 break;
             case "Enter at least one fixed-width break position.":
                 FocusInvalidFixedWidthBreaksInput();
+                break;
+            case "Select at least one delimiter.":
+                FocusInvalidDelimiterSelectionInput();
                 break;
             case "Custom delimiter is required.":
                 FocusInvalidCustomDelimiterInput();
