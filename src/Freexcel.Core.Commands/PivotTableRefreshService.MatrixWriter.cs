@@ -15,9 +15,7 @@ public static partial class PivotTableRefreshService
         var start = GetPivotBodyStart(pivotTable);
         var rowFields = pivotTable.RowFields.ToList();
         var rowFieldOutputColumns = RowFieldOutputColumnCount(pivotTable);
-        var rowGroups = rows
-            .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .ToList();
+        var rowGroups = BuildRowGroups(workbook, pivotTable, rows, rowFields);
         rowGroups = ApplyLabelFilters(rowGroups, pivotTable, rowFields);
         rowGroups = ApplyValueFilters(rowGroups, pivotTable, headers, rowFields);
         rowGroups = ApplySorts(rowGroups, pivotTable, headers, rowFields);
@@ -113,7 +111,9 @@ public static partial class PivotTableRefreshService
                         dataField,
                         pivotTable,
                         headers),
-                        dataField);
+                        dataField,
+                        pivotTable,
+                        isEmptyIntersection: visibleRowGroupRows.Count == 0);
                     outputColumn++;
                 }
             }
