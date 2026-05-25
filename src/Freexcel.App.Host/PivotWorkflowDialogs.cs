@@ -17,7 +17,9 @@ public sealed record PivotTableDataSourceRangeSelectionRequest(
 
 public sealed class PivotTableDataSourceDialog : Window
 {
+    private readonly SheetId _sheetId;
     private readonly TextBox _sourceBox = new();
+    private readonly Func<string, SheetId?> _resolveSheetId;
     private readonly Action<PivotTableDataSourceRangeSelectionRequest>? _requestRangeSelection;
 
     public PivotTableDataSourceDialogResult Result { get; private set; }
@@ -25,8 +27,12 @@ public sealed class PivotTableDataSourceDialog : Window
 
     public PivotTableDataSourceDialog(
         string sourceRangeText,
-        Action<PivotTableDataSourceRangeSelectionRequest>? requestRangeSelection = null)
+        Action<PivotTableDataSourceRangeSelectionRequest>? requestRangeSelection = null,
+        SheetId sheetId = default,
+        Func<string, SheetId?>? resolveSheetId = null)
     {
+        _sheetId = sheetId;
+        _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText);
         Title = "Change PivotTable Data Source";
@@ -57,6 +63,9 @@ public sealed class PivotTableDataSourceDialog : Window
             new Thickness(0, 0, 0, 16));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
         {
+            if (!ValidateInputs())
+                return;
+
             Result = CreateResult(_sourceBox.Text);
             DialogResult = true;
         }));
@@ -73,6 +82,26 @@ public sealed class PivotTableDataSourceDialog : Window
                 _requestRangeSelection?.Invoke(RangeSelectionRequest);
                 FocusRangeSelectionInput(request.Target);
             });
+
+    private bool ValidateInputs()
+    {
+        if (!WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid PivotTable source range.", _sourceBox);
+            return false;
+        }
+
+        return true;
+    }
+
+    private SheetId? ResolveSheetIdByName(string sheetName) => _resolveSheetId(sheetName);
+
+    private bool ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        FocusRangeSelectionInput(target);
+        return false;
+    }
 
     private static void FocusRangeSelectionInput(TextBox target)
     {

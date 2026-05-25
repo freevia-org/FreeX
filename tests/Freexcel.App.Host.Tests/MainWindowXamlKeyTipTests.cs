@@ -710,6 +710,19 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void TopLevelKeyTipHandling_WaitsForVisibleContextualTabPrefixes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
+
+        var prefixGuardIndex = source.IndexOf("HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence)", StringComparison.Ordinal);
+        var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence)", StringComparison.Ordinal);
+
+        prefixGuardIndex.Should().BeGreaterThanOrEqualTo(0);
+        topLevelRouteIndex.Should().BeGreaterThanOrEqualTo(0);
+        prefixGuardIndex.Should().BeLessThan(topLevelRouteIndex, "Alt, J should wait for visible JA/JD contextual tabs before selecting Draw");
+    }
+
+    [Fact]
     public void KeyedRibbonDropDowns_HaveKeyTipsForDirectMenuItems()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

@@ -200,6 +200,50 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetSmartTags()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsNativeJson");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            NativeXml = "<smartTags xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><cellSmartTags r=\"A1\"><cellSmartTag type=\"0\" deleted=\"0\"><cellSmartTagPr key=\"place\" val=\"Seattle\" customSmartTagPropertyFlag=\"keep\" /></cellSmartTag></cellSmartTags></smartTags>",
+            Cells =
+            [
+                new WorksheetCellSmartTagsModel
+                {
+                    Reference = "A1",
+                    Tags =
+                    [
+                        new WorksheetCellSmartTagModel
+                        {
+                            Type = "0",
+                            Deleted = false,
+                            Properties =
+                            [
+                                new WorksheetCellSmartTagPropertyModel
+                                {
+                                    Key = "place",
+                                    Value = "Seattle",
+                                    NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.SmartTags.Should().BeEquivalentTo(sheet.SmartTags);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -14591,6 +14635,29 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SmartTags.Should().NotBeNull();
+        loadedSheet.SmartTags!.Cells.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorksheetCellSmartTagsModel
+        {
+            Reference = "A1",
+            Tags =
+            [
+                new WorksheetCellSmartTagModel
+                {
+                    Type = "0",
+                    Deleted = false,
+                    Properties =
+                    [
+                        new WorksheetCellSmartTagPropertyModel
+                        {
+                            Key = "place",
+                            Value = "Seattle",
+                            NativeAttributes = new Dictionary<string, string> { ["customSmartTagPropertyFlag"] = "keep" }
+                        }
+                    ]
+                }
+            ]
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14606,6 +14673,7 @@ public partial class FileAdapterSmokeTests
         smartTags.ToString().Should().Contain("type=\"0\"");
         smartTags.ToString().Should().Contain("key=\"place\"");
         smartTags.ToString().Should().Contain("val=\"Seattle\"");
+        smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
     }
 
     [Fact]
@@ -14643,6 +14711,40 @@ public partial class FileAdapterSmokeTests
         autoFilter.ToString().Should().Contain("colId=\"0\"");
         autoFilter.ToString().Should().Contain("blank=\"1\"");
         autoFilter.ToString().Should().Contain("val=\"A\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterBeforeMergeCells()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B2", null);
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 4, 2)));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedElements = worksheetXml.Root!
+            .Elements()
+            .Where(element => element.Name.Namespace == worksheetNs)
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        orderedElements.Should().Contain("autoFilter");
+        orderedElements.Should().Contain("mergeCells");
+        orderedElements.IndexOf("autoFilter").Should().BeLessThan(orderedElements.IndexOf("mergeCells"));
+        worksheetXml.Root!.Element(worksheetNs + "autoFilter")!.Attribute("ref")!.Value.Should().Be("A1:B2");
     }
 
     [Fact]
@@ -18494,6 +18596,15 @@ public partial class FileAdapterSmokeTests
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:B3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XElement(worksheetNs + "filter", new XAttribute("val", "A"))))));
+            worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sortState",
                 new XAttribute("ref", "A1:A3"),
                 new XElement(
@@ -18571,7 +18682,8 @@ public partial class FileAdapterSmokeTests
                         new XElement(
                             worksheetNs + "cellSmartTagPr",
                             new XAttribute("key", "place"),
-                            new XAttribute("val", "Seattle"))))));
+                            new XAttribute("val", "Seattle"),
+                            new XAttribute("customSmartTagPropertyFlag", "keep"))))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
