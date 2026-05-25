@@ -264,14 +264,15 @@ public class TextEntryDialog : Window
     }
 }
 
-public sealed record ThreadedCommentDialogResult(string? ReplyText, bool IsResolved);
+public sealed record ThreadedCommentDialogResult(string? RootText, string? ReplyText, bool IsResolved);
 
 public sealed class ThreadedCommentDialog : Window
 {
+    private readonly TextBox _rootBox = new() { AcceptsReturn = true, MinLines = 3, MaxLines = 6 };
     private readonly TextBox _replyBox = new() { AcceptsReturn = true, MinLines = 3, MaxLines = 6 };
     private readonly CheckBox _resolveBox;
 
-    public ThreadedCommentDialogResult Result { get; private set; } = new(null, false);
+    public ThreadedCommentDialogResult Result { get; private set; } = new(null, null, false);
 
     public ThreadedCommentDialog(string cellRef, ThreadedComment? existing)
     {
@@ -297,9 +298,7 @@ public sealed class ThreadedCommentDialog : Window
         var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 80 };
         ok.Click += (_, _) =>
         {
-            Result = new ThreadedCommentDialogResult(
-                string.IsNullOrWhiteSpace(_replyBox.Text) ? null : _replyBox.Text.Trim(),
-                _resolveBox.IsChecked == true);
+            Result = CreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true);
             DialogResult = true;
         };
         var btnRow = new StackPanel
@@ -326,13 +325,50 @@ public sealed class ThreadedCommentDialog : Window
 
         var inner = new StackPanel();
         inner.Children.Add(scroll);
-        inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "_Reply:", Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
-        inner.Children.Add(_replyBox);
+        _rootBox.Text = existing?.Text ?? "";
+        inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "Edit _comment:", Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        inner.Children.Add(_rootBox);
+        if (existing is not null)
+        {
+            inner.Children.Add(new Label { Content = "_Reply:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+            inner.Children.Add(_replyBox);
+        }
         inner.Children.Add(_resolveBox);
         root.Children.Add(inner);
 
         Content = root;
-        Loaded += (_, _) => { _replyBox.Focus(); Keyboard.Focus(_replyBox); };
+        Loaded += (_, _) =>
+        {
+            var target = existing is null ? _rootBox : _replyBox;
+            target.Focus();
+            Keyboard.Focus(target);
+        };
+    }
+
+    public static ThreadedCommentDialogResult CreateResult(
+        ThreadedComment? existing,
+        string? rootText,
+        string? replyText,
+        bool isResolved)
+    {
+        var trimmedRoot = (rootText ?? "").Trim();
+        var trimmedReply = (replyText ?? "").Trim();
+        if (existing is null)
+        {
+            return new ThreadedCommentDialogResult(
+                null,
+                string.IsNullOrWhiteSpace(trimmedRoot) ? null : trimmedRoot,
+                isResolved);
+        }
+
+        var rootEdit = !string.IsNullOrWhiteSpace(trimmedRoot)
+            && !string.Equals(trimmedRoot, existing.Text, StringComparison.Ordinal)
+                ? trimmedRoot
+                : null;
+        return new ThreadedCommentDialogResult(
+            rootEdit,
+            string.IsNullOrWhiteSpace(trimmedReply) ? null : trimmedReply,
+            isResolved);
     }
 
     private static Border BuildMessage(string author, string text, bool isRoot)

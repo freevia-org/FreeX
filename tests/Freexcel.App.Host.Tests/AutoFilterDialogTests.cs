@@ -413,6 +413,20 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_RenderFilterFamilyAsNestedMenuCommands()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("ConfigureFilterFamilySubmenu(menuPlan);");
+        source.Should().Contain("private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)");
+        source.Should().Contain("new ContextMenu()");
+        source.Should().Contain("parentButton.ContextMenu = submenu;");
+        source.Should().Contain("menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);");
+        source.Should().Contain("private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)");
+        source.Should().Contain("AutoFilterMenuEntryKind.FilterFamilyCommand");
+    }
+
+    [Fact]
     public void DialogControls_InvalidTypedCriteriaWarnsAndRefocusesRequiredField()
     {
         var source = ReadAutoFilterDialogSources();

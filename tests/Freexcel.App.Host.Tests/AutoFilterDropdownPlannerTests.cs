@@ -206,6 +206,35 @@ public sealed class AutoFilterDropdownPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_ProvidesNestedFilterFamilySubmenuCommands()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new NumberValue(20));
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        var family = menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
+        family.Header.Should().Be("Number Filters");
+        family.Children.Select(child => child.Header).Should().ContainInOrder(
+            "Equals",
+            "Does Not Equal",
+            "Greater Than",
+            "Between",
+            "Top 10",
+            "Above Average",
+            "Blanks");
+        family.Children.Should().OnlyContain(child => child.Kind == AutoFilterMenuEntryKind.FilterFamilyCommand);
+        family.Children.Single(child => child.Header == "Greater Than").Value.Should().Be(">");
+        family.Children.Single(child => child.Header == "Above Average").Value.Should().Be("above average");
+        family.Children.Single(child => child.Header == "Blanks").Value.Should().Be("blank");
+    }
+
+    [Fact]
     public void CreateMenuPlan_ChoosesNumberAndDateFilterFamiliesFromBodyValues()
     {
         var numberSheet = new Sheet(SheetId, "Sheet1");
