@@ -116,6 +116,26 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void StandaloneAltKeyTips_AreNotSuppressedByTextBoxFocus()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var keyUpStart = keyboardFocusSource.IndexOf(
+            "private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)",
+            StringComparison.Ordinal);
+        var deactivatedStart = keyboardFocusSource.IndexOf(
+            "private void MainWindow_Deactivated(object? sender, EventArgs e)",
+            StringComparison.Ordinal);
+
+        keyUpStart.Should().BeGreaterThanOrEqualTo(0);
+        deactivatedStart.Should().BeGreaterThan(keyUpStart);
+        var keyUpSource = keyboardFocusSource[keyUpStart..deactivatedStart];
+
+        keyUpSource.Should().Contain("_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey)");
+        keyUpSource.Should().NotContain("Keyboard.FocusedElement is TextBox or ComboBox");
+        keyUpSource.Should().Contain("EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);");
+    }
+
+    [Fact]
     public void F6ShellFocusCycle_ContinuesWhenRegionRejectsFocus()
     {
         var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));

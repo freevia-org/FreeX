@@ -95,8 +95,7 @@ internal static class XlsxWorkbookMetadataReader
             {
                 if (attribute.IsNamespaceDeclaration ||
                     string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Name.LocalName, "revisionsPassword", StringComparison.Ordinal))
+                    string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal))
                 {
                     continue;
                 }

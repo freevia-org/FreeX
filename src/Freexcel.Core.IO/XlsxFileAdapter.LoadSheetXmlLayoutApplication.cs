@@ -54,6 +54,8 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
             ? null
             : layout.PrintQualityVerticalDpi;
+        sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
+        sheet.PageSetupMetadata = layout.PageSetupMetadata;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;

@@ -395,8 +395,7 @@ internal static class XlsxWorkbookMetadataWriter
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) ||
                     string.Equals(attribute.Key, "lockStructure", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Key, "revisionsPassword", StringComparison.Ordinal))
+                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal))
                 {
                     continue;
                 }

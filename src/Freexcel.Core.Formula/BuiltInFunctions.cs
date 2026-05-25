@@ -661,12 +661,19 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, LeftScalarWithCount);
+    }
+
+    private static ScalarValue LeftScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
-        if (args[0] is RangeValue range) return MapTextSliceRange(range, count, fromRight: false);
-        return LeftScalar(args[0], count);
+        return LeftScalar(value, count);
     }
 
     private static ScalarValue LeftScalar(ScalarValue value, int count)
@@ -682,12 +689,19 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
-        var rawCount = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var countArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], countArg, RightScalarWithCount);
+    }
+
+    private static ScalarValue RightScalarWithCount(ScalarValue value, ScalarValue countValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (countValue is ErrorValue countError) return countError;
+        var rawCount = ToNumber(countValue);
         if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
-        if (args[0] is RangeValue range) return MapTextSliceRange(range, count, fromRight: true);
-        return RightScalar(args[0], count);
+        return RightScalar(value, count);
     }
 
     private static ScalarValue RightScalar(ScalarValue value, int count)

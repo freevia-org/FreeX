@@ -77,6 +77,20 @@ public sealed partial class Sheet
             PrintQualityVerticalDpi       = PrintQualityVerticalDpi,
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
+            PrintOptionsMetadata          = PrintOptionsMetadata is null
+                ? null
+                : new WorksheetPrintOptionsMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PrintOptionsMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PrintOptionsMetadata.NativeChildXmls]
+                },
+            PageSetupMetadata             = PageSetupMetadata is null
+                ? null
+                : new WorksheetPageSetupMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PageSetupMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PageSetupMetadata.NativeChildXmls]
+                },
             ViewMode                      = ViewMode,
             IsHidden                      = false,
             IsVeryHidden                  = IsVeryHidden,

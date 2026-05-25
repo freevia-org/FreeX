@@ -293,9 +293,6 @@ public partial class MainWindow
         if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
             return;
 
-        if (Keyboard.FocusedElement is TextBox or ComboBox)
-            return;
-
         if (_ribbonKeyTipMode.IsActive)
             ExitRibbonKeyTipMode();
         else

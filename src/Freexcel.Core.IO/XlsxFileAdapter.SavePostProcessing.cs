@@ -308,6 +308,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetProtectionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.PrintOptionsMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.SmartTags is not null))
         {
             packageStream.Position = 0;
