@@ -34,6 +34,7 @@ public sealed partial class Sheet
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
             AutoFilter                    = AutoFilter,
             SmartTags                     = SmartTags,
+            DataConsolidation             = DataConsolidation,
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
             PageMargins                   = PageMargins,

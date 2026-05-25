@@ -51,6 +51,25 @@ public sealed class WorksheetCellSmartTagPropertyModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorksheetDataConsolidationModel
+{
+    public string? Function { get; set; }
+    public bool? LeftLabels { get; set; }
+    public bool? TopLabels { get; set; }
+    public bool? Link { get; set; }
+    public string? NativeXml { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetDataConsolidationReferenceModel> References { get; set; } = [];
+}
+
+public sealed class WorksheetDataConsolidationReferenceModel
+{
+    public string? Reference { get; set; }
+    public string? Sheet { get; set; }
+    public string? Name { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -113,6 +132,9 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet-level Excel smart-tag metadata loaded from XLSX.</summary>
     public WorksheetSmartTagsModel? SmartTags { get; set; }
+
+    /// <summary>Worksheet-level Excel data-consolidation metadata loaded from XLSX.</summary>
+    public WorksheetDataConsolidationModel? DataConsolidation { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;

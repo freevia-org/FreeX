@@ -244,6 +244,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetDataConsolidation()
+    {
+        var workbook = new Workbook("WorksheetDataConsolidationNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.DataConsolidation = new WorksheetDataConsolidationModel
+        {
+            Function = "sum",
+            LeftLabels = true,
+            TopLabels = true,
+            Link = true,
+            NativeXml = "<dataConsolidate xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" function=\"sum\" leftLabels=\"1\" topLabels=\"1\" link=\"1\" customDataConsolidationFlag=\"keep\"><dataRefs count=\"1\"><dataRef ref=\"A1:B2\" sheet=\"Data\" customDataRefFlag=\"keep\" /></dataRefs></dataConsolidate>",
+            NativeAttributes = new Dictionary<string, string> { ["customDataConsolidationFlag"] = "keep" },
+            References =
+            [
+                new WorksheetDataConsolidationReferenceModel
+                {
+                    Reference = "A1:B2",
+                    Sheet = "Data",
+                    NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.DataConsolidation.Should().BeEquivalentTo(sheet.DataConsolidation);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -14462,6 +14496,19 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        var loadedData = loaded.GetSheetAt(0).DataConsolidation;
+        loadedData.Should().NotBeNull();
+        loadedData!.Function.Should().Be("sum");
+        loadedData.LeftLabels.Should().BeTrue();
+        loadedData.TopLabels.Should().BeTrue();
+        loadedData.Link.Should().BeTrue();
+        loadedData.NativeAttributes.Should().Contain("customDataConsolidationFlag", "keep");
+        loadedData.References.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorksheetDataConsolidationReferenceModel
+        {
+            Reference = "A1:B2",
+            Sheet = "Data",
+            NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14475,8 +14522,10 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Should().NotBeNull();
         dataConsolidate!.Attribute("function")!.Value.Should().Be("sum");
         dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1");
+        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
         dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
         dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
+        dataConsolidate.ToString().Should().Contain("customDataRefFlag=\"keep\"");
     }
 
     [Fact]
@@ -18686,13 +18735,15 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("leftLabels", "1"),
                 new XAttribute("topLabels", "1"),
                 new XAttribute("link", "1"),
+                new XAttribute("customDataConsolidationFlag", "keep"),
                 new XElement(
                     worksheetNs + "dataRefs",
                     new XAttribute("count", "1"),
                     new XElement(
                         worksheetNs + "dataRef",
                         new XAttribute("ref", "A1:B2"),
-                        new XAttribute("sheet", "Data")))));
+                        new XAttribute("sheet", "Data"),
+                        new XAttribute("customDataRefFlag", "keep")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
