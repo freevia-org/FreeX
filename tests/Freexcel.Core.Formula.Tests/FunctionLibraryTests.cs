@@ -7227,6 +7227,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filterxml_SameShapeRangeArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")),
+            (1, 2, new TextValue("/root/item")),
+            (2, 2, new TextValue("/root/item")));
+
+        AssertTextColumn(_eval.Evaluate("=FILTERXML(A1:A2,B1:B2)", sheet), "A", "B");
+    }
+
+    [Fact]
+    public void Filterxml_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")),
+            (1, 2, new TextValue("/root/item")),
+            (1, 3, new TextValue("/root/item")));
+
+        _eval.Evaluate("=FILTERXML(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Numbervalue_DefaultSeparators_ParsesPlainNumber() =>
         _eval.Evaluate("=NUMBERVALUE(\"1234.56\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
