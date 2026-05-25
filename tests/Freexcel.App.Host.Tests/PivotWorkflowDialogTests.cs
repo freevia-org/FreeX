@@ -991,6 +991,21 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotFieldGroupingDialogInvalidBounds_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotWorkflowDialogs.cs",
+            "public sealed class PivotFieldGroupingDialog",
+            "");
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid starting value or leave it blank.\", _startBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid ending value or leave it blank.\", _endBox);");
+        source.Should().Contain("TryParseOptionalFiniteDouble(_startBox.Text, out _)");
+        source.Should().Contain("TryParseOptionalFiniteDouble(_endBox.Text, out _)");
+        source.Should().Contain("double.IsFinite(parsed)");
+    }
+
+    [Fact]
     public void PivotCalculatedFieldDialog_CreateResult_TrimsAndBuildsModel()
     {
         var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
