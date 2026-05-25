@@ -37,6 +37,13 @@ public sealed partial class Sheet
             DataConsolidation             = DataConsolidation,
             SortState                     = SortState,
             AdditionalViews               = AdditionalViews,
+            PrimaryViewMetadata           = PrimaryViewMetadata is null
+                ? null
+                : new WorksheetPrimaryViewMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PrimaryViewMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PrimaryViewMetadata.NativeChildXmls]
+                },
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
             PageMargins                   = PageMargins,

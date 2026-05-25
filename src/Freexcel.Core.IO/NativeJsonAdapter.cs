@@ -132,6 +132,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
+            sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }
@@ -652,6 +653,25 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             return null;
 
         return new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPrimaryViewMetadataModel? ToWorksheetPrimaryViewMetadata(WorksheetPrimaryViewMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetPrimaryViewMetadataModel
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls

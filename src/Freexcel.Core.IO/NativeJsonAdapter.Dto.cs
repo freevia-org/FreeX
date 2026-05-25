@@ -325,6 +325,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
         public WorksheetSortStateDto? SortState { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
+        public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
@@ -419,6 +420,12 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetSheetPropertiesMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPrimaryViewMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];

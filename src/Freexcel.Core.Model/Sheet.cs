@@ -58,6 +58,12 @@ public sealed class WorksheetSheetPropertiesMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetPrimaryViewMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetPageMarginsMetadataModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -233,6 +239,9 @@ public sealed partial class Sheet
 
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
+
+    /// <summary>Native Excel primary sheetView metadata not yet modeled as editable fields.</summary>
+    public WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata { get; set; }
 
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;

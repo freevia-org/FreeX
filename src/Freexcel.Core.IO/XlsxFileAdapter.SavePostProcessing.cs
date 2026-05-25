@@ -338,6 +338,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSheetPropertiesMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.PrimaryViewMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPrimaryViewMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.PageMarginsMetadata is not null))
         {
             packageStream.Position = 0;
