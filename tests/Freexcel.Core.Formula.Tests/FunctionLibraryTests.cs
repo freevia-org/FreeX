@@ -4766,6 +4766,18 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTRANK(A1:A2,1,B1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void Percentrank_XAndSignificanceRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (3, 1, new NumberValue(3)),
+            (4, 1, new NumberValue(4)), (5, 1, new NumberValue(5)),
+            (1, 2, new NumberValue(2)), (2, 2, new NumberValue(4)),
+            (1, 3, new NumberValue(3)), (2, 3, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=PERCENTRANK(A1:A5,B1:B2,C1:C2)", sheet), new NumberValue(0.25), new NumberValue(0.75));
+    }
+
     [Fact] public void Correl_PerfectPositive_Returns1()
     {
         var sheet = MakeSheet(
