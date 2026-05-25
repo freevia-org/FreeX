@@ -47,6 +47,12 @@ internal static class PivotStylePaletteResolver
             return true;
         }
 
+        if (string.Equals(styleName, "PivotStyleLight16", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedLightPalette(theme, WorkbookThemeColorSlot.Accent1);
+            return true;
+        }
+
         if (string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase))
         {
             palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent2);
@@ -85,6 +91,16 @@ internal static class PivotStylePaletteResolver
             theme.ResolveColor(slot, 0.9),
             theme.ResolveColor(slot, 0.5));
     }
+
+    private static PivotStylePalette ThemedLightPalette(WorkbookTheme theme, WorkbookThemeColorSlot slot) =>
+        new(
+            HeaderFill: theme.ResolveColor(slot, 0.8),
+            HeaderFont: CellColor.Black,
+            SubtotalFill: theme.ResolveColor(slot, 0.9),
+            GrandTotalFill: theme.ResolveColor(slot, 0.9),
+            GrandTotalFont: CellColor.Black,
+            StripeFill: theme.ResolveColor(slot, 0.95),
+            Border: theme.ResolveColor(slot, 0.6));
 
     private static PivotStylePalette LightPalette() =>
         new(
