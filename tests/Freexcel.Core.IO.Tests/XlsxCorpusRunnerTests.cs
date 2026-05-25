@@ -407,6 +407,67 @@ public class XlsxCorpusRunnerTests
             .ToArray();
     }
 
+    private static IReadOnlyList<string> RelationshipDetailsForParts(
+        PackagePartSummary package,
+        IReadOnlyList<string> partNames)
+    {
+        var partSet = partNames
+            .Select(part => part.TrimStart('/').Replace('\\', '/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var relationshipPrefixes = partNames
+            .Select(GetRelationshipPartPathForPart)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path + "=>")
+            .ToArray();
+
+        return package.CriticalRelationshipDetails
+            .Where(entry =>
+                relationshipPrefixes.Any(prefix => entry.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
+                IsWorkbookRelationshipToCriticalPart(entry, partSet))
+            .ToArray();
+    }
+
+    private static string GetRelationshipPartPathForPart(string partName)
+    {
+        var path = partName.TrimStart('/').Replace('\\', '/');
+        if (string.Equals(path, "_rels/.rels", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("xl/_rels/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        if (path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var slashIndex = path.LastIndexOf('/');
+        return slashIndex < 0
+            ? $"_rels/{path}.rels"
+            : $"{path[..slashIndex]}/_rels/{path[(slashIndex + 1)..]}.rels";
+    }
+
+    private static bool IsWorkbookRelationshipToCriticalPart(string relationshipDetail, ISet<string> partNames)
+    {
+        const string workbookRelsPrefix = "xl/_rels/workbook.xml.rels=>";
+        if (!relationshipDetail.StartsWith(workbookRelsPrefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var targetEnd = relationshipDetail.IndexOf("|type=", StringComparison.Ordinal);
+        if (targetEnd < 0)
+            return false;
+
+        var target = relationshipDetail[workbookRelsPrefix.Length..targetEnd];
+        if (string.Equals(target, "worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(target, "/xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var normalized = target.StartsWith("/", StringComparison.Ordinal)
+            ? target.TrimStart('/')
+            : "xl/" + target.TrimStart('/');
+        return partNames.Contains(normalized);
+    }
+
     [Fact]
     public void GeneratedUnsupportedChartFixture_UsesCurrentlyUnsupportedChartFamily()
     {
@@ -510,6 +571,52 @@ public class XlsxCorpusRunnerTests
         }
 
         inspectedRows.Should().BeGreaterThan(0, "at least one public corpus workbook with warning tags must be present to prove real-file warning detection");
+    }
+
+    [Fact]
+    public void PublicCorpusRows_WithUnsupportedWarningTags_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
+            .Where(item => item.ExpectedKinds.Length > 0)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public corpus warning-tag rows should also prove real package retention");
+
+        var adapter = new XlsxFileAdapter();
+        var inspectedRows = 0;
+        foreach (var item in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var before = CapturePackageSummary(source);
+            before.CriticalParts.Should().NotBeEmpty(item.Row.Id);
+            var retainedRelationshipDetails = RelationshipDetailsForParts(before, before.CriticalParts);
+            retainedRelationshipDetails.Should().NotBeEmpty(item.Row.Id);
+            var retainedContentTypeOverrides = ContentTypeOverridesForParts(before, before.CriticalParts);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 12, 1), new TextValue("freexcel-public-warning-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            var after = CapturePackageSummary(saved);
+            inspectedRows++;
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, item.Row.Id);
+            after.CriticalRelationshipDetails.Should().Contain(retainedRelationshipDetails, item.Row.Id);
+            after.CriticalContentTypeOverrides.Should().Contain(retainedContentTypeOverrides, item.Row.Id);
+        }
+
+        inspectedRows.Should().BeGreaterThan(0, "at least one public warning workbook must be present to prove real-file package retention");
     }
 
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
