@@ -933,6 +933,32 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LeftAndRight_SameShapeNumCharsArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(4)));
+
+        AssertTextColumn(_eval.Evaluate("=LEFT(A1:A2,B1:B2)", sheet), "Ap", "Bana");
+        AssertTextColumn(_eval.Evaluate("=RIGHT(A1:A2,B1:B2)", sheet), "le", "nana");
+    }
+
+    [Fact]
+    public void LeftAndRight_MismatchedNumCharsArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(4)));
+
+        _eval.Evaluate("=LEFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=RIGHT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -1467,6 +1493,33 @@ public class FunctionLibraryTests
     // ── REPT ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Mid_SameShapeStartAndLengthArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(3)),
+            (1, 3, new NumberValue(2)),
+            (2, 3, new NumberValue(3)));
+
+        AssertTextColumn(_eval.Evaluate("=MID(A1:A2,B1:B2,C1:C2)", sheet), "pp", "nan");
+    }
+
+    [Fact]
+    public void Mid_MismatchedStartOrLengthArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=MID(A1:A2,B1:C1,2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MID(A1:A2,2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Mid_DoesNotSplitSurrogatePairs()
     {
         var sheet = MakeSheet();
@@ -1521,6 +1574,30 @@ public class FunctionLibraryTests
     }
 
     // ── VALUE ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Rept_SameShapeTimesArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (2, 1, new TextValue("bc")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(2)));
+
+        AssertTextColumn(_eval.Evaluate("=REPT(A1:A2,B1:B2)", sheet), "aaa", "bcbc");
+    }
+
+    [Fact]
+    public void Rept_MismatchedTimesArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (2, 1, new TextValue("bc")),
+            (1, 2, new NumberValue(3)),
+            (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=REPT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Value_ParsesNumber()

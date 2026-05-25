@@ -416,6 +416,8 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue startError) return startError;
         if (args[2] is ErrorValue lengthError) return lengthError;
+        if (args[0] is RangeValue || args[1] is RangeValue || args[2] is RangeValue)
+            return MapTernaryTextArgs(args[0], args[1], args[2], MidScalarWithArgs);
         double rawStart = ToNumber(args[1]);
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
@@ -439,6 +441,47 @@ public static partial class BuiltInFunctions
             {
                 var value = range.Cells[r, c];
                 cells[r, c] = value is ErrorValue e ? e : MidText(ToText(value), startNum, numChars);
+            }
+
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue MidScalarWithArgs(ScalarValue value, ScalarValue startValue, ScalarValue lengthValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (startValue is ErrorValue startError) return startError;
+        if (lengthValue is ErrorValue lengthError) return lengthError;
+        double rawStart = ToNumber(startValue);
+        double rawLen = ToNumber(lengthValue);
+        if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
+        if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        return MidText(ToText(value), (int)rawStart, (int)rawLen);
+    }
+
+    private static ScalarValue MapTernaryTextArgs(
+        ScalarValue first,
+        ScalarValue second,
+        ScalarValue third,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        var firstRange = first as RangeValue;
+        var secondRange = second as RangeValue;
+        var thirdRange = third as RangeValue;
+        var shape = firstRange ?? secondRange ?? thirdRange;
+        if (shape is null) return map(first, second, third);
+        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
+            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
+            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+        for (int r = 0; r < shape.RowCount; r++)
+            for (int c = 0; c < shape.ColCount; c++)
+            {
+                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
+                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
+                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                cells[r, c] = map(firstValue, secondValue, thirdValue);
             }
 
         return new RangeValue(cells);
@@ -513,12 +556,18 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue repeatError) return repeatError;
-        var timesD = ToNumber(args[1]);
+        return MapBinaryMathArgs(args[0], args[1], ReptScalarWithTimes);
+    }
+
+    private static ScalarValue ReptScalarWithTimes(ScalarValue value, ScalarValue timesValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (timesValue is ErrorValue timesError) return timesError;
+        var timesD = ToNumber(timesValue);
         if (!double.IsFinite(timesD) || timesD > int.MaxValue) return ErrorValue.Value;
         int times = (int)timesD;
         if (times < 0) return ErrorValue.Value;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ReptText(ToText(value), times));
-        return ReptText(ToText(args[0]), times);
+        return ReptText(ToText(value), times);
     }
 
     private static ScalarValue ReptText(string text, int times)
