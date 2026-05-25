@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -40,7 +41,7 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledHeaderFooterAttribute(attribute.Key))
                     continue;
 
-                headerFooter.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(headerFooter, attribute.Key, attribute.Value);
             }
 
             foreach (var childXml in sheet.HeaderFooterMetadata.NativeChildXmls)
@@ -69,4 +70,21 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
 
     private static bool IsModeledHeaderFooterElement(string name) =>
         name is "oddHeader" or "oddFooter" or "evenHeader" or "evenFooter" or "firstHeader" or "firstFooter";
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 }
