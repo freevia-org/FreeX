@@ -7418,6 +7418,25 @@ public class FunctionLibraryTests
     // ── UNICHAR / UNICODE additional cases ───────────────────────────────────
 
     [Fact]
+    public void NetworkdaysIntl_StartAndEndRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2026, 5, 18).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2026, 5, 22).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2026, 5, 22).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2026, 5, 18).ToOADate())),
+            (3, 2, new NumberValue(new DateTime(2026, 5, 19).ToOADate())));
+
+        AssertColumn(
+            _eval.Evaluate("=NETWORKDAYS.INTL(A1:A2,B1:B2,\"0000011\")", sheet),
+            new NumberValue(5),
+            new NumberValue(-5));
+
+        _eval.Evaluate("=NETWORKDAYS.INTL(A1:A2,B1:B3,\"0000011\")", sheet)
+            .Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Unichar_BasicAscii_ReturnsLetter() =>
         _eval.Evaluate("=UNICHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
 

@@ -211,6 +211,12 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         XlsxWorkbookThemeWriter.Save(packageStream, workbook.Theme);
 
+        if (workbook.IndexedColors.Colors.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
+        }
+
         if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
         {
             packageStream.Position = 0;
@@ -262,6 +268,12 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        if (workbook.IndexedColors.Colors.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
+        }
 
         packageStream.Position = 0;
         XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);

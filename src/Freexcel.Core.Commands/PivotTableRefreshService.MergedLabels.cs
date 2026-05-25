@@ -27,6 +27,14 @@ public static partial class PivotTableRefreshService
                 bodyStart.Row + 1,
                 bodyStart.Col + (uint)colOffset,
                 bodyStart.Col + (uint)rowLabelColumnCount - 1);
+
+        MergeSubtotalLabelsAcrossRowFields(
+            workbook,
+            sheet,
+            materialized,
+            bodyStart.Row + 1,
+            bodyStart.Col,
+            bodyStart.Col + (uint)rowLabelColumnCount - 1);
     }
 
     private static void MergeRepeatedLabelsInColumn(
@@ -87,17 +95,67 @@ public static partial class PivotTableRefreshService
         return false;
     }
 
+    private static void MergeSubtotalLabelsAcrossRowFields(
+        Workbook workbook,
+        Sheet sheet,
+        GridRange materialized,
+        uint firstBodyRow,
+        uint firstRowLabelCol,
+        uint lastRowLabelCol)
+    {
+        if (lastRowLabelCol <= firstRowLabelCol)
+            return;
+
+        for (var row = firstBodyRow; row <= materialized.End.Row; row++)
+        {
+            for (var col = firstRowLabelCol; col < lastRowLabelCol; col++)
+            {
+                if (sheet.GetCell(row, col)?.Value is not TextValue text ||
+                    !IsPivotSubtotalCaption(text.Value) ||
+                    HasRowLabelValueToRight(sheet, row, col, lastRowLabelCol))
+                {
+                    continue;
+                }
+
+                MergeLabelRegion(workbook, sheet, row, row, col, lastRowLabelCol);
+                break;
+            }
+        }
+    }
+
+    private static bool HasRowLabelValueToRight(Sheet sheet, uint row, uint col, uint lastRowLabelCol)
+    {
+        for (var currentCol = col + 1; currentCol <= lastRowLabelCol; currentCol++)
+        {
+            if (sheet.GetCell(row, currentCol)?.Value is not null)
+                return true;
+        }
+
+        return false;
+    }
+
     private static void MergeLabelSpan(Workbook workbook, Sheet sheet, uint startRow, uint endRow, uint col)
     {
         if (endRow <= startRow)
             return;
 
+        MergeLabelRegion(workbook, sheet, startRow, endRow, col, col);
+    }
+
+    private static void MergeLabelRegion(
+        Workbook workbook,
+        Sheet sheet,
+        uint startRow,
+        uint endRow,
+        uint startCol,
+        uint endCol)
+    {
         var region = new GridRange(
-            new CellAddress(sheet.Id, startRow, col),
-            new CellAddress(sheet.Id, endRow, col));
+            new CellAddress(sheet.Id, startRow, startCol),
+            new CellAddress(sheet.Id, endRow, endCol));
         sheet.AddMergedRegion(region);
 
-        var labelCell = sheet.GetCell(startRow, col);
+        var labelCell = sheet.GetCell(startRow, startCol);
         if (labelCell is not null)
         {
             var style = workbook.GetStyle(labelCell.StyleId);
@@ -107,6 +165,10 @@ public static partial class PivotTableRefreshService
         }
 
         for (var row = startRow + 1; row <= endRow; row++)
-            sheet.ClearCell(row, col);
+            for (var col = startCol; col <= endCol; col++)
+                sheet.ClearCell(row, col);
+
+        for (var col = startCol + 1; col <= endCol; col++)
+            sheet.ClearCell(startRow, col);
     }
 }

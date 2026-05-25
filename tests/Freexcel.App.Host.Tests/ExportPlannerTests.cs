@@ -186,6 +186,25 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ResolveExportSheetIds_ActiveSheetUsesGroupedVisibleSheetsInWorkbookOrder()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var third = workbook.AddSheet("Third");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+
+        var result = ExportSheetSelectionPlanner.ResolveSheetIds(
+            workbook,
+            new ExportOptions(ExportContentScope.ActiveSheet, false, false),
+            second.Id,
+            [third.Id, hidden.Id, second.Id]);
+
+        result.Should().Equal(second.Id, third.Id);
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(

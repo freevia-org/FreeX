@@ -16,12 +16,29 @@ public static partial class NumberFormatter
         => FormatWithColor(value, formatString, targetWidthCharacters).Text;
 
     public static FormatResult FormatWithColor(ScalarValue value, string formatString)
-        => FormatWithColor(value, formatString, null);
+        => FormatWithColor(value, formatString, (int?)null);
 
     public static FormatResult FormatWithColor(ScalarValue value, string formatString, int targetWidthCharacters)
         => FormatWithColor(value, formatString, (int?)targetWidthCharacters);
 
-    private static FormatResult FormatWithColor(ScalarValue value, string formatString, int? targetWidthCharacters)
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        WorkbookIndexedColorPalette indexedColors)
+        => FormatWithColor(value, formatString, (int?)null, indexedColors);
+
+    public static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int targetWidthCharacters,
+        WorkbookIndexedColorPalette indexedColors)
+        => FormatWithColor(value, formatString, (int?)targetWidthCharacters, indexedColors);
+
+    private static FormatResult FormatWithColor(
+        ScalarValue value,
+        string formatString,
+        int? targetWidthCharacters,
+        WorkbookIndexedColorPalette? indexedColors = null)
     {
         if (string.IsNullOrEmpty(formatString) || IsGeneralFormat(formatString))
             return new FormatResult(FormatGeneral(value));
@@ -41,9 +58,9 @@ public static partial class NumberFormatter
 
         return value switch
         {
-            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters),
-            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections),
-            TextValue t     => FormatTextWithColor(t.Value, sections),
+            NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, indexedColors),
+            TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
             BlankValue      => new FormatResult(""),
@@ -57,9 +74,13 @@ public static partial class NumberFormatter
 
     // ── Number formatting ─────────────────────────────────────────────────────
 
-    private static FormatResult FormatNumber(double value, string[] sections, int? targetWidthCharacters)
+    private static FormatResult FormatNumber(
+        double value,
+        string[] sections,
+        int? targetWidthCharacters,
+        WorkbookIndexedColorPalette? indexedColors)
     {
-        var parsedSections = sections.Select(ParseSection).ToArray();
+        var parsedSections = sections.Select(section => ParseSection(section, indexedColors)).ToArray();
         bool hasConditions = parsedSections.Any(section => section.Condition is not null);
 
         ParsedSection section;
