@@ -482,6 +482,36 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    [Fact]
+    public void PublicCorpusRows_WithUnsupportedWarningTags_ReportExpectedFeaturesWhenFilesArePresent()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Select(row => new { Row = row, ExpectedKinds = ExpectedFeatureKindsFor(row) })
+            .Where(item => item.ExpectedKinds.Length > 0)
+            .ToArray();
+
+        rows.Should().NotBeEmpty("public corpus warning-tag rows prove real workbook warning detection, not only generated fixtures");
+
+        var inspectedRows = 0;
+        foreach (var item in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", item.Row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var report = XlsxFeatureInspector.Inspect(source);
+            inspectedRows++;
+
+            report.Features.Select(feature => feature.Kind).Distinct()
+                .Should().Contain(item.ExpectedKinds, item.Row.Id);
+        }
+
+        inspectedRows.Should().BeGreaterThan(0, "at least one public corpus workbook with warning tags must be present to prove real-file warning detection");
+    }
+
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {
         var manifestPath = Path.Combine(FindWorkspaceRoot(), "test-corpus", "manifest.csv");
@@ -590,7 +620,7 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("smartart") || tags.Contains("diagrams"))
             expected.Add(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
 
-        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets"))
+        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets") || tags.Contains("unsupported-sheet-types"))
             expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
 
         if (tags.Contains("embedded-objects"))
