@@ -617,6 +617,21 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void RuleDialogInvalidRequiredInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = ReadConditionalFormatDialogSource();
+
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a formula for this conditional formatting rule.\", _formulaBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a value for this conditional formatting rule.\", _value1Box);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum value for this conditional formatting rule.\", _value2Box);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter text for this conditional formatting rule.\", _value1Box);");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox? target)");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void ExistingDataBarRule_PrePopulatesDataBarFields()
     {
         StaTestRunner.Run(() =>
@@ -800,7 +815,9 @@ public sealed class ConditionalFormatDialogTests
         {
             "ConditionalFormatDialog.cs",
             "ConditionalFormatDialog.ColorEditors.cs",
-            "ConditionalFormatDialog.IconSets.cs"
+            "ConditionalFormatDialog.IconSets.cs",
+            "ConditionalFormatDialog.Parsing.cs",
+            "ConditionalFormatDialog.Result.cs"
         }.Select(file => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", file))));
 
     private static T GetControl<T>(ConditionalFormatDialog dialog, string name)

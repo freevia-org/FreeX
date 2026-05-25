@@ -47,14 +47,15 @@ public sealed class PageBreakDialog : Window
         if (trimmed.Equals("clear", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak))
+        if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak) && rowBreak > 0)
         {
             result = new PageBreakDialogResult(PageBreakDialogAction.AddRow, rowBreak, null);
             return true;
         }
 
-        if (PageLayoutInputParser.TryParseBreakInput(trimmed, "col", out var columnBreak) ||
-            PageLayoutInputParser.TryParseBreakInput(trimmed, "column", out columnBreak))
+        if ((PageLayoutInputParser.TryParseBreakInput(trimmed, "col", out var columnBreak) ||
+             PageLayoutInputParser.TryParseBreakInput(trimmed, "column", out columnBreak)) &&
+            columnBreak > 0)
         {
             result = new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, columnBreak);
             return true;
@@ -70,7 +71,7 @@ public sealed class PageBreakDialog : Window
             result = CreateClearResult();
         else if (_insertColumnButton.IsChecked == true)
         {
-            if (!uint.TryParse(_columnBreakBox.Text.Trim(), out var columnBreak))
+            if (!uint.TryParse(_columnBreakBox.Text.Trim(), out var columnBreak) || columnBreak == 0)
             {
                 MessageBox.Show(
                     this,
@@ -86,7 +87,7 @@ public sealed class PageBreakDialog : Window
         }
         else
         {
-            if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak))
+            if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak) || rowBreak == 0)
             {
                 MessageBox.Show(
                     this,
