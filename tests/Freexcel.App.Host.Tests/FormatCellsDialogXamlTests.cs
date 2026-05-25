@@ -913,6 +913,45 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_AllowsBlankSideColorsWhenBorderSidesAreNone()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle
+            {
+                BorderTop = new CellBorder(BorderStyle.Thin, new CellColor(1, 2, 3)),
+                BorderRight = new CellBorder(BorderStyle.Thin, new CellColor(4, 5, 6)),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(7, 8, 9)),
+                BorderLeft = new CellBorder(BorderStyle.Thin, new CellColor(10, 11, 12))
+            };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.BorderTop.Should().Be(new CellBorder(BorderStyle.None, new CellColor(1, 2, 3)));
+                dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.None, new CellColor(4, 5, 6)));
+                dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.None, new CellColor(7, 8, 9)));
+                dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.None, new CellColor(10, 11, 12)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));

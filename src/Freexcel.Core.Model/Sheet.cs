@@ -81,6 +81,9 @@ public sealed partial class Sheet
     /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
     public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
 
+    /// <summary>Native Excel cell watch metadata not yet modeled as editable fields.</summary>
+    public WorksheetCellWatchesMetadataModel? CellWatchesMetadata { get; set; }
+
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
 
