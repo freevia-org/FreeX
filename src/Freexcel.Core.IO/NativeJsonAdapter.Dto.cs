@@ -351,6 +351,7 @@ public sealed partial class NativeJsonAdapter
         public bool DifferentOddEvenHeaderFooter { get; set; }
         public bool? HeaderFooterScaleWithDocument { get; set; }
         public bool? HeaderFooterAlignWithMargins { get; set; }
+        public WorksheetHeaderFooterMetadataDto? HeaderFooterMetadata { get; set; }
         public bool CenterHorizontallyOnPage { get; set; }
         public bool CenterVerticallyOnPage { get; set; }
         public WorksheetPageOrder? PageOrder { get; set; }
@@ -411,6 +412,12 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetPageMarginsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetHeaderFooterMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];
