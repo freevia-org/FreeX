@@ -14714,6 +14714,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterBeforeMergeCells()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B2", null);
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 4, 2)));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedElements = worksheetXml.Root!
+            .Elements()
+            .Where(element => element.Name.Namespace == worksheetNs)
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        orderedElements.Should().Contain("autoFilter");
+        orderedElements.Should().Contain("mergeCells");
+        orderedElements.IndexOf("autoFilter").Should().BeLessThan(orderedElements.IndexOf("mergeCells"));
+        worksheetXml.Root!.Element(worksheetNs + "autoFilter")!.Attribute("ref")!.Value.Should().Be("A1:B2");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -18561,6 +18595,15 @@ public partial class FileAdapterSmokeTests
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:B3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XElement(worksheetNs + "filter", new XAttribute("val", "A"))))));
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sortState",
                 new XAttribute("ref", "A1:A3"),
