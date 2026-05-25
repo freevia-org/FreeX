@@ -2001,6 +2001,13 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("PageLayoutTest");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.DimensionMetadata = new WorksheetDimensionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeDimensionAttr"] = "kept"
+            }
+        };
         sheet.PrintArea = new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 8, 4));
@@ -2102,6 +2109,7 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DimensionMetadata.Should().BeEquivalentTo(sheet.DimensionMetadata);
         loadedSheet.PrintArea.Should().Be(new GridRange(
             new CellAddress(loadedSheet.Id, 2, 2),
             new CellAddress(loadedSheet.Id, 8, 4)));
@@ -13523,7 +13531,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DimensionMetadata.Should().NotBeNull();
+        loadedSheet.DimensionMetadata!.NativeAttributes.Should().Contain("nativeDimensionAttr", "kept");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);

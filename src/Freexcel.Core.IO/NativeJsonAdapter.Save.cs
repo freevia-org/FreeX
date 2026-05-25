@@ -133,6 +133,7 @@ public sealed partial class NativeJsonAdapter
                 ShowOutlineSymbols = s.ShowOutlineSymbols,
                 ApplyOutlineStyles = s.ApplyOutlineStyles,
                 SheetFormatMetadata = FromWorksheetSheetFormatMetadata(s.SheetFormatMetadata),
+                DimensionMetadata = FromWorksheetDimensionMetadata(s.DimensionMetadata),
                 GroupHiddenRows = s.GroupHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
                 GroupHiddenCols = s.GroupHiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 ViewMode = NativeJsonValueSanitizer.ValidEnumOrDefault(s.ViewMode, WorksheetViewMode.Normal),
@@ -503,6 +504,21 @@ public sealed partial class NativeJsonAdapter
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetDimensionMetadataDto? FromWorksheetDimensionMetadata(WorksheetDimensionMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        if (nativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetDimensionMetadataDto
+        {
+            NativeAttributes = nativeAttributes
         };
     }
 
