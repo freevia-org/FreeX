@@ -32,6 +32,12 @@ public sealed class WorkbookPropertiesModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorkbookProtectionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorkbookFunctionGroupsModel
 {
     public string? BuiltInGroupCount { get; set; }
@@ -198,6 +204,9 @@ public sealed class Workbook
 
     /// <summary>Password hash/text for workbook structure protection. Null means no password required.</summary>
     public string? StructureProtectionPassword { get; set; }
+
+    /// <summary>Native Excel workbook protection metadata not yet modeled as editable fields.</summary>
+    public WorkbookProtectionMetadataModel? ProtectionMetadata { get; set; }
 
     /// <summary>Define or replace a named range.</summary>
     public void DefineNamedRange(string name, GridRange range)

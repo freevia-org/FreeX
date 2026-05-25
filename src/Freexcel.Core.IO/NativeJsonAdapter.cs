@@ -43,6 +43,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.AdditionalViews = ToWorkbookAdditionalViews(dto.AdditionalViews);
         workbook.IsStructureProtected = dto.IsStructureProtected;
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
+        workbook.ProtectionMetadata = ToWorkbookProtectionMetadata(dto.ProtectionMetadata);
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
             workbook.WindowArrangement = arrangement;
         ApplyCalculationOptions(dto, workbook);
@@ -514,6 +515,25 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             return null;
 
         return new WorkbookPropertiesModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorkbookProtectionMetadataModel? ToWorkbookProtectionMetadata(WorkbookProtectionMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorkbookProtectionMetadataModel
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls

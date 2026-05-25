@@ -382,8 +382,46 @@ internal static class XlsxWorkbookMetadataWriter
             return;
 
         root.Element(workbookNs + "workbookProtection")?.Remove();
-        var protection = new XElement(workbookNs + "workbookProtection",
-            new XAttribute("lockStructure", "1"));
+        if (!workbook.IsStructureProtected && workbook.ProtectionMetadata is null)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        var protection = new XElement(workbookNs + "workbookProtection");
+        if (workbook.ProtectionMetadata is not null)
+        {
+            foreach (var attribute in workbook.ProtectionMetadata.NativeAttributes)
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                    string.Equals(attribute.Key, "lockStructure", StringComparison.Ordinal) ||
+                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal) ||
+                    string.Equals(attribute.Key, "revisionsPassword", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                protection.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            foreach (var childXml in workbook.ProtectionMetadata.NativeChildXmls)
+            {
+                if (string.IsNullOrWhiteSpace(childXml))
+                    continue;
+
+                try
+                {
+                    protection.Add(XElement.Parse(childXml));
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
+            }
+        }
+
+        if (workbook.IsStructureProtected)
+            protection.SetAttributeValue("lockStructure", "1");
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
             protection.SetAttributeValue("workbookPassword", ToLegacyPasswordHash(workbook.StructureProtectionPassword));
 
