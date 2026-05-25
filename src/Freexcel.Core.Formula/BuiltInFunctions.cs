@@ -1434,16 +1434,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
+        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
+        return MapBinaryMathArgs(args[0], decimalsArg, (value, decimalsValue) => FixedScalarWithDecimals(value, decimalsValue, noCommas));
+    }
+
+    private static ScalarValue FixedScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue, bool noCommas)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
         int dec = 2;
-        if (args.Count > 1 && args[1] is not BlankValue)
+        if (decimalsValue is not BlankValue)
         {
-            double rawDec = ToNumber(args[1]);
+            double rawDec = ToNumber(decimalsValue);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => FixedScalar(value, dec, noCommas));
-        return FixedScalar(args[0], dec, noCommas);
+        return FixedScalar(value, dec, noCommas);
     }
 
     private static ScalarValue FixedScalar(ScalarValue value, int dec, bool noCommas)
@@ -1471,19 +1478,26 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        var decimalsArg = args.Count > 1 ? args[1] : new NumberValue(2);
+        return MapBinaryMathArgs(args[0], decimalsArg, DollarScalarWithDecimals);
+    }
+
+    private static ScalarValue DollarScalarWithDecimals(ScalarValue value, ScalarValue decimalsValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (decimalsValue is ErrorValue decimalsError) return decimalsError;
         int dec = 2;
-        if (args.Count > 1 && args[1] is BlankValue)
+        if (decimalsValue is BlankValue)
         {
             dec = 0;
         }
-        else if (args.Count > 1)
+        else
         {
-            double rawDec = ToNumber(args[1]);
+            double rawDec = ToNumber(decimalsValue);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => DollarScalar(value, dec));
-        return DollarScalar(args[0], dec);
+        return DollarScalar(value, dec);
     }
 
     private static ScalarValue DollarScalar(ScalarValue value, int dec)
