@@ -42,7 +42,8 @@ public partial class MainWindow
         var dialog = new SparklineDialog(
             selected?.ToString() ?? "",
             "",
-            SparklineInputParser.ParseDialogKindChoice(type))
+            SparklineInputParser.ParseDialogKindChoice(type),
+            sheetId: _currentSheetId)
         { Owner = this };
         if (dialog.ShowDialog() != true)
             return;

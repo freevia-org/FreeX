@@ -595,6 +595,22 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs"));
+        var insertSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.InsertCommands.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("SparklineInputParser.TryParseDataRange(_dataRangeBox.Text, _sheetId, out _)");
+        source.Should().Contain("SparklineInputParser.TryParseLocation(_locationBox.Text, _sheetId, out _)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Invalid data range.\", _dataRangeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Invalid location cell.\", _locationBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("FocusRangeSelectionInput(textBox);");
+        insertSource.Should().Contain("_currentSheetId,");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
