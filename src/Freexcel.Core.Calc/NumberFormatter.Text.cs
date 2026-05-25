@@ -13,15 +13,15 @@ public static partial class NumberFormatter
         {
             var firstSection = ParseSection(sections[0], indexedColors);
             return firstSection.Format.Contains('@', StringComparison.Ordinal)
-                ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
+                ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex, firstSection.ThemeColor)
                 : new FormatResult(text);
         }
 
         var parsed = ParseSection(sections[3], indexedColors);
         if (parsed.Format == "")
-            return new FormatResult("", parsed.ColorHex);
+            return new FormatResult("", parsed.ColorHex, parsed.ThemeColor);
 
-        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);
+        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex, parsed.ThemeColor);
     }
 
     private static string ApplyTextSection(string section, string text)

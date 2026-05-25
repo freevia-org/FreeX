@@ -6,7 +6,11 @@ namespace Freexcel.Core.Calc;
 
 public static partial class NumberFormatter
 {
-    private sealed record ParsedSection(string Format, string? ColorHex, FormatCondition? Condition);
+    private sealed record ParsedSection(
+        string Format,
+        string? ColorHex,
+        WorkbookThemeColorReference? ThemeColor,
+        FormatCondition? Condition);
 
     private sealed record FormatCondition(string Operator, double Value)
     {
@@ -94,6 +98,7 @@ public static partial class NumberFormatter
     private static ParsedSection ParseSection(string section, WorkbookIndexedColorPalette? indexedColors)
     {
         string? color = null;
+        WorkbookThemeColorReference? themeColor = null;
         FormatCondition? condition = null;
         int index = 0;
 
@@ -104,9 +109,10 @@ public static partial class NumberFormatter
                 break;
 
             string token = section[(index + 1)..close];
-            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor))
+            if (NumberFormatColorMapper.TryMapColor(token, indexedColors, out var tokenColor, out var tokenThemeColor))
             {
                 color = tokenColor;
+                themeColor = tokenThemeColor;
                 index = SkipInterDirectiveWhitespace(section, close + 1);
                 continue;
             }
@@ -121,7 +127,7 @@ public static partial class NumberFormatter
             break;
         }
 
-        return new ParsedSection(section[index..], color, condition);
+        return new ParsedSection(section[index..], color, themeColor, condition);
     }
 
     private static int SkipInterDirectiveWhitespace(string section, int index)

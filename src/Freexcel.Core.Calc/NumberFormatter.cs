@@ -7,7 +7,19 @@ namespace Freexcel.Core.Calc;
 public static partial class NumberFormatter
 {
     // Returned alongside display text so the grid can apply conditional colors.
-    public sealed record FormatResult(string Text, string? ColorHex = null);
+    public sealed record FormatResult(string Text, string? ColorHex = null)
+    {
+        public FormatResult(
+            string text,
+            string? colorHex,
+            WorkbookThemeColorReference? themeColor)
+            : this(text, colorHex)
+        {
+            ThemeColor = themeColor;
+        }
+
+        public WorkbookThemeColorReference? ThemeColor { get; init; }
+    }
 
     public static string Format(ScalarValue value, string formatString)
         => FormatWithColor(value, formatString).Text;
@@ -108,7 +120,7 @@ public static partial class NumberFormatter
             ? ""
             : ApplyNumericFormat(displayValue, section.Format);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
-        return new FormatResult(text, section.ColorHex);
+        return new FormatResult(text, section.ColorHex, section.ThemeColor);
     }
 
     private static string ApplyAccountingTargetWidth(string text, string format, int? targetWidthCharacters)

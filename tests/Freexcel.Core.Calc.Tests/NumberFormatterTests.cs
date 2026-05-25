@@ -230,6 +230,21 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[ThemeColor Text 1]0.0", WorkbookThemeColorSlot.Dark1, 0)]
+    [InlineData("[ThemeColor followed-hyperlink Tint -0.25]0.0", WorkbookThemeColorSlot.FollowedHyperlink, -0.25)]
+    public void CustomNumberSubset_ReturnsThemeColorReference(
+        string format,
+        WorkbookThemeColorSlot expectedSlot,
+        double expectedTint)
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(12.5), format);
+
+        Assert.Equal("12.5", result.Text);
+        Assert.Null(result.ColorHex);
+        Assert.Equal(new WorkbookThemeColorReference(expectedSlot, expectedTint), result.ThemeColor);
+    }
+
+    [Theory]
     [InlineData("[Color9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
     [InlineData("[Color 9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
     [InlineData("0;0;0;[Red]@", 0, "hello", "#FF0000")]
