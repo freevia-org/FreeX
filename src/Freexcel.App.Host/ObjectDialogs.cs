@@ -72,11 +72,7 @@ public sealed class HyperlinkDialog : Window
         Grid.SetRow(buttonRow, 2);
         Grid.SetColumn(buttonRow, 1);
 
-        grid.Children.Add(DialogButtonRowFactory.Create(() =>
-        {
-            Result = CreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark);
-            DialogResult = true;
-        }, 72));
+        grid.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         Grid.SetRow(grid.Children[^1], 3);
         Grid.SetColumnSpan(grid.Children[^1], 2);
         root.Children.Add(grid);
@@ -103,6 +99,32 @@ public sealed class HyperlinkDialog : Window
             (bookmark ?? "").Trim());
     }
 
+    public static bool TryCreateResult(
+        string? target,
+        string? displayText,
+        HyperlinkLinkType linkType,
+        string? screenTip,
+        string? bookmark,
+        out HyperlinkDialogResult result,
+        out string? error)
+    {
+        result = CreateResult(target ?? "", displayText, linkType, screenTip, bookmark);
+        if (string.IsNullOrWhiteSpace(result.Target))
+        {
+            error = linkType switch
+            {
+                HyperlinkLinkType.PlaceInThisDocument => "Enter a valid cell reference or defined name.",
+                HyperlinkLinkType.EmailAddress => "Enter an email address.",
+                HyperlinkLinkType.CreateNewDocument => "Enter a new document name.",
+                _ => "Enter an address."
+            };
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
     private HyperlinkLinkType SelectedLinkType => _linkTypes.SelectedIndex switch
     {
         1 => HyperlinkLinkType.CreateNewDocument,
@@ -110,6 +132,18 @@ public sealed class HyperlinkDialog : Window
         3 => HyperlinkLinkType.EmailAddress,
         _ => HyperlinkLinkType.ExistingFileOrWebPage
     };
+
+    private void Accept()
+    {
+        if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter hyperlink details.");
+            return;
+        }
+
+        Result = result;
+        DialogResult = true;
+    }
 
     private void ScreenTipButton_Click(object sender, RoutedEventArgs e)
     {
@@ -133,6 +167,14 @@ public sealed class HyperlinkDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
+        _targetBox.Focus();
+        _targetBox.SelectAll();
+        Keyboard.Focus(_targetBox);
+    }
+
+    private void ShowInvalidInputWarning(string message)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         _targetBox.Focus();
         _targetBox.SelectAll();
         Keyboard.Focus(_targetBox);

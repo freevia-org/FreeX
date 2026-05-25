@@ -1260,6 +1260,24 @@ public sealed class MainWindowXamlKeyTipTests
         overlay.Attribute("FontSize")?.Value.Should().Be("18");
     }
 
+    [Theory]
+    [InlineData("StatusZoomOutButton")]
+    [InlineData("StatusZoomInButton")]
+    public void StatusBarZoomGlyphButtons_AreReadableAtExcelScale(string buttonName)
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var button = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+        button.Attribute("Width")?.Value.Should().Be("22");
+        button.Attribute("Height")?.Value.Should().Be("22");
+        button.Attribute("FontSize")?.Value.Should().Be("18");
+    }
+
     [Fact]
     public void BackstageSearchBox_HasAccessibleNameAndHelpText()
     {

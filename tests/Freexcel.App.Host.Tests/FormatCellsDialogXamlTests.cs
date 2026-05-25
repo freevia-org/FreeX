@@ -872,6 +872,42 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_ListsExcelUnderlineOptions()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("\"None\", \"Single\", \"Double\", \"Single Accounting\", \"Double Accounting\"");
+    }
+
+    [Theory]
+    [InlineData("Single Accounting", true, false)]
+    [InlineData("Double Accounting", false, true)]
+    public void FormatCellsDialog_MapsAccountingUnderlineOptionsIntoCurrentStyleModel(
+        string underlineOption,
+        bool expectedUnderline,
+        bool expectedDoubleUnderline)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgUnderlineStyleBox").SelectedItem = underlineOption;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.Underline.Should().Be(expectedUnderline);
+                dialog.ResultDiff.DoubleUnderline.Should().Be(expectedDoubleUnderline);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsNumberAndAlignmentFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
