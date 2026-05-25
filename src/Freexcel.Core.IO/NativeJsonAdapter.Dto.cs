@@ -485,6 +485,13 @@ public sealed partial class NativeJsonAdapter
     {
         public string Name { get; set; } = "";
         public int Id { get; set; }
+        public WorksheetCustomPropertyMetadataDto? Metadata { get; set; }
+    }
+
+    private class WorksheetCustomPropertyMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
     }
 
     private class WorksheetPhoneticPropertiesDto
