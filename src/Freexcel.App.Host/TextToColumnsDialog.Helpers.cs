@@ -101,8 +101,8 @@ public sealed partial class TextToColumnsDialog
     {
         if (string.IsNullOrWhiteSpace(input))
         {
-            destination = defaultDestination;
-            return true;
+            destination = default;
+            return false;
         }
 
         return CellAddress.TryParse(input.Trim(), defaultDestination.Sheet, out destination);

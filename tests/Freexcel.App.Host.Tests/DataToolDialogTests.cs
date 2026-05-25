@@ -349,17 +349,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsResult_ParsesDestinationCellOrDefaultsToSelectionStart()
+    public void TextToColumnsResult_RequiresSingleDestinationCell()
     {
         var sheetId = SheetId.New();
         var defaultDestination = new CellAddress(sheetId, 2, 1);
 
-        TextToColumnsDialog.TryParseDestination("", defaultDestination, out var blankDestination).Should().BeTrue();
-        blankDestination.Should().Be(defaultDestination);
+        TextToColumnsDialog.TryParseDestination("", defaultDestination, out _).Should().BeFalse();
 
         TextToColumnsDialog.TryParseDestination(" F2 ", defaultDestination, out var parsedDestination).Should().BeTrue();
         parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
 
+        TextToColumnsDialog.TryParseDestination(" ", defaultDestination, out _).Should().BeFalse();
         TextToColumnsDialog.TryParseDestination("F2:G3", defaultDestination, out _).Should().BeFalse();
     }
 
