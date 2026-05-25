@@ -350,6 +350,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.RowPageBreaksMetadata is not null || sheet.ColumnPageBreaksMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPageBreaksMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.HeaderFooterMetadata is not null))
         {
             packageStream.Position = 0;

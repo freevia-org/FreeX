@@ -61,6 +61,8 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
         sheet.PageSetupMetadata = layout.PageSetupMetadata;
         sheet.HeaderFooterMetadata = layout.HeaderFooterMetadata;
+        sheet.RowPageBreaksMetadata = layout.RowPageBreaksMetadata;
+        sheet.ColumnPageBreaksMetadata = layout.ColumnPageBreaksMetadata;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;
