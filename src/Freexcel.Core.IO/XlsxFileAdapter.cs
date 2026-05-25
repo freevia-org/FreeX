@@ -47,6 +47,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var smartTags = XlsxWorkbookMetadataReader.LoadSmartTags(packageStream);
         packageStream.Position = 0;
+        var additionalViews = XlsxWorkbookAdditionalViewMapper.Read(packageStream);
+        packageStream.Position = 0;
         var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
         packageStream.Position = 0;
         var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
@@ -87,6 +89,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.FileVersion = fileVersion;
         workbook.FunctionGroups = functionGroups;
         workbook.SmartTags = smartTags;
+        workbook.AdditionalViews = additionalViews;
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
