@@ -191,6 +191,7 @@ public sealed partial class XlsxFileAdapter
                     cell.IgnoreFormulaError = true;
             }
         }
+        sheet.IgnoredErrorsMetadata = layout.IgnoredErrorsMetadata;
         foreach (var watchedCell in layout.CellWatches)
         {
             var address = new CellAddress(sheet.Id, watchedCell.Row, watchedCell.Col);
