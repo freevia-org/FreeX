@@ -4938,10 +4938,12 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedRule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
-        loadedRule.NativePayloadAttributes.Should().ContainKey("border").WhoseValue.Should().Be("1");
-        loadedRule.NativePayloadAttributes.Should().ContainKey("axisPosition").WhoseValue.Should().Be("middle");
-        loadedRule.NativePayloadChildXmls.Should().Contain(xml => xml.Contains("negativeFillColor", StringComparison.Ordinal));
-        loadedRule.NativePayloadChildXmls.Should().Contain(xml => xml.Contains("axisColor", StringComparison.Ordinal));
+        loadedRule.DataBarBorder.Should().BeTrue();
+        loadedRule.DataBarAxisPosition.Should().Be("middle");
+        loadedRule.DataBarNegativeFillColor.Should().Be(new RgbColor(255, 0, 0));
+        loadedRule.DataBarAxisColor.Should().Be(new RgbColor(0, 0, 0));
+        loadedRule.NativePayloadAttributes.Should().BeNull();
+        loadedRule.NativePayloadChildXmls.Should().BeNull();
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
