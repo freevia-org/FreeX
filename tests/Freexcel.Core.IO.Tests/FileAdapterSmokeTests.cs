@@ -4088,6 +4088,14 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.ProtectionMetadata.Should().NotBeNull();
+        loadedSheet.ProtectionMetadata!.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("algorithmName", "SHA-512"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("hashValue", "abc123"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("saltValue", "salt123"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("spinCount", "100000"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("objects", "1"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("scenarios", "1"));
+        loadedSheet.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -5617,6 +5625,21 @@ public partial class FileAdapterSmokeTests
         sheet.ProtectionPermissions.Clear();
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.SelectUnlockedCells);
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        sheet.ProtectionMetadata = new WorksheetProtectionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["algorithmName"] = "SHA-512",
+                ["hashValue"] = "abc123",
+                ["saltValue"] = "salt123",
+                ["spinCount"] = "100000",
+                ["objects"] = "1"
+            },
+            NativeChildXmls =
+            [
+                "<fx:sheetProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
+            ]
+        };
         sheet.AllowEditRanges.Add(new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3)));
@@ -5637,6 +5660,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectUnlockedCells,
             SheetProtectionPermission.FormatCells);
+        loadedSheet.ProtectionMetadata.Should().BeEquivalentTo(sheet.ProtectionMetadata);
         var allowEditRange = loadedSheet.AllowEditRanges.Should().ContainSingle().Subject;
         allowEditRange.Start.ToA1().Should().Be("B2");
         allowEditRange.End.ToA1().Should().Be("C3");

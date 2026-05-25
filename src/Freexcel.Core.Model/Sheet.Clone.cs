@@ -88,6 +88,13 @@ public sealed partial class Sheet
             ApplyOutlineStyles            = ApplyOutlineStyles,
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
+            ProtectionMetadata            = ProtectionMetadata is null
+                ? null
+                : new WorksheetProtectionMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(ProtectionMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. ProtectionMetadata.NativeChildXmls]
+                },
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
         };
