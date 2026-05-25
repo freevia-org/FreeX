@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -40,7 +41,7 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrintOptionsAttribute(attribute.Key))
                     continue;
 
-                printOptions.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(printOptions, attribute.Key, attribute.Value);
             }
 
             if (sheet.PrintOptionsMetadata.NativeChildXmls.Count > 0)
@@ -86,5 +87,22 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
         }
 
         root.Add(printOptions);
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 }
