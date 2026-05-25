@@ -1028,6 +1028,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Text_SameShapeFormatArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3.14159)),
+            (2, 1, new NumberValue(42)),
+            (1, 2, new TextValue("0.00")),
+            (2, 2, new TextValue("000")));
+
+        AssertTextColumn(_eval.Evaluate("=TEXT(A1:A2,B1:B2)", sheet), "3.14", "042");
+    }
+
+    [Fact]
+    public void Text_MismatchedFormatArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3.14159)),
+            (2, 1, new NumberValue(42)),
+            (1, 2, new TextValue("0.00")),
+            (1, 3, new TextValue("000")));
+
+        _eval.Evaluate("=TEXT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void IsFunctions_RangeArgument_SpillElementwise()
     {
         var sheet = MakeSheet(
