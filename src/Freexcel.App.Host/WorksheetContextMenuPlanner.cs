@@ -68,7 +68,7 @@ public static class WorksheetContextMenuPlanner
         new("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
         new("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
         new("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote || state.HasThreadedComment),
-        new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink..."),
+        .. BuildHyperlinkCommands(state),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         WorksheetContextMenuCommand.Separator,
@@ -146,6 +146,17 @@ public static class WorksheetContextMenuPlanner
 
         return commands;
     }
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildHyperlinkCommands(WorksheetContextMenuState state) =>
+        state.HasHyperlink
+            ? [
+                new("Open Hyperlink", WorksheetContextMenuAction.OpenHyperlink, AccessHeader: "_Open Hyperlink"),
+                new("Edit Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Edit Hyperlink..."),
+                new("Remove Hyperlink", WorksheetContextMenuAction.ClearHyperlinks, AccessHeader: "_Remove Hyperlink")
+            ]
+            : [
+                new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
+            ];
 }
 
 public sealed record WorksheetContextMenuCommand(
@@ -214,6 +225,7 @@ public enum WorksheetContextMenuAction
     EditNote,
     DeleteNote,
     ShowNotes,
+    OpenHyperlink,
     Hyperlink,
     FormatCells,
     ClearAll,
