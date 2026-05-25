@@ -413,6 +413,21 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_InvalidTypedCriteriaWarnsAndRefocusesRequiredField()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("if (!ValidateTypedCriteriaInputs())");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a filter value.\", _criteriaValueBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the first value for the between filter.\", _betweenMinBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the second value for the between filter.\", _betweenMaxBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a valid top or bottom count.\", _topBottomCountBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void DialogLayout_UsesSeparatorsBetweenExcelFilterMenuSections()
     {
         var source = ReadAutoFilterDialogSources();

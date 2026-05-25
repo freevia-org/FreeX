@@ -1,4 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using Freexcel.Core.Commands;
 
 namespace Freexcel.App.Host;
 
@@ -68,6 +71,48 @@ public sealed partial class AutoFilterDialog
             return BuildTopBottomCriteriaText(option, _topBottomCountBox.Text);
 
         return BuildCriteriaText(option, _criteriaValueBox.Text);
+    }
+
+    private bool ValidateTypedCriteriaInputs()
+    {
+        if (_criteriaOperatorBox.SelectedItem is not AutoFilterCriteriaOption option)
+            return true;
+
+        if (SelectedDatePresetCriteria() is { Length: > 0 })
+            return true;
+
+        if (IsBetweenOption(option))
+        {
+            if (string.IsNullOrWhiteSpace(_betweenMinBox.Text))
+                return ShowInvalidCriteriaWarning("Enter the first value for the between filter.", _betweenMinBox);
+
+            if (string.IsNullOrWhiteSpace(_betweenMaxBox.Text))
+                return ShowInvalidCriteriaWarning("Enter the second value for the between filter.", _betweenMaxBox);
+
+            return true;
+        }
+
+        if (IsTopBottomOption(option))
+        {
+            if (!FilterInputParser.TryParseTopBottom(BuildTopBottomCriteriaText(option, _topBottomCountBox.Text), out _, out _, out _, out _))
+                return ShowInvalidCriteriaWarning("Enter a valid top or bottom count.", _topBottomCountBox);
+
+            return true;
+        }
+
+        if (option.RequiresValue && string.IsNullOrWhiteSpace(_criteriaValueBox.Text))
+            return ShowInvalidCriteriaWarning("Enter a filter value.", _criteriaValueBox);
+
+        return true;
+    }
+
+    private bool ShowInvalidCriteriaWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
     }
 
     private string SelectedDatePresetCriteria()
