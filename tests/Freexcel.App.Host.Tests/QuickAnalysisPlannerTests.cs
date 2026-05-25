@@ -154,6 +154,20 @@ public sealed class QuickAnalysisPlannerTests
     }
 
     [Fact]
+    public void BuildHoverPreview_CarriesVisualKindForDataBars()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+        var dataBars = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.DataBar);
+
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(selection, dataBars);
+
+        preview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        preview.Range.Should().Be(selection);
+    }
+
+    [Fact]
     public void BuildHoverPreview_UsesSelectionForFormattingChartsAndTables()
     {
         var sheetId = SheetId.New();

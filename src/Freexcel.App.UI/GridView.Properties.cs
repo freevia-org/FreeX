@@ -52,6 +52,15 @@ public partial class GridView
         set => SetValue(QuickAnalysisPreviewRangeProperty, value);
     }
 
+    public static readonly DependencyProperty QuickAnalysisPreviewVisualProperty =
+        DependencyProperty.Register(nameof(QuickAnalysisPreviewVisual), typeof(GridQuickAnalysisPreviewVisualKind), typeof(GridView),
+            new FrameworkPropertyMetadata(GridQuickAnalysisPreviewVisualKind.None, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridQuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual
+    {
+        get => (GridQuickAnalysisPreviewVisualKind)GetValue(QuickAnalysisPreviewVisualProperty);
+        set => SetValue(QuickAnalysisPreviewVisualProperty, value);
+    }
+
     public static readonly DependencyProperty EditingCellProperty =
         DependencyProperty.Register(nameof(EditingCell), typeof(CellAddress?), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
