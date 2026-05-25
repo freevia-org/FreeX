@@ -12195,6 +12195,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_WritesWorkbookFileRecoveryBeforeWebPublishObjects()
+    {
+        var workbook = new Workbook("WorkbookFileRecoveryOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileRecoveryProperties(source);
+        AddWorkbookWebPublishObjects(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = workbookXml.Root!.Elements().ToList();
+        var recoveryIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "fileRecoveryPr");
+        var webPublishObjectsIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "webPublishObjects");
+
+        recoveryIndex.Should().BeGreaterThanOrEqualTo(0);
+        webPublishObjectsIndex.Should().BeGreaterThan(recoveryIndex);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookSmartTagMetadata()
     {
         var workbook = new Workbook("WorkbookSmartTagRetentionTest");
