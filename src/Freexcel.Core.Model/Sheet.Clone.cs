@@ -36,6 +36,7 @@ public sealed partial class Sheet
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
             SortState                     = SortState,
+            SingleXmlCells                = CloneSingleXmlCells(SingleXmlCells),
             AdditionalViews               = AdditionalViews,
             PrimaryViewMetadata           = PrimaryViewMetadata is null
                 ? null
@@ -428,6 +429,24 @@ public sealed partial class Sheet
             BreakNativeAttributes = metadata.BreakNativeAttributes.ToDictionary(
                 pair => pair.Key,
                 pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal))
+        };
+    }
+
+    private static WorksheetSingleXmlCellsModel? CloneSingleXmlCells(WorksheetSingleXmlCellsModel? model)
+    {
+        if (model is null)
+            return null;
+
+        return new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(model.NativeAttributes, StringComparer.Ordinal),
+            Cells = model.Cells.Select(cell => new WorksheetSingleXmlCellModel
+            {
+                Id = cell.Id,
+                Reference = cell.Reference,
+                XmlCellPropertyId = cell.XmlCellPropertyId,
+                NativeAttributes = new Dictionary<string, string>(cell.NativeAttributes, StringComparer.Ordinal)
+            }).ToList()
         };
     }
 }

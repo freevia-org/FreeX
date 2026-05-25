@@ -70,6 +70,20 @@ public sealed class WorksheetPageBreaksMetadataModel
     public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
 }
 
+public sealed class WorksheetSingleXmlCellsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorksheetSingleXmlCellModel> Cells { get; set; } = [];
+}
+
+public sealed class WorksheetSingleXmlCellModel
+{
+    public int? Id { get; set; }
+    public string? Reference { get; set; }
+    public int? XmlCellPropertyId { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
 public sealed class WorksheetPageMarginsMetadataModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -242,6 +256,9 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet-level Excel sort-state metadata loaded from XLSX.</summary>
     public WorksheetSortStateModel? SortState { get; set; }
+
+    /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
+    public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
 
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
