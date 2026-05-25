@@ -138,6 +138,22 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialogInvalidRanges_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid PivotTable source range.\", _sourceRangeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a destination cell on the active worksheet.\", _destinationRangeBox);");
+        source.Should().Contain("WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _)");
+        source.Should().Contain("destinationRange.Start.Sheet != _sourceSheetId");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotTableRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         PivotTableDialog.CreateRangeSelectionRequest(PivotTableRangeSelectionTarget.DestinationRange, " Report!F3 ")
