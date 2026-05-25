@@ -40,6 +40,7 @@ public sealed partial class XlsxFileAdapter
         bool? AutoPageBreaks,
         int? PrintQualityDpi,
         int? PrintQualityVerticalDpi,
+        WorksheetPageSetupMetadataModel? PageSetupMetadata,
         WorksheetBackgroundImage? BackgroundImage,
         XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
@@ -334,6 +335,7 @@ public sealed partial class XlsxFileAdapter
             ParseOptionalBool(pageSetUpPr?.Attribute("autoPageBreaks")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("horizontalDpi")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("verticalDpi")?.Value),
+            ReadWorksheetPageSetupMetadata(pageSetup),
             background,
             headerFooterPictures,
             rowOutlineLevels,
@@ -367,6 +369,37 @@ public sealed partial class XlsxFileAdapter
             explicitStyleOnlyCells,
             codeName);
     }
+
+    private static WorksheetPageSetupMetadataModel? ReadWorksheetPageSetupMetadata(XElement? pageSetup)
+    {
+        if (pageSetup is null)
+            return null;
+
+        var model = new WorksheetPageSetupMetadataModel
+        {
+            NativeChildXmls = pageSetup.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in pageSetup.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledPageSetupAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledPageSetupAttribute(string name) =>
+        name is "paperSize" or "scale" or "firstPageNumber" or "fitToWidth" or "fitToHeight" or
+            "pageOrder" or "orientation" or "usePrinterDefaults" or "blackAndWhite" or "draft" or
+            "cellComments" or "useFirstPageNumber" or "errors" or "horizontalDpi" or "verticalDpi" or
+            "copies";
 
     private static WorksheetProtectionMetadataModel? ReadWorksheetProtectionMetadata(XElement? protection)
     {
