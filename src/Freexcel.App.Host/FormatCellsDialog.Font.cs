@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -51,6 +52,33 @@ public partial class FormatCellsDialog
     private bool IsSingleUnderlineSelected()
         => DlgUnderlineStyleBox.SelectedItem is string underline
             && underline == "Single";
+
+    private void DlgNormalFontCheck_Checked(object sender, RoutedEventArgs e)
+    {
+        var normal = CellStyle.Default;
+        EnsureFontNameAvailable(normal.FontName);
+        DlgFontNameBox.SelectedItem = DlgFontNameBox.Items
+            .OfType<string>()
+            .FirstOrDefault(font => string.Equals(font, normal.FontName, StringComparison.CurrentCultureIgnoreCase));
+        DlgFontNameBox.Text = normal.FontName;
+        DlgFontSizeBox.Text = normal.FontSize.ToString("0.#");
+        DlgFontStyleList.SelectedItem = FontStyleLabel(normal.Bold, normal.Italic);
+        DlgUnderlineStyleBox.SelectedItem = "None";
+        DlgDoubleUnderlineCheck.IsChecked = normal.DoubleUnderline;
+        DlgStrikeCheck.IsChecked = normal.Strikethrough;
+        DlgSuperscriptCheck.IsChecked = normal.Superscript;
+        DlgSubscriptCheck.IsChecked = normal.Subscript;
+        DlgFontColorBox.Text = ColorInputParser.FormatRgbColor(normal.FontColor);
+        UpdateFontPreview();
+    }
+
+    private void EnsureFontNameAvailable(string fontName)
+    {
+        if (DlgFontNameBox.Items.OfType<string>().Contains(fontName, StringComparer.CurrentCultureIgnoreCase))
+            return;
+
+        DlgFontNameBox.ItemsSource = FontNamesWithFallback(fontName);
+    }
 
     private static string[] FontNamesWithFallback(string fontName)
     {

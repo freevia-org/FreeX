@@ -3121,7 +3121,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 2  Formula bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="FormulaBarBorder" Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4">
+        <Border x:Name="FormulaBarBorder" Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4,5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="80"/>
@@ -3131,12 +3131,13 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
-                         FontFamily="Consolas" FontSize="13"
+                         FontFamily="Consolas" FontSize="15"
+                         MinHeight="30"
                          TextOptions.TextFormattingMode="Display"
                          TextOptions.TextRenderingMode="ClearType"
                          TextOptions.TextHintingMode="Fixed"
                          VerticalContentAlignment="Center"
-                         BorderBrush="#C0C0C0" Padding="4,2"
+                         BorderBrush="#C0C0C0" Padding="5,3"
                          AutomationProperties.Name="Name Box"
                          AutomationProperties.HelpText="Go to a cell or named range"/>
 
@@ -3152,23 +3153,24 @@
 
                 <Grid Grid.Column="2">
                     <TextBlock x:Name="FormulaBarReferenceOverlay"
-                               Margin="6,3,4,2"
+                               Margin="7,3,5,2"
                                FontFamily="Calibri"
-                               FontSize="15"
+                               FontSize="18"
                                IsHitTestVisible="False"
                                VerticalAlignment="Center"
                                Visibility="Collapsed"
                                TextOptions.TextFormattingMode="Display"
                                TextOptions.TextRenderingMode="ClearType"
                                TextOptions.TextHintingMode="Fixed"/>
-                    <TextBox x:Name="FormulaBar" FontFamily="Calibri" FontSize="15"
+                    <TextBox x:Name="FormulaBar" FontFamily="Calibri" FontSize="18"
+                             MinHeight="30"
                              TextOptions.TextFormattingMode="Display"
                              TextOptions.TextRenderingMode="ClearType"
                              TextOptions.TextHintingMode="Fixed"
                              AcceptsReturn="True"
                              Background="Transparent"
                              CaretBrush="Black"
-                             VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
+                             VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="6,3"
                              AutomationProperties.Name="Formula Bar"
                              AutomationProperties.HelpText="Edit the active cell value or formula"
                              PreviewKeyDown="FormulaBar_KeyDown"/>
