@@ -110,10 +110,20 @@ public sealed partial class PrintPreviewDialog
             Orientation = Orientation.Vertical
         };
 
-        void AddLabel(string text) =>
+        void AddSectionLabel(string text) =>
             panel.Children.Add(new TextBlock
             {
                 Text = text,
+                Margin = new Thickness(0, 10, 0, 2),
+                FontWeight = FontWeights.SemiBold
+            });
+
+        void AddLabel(string text, Control target) =>
+            panel.Children.Add(new Label
+            {
+                Content = text,
+                Target = target,
+                Padding = new Thickness(0),
                 Margin = new Thickness(0, 10, 0, 2),
                 FontWeight = FontWeights.SemiBold
             });
@@ -137,9 +147,9 @@ public sealed partial class PrintPreviewDialog
         }
 
         // Orientation
-        AddLabel("Orientation");
         var orientIndex = sheet?.PageOrientation == WorksheetPageOrientation.Landscape ? 1 : 0;
         var orientBox = MakeComboBox(["Portrait", "Landscape"], orientIndex);
+        AddLabel("_Orientation", orientBox);
         orientBox.SelectionChanged += (_, _) =>
         {
             if (orientBox.SelectedIndex < 0 || executeCommand is null) return;
@@ -152,7 +162,6 @@ public sealed partial class PrintPreviewDialog
         panel.Children.Add(orientBox);
 
         // Paper Size
-        AddLabel("Paper Size");
         var paperIndex = sheet?.PaperSize switch
         {
             WorksheetPaperSize.Letter => 1,
@@ -160,6 +169,7 @@ public sealed partial class PrintPreviewDialog
             _                         => 0
         };
         var paperBox = MakeComboBox(["A4", "Letter", "Legal"], paperIndex);
+        AddLabel("_Paper Size", paperBox);
         paperBox.SelectionChanged += (_, _) =>
         {
             if (paperBox.SelectedIndex < 0 || executeCommand is null) return;
@@ -175,7 +185,6 @@ public sealed partial class PrintPreviewDialog
         panel.Children.Add(paperBox);
 
         // Margins
-        AddLabel("Margins");
         int marginsIndex;
         if (sheet?.PageMargins == WorksheetPageMargins.Normal)
             marginsIndex = 1;
@@ -184,6 +193,7 @@ public sealed partial class PrintPreviewDialog
         else
             marginsIndex = 0;
         var marginsBox = MakeComboBox(["Narrow", "Normal", "Wide"], marginsIndex);
+        AddLabel("_Margins", marginsBox);
         marginsBox.SelectionChanged += (_, _) =>
         {
             if (marginsBox.SelectedIndex < 0 || executeCommand is null) return;
@@ -199,7 +209,6 @@ public sealed partial class PrintPreviewDialog
         panel.Children.Add(marginsBox);
 
         // Scaling
-        AddLabel("Scaling");
         var stf = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
         int scaleIndex;
         if (stf.FitToPagesWide == 1 && stf.FitToPagesTall == 1)
@@ -209,6 +218,7 @@ public sealed partial class PrintPreviewDialog
         else
             scaleIndex = 0;
         var scaleBox = MakeComboBox(["100%", "Fit to 1 Page", "Fit to 1 Page Wide"], scaleIndex);
+        AddLabel("_Scaling", scaleBox);
         scaleBox.SelectionChanged += (_, _) =>
         {
             if (scaleBox.SelectedIndex < 0 || executeCommand is null) return;
@@ -223,7 +233,7 @@ public sealed partial class PrintPreviewDialog
         };
         panel.Children.Add(scaleBox);
 
-        AddLabel("Print Options");
+        AddSectionLabel("Print Options");
         var gridlinesBox = new CheckBox
         {
             Content = "_Print gridlines",
