@@ -414,6 +414,13 @@ public sealed class FormulaEvaluator
 
         bool isStructured = IsStructuredRangeFunction(node.FunctionName);
 
+        if (node.Arguments.Count == 1 &&
+            IsSingleDirectRangeFastAggregate(node.FunctionName) &&
+            TryAsRangeRef(node.Arguments[0], out var directAggregateRange))
+        {
+            return EvaluateSingleDirectRangeAggregate(node.FunctionName, directAggregateRange, context);
+        }
+
         // Expand range arguments into individual values for aggregate functions,
         // or wrap as RangeValue for structured functions that need 2-D access.
         var expandedArgs = new List<ScalarValue>();
@@ -575,6 +582,174 @@ public sealed class FormulaEvaluator
             expandedArgs.AddRange(values.Select(v => new ReferencedScalarValue(v)));
         else
             expandedArgs.AddRange(values);
+    }
+
+    private static bool IsSingleDirectRangeFastAggregate(string functionName)
+        => functionName is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT";
+
+    private static ScalarValue EvaluateSingleDirectRangeAggregate(string functionName, RangeRefNode range, IEvalContext context)
+    {
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+            return ErrorValue.Ref;
+
+        uint r0 = Math.Min(range.Start.Row, range.End.Row);
+        uint r1 = Math.Max(range.Start.Row, range.End.Row);
+        uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+
+        return functionName switch
+        {
+            "SUM" => EvaluateSingleDirectRangeSum(range.SheetName, r0, c0, r1, c1, context),
+            "AVERAGE" => EvaluateSingleDirectRangeAverage(range.SheetName, r0, c0, r1, c1, context),
+            "MIN" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: false),
+            "MAX" => EvaluateSingleDirectRangeMinMax(range.SheetName, r0, c0, r1, c1, context, findMax: true),
+            _ => EvaluateSingleDirectRangeCount(range.SheetName, r0, c0, r1, c1, context)
+        };
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeSum(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        double total = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (TryDirectRangeNumber(value, out var number, out var error))
+                {
+                    total += number;
+                }
+                else if (error is not null)
+                {
+                    return error;
+                }
+            }
+        }
+
+        return double.IsFinite(total) ? new NumberValue(total) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeAverage(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        double total = 0;
+        var count = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (TryDirectRangeNumber(value, out var number, out var error))
+                {
+                    total += number;
+                    count++;
+                }
+                else if (error is not null)
+                {
+                    return error;
+                }
+            }
+        }
+
+        return count == 0
+            ? ErrorValue.DivByZero
+            : double.IsFinite(total / count) ? new NumberValue(total / count) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeMinMax(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context,
+        bool findMax)
+    {
+        double? result = null;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (TryDirectRangeNumber(value, out var number, out var error))
+                {
+                    if (result is null ||
+                        (findMax ? number > result.Value : number < result.Value))
+                    {
+                        result = number;
+                    }
+                }
+                else if (error is not null)
+                {
+                    return error;
+                }
+            }
+        }
+
+        return result is null
+            ? new NumberValue(0)
+            : double.IsFinite(result.Value) ? new NumberValue(result.Value) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateSingleDirectRangeCount(
+        string? sheetName,
+        uint r0,
+        uint c0,
+        uint r1,
+        uint c1,
+        IEvalContext context)
+    {
+        var count = 0;
+        for (var row = r0; row <= r1; row++)
+        {
+            for (var col = c0; col <= c1; col++)
+            {
+                var value = sheetName is not null
+                    ? context.GetCellValue(sheetName, row, col)
+                    : context.GetCellValue(row, col);
+                if (value is NumberValue or DateTimeValue)
+                    count++;
+            }
+        }
+
+        return new NumberValue(count);
+    }
+
+    private static bool TryDirectRangeNumber(ScalarValue value, out double number, out ErrorValue? error)
+    {
+        number = 0;
+        error = null;
+        switch (value)
+        {
+            case ErrorValue e:
+                error = e;
+                return false;
+            case NumberValue n:
+                number = n.Value;
+                return true;
+            case DateTimeValue d:
+                number = d.Value;
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)

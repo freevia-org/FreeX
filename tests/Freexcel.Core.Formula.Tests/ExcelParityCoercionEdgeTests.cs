@@ -37,6 +37,48 @@ public sealed class ExcelParityCoercionEdgeTests
     }
 
     [Fact]
+    public void SingleDirectRangeFastAggregates_PreserveDateAndBooleanReferenceRules()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 17));
+        var sheet = Sheet(
+            (1, 1, date),
+            (2, 1, new BoolValue(true)),
+            (3, 1, BlankValue.Instance));
+
+        _eval.Evaluate("=SUM(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=AVERAGE(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=MIN(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=MAX(A1:A3)", sheet).Should().Be(new NumberValue(date.Value));
+        _eval.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void AggregateFastPath_DoesNotChangeMultiArgumentOrArraySemantics()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("2")),
+            (2, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUM(A1:A2,\"4\")", sheet).Should().Be(new NumberValue(7));
+        _eval.Evaluate("=COUNT(A1:A2,\"4\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SUM(SEQUENCE(2,1))", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void SingleDirectRangeFastAggregates_PreserveAllIgnoredRangeRules()
+    {
+        var sheet = Sheet(
+            (1, 1, new TextValue("2")),
+            (2, 1, new BoolValue(true)));
+
+        _eval.Evaluate("=SUM(A1:A3)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=AVERAGE(A1:A3)", sheet).Should().Be(ErrorValue.DivByZero);
+        _eval.Evaluate("=MIN(A1:A3)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=MAX(A1:A3)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
     public void EmptyTextAndBlankCells_FollowExcelCountingRules()
     {
         var sheet = Sheet((1, 1, new TextValue("")));
