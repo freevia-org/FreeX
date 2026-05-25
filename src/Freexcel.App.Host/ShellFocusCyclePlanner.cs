@@ -8,6 +8,7 @@ public static class ShellFocusCyclePlanner
         ShellFocusTarget.Ribbon,
         ShellFocusTarget.FormulaBar,
         ShellFocusTarget.SheetTabs,
+        ShellFocusTarget.TaskPane,
         ShellFocusTarget.StatusBar
     ];
 
@@ -29,5 +30,6 @@ public enum ShellFocusTarget
     Ribbon,
     FormulaBar,
     SheetTabs,
+    TaskPane,
     StatusBar
 }
