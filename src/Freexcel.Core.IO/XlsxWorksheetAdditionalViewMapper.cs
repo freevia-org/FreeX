@@ -92,7 +92,9 @@ internal static class XlsxWorksheetAdditionalViewMapper
         {
             try
             {
-                return XElement.Parse(model.NativeXml);
+                var nativeElement = XElement.Parse(model.NativeXml);
+                if (nativeElement.Name == WorksheetNs + "sheetView")
+                    return nativeElement;
             }
             catch
             {
