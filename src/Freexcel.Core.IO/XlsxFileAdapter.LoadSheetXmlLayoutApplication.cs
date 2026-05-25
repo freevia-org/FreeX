@@ -197,6 +197,7 @@ public sealed partial class XlsxFileAdapter
             if (!workbook.WatchedCells.Contains(address))
                 workbook.WatchedCells.Add(address);
         }
+        sheet.CellWatchesMetadata = layout.CellWatchesMetadata;
         foreach (var scenario in layout.Scenarios)
         {
             var remappedScenario = new WorkbookScenario(
@@ -205,7 +206,8 @@ public sealed partial class XlsxFileAdapter
                     .Select(change => new ScenarioCellValue(
                         new CellAddress(sheet.Id, change.Address.Row, change.Address.Col),
                         change.Value))
-                    .ToList());
+                    .ToList(),
+                scenario.Comment);
 
             if (loadedScenarioNames.Add(remappedScenario.Name))
             {
