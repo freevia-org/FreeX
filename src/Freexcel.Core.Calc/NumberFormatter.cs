@@ -113,9 +113,52 @@ public static partial class NumberFormatter
 
         int fillIndex = FindAccountingFillInsertionIndex(text);
         if (fillIndex < 0)
-            return text.PadLeft(targetWidthCharacters.Value);
+        {
+            var trailingSkipSpaces = CountTrailingSkipDirectives(format);
+            return trailingSkipSpaces > 0
+                ? text + new string(' ', trailingSkipSpaces)
+                : text;
+        }
 
         return text.Insert(fillIndex, new string(' ', targetWidthCharacters.Value - text.Length));
+    }
+
+    private static int CountTrailingSkipDirectives(string format)
+    {
+        bool inQuote = false;
+        var lastNumericPlaceholder = -1;
+        var skipDirectivesAfterValue = 0;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && IsNumericPlaceholder(c))
+            {
+                lastNumericPlaceholder = i;
+                skipDirectivesAfterValue = 0;
+                continue;
+            }
+
+            if (!inQuote && lastNumericPlaceholder >= 0 && c == '_' && i + 1 < format.Length)
+            {
+                skipDirectivesAfterValue++;
+                i++;
+            }
+        }
+
+        return skipDirectivesAfterValue;
     }
 
     private static bool HasAccountingLayoutDirective(string format)
@@ -404,12 +447,11 @@ public static partial class NumberFormatter
                 continue;
             }
 
-            if (!inQuote && IsCurrencySymbol(c) &&
-                i + 2 < format.Length && format[i + 1] == '*' && format[i + 2] == ' ')
+            if (!inQuote && TryReadAccountingFillSymbol(format, i, out var symbol, out var fillIndex))
             {
-                sb.Append(c);
+                sb.Append(symbol);
                 sb.Append(' ');
-                i += 2;
+                i = fillIndex + 1;
                 continue;
             }
 
@@ -421,6 +463,37 @@ public static partial class NumberFormatter
 
     private static bool IsCurrencySymbol(char c)
         => c is '$' or '\u00A3' or '\u20AC' or '\u00A5';
+
+    private static bool TryReadAccountingFillSymbol(
+        string format,
+        int start,
+        out string symbol,
+        out int fillIndex)
+    {
+        symbol = "";
+        fillIndex = -1;
+        if (!IsAccountingSymbolChar(format[start]))
+            return false;
+
+        int cursor = start;
+        while (cursor < format.Length && IsAccountingSymbolChar(format[cursor]))
+            cursor++;
+
+        if (cursor == start ||
+            cursor + 1 >= format.Length ||
+            format[cursor] != '*' ||
+            format[cursor + 1] != ' ')
+        {
+            return false;
+        }
+
+        symbol = format[start..cursor];
+        fillIndex = cursor;
+        return true;
+    }
+
+    private static bool IsAccountingSymbolChar(char c)
+        => char.IsLetter(c) || IsCurrencySymbol(c);
 
     private static (string Format, double Value) ApplyTrailingCommaScaling(string format, double value)
     {

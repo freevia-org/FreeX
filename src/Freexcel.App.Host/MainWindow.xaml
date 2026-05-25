@@ -1230,7 +1230,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Pictures" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Picture"
+                                        local:RibbonTooltip.Title="Pictures"
                                         local:RibbonTooltip.KeyTip="IP"
                                         local:RibbonTooltip.Description="Insert a picture from a local image file."/>
                                 <Button Content="Shapes" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawRectBtn_Click"
