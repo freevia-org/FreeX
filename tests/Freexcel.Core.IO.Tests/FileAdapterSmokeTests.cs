@@ -13337,6 +13337,43 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedAdditionalWorksheetSheetViews()
+    {
+        var workbook = new Workbook("AdditionalSheetViewsRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdditionalWorksheetSheetView(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.AdditionalViews.Should().NotBeNull();
+        loadedSheet.AdditionalViews = null;
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+        sheetViews.Should().NotBeNull();
+        sheetViews!.Elements(worksheetNs + "sheetView")
+            .Any(view => string.Equals(
+                view.Attribute("workbookViewId")?.Value,
+                "1",
+                StringComparison.Ordinal))
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_FallsBackWhenAdditionalWorksheetViewNativeXmlHasWrongNamespace()
     {
         var workbook = new Workbook("AdditionalSheetViewWrongNamespaceFallbackTest");

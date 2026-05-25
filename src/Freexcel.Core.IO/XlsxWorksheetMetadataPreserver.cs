@@ -168,7 +168,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
+            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
             if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
                 changed = true;
@@ -483,7 +483,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
+            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
             if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
                 changed = true;

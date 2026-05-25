@@ -90,6 +90,10 @@ public static class ChartTypeSupport
     public static bool SupportsDoughnutHoleSize(ChartType type) =>
         type is ChartType.Doughnut;
 
+    public static bool SupportsBarGapWidth(ChartType type) =>
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.ThreeDColumn
+            or ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar;
+
     public static int GetDataSeriesCount(ChartModel chart)
     {
         if (chart.Type == ChartType.Bubble)

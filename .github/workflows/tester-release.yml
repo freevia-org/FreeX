@@ -24,16 +24,15 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -107,14 +106,14 @@ jobs:
           Copy-Item -LiteralPath $versionedExe.FullName -Destination (Join-Path $uploadRoot "Freexcel-latest-win-x64.exe") -Force
 
       - name: Upload versioned artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: freexcel-${{ steps.meta.outputs.version_slug }}-${{ steps.meta.outputs.short_sha }}-win-x64-singlefile
           path: artifacts/upload/freexcel-*-win-x64-singlefile.exe
           if-no-files-found: error
 
       - name: Upload latest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Freexcel-latest-win-x64.exe
           path: artifacts/upload/Freexcel-latest-win-x64.exe
