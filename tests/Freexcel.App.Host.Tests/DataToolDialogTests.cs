@@ -997,6 +997,28 @@ public sealed class DataToolDialogTests
         ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("A1:B3", false)]
+    [InlineData("A1:B3; D5:E7", false)]
+    [InlineData("not-a-range", true)]
+    public void ConsolidateDialog_HasPendingReferenceText_IgnoresBlankOrAlreadyListedReferences(
+        string referenceText,
+        bool expected)
+    {
+        ConsolidateDialog.HasPendingReferenceText(["A1:B3", "D5:E7"], referenceText)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void ConsolidateDialog_HasPendingReferenceText_DetectsUnaddedTypedReference()
+    {
+        ConsolidateDialog.HasPendingReferenceText(["A1:B3"], "D5:E7")
+            .Should()
+            .BeTrue();
+    }
+
     [Fact]
     public void ConsolidateDialog_TryAddReference_RejectsMalformedReferenceImmediately()
     {
@@ -1072,6 +1094,20 @@ public sealed class DataToolDialogTests
         source.Should().Contain("FocusDestinationInput();");
         source.Should().Contain("_referencesList.Focus();");
         source.Should().Contain("_destinationBox.SelectAll();");
+    }
+
+    [Fact]
+    public void ConsolidateDialogPendingReference_RequiresAddBeforeOk()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text)");
+        source.Should().Contain("MessageBox.Show(this, \"Add the reference before clicking OK.\"");
+        source.Should().Contain("FocusPendingReferenceInput();");
+        source.Should().Contain("private void FocusPendingReferenceInput()");
+        source.Should().Contain("_referenceBox.Focus();");
+        source.Should().Contain("_referenceBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_referenceBox);");
     }
 
     [Fact]
