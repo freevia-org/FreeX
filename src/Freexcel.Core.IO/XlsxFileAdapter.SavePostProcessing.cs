@@ -219,7 +219,8 @@ public sealed partial class XlsxFileAdapter
                 workbook,
                 XlsxChartXmlWriter.IsSupportedXlsxChart,
                 XlsxChartXmlWriter.ToChartXml,
-                XlsxChartXmlWriter.GetContentType);
+                XlsxChartXmlWriter.GetContentType,
+                XlsxChartXmlWriter.GetRelationshipType);
         }
 
         if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))

@@ -28,11 +28,37 @@ public static partial class XlsxChartPartReader
                 return (element, type);
         }
 
+        var chartExSeries = plotArea
+            .Descendants()
+            .Where(element => element.Name.LocalName == "series")
+            .ToList();
+        if (chartExSeries.Count > 0)
+        {
+            var hasParetoLine = chartExSeries.Any(series =>
+                string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
+            var primarySeries = chartExSeries.FirstOrDefault(series =>
+                !string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
+            if (primarySeries is not null && ToChartExChartType(primarySeries.Attribute("layoutId")?.Value, hasParetoLine) is { } chartType)
+                return (primarySeries, chartType);
+        }
+
         var mapChart = plotArea
             .Descendants()
             .FirstOrDefault(element => element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart");
         return mapChart is null ? null : (mapChart, ChartType.Map);
     }
+
+    private static ChartType? ToChartExChartType(string? layoutId, bool hasParetoLine) =>
+        layoutId?.ToLowerInvariant() switch
+        {
+            "treemap" => ChartType.Treemap,
+            "sunburst" => ChartType.Sunburst,
+            "clusteredcolumn" => hasParetoLine ? ChartType.Pareto : ChartType.Histogram,
+            "boxwhisker" => ChartType.BoxAndWhisker,
+            "waterfall" => ChartType.Waterfall,
+            "funnel" => ChartType.Funnel,
+            _ => null
+        };
 
     private static bool HasDirectSupportedChart(XElement? plotArea) =>
         plotArea?.Elements().Any(element => element.Name.LocalName is
@@ -66,11 +92,29 @@ public static partial class XlsxChartPartReader
             Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
-        foreach (var series in plotChart.Descendants().Where(element => element.Name.LocalName == "ser"))
+        var seriesElements = plotChart.Name.LocalName == "series"
+            ? [plotChart]
+            : plotChart.Descendants().Where(element => element.Name.LocalName == "ser");
+        foreach (var series in seriesElements)
         {
-            hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
-            hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
-            foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
+            if (series.Name.LocalName == "series")
+            {
+                var data = FindChartExData(chartXml, series);
+                hasTitleRange |= data?.Elements().Any(element =>
+                    element.Name.LocalName == "numDim" &&
+                    element.Elements().Any(child => child.Name.LocalName == "nf" && !string.IsNullOrWhiteSpace(child.Value))) == true;
+                hasCategoryRange |= data?.Elements().Any(element =>
+                    element.Name.LocalName == "strDim" &&
+                    string.Equals(element.Attribute("type")?.Value, "cat", StringComparison.OrdinalIgnoreCase) &&
+                    element.Elements().Any(child => child.Name.LocalName == "f" && !string.IsNullOrWhiteSpace(child.Value))) == true;
+            }
+            else
+            {
+                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
+                hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
+            }
+
+            foreach (var formula in ReadDeferredAdvancedSeriesRangeFormulas(chartXml, series))
             {
                 if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, out var range))
                     ranges.Add(range);
@@ -91,6 +135,45 @@ public static partial class XlsxChartPartReader
         chart = result;
         return true;
     }
+
+    private static IEnumerable<string> ReadDeferredAdvancedSeriesRangeFormulas(XDocument chartXml, XElement series)
+    {
+        if (series.Name.LocalName != "series")
+            return XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series);
+
+        var dataId = series
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "dataId")?
+            .Attribute("val")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(dataId))
+            return [];
+
+        var data = FindChartExData(chartXml, dataId);
+        return data is null
+            ? []
+            : data.Descendants()
+                .Where(element => element.Name.LocalName is "f" or "nf")
+                .Select(element => element.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static XElement? FindChartExData(XDocument chartXml, XElement series)
+    {
+        var dataId = series
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "dataId")?
+            .Attribute("val")?
+            .Value;
+        return string.IsNullOrWhiteSpace(dataId) ? null : FindChartExData(chartXml, dataId);
+    }
+
+    private static XElement? FindChartExData(XDocument chartXml, string dataId) =>
+        chartXml.Root?
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "data" &&
+                string.Equals(element.Attribute("id")?.Value, dataId, StringComparison.Ordinal));
 
     private static bool TryReadThreeDBarChart(
         XDocument chartXml,

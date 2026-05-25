@@ -107,6 +107,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         if (chartExParts.Count == 0)
             return;
 
+        const string chartRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+        const string chartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         foreach (var relsEntry in archive.Entries
                      .Where(entry =>
@@ -119,7 +121,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             var chartExRelationships = relsXml.Root?
                 .Elements(packageRelNs + "Relationship")
                 .Where(element =>
-                    string.Equals(element.Attribute("Type")?.Value, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart", StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(element.Attribute("Type")?.Value, chartRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(element.Attribute("Type")?.Value, chartExRelationshipType, StringComparison.OrdinalIgnoreCase)) &&
                     element.Attribute("Target")?.Value is { Length: > 0 } target &&
                     chartExParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(drawingPath, target)))
                 .ToList()

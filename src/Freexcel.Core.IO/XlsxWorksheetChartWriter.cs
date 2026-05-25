@@ -14,7 +14,8 @@ internal static class XlsxWorksheetChartWriter
         Workbook workbook,
         Func<ChartModel, bool> isSupportedChart,
         Func<ChartModel, Sheet, XDocument> createChartXml,
-        Func<ChartModel, string> getChartContentType)
+        Func<ChartModel, string> getChartContentType,
+        Func<ChartModel, string> getChartRelationshipType)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -57,7 +58,7 @@ internal static class XlsxWorksheetChartWriter
             if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
 
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml, getChartContentType);
+            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml, getChartContentType, getChartRelationshipType);
         }
     }
 
@@ -69,7 +70,8 @@ internal static class XlsxWorksheetChartWriter
         int drawingIndex,
         ref int chartIndex,
         Func<ChartModel, Sheet, XDocument> createChartXml,
-        Func<ChartModel, string> getChartContentType)
+        Func<ChartModel, string> getChartContentType,
+        Func<ChartModel, string> getChartRelationshipType)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -105,7 +107,7 @@ internal static class XlsxWorksheetChartWriter
             drawingRelsXml.Root!.Add(new XElement(
                 packageRelNs + "Relationship",
                 new XAttribute("Id", chartRelId),
-                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
+                new XAttribute("Type", getChartRelationshipType(chart)),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
             anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));

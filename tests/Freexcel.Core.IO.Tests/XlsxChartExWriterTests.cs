@@ -9,18 +9,23 @@ namespace Freexcel.Core.IO.Tests;
 public sealed class XlsxChartExWriterTests
 {
     private const string ChartExContentType = "application/vnd.ms-office.chartex+xml";
+    private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
     private static readonly XNamespace ContentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace ChartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
     [Theory]
-    [InlineData(ChartType.Treemap, "treemapChart")]
-    [InlineData(ChartType.Sunburst, "sunburstChart")]
-    [InlineData(ChartType.Histogram, "histogramChart")]
-    [InlineData(ChartType.Pareto, "histogramChart")]
-    [InlineData(ChartType.BoxAndWhisker, "boxWhiskerChart")]
-    [InlineData(ChartType.Waterfall, "waterfallChart")]
-    [InlineData(ChartType.Funnel, "funnelChart")]
-    public void Save_WritesChartExPartForRenderableModernCharts(ChartType chartType, string expectedFamilyElement)
+    [InlineData(ChartType.Treemap, "treemap")]
+    [InlineData(ChartType.Sunburst, "sunburst")]
+    [InlineData(ChartType.Histogram, "clusteredColumn")]
+    [InlineData(ChartType.Pareto, "clusteredColumn", true)]
+    [InlineData(ChartType.BoxAndWhisker, "boxWhisker")]
+    [InlineData(ChartType.Waterfall, "waterfall")]
+    [InlineData(ChartType.Funnel, "funnel")]
+    public void Save_WritesSchemaShapedChartExPartForRenderableModernCharts(
+        ChartType chartType,
+        string expectedLayoutId,
+        bool expectParetoLine = false)
     {
         var saved = SaveWorkbookWithChart(chartType);
 
@@ -28,16 +33,48 @@ public sealed class XlsxChartExWriterTests
         {
             var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
             chartXml.Root!.Name.Should().Be(ChartExNs + "chartSpace");
-            chartXml.Descendants(ChartExNs + expectedFamilyElement).Should().ContainSingle();
-            chartXml.Descendants().Any(element => element.Name.LocalName == "ser").Should().BeTrue();
-            chartXml.Descendants().Any(element => element.Name.LocalName == "f" && element.Value.Contains("$B$1", StringComparison.Ordinal)).Should().BeTrue();
-            chartXml.Descendants().Any(element => element.Name.LocalName == "f" && element.Value.Contains("$A$2:$A$4", StringComparison.Ordinal)).Should().BeTrue();
-            chartXml.Descendants().Any(element => element.Name.LocalName == "f" && element.Value.Contains("$B$2:$B$4", StringComparison.Ordinal)).Should().BeTrue();
+            chartXml.Root.Elements().Select(element => element.Name).Take(2)
+                .Should().Equal(ChartExNs + "chartData", ChartExNs + "chart");
 
-            if (chartType == ChartType.Pareto)
-                chartXml.Descendants(ChartExNs + "paretoLine").Should().ContainSingle();
-            else
-                chartXml.Descendants(ChartExNs + "paretoLine").Should().BeEmpty();
+            var classicChartSeriesDataElements = chartXml.Descendants()
+                .Where(element =>
+                    element.Name.LocalName is "ser" or "cat" or "val" &&
+                    element.Name.NamespaceName == "http://schemas.openxmlformats.org/drawingml/2006/chart")
+                .ToList();
+            classicChartSeriesDataElements.Should().BeEmpty();
+
+            var chartData = chartXml.Root.Element(ChartExNs + "chartData");
+            chartData.Should().NotBeNull();
+            var data = chartData!.Elements(ChartExNs + "data").Should().ContainSingle().Subject;
+            data.Attribute("id")!.Value.Should().Be("data0");
+            data.Elements(ChartExNs + "strDim").Should().ContainSingle()
+                .Which.Should().Match<XElement>(element =>
+                    element.Attribute("type")!.Value == "cat" &&
+                    element.Element(ChartExNs + "f")!.Value.Contains("$A$2:$A$4", StringComparison.Ordinal));
+            data.Elements(ChartExNs + "numDim").Should().ContainSingle()
+                .Which.Should().Match<XElement>(element =>
+                    element.Attribute("type")!.Value == "val" &&
+                    element.Element(ChartExNs + "f")!.Value.Contains("$B$2:$B$4", StringComparison.Ordinal) &&
+                    element.Element(ChartExNs + "nf")!.Value.Contains("$B$1", StringComparison.Ordinal));
+
+            var plotAreaRegion = chartXml.Root
+                .Element(ChartExNs + "chart")!
+                .Element(ChartExNs + "plotArea")!
+                .Element(ChartExNs + "plotAreaRegion");
+            plotAreaRegion.Should().NotBeNull();
+
+            var regionSeries = plotAreaRegion!.Elements(ChartExNs + "series").ToList();
+            regionSeries.Should().HaveCount(expectParetoLine ? 2 : 1);
+            var series = regionSeries[0];
+            series.Attribute("layoutId")!.Value.Should().Be(expectedLayoutId);
+            series.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("data0");
+
+            if (expectParetoLine)
+            {
+                var paretoLine = regionSeries[1];
+                paretoLine.Attribute("layoutId")!.Value.Should().Be("paretoLine");
+                paretoLine.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("data0");
+            }
 
             var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
             var chartContentTypeOverrides = contentTypesXml.Root!
@@ -49,8 +86,13 @@ public sealed class XlsxChartExWriterTests
             chartContentTypeOverrides.Should().ContainSingle();
 
             var drawingRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!);
-            drawingRelsXml.ToString().Should().Contain("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart");
-            drawingRelsXml.ToString().Should().Contain("../charts/chart1.xml");
+            var chartExRelationships = drawingRelsXml.Root!
+                .Elements(PackageRelNs + "Relationship")
+                .Where(element =>
+                    element.Attribute("Type")?.Value == ChartExRelationshipType &&
+                    element.Attribute("Target")?.Value == "../charts/chart1.xml")
+                .ToList();
+            chartExRelationships.Should().ContainSingle();
         }
 
         saved.Position = 0;

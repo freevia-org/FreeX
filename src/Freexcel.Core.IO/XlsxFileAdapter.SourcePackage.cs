@@ -20,6 +20,7 @@ public sealed partial class XlsxFileAdapter
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive);
+        PreserveSourceChartExParts(sourceArchive, generatedArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
@@ -50,6 +51,49 @@ public sealed partial class XlsxFileAdapter
 
     private static bool HasSourcePackagePart(ZipArchive archive, string prefix) =>
         archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    private static void PreserveSourceChartExParts(ZipArchive sourceArchive, ZipArchive generatedArchive)
+    {
+        foreach (var chartExPartPath in GetChartExPartPaths(sourceArchive))
+        {
+            var sourceEntry = sourceArchive.GetEntry(chartExPartPath);
+            if (sourceEntry is null)
+                continue;
+
+            generatedArchive.GetEntry(chartExPartPath)?.Delete();
+            XlsxPackageMetadataMerger.CopyEntry(sourceEntry, generatedArchive);
+        }
+    }
+
+    private static IEnumerable<string> GetChartExPartPaths(ZipArchive archive)
+    {
+        const string chartExContentType = "application/vnd.ms-office.chartex+xml";
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            yield break;
+
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        foreach (var partName in contentTypesXml.Root?
+                     .Elements(contentTypesNs + "Override")
+                     .Where(element => string.Equals(element.Attribute("ContentType")?.Value, chartExContentType, StringComparison.OrdinalIgnoreCase))
+                     .Select(element => element.Attribute("PartName")?.Value)
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                 ?? [])
+        {
+            yield return partName!.TrimStart('/');
+        }
+
+        foreach (var chartEntry in archive.Entries.Where(entry =>
+                     entry.FullName.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) &&
+                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var chartXml = XlsxPackageXmlEditor.LoadXml(chartEntry);
+            if (chartXml.Root?.Name.NamespaceName == "http://schemas.microsoft.com/office/drawing/2014/chartex")
+                yield return chartEntry.FullName;
+        }
+    }
 
     private static bool HasAnySourcePackagePart(ZipArchive archive, params string[] prefixes) =>
         archive.Entries.Any(entry => prefixes.Any(prefix => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
