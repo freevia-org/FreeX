@@ -78,7 +78,7 @@ public sealed class ObjectSizeDialog : Window
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            FocusInvalidSizeInput(_heightBox);
+            FocusInvalidSizeInput(ResolveInvalidSizeInput());
             return;
         }
 
@@ -92,6 +92,21 @@ public sealed class ObjectSizeDialog : Window
         _heightBox.SelectAll();
         Keyboard.Focus(_heightBox);
     }
+
+    private TextBox ResolveInvalidSizeInput()
+    {
+        if (!TryParsePositiveSize(_heightBox.Text))
+            return _heightBox;
+
+        if (!TryParsePositiveSize(_widthBox.Text))
+            return _widthBox;
+
+        return _heightBox;
+    }
+
+    private static bool TryParsePositiveSize(string text) =>
+        DrawingInputParser.TryParseSize($"{text}x{text}", out var value, out _)
+        && value > 0;
 
     private static void FocusInvalidSizeInput(TextBox textBox)
     {

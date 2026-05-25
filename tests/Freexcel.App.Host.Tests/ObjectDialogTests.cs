@@ -139,7 +139,7 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesHeightInput()
+    public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesInvalidSizeInput()
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
@@ -147,7 +147,11 @@ public sealed class ObjectDialogTests
         source.Should().Contain("this,");
         source.Should().Contain("Enter positive width and height values.");
         source.Should().Contain("MessageBoxImage.Warning");
-        source.Should().Contain("FocusInvalidSizeInput(_heightBox);");
+        source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
+        source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
+        source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
+        source.Should().Contain("if (!TryParsePositiveSize(_widthBox.Text))");
+        source.Should().Contain("private static bool TryParsePositiveSize(string text)");
         source.Should().Contain("private static void FocusInvalidSizeInput(TextBox textBox)");
     }
 
