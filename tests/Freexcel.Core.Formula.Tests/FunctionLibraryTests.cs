@@ -1303,6 +1303,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Find_SameShapeFindAndWithinTextRanges_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("p")),
+            (2, 1, new TextValue("n")),
+            (1, 2, new TextValue("Apple")),
+            (2, 2, new TextValue("Banana")));
+
+        AssertColumn(_eval.Evaluate("=FIND(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
+    public void Find_MismatchedFindAndWithinTextRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("p")),
+            (2, 1, new TextValue("n")),
+            (1, 2, new TextValue("Apple")),
+            (1, 3, new TextValue("Banana")));
+
+        _eval.Evaluate("=FIND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Search_CaseInsensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -1357,6 +1381,30 @@ public class FunctionLibraryTests
     }
 
     // ── MID ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Search_SameShapeFindAndWithinTextRanges_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("P")),
+            (2, 1, new TextValue("N")),
+            (1, 2, new TextValue("Apple")),
+            (2, 2, new TextValue("Banana")));
+
+        AssertColumn(_eval.Evaluate("=SEARCH(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
+    public void Search_MismatchedFindAndWithinTextRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("P")),
+            (2, 1, new TextValue("N")),
+            (1, 2, new TextValue("Apple")),
+            (1, 3, new TextValue("Banana")));
+
+        _eval.Evaluate("=SEARCH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Search_EmptyFindTextAtEndBoundary_ReturnsStartNum()
