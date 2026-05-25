@@ -44,10 +44,35 @@ internal static class XlsxWorksheetSmartTagMapper
 
             root.Element(WorksheetNs + "smartTags")?.Remove();
             if (ToXml(sheet.SmartTags!) is { } smartTags)
-                root.Add(smartTags);
+                InsertSmartTags(root, smartTags);
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
+    }
+
+    private static void InsertSmartTags(XElement root, XElement smartTags)
+    {
+        string[] laterWorksheetElements =
+        [
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var insertionPoint = root.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == WorksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is not null)
+            insertionPoint.AddBeforeSelf(smartTags);
+        else
+            root.Add(smartTags);
     }
 
     private static WorksheetCellSmartTagsModel ReadCellSmartTags(XElement element)

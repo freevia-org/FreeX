@@ -14726,6 +14726,62 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetSmartTagsBeforeDrawing()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Seattle"));
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            Cells =
+            [
+                new WorksheetCellSmartTagsModel
+                {
+                    Reference = "A1",
+                    Tags =
+                    [
+                        new WorksheetCellSmartTagModel
+                        {
+                            Type = "0",
+                            Properties =
+                            [
+                                new WorksheetCellSmartTagPropertyModel { Key = "place", Value = "Seattle" }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 3),
+            Name = "Marker",
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 80,
+            Height = 40
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedElements = worksheetXml.Root!
+            .Elements()
+            .Where(element => element.Name.Namespace == worksheetNs)
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        orderedElements.Should().Contain("smartTags");
+        orderedElements.Should().Contain("drawing");
+        orderedElements.IndexOf("smartTags").Should().BeLessThan(orderedElements.IndexOf("drawing"));
+        worksheetXml.Root!.Element(worksheetNs + "smartTags")!.ToString().Should().Contain("val=\"Seattle\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterMetadata()
     {
         var workbook = new Workbook("WorksheetAutoFilterRetentionTest");
