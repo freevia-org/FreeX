@@ -1762,6 +1762,36 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DateDifference_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=DAYS(B1:B2,A1:A2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,0)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 360.0));
+        AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B2)", sheet), new NumberValue(5), new NumberValue(7));
+    }
+
+    [Fact]
+    public void DateDifference_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        _eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void DateTimeSecondRangeArguments_SpillElementwise()
     {
         var offsets = MakeSheet(
@@ -2071,6 +2101,38 @@ public class FunctionLibraryTests
         AssertColumn(_eval.Evaluate("=CEILING(10,A1:A2)", sheet), new NumberValue(10), new NumberValue(12));
         AssertColumn(_eval.Evaluate("=FLOOR(10,A1:A2)", sheet), new NumberValue(10), new NumberValue(8));
         AssertColumn(_eval.Evaluate("=MROUND(10,A1:A2)", sheet), new NumberValue(10), new NumberValue(12));
+    }
+
+    [Fact]
+    public void BinaryMath_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),  (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)),  (2, 2, new NumberValue(4)));
+
+        AssertColumn(_eval.Evaluate("=POWER(A1:A2,B1:B2)", sheet), new NumberValue(16), new NumberValue(6561));
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,B1:B2)", sheet), new NumberValue(0), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=LOG(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(Math.Log(9) / Math.Log(4)));
+        AssertColumn(_eval.Evaluate("=QUOTIENT(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=CEILING(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(12));
+        AssertColumn(_eval.Evaluate("=FLOOR(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=MROUND(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+    }
+
+    [Fact]
+    public void BinaryMath_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),  (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)),  (1, 3, new NumberValue(4)));
+
+        _eval.Evaluate("=POWER(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MOD(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=LOG(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=QUOTIENT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CEILING(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FLOOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MROUND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

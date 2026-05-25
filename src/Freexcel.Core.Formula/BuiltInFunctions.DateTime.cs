@@ -514,9 +514,7 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (!TryCollectHolidays(args.Count > 2 ? args[2] : null, out var holidays, out var holidayError))
             return holidayError!;
-        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => NetworkdaysScalar(value, args[1], holidays));
-        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => NetworkdaysScalar(args[0], value, holidays));
-        return NetworkdaysScalar(args[0], args[1], holidays);
+        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => NetworkdaysScalar(startDate, endDate, holidays));
     }
 
     private static ScalarValue NetworkdaysScalar(ScalarValue startDate, ScalarValue endDate, HashSet<DateTime> holidays)
@@ -567,9 +565,7 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[0] is RangeValue endRange) return MapUnaryTextRange(endRange, value => DaysScalar(value, args[1]));
-        if (args[1] is RangeValue startRange) return MapUnaryTextRange(startRange, value => DaysScalar(args[0], value));
-        return DaysScalar(args[0], args[1]);
+        return MapBinaryMathArgs(args[0], args[1], DaysScalar);
     }
 
     private static ScalarValue DaysScalar(ScalarValue endDate, ScalarValue startDate)
@@ -585,9 +581,7 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
-        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => Days360Scalar(value, args[1], european));
-        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => Days360Scalar(args[0], value, european));
-        return Days360Scalar(args[0], args[1], european);
+        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => Days360Scalar(startDate, endDate, european));
     }
 
     private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, bool european)
@@ -609,9 +603,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
         int basis = (int)rawBasis;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        if (args[0] is RangeValue startRange) return MapUnaryTextRange(startRange, value => YearfracScalar(value, args[1], basis));
-        if (args[1] is RangeValue endRange) return MapUnaryTextRange(endRange, value => YearfracScalar(args[0], value, basis));
-        return YearfracScalar(args[0], args[1], basis);
+        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => YearfracScalar(startDate, endDate, basis));
     }
 
     private static ScalarValue YearfracScalar(ScalarValue startDate, ScalarValue endDate, int basis)
