@@ -540,7 +540,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_ExposesExcelLikeLinkTypeAndScreenTipAffordances()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+        var source = ReadObjectDialogSources();
 
         source.Should().Contain("Existing File or Web Page");
         source.Should().Contain("Create New Document");
@@ -559,7 +559,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void HyperlinkDialog_AcceptWarnsAndRefocusesBlankTarget()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+        var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
@@ -573,7 +573,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void HyperlinkDialogOpenedFromKeyboard_FocusesAddressBox()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class HyperlinkDialog", "public sealed class ScreenTipDialog");
+        var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -672,6 +672,7 @@ public sealed class ObjectDialogTests
     private static string ReadObjectDialogSources() =>
         string.Join(
             Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizingDialogs.cs")));
 
