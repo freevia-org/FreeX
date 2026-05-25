@@ -37,6 +37,7 @@ public partial class GridView
         {
             RenderCharts(dc);
             RenderDrawingShapes(dc);
+            RenderNativeSlicerTimelineControls(dc);
             RenderPictures(dc);
             RenderTextBoxes(dc);
         }

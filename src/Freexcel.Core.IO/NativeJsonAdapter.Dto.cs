@@ -324,6 +324,7 @@ public sealed partial class NativeJsonAdapter
         public WorksheetSmartTagsDto? SmartTags { get; set; }
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
         public WorksheetSortStateDto? SortState { get; set; }
+        public WorksheetSingleXmlCellsDto? SingleXmlCells { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
@@ -437,6 +438,20 @@ public sealed partial class NativeJsonAdapter
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
+    }
+
+    private class WorksheetSingleXmlCellsDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetSingleXmlCellDto> Cells { get; set; } = [];
+    }
+
+    private class WorksheetSingleXmlCellDto
+    {
+        public int? Id { get; set; }
+        public string? Reference { get; set; }
+        public int? XmlCellPropertyId { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
     private class WorksheetPageMarginsMetadataDto

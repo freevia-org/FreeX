@@ -75,4 +75,44 @@ public sealed class SlicerTimelinePlannerTests
     {
         SlicerTimelinePlanner.NormalizeTimelineDateInput(value).Should().Be(expected);
     }
+
+    [Fact]
+    public void NativeVisualFilters_ReturnAnchoredControlsForPivotsOnActiveSheet()
+    {
+        var workbook = new Workbook("NativeVisualFilters");
+        var activeSheet = workbook.AddSheet("Pivot");
+        var otherSheet = workbook.AddSheet("Other");
+        activeSheet.PivotTables.Add(new PivotTableModel { Name = "PivotTable1" });
+        otherSheet.PivotTables.Add(new PivotTableModel { Name = "PivotTable2" });
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 1, 0),
+            new DrawingAnchorPoint(4, 0, 8, 0));
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Region Slicer",
+            SourcePivotTableName = "PivotTable1",
+            DrawingAnchor = anchor
+        });
+        workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Other Slicer",
+            SourcePivotTableName = "PivotTable2",
+            DrawingAnchor = anchor
+        });
+        workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "Date Timeline",
+            SourcePivotTableName = "PivotTable1",
+            DrawingAnchor = anchor
+        });
+
+        SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet)
+            .Select(slicer => slicer.Name)
+            .Should()
+            .Equal("Region Slicer");
+        SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet)
+            .Select(timeline => timeline.Name)
+            .Should()
+            .Equal("Date Timeline");
+    }
 }

@@ -53,6 +53,8 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
             if (sheet.PrimaryViewMetadata.NativeChildXmls.Count > 0)
             {
+                PruneSelectionsForModeledActiveCell(sheetView, sheet);
+
                 sheetView.Elements()
                     .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
                     .Remove();
@@ -62,14 +64,21 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                     if (string.IsNullOrWhiteSpace(childXml))
                         continue;
 
-                    try
+                try
+                {
+                    var nativeChild = XElement.Parse(childXml);
+                    if (nativeChild.Name == WorksheetNs + "selection")
                     {
-                        sheetView.Add(XElement.Parse(childXml));
+                        MergeMatchingSelectionNativeAttributes(sheetView, nativeChild);
+                        continue;
                     }
-                    catch
-                    {
-                        // Skip malformed native payloads in authored native JSON files.
-                    }
+
+                    sheetView.Add(nativeChild);
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
                 }
             }
 
@@ -82,5 +91,47 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             "zoomScale" or "showFormulas" or "topLeftCell";
 
     private static bool IsModeledPrimaryViewElement(string name) =>
-        name is "pane";
+        name is "pane" or "selection";
+
+    private static void PruneSelectionsForModeledActiveCell(XElement sheetView, Sheet sheet)
+    {
+        if (sheet.ActiveRow is not { } row || sheet.ActiveCol is not { } col)
+            return;
+
+        var activeCell = new CellAddress(sheet.Id, row, col).ToA1();
+        var matchingSelectionKept = false;
+        foreach (var selection in sheetView.Elements(WorksheetNs + "selection").ToList())
+        {
+            var isModeledSelection =
+                string.Equals(selection.Attribute("activeCell")?.Value, activeCell, StringComparison.Ordinal) &&
+                string.Equals(selection.Attribute("sqref")?.Value, activeCell, StringComparison.Ordinal);
+            if (!isModeledSelection || matchingSelectionKept)
+                selection.Remove();
+            else
+                matchingSelectionKept = true;
+        }
+    }
+
+    private static void MergeMatchingSelectionNativeAttributes(XElement sheetView, XElement nativeSelection)
+    {
+        var nativeActiveCell = nativeSelection.Attribute("activeCell")?.Value;
+        var nativeSelectionRef = nativeSelection.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(nativeActiveCell) || string.IsNullOrWhiteSpace(nativeSelectionRef))
+            return;
+
+        var targetSelection = sheetView.Elements(WorksheetNs + "selection")
+            .FirstOrDefault(selection =>
+                string.Equals(selection.Attribute("activeCell")?.Value, nativeActiveCell, StringComparison.Ordinal) &&
+                string.Equals(selection.Attribute("sqref")?.Value, nativeSelectionRef, StringComparison.Ordinal));
+        if (targetSelection is null)
+            return;
+
+        foreach (var attribute in nativeSelection.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || attribute.Name.LocalName is "activeCell" or "sqref")
+                continue;
+
+            targetSelection.SetAttributeValue(attribute.Name, attribute.Value);
+        }
+    }
 }

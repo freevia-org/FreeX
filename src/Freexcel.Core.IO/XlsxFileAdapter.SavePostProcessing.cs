@@ -196,6 +196,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.SingleXmlCells is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
         {
             packageStream.Position = 0;
