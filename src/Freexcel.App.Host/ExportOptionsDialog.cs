@@ -14,6 +14,8 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
     private readonly CheckBox _bookmarksBox = new() { Content = "Create _PDF bookmarks using sheet names" };
     private readonly CheckBox _bitmapTextBox = new() { Content = "_Bitmap text when fonts may not be embedded" };
+    private readonly CheckBox _pdfABox = new() { Content = "PDF/_A compliant (not supported)", IsEnabled = false };
+    private readonly CheckBox _structureTagsBox = new() { Content = "Document structure _tags (not supported)", IsEnabled = false };
     private readonly ComboBox _bookmarkModeBox = new() { Width = 180, IsEnabled = false };
     private readonly ComboBox _initialViewBox = new() { Width = 180 };
     private readonly ComboBox _openModeBox = new() { Width = 180 };
@@ -95,6 +97,10 @@ internal sealed class ExportOptionsDialog : Window
         pdfLanguagePanel.Children.Add(_pdfLanguageBox);
         stack.Children.Add(pdfLanguagePanel);
         stack.Children.Add(_bitmapTextBox);
+        _pdfABox.ToolTip = "Freexcel's current PDF exporter cannot write PDF/A conformance metadata.";
+        _structureTagsBox.ToolTip = "Freexcel's current PDF exporter cannot write tagged PDF structure trees.";
+        stack.Children.Add(_pdfABox);
+        stack.Children.Add(_structureTagsBox);
         stack.Children.Add(_standardQualityButton);
         stack.Children.Add(_minimumSizeButton);
 
@@ -207,7 +213,9 @@ internal sealed class ExportOptionsDialog : Window
         PdfInitialView initialView = PdfInitialView.SinglePage,
         PdfOpenMode openMode = PdfOpenMode.Normal,
         bool bitmapTextWhenFontsMayNotBeEmbedded = false,
-        string? pdfLanguage = ExportPlanner.DefaultPdfLanguage) =>
+        string? pdfLanguage = ExportPlanner.DefaultPdfLanguage,
+        PdfConformance pdfConformance = PdfConformance.Standard,
+        bool includeDocumentStructureTags = false) =>
         new(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
@@ -224,7 +232,9 @@ internal sealed class ExportOptionsDialog : Window
             Enum.IsDefined(initialView) ? initialView : PdfInitialView.SinglePage,
             Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal,
             bitmapTextWhenFontsMayNotBeEmbedded,
-            ExportPlanner.NormalizePdfLanguage(pdfLanguage));
+            ExportPlanner.NormalizePdfLanguage(pdfLanguage),
+            Enum.IsDefined(pdfConformance) ? pdfConformance : PdfConformance.Standard,
+            includeDocumentStructureTags);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
         _bookmarkModeBox.SelectedIndex switch
