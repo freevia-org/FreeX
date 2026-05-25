@@ -44,6 +44,7 @@ public sealed partial class XlsxFileAdapter
         int? PrintQualityDpi,
         int? PrintQualityVerticalDpi,
         WorksheetPageSetupMetadataModel? PageSetupMetadata,
+        WorksheetHeaderFooterMetadataModel? HeaderFooterMetadata,
         WorksheetBackgroundImage? BackgroundImage,
         XlsxHeaderFooterPictureSets HeaderFooterPictures,
         Dictionary<uint, int> RowOutlineLevels,
@@ -274,6 +275,7 @@ public sealed partial class XlsxFileAdapter
             .Element(worksheetNs + "sheetPr")?
             .Element(worksheetNs + "outlinePr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
+        var headerFooter = worksheetXml.Root?.Element(worksheetNs + "headerFooter");
         var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");
         var printOptions = worksheetXml.Root?.Element(worksheetNs + "printOptions");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
@@ -344,6 +346,7 @@ public sealed partial class XlsxFileAdapter
             ParseOptionalPositiveInt(pageSetup?.Attribute("horizontalDpi")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("verticalDpi")?.Value),
             ReadWorksheetPageSetupMetadata(pageSetup),
+            ReadWorksheetHeaderFooterMetadata(headerFooter),
             background,
             headerFooterPictures,
             rowOutlineLevels,
@@ -377,6 +380,36 @@ public sealed partial class XlsxFileAdapter
             explicitStyleOnlyCells,
             codeName);
     }
+
+    private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
+    {
+        if (headerFooter is null)
+            return null;
+
+        var model = new WorksheetHeaderFooterMetadataModel();
+        foreach (var attribute in headerFooter.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledHeaderFooterAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        model.NativeChildXmls = headerFooter.Elements()
+            .Where(element => !IsModeledHeaderFooterElement(element.Name.LocalName))
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .ToList();
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledHeaderFooterAttribute(string name) =>
+        name is "differentOddEven" or "differentFirst" or "scaleWithDoc" or "alignWithMargins";
+
+    private static bool IsModeledHeaderFooterElement(string name) =>
+        name is "oddHeader" or "oddFooter" or "evenHeader" or "evenFooter" or "firstHeader" or "firstFooter";
 
     private static WorksheetPageMarginsMetadataModel? ReadWorksheetPageMarginsMetadata(XElement? pageMargins)
     {

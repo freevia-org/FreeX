@@ -2050,6 +2050,17 @@ public partial class FileAdapterSmokeTests
         sheet.PrintTitleRows = new WorksheetRepeatRange(1, 2);
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
+        sheet.HeaderFooterMetadata = new WorksheetHeaderFooterMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeHeaderFooterAttr"] = "kept"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativeHeaderFooterChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Page &[Page]", "Right footer");
         sheet.FirstPageHeader = new WorksheetHeaderFooter("First header left", "First header center", "First header right");
         sheet.FirstPageFooter = new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right");
@@ -2107,6 +2118,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
         loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
+        loadedSheet.HeaderFooterMetadata.Should().BeEquivalentTo(sheet.HeaderFooterMetadata);
         loadedSheet.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Page &[Page]", "Right footer"));
         loadedSheet.FirstPageHeader.Should().Be(new WorksheetHeaderFooter("First header left", "First header center", "First header right"));
         loadedSheet.FirstPageFooter.Should().Be(new WorksheetHeaderFooter("First footer left", "First footer center", "First footer right"));
@@ -13476,7 +13488,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.HeaderFooterMetadata.Should().NotBeNull();
+        loadedSheet.HeaderFooterMetadata!.NativeAttributes.Should().Contain("nativeHeaderFooterAttr", "kept");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
