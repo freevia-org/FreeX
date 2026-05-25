@@ -2009,6 +2009,17 @@ public partial class FileAdapterSmokeTests
         sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
         sheet.HeaderMargin = 0.35;
         sheet.FooterMargin = 0.45;
+        sheet.PageMarginsMetadata = new WorksheetPageMarginsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["customAttr"] = "page-margins-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePageMarginsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
         sheet.SheetFormatMetadata = new WorksheetSheetFormatMetadataModel
@@ -2088,6 +2099,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PageMargins.Should().Be(new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1));
         loadedSheet.HeaderMargin.Should().Be(0.35);
         loadedSheet.FooterMargin.Should().Be(0.45);
+        loadedSheet.PageMarginsMetadata.Should().BeEquivalentTo(sheet.PageMarginsMetadata);
         loadedSheet.PrintGridlines.Should().BeTrue();
         loadedSheet.PrintHeadings.Should().BeTrue();
         loadedSheet.SheetFormatMetadata.Should().BeEquivalentTo(sheet.SheetFormatMetadata);
@@ -13426,7 +13438,10 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageMarginsMetadata.Should().NotBeNull();
+        loadedSheet.PageMarginsMetadata!.NativeAttributes.Should().Contain("customAttr", "page-margins-native");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);

@@ -38,6 +38,7 @@ public sealed partial class XlsxFileAdapter
         WorksheetAutoFilterModel? AutoFilter,
         bool? UsePrinterDefaults,
         int? PrintCopies,
+        WorksheetPageMarginsMetadataModel? PageMarginsMetadata,
         bool? FitToPage,
         bool? AutoPageBreaks,
         int? PrintQualityDpi,
@@ -273,6 +274,7 @@ public sealed partial class XlsxFileAdapter
             .Element(worksheetNs + "sheetPr")?
             .Element(worksheetNs + "outlinePr");
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
+        var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");
         var printOptions = worksheetXml.Root?.Element(worksheetNs + "printOptions");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
@@ -336,6 +338,7 @@ public sealed partial class XlsxFileAdapter
             ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter")),
             ParseOptionalBool(pageSetup?.Attribute("usePrinterDefaults")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("copies")?.Value),
+            ReadWorksheetPageMarginsMetadata(pageMargins),
             ParseOptionalBool(pageSetUpPr?.Attribute("fitToPage")?.Value),
             ParseOptionalBool(pageSetUpPr?.Attribute("autoPageBreaks")?.Value),
             ParseOptionalPositiveInt(pageSetup?.Attribute("horizontalDpi")?.Value),
@@ -374,6 +377,34 @@ public sealed partial class XlsxFileAdapter
             explicitStyleOnlyCells,
             codeName);
     }
+
+    private static WorksheetPageMarginsMetadataModel? ReadWorksheetPageMarginsMetadata(XElement? pageMargins)
+    {
+        if (pageMargins is null)
+            return null;
+
+        var model = new WorksheetPageMarginsMetadataModel
+        {
+            NativeChildXmls = pageMargins.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in pageMargins.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledPageMarginsAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledPageMarginsAttribute(string name) =>
+        name is "left" or "right" or "top" or "bottom" or "header" or "footer";
 
     private static WorksheetSheetFormatMetadataModel? ReadWorksheetSheetFormatMetadata(XElement? sheetFormatProperties)
     {

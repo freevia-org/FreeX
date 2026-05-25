@@ -47,6 +47,12 @@ public sealed class WorksheetSheetFormatMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetPageMarginsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -219,6 +225,9 @@ public sealed partial class Sheet
 
     /// <summary>Distance from the page bottom to the printed footer, in inches.</summary>
     public double FooterMargin { get; set; } = 0.3;
+
+    /// <summary>Native Excel pageMargins metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageMarginsMetadataModel? PageMarginsMetadata { get; set; }
 
     /// <summary>Whether gridlines are printed for this worksheet.</summary>
     public bool PrintGridlines { get; set; }

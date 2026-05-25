@@ -200,10 +200,15 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        string from = ToText(args[1]);
-        string to = ToText(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ConvertScalar(value, from, to));
-        return ConvertScalar(args[0], from, to);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ConvertScalarWithUnits);
+    }
+
+    private static ScalarValue ConvertScalarWithUnits(ScalarValue numberValue, ScalarValue fromValue, ScalarValue toValue)
+    {
+        if (numberValue is ErrorValue numberError) return numberError;
+        if (fromValue is ErrorValue fromError) return fromError;
+        if (toValue is ErrorValue toError) return toError;
+        return ConvertScalar(numberValue, ToText(fromValue), ToText(toValue));
     }
 
     private static ScalarValue ConvertScalar(ScalarValue numberValue, string from, string to)
