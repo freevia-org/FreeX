@@ -559,7 +559,8 @@ public partial class FileAdapterSmokeTests
             [
                 new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
                 new ScenarioCellValue(new CellAddress(sheet.Id, 2, 1), new TextValue("manual"))
-            ]));
+            ],
+            "Scenario comment"));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -571,6 +572,7 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
         scenario.Name.Should().Be("Best Case");
+        scenario.Comment.Should().Be("Scenario comment");
         scenario.ChangingCells.Should().Contain(new ScenarioCellValue(
             new CellAddress(loadedSheet.Id, 1, 1),
             new NumberValue(42)));
@@ -14475,6 +14477,7 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
         scenario.Name.Should().Be("BestCase");
+        scenario.Comment.Should().Be("Scenario comment");
         scenario.ChangingCells.Should().ContainSingle()
             .Which.Should().Be(new ScenarioCellValue(
                 new CellAddress(loadedSheet.Id, 1, 1),
@@ -14492,7 +14495,8 @@ public partial class FileAdapterSmokeTests
             [
                 new ScenarioCellValue(new CellAddress(data.Id, 1, 1), new NumberValue(42)),
                 new ScenarioCellValue(new CellAddress(assumptions.Id, 2, 2), new TextValue("manual"))
-            ]));
+            ],
+            "Scenario comment"));
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
@@ -14508,6 +14512,7 @@ public partial class FileAdapterSmokeTests
             .Elements(worksheetNs + "scenario")
             .Should().ContainSingle().Subject;
         firstScenario.Attribute("name")!.Value.Should().Be("BestCase");
+        firstScenario.Attribute("comment")!.Value.Should().Be("Scenario comment");
         firstScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("A1");
         firstScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("42");
         firstScenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
@@ -14519,6 +14524,7 @@ public partial class FileAdapterSmokeTests
             .Elements(worksheetNs + "scenario")
             .Should().ContainSingle().Subject;
         secondScenario.Attribute("name")!.Value.Should().Be("BestCase");
+        secondScenario.Attribute("comment")!.Value.Should().Be("Scenario comment");
         secondScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("B2");
         secondScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("manual");
     }
@@ -14585,6 +14591,39 @@ public partial class FileAdapterSmokeTests
         scenario.Attribute("locked")!.Value.Should().Be("1");
         scenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
         scenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotRestoreClearedScenarioComment()
+    {
+        var workbook = new Workbook("ScenarioCommentRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
+        loaded.Scenarios[0] = scenario with { Comment = null };
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var savedScenario = worksheetXml.Root!
+            .Element(worksheetNs + "scenarios")!
+            .Elements(worksheetNs + "scenario")
+            .Should().ContainSingle().Subject;
+
+        savedScenario.Attribute("comment").Should().BeNull();
     }
 
     [Fact]
@@ -15023,7 +15062,80 @@ public partial class FileAdapterSmokeTests
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
         cellWatches.Should().NotBeNull();
+        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept");
+        cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch")!.Value.Should().Be("kept");
         cellWatches!.ToString().Should().Contain("r=\"A1\"");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCellWatchesMetadata()
+    {
+        var workbook = new Workbook("CellWatchesNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        workbook.WatchedCells.Add(new CellAddress(sheet.Id, 1, 1));
+        sheet.CellWatchesMetadata = new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["nativeContainer"] = "kept"
+            },
+            WatchNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["nativeWatch"] = "kept"
+                }
+            }
+        };
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loaded.WatchedCells.Should().ContainSingle(address =>
+            address.Sheet.Equals(loadedSheet.Id) &&
+            address.Row == 1 &&
+            address.Col == 1);
+        loadedSheet.CellWatchesMetadata.Should().BeEquivalentTo(sheet.CellWatchesMetadata);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetCellWatchMetadata()
+    {
+        var workbook = new Workbook("CellWatchesMetadataSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        workbook.WatchedCells.Add(new CellAddress(sheet.Id, 1, 1));
+        sheet.CellWatchesMetadata = new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes =
+            {
+                ["nativeContainer"] = "kept"
+            },
+            WatchNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["nativeWatch"] = "kept"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
+
+        cellWatches.Should().NotBeNull();
+        cellWatches!.Attribute("nativeContainer")!.Value.Should().Be("kept");
+        cellWatches.Element(worksheetNs + "cellWatch")!.Attribute("nativeWatch")!.Value.Should().Be("kept");
+        cellWatches.ToString().Should().Contain("r=\"A1\"");
     }
 
     [Fact]
@@ -19788,6 +19900,7 @@ public partial class FileAdapterSmokeTests
                 new XElement(
                     worksheetNs + "scenario",
                     new XAttribute("name", "BestCase"),
+                    new XAttribute("comment", "Scenario comment"),
                     new XAttribute("locked", "1"),
                     new XAttribute("count", "1"),
                     new XAttribute("user", "FreexcelTest"),
@@ -19884,11 +19997,22 @@ public partial class FileAdapterSmokeTests
     }
 
     private static void AddWorksheetCellWatches(MemoryStream packageStream) =>
-        AddWorksheetCellWatches(packageStream, "xl/worksheets/sheet1.xml", ("A1", null, null));
+        AddWorksheetCellWatches(
+            packageStream,
+            "xl/worksheets/sheet1.xml",
+            [("nativeContainer", "kept")],
+            ("A1", "nativeWatch", "kept"));
 
     private static void AddWorksheetCellWatches(
         MemoryStream packageStream,
         string worksheetPath,
+        params (string Reference, string? AttributeName, string? AttributeValue)[] watches)
+        => AddWorksheetCellWatches(packageStream, worksheetPath, [], watches);
+
+    private static void AddWorksheetCellWatches(
+        MemoryStream packageStream,
+        string worksheetPath,
+        (string Name, string Value)[] containerAttributes,
         params (string Reference, string? AttributeName, string? AttributeValue)[] watches)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -19896,7 +20020,7 @@ public partial class FileAdapterSmokeTests
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
             var worksheetXml = LoadPackageXml(archive.GetEntry(worksheetPath)!);
-            worksheetXml.Root!.Add(new XElement(
+            var cellWatches = new XElement(
                 worksheetNs + "cellWatches",
                 watches.Select(watch =>
                 {
@@ -19907,7 +20031,11 @@ public partial class FileAdapterSmokeTests
                         element.SetAttributeValue(watch.AttributeName, watch.AttributeValue);
 
                     return element;
-                })));
+                }));
+            foreach (var (name, value) in containerAttributes)
+                cellWatches.SetAttributeValue(name, value);
+
+            worksheetXml.Root!.Add(cellWatches);
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
 
