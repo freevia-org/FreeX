@@ -35,7 +35,7 @@ public class NumberFormatterTests
     [Theory]
     [InlineData(1234.5, "$ 1,234.50")]
     [InlineData(-1234.5, "$ (1,234.50)")]
-    [InlineData(0, "$ -")]
+    [InlineData(0, "$ -  ")]
     public void AccountingSubset_RemovesSpacingDirectivesAndPreservesVisibleLiterals(double value, string expected)
     {
         const string format = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
@@ -48,7 +48,7 @@ public class NumberFormatterTests
     [Theory]
     [InlineData(1234.5, 14, "$     1,234.50")]
     [InlineData(-1234.5, 14, "$   (1,234.50)")]
-    [InlineData(0, 14, "$            -")]
+    [InlineData(0, 14, "$          -  ")]
     [InlineData(123456789, 8, "$ 123,456,789.00")]
     public void AccountingSubset_ExpandsFillSpaceToRequestedCharacterWidth(
         double value,
@@ -64,7 +64,7 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("_(EUR* #,##0.00_);_(EUR* (#,##0.00);_(EUR* \"-\"??_);_(@_)", 1234.5, "EUR 1,234.50")]
-    [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -")]
+    [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -  ")]
     public void AccountingSubset_PreservesRawMultiCharacterSymbolFillGap(
         string format,
         double value,
@@ -328,6 +328,22 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("\"ID \"??", 5, "ID  5")]
+    [InlineData("??\" kg\"", 5, " 5 kg")]
+    [InlineData("[$\u20AC-407]??", 12, "\u20AC12")]
+    [InlineData("\"-\"??", 5, "- 5")]
+    [InlineData("0;\"-\"??", -5, "- 5")]
+    public void CustomNumberSubset_PreservesQuestionOnlyValuesOutsideAccountingDashZeros(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[$\u20AC-407]#,##0.00", 1234.5, "\u20AC1.234,50")]
     [InlineData("[$\u00A3-809] #,##0.00", 1234.5, "\u00A3 1,234.50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
@@ -343,6 +359,18 @@ public class NumberFormatterTests
         string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[$\u20AC-407]* #,##0.00;[$\u20AC-407]* (#,##0.00);[$\u20AC-407]* \"-\"??", "\u20AC -  ")]
+    [InlineData("[$CHF-807]* #,##0.00;[$CHF-807]* (#,##0.00);[$CHF-807]* \"-\"??", "CHF -  ")]
+    public void CustomNumberSubset_PreservesLocaleCurrencyAccountingZeroDashAlignment(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(0), format);
 
         Assert.Equal(expected, result);
     }
