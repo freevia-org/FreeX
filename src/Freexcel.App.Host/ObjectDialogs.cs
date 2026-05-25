@@ -294,13 +294,9 @@ public sealed class ThreadedCommentDialog : Window
         var root = new DockPanel { Margin = new Thickness(12) };
 
         // Button row at bottom
-        var ok = new Button { Content = "OK", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = existing is null ? "_Add" : "_Reply", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 80 };
-        ok.Click += (_, _) =>
-        {
-            Result = CreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true);
-            DialogResult = true;
-        };
+        ok.Click += (_, _) => SubmitThreadedCommentDialog(existing);
         var btnRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -331,6 +327,14 @@ public sealed class ThreadedCommentDialog : Window
         if (existing is not null)
         {
             inner.Children.Add(new Label { Content = "_Reply:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+            _replyBox.PreviewKeyDown += (_, e) =>
+            {
+                if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
+                {
+                    SubmitThreadedCommentDialog(existing);
+                    e.Handled = true;
+                }
+            };
             inner.Children.Add(_replyBox);
         }
         inner.Children.Add(_resolveBox);
@@ -343,6 +347,12 @@ public sealed class ThreadedCommentDialog : Window
             target.Focus();
             Keyboard.Focus(target);
         };
+    }
+
+    private void SubmitThreadedCommentDialog(ThreadedComment? existing)
+    {
+        Result = CreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true);
+        DialogResult = true;
     }
 
     public static ThreadedCommentDialogResult CreateResult(
