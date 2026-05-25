@@ -24,9 +24,7 @@ public static partial class PivotTableRefreshService
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
             sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)rowFieldOutputColumns + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
 
-        var groups = rows
-            .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .ToList();
+        var groups = BuildRowGroups(workbook, pivotTable, rows, rowFields);
         groups = ApplyLabelFilters(groups, pivotTable, rowFields);
         groups = ApplyValueFilters(groups, pivotTable, headers, rowFields);
         groups = ApplySorts(groups, pivotTable, headers, rowFields);
@@ -43,6 +41,7 @@ public static partial class PivotTableRefreshService
         var calculatedItemTotals = new double[pivotTable.DataFields.Count];
         foreach (var group in groups)
         {
+            var groupRows = group.ToList();
             if (pivotTable.ShowSubtotals && rowFields.Count > 1)
             {
                 var subtotalKey = new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray());
@@ -68,7 +67,7 @@ public static partial class PivotTableRefreshService
                 }
 
                 if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
-                    subtotalRows.AddRange(group);
+                    subtotalRows.AddRange(groupRows);
             }
 
             if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
@@ -90,12 +89,14 @@ public static partial class PivotTableRefreshService
                     sheet,
                     new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldOutputColumns + (uint)index),
                     DisplayAggregate(
-                        group,
-                        new PivotDisplayContext(retainedRows, group.ToList(), retainedRows),
+                        groupRows,
+                        new PivotDisplayContext(retainedRows, groupRows, retainedRows),
                         pivotTable.DataFields[index],
                         pivotTable,
                         headers),
-                    pivotTable.DataFields[index]);
+                    pivotTable.DataFields[index],
+                    pivotTable,
+                    isEmptyIntersection: groupRows.Count == 0);
             previousRowKey = group.Key;
             outputRow++;
             if (pivotTable.BlankLineAfterItems &&
