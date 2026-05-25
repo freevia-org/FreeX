@@ -135,6 +135,31 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookProperties()
+    {
+        var workbook = new Workbook("WorkbookPropertiesNativeJson")
+        {
+            Properties = new WorkbookPropertiesModel
+            {
+                NativeAttributes = new Dictionary<string, string> { ["defaultThemeVersion"] = "166925" },
+                NativeChildXmls =
+                [
+                    "<fx:workbookPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
+                ]
+            }
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.Properties.Should().BeEquivalentTo(workbook.Properties);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorkbookFunctionGroups()
     {
         var workbook = new Workbook("FunctionGroupsNativeJson")
@@ -12279,6 +12304,11 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         loaded.Uses1904DateSystem.Should().BeTrue();
+        loaded.Properties.Should().NotBeNull();
+        loaded.Properties!.NativeAttributes.Should().Contain("defaultThemeVersion", "166925");
+        loaded.Properties.NativeChildXmls.Should().HaveCount(2);
+        loaded.Properties.NativeChildXmls[0].Should().Contain("id=\"first\"");
+        loaded.Properties.NativeChildXmls[1].Should().Contain("id=\"second\"");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();

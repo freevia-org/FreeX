@@ -25,6 +25,7 @@ public sealed partial class NativeJsonAdapter
                 .Select(FromWorkbookFileRecoveryProperties)
                 .OfType<WorkbookFileRecoveryPropertiesDto>()
                 .ToList(),
+            Properties = FromWorkbookProperties(workbook.Properties),
             FunctionGroups = FromWorkbookFunctionGroups(workbook.FunctionGroups),
             SmartTags = FromWorkbookSmartTags(workbook.SmartTags),
             AdditionalViews = FromWorkbookAdditionalViews(workbook.AdditionalViews),
@@ -381,6 +382,25 @@ public sealed partial class NativeJsonAdapter
         {
             Name = name,
             NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorkbookPropertiesDto? FromWorkbookProperties(WorkbookPropertiesModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = model.NativeChildXmls
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorkbookPropertiesDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
         };
     }
 

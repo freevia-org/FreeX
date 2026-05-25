@@ -1389,6 +1389,8 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 1 && args[0] is RangeValue && args[1] is RangeValue)
+            return MapBinaryMathArgs(args[0], args[1], HyperlinkScalar);
         if (args.Count > 1 && args[1] is RangeValue friendlyRange)
             return MapUnaryTextRange(friendlyRange, value => HyperlinkScalar(args[0], value));
         if (args[0] is RangeValue linkRange)
