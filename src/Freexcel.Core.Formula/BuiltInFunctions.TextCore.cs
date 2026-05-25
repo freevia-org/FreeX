@@ -487,6 +487,39 @@ public static partial class BuiltInFunctions
         return new RangeValue(cells);
     }
 
+    private static ScalarValue MapQuaternaryTextArgs(
+        ScalarValue first,
+        ScalarValue second,
+        ScalarValue third,
+        ScalarValue fourth,
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
+    {
+        var firstRange = first as RangeValue;
+        var secondRange = second as RangeValue;
+        var thirdRange = third as RangeValue;
+        var fourthRange = fourth as RangeValue;
+        var shape = firstRange ?? secondRange ?? thirdRange ?? fourthRange;
+        if (shape is null) return map(first, second, third, fourth);
+        if ((firstRange is not null && (firstRange.RowCount != shape.RowCount || firstRange.ColCount != shape.ColCount)) ||
+            (secondRange is not null && (secondRange.RowCount != shape.RowCount || secondRange.ColCount != shape.ColCount)) ||
+            (thirdRange is not null && (thirdRange.RowCount != shape.RowCount || thirdRange.ColCount != shape.ColCount)) ||
+            (fourthRange is not null && (fourthRange.RowCount != shape.RowCount || fourthRange.ColCount != shape.ColCount)))
+            return ErrorValue.Value;
+
+        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
+        for (int r = 0; r < shape.RowCount; r++)
+            for (int c = 0; c < shape.ColCount; c++)
+            {
+                var firstValue = firstRange is null ? first : firstRange.Cells[r, c];
+                var secondValue = secondRange is null ? second : secondRange.Cells[r, c];
+                var thirdValue = thirdRange is null ? third : thirdRange.Cells[r, c];
+                var fourthValue = fourthRange is null ? fourth : fourthRange.Cells[r, c];
+                cells[r, c] = map(firstValue, secondValue, thirdValue, fourthValue);
+            }
+
+        return new RangeValue(cells);
+    }
+
     private static ScalarValue MidText(string text, int startNum, int numChars)
     {
         if (ContainsSurrogatePair(text))

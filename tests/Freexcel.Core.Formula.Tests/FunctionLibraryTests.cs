@@ -5078,6 +5078,36 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Replace_SameShapeStartLengthAndNewTextArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(3)),
+            (1, 3, new NumberValue(2)),
+            (2, 3, new NumberValue(3)),
+            (1, 4, new TextValue("X")),
+            (2, 4, new TextValue("YZ")));
+
+        AssertTextColumn(_eval.Evaluate("=REPLACE(A1:A2,B1:B2,C1:C2,D1:D2)", sheet), "AXle", "BaYZa");
+    }
+
+    [Fact]
+    public void Replace_MismatchedStartLengthOrNewTextArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=REPLACE(A1:A2,B1:C1,2,\"X\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,2,B1:C1,\"X\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,2,2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Replace_DoesNotSplitSurrogatePairs()
     {
         var sheet = MakeSheet();
