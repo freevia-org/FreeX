@@ -13,7 +13,8 @@ public enum AccessibilityIssueKind
     DefaultWorksheetName,
     HiddenSheetWithContent,
     HiddenRowWithContent,
-    HiddenColumnWithContent
+    HiddenColumnWithContent,
+    TableMissingHeaderText
 }
 
 public sealed record AccessibilityIssue(
@@ -62,6 +63,7 @@ public static class AccessibilityCheckerService
             }
 
             AddHiddenContentIssues(issues, sheet);
+            AddStructuredTableIssues(issues, sheet);
 
             foreach (var range in sheet.MergedRegions)
             {
@@ -122,6 +124,34 @@ public static class AccessibilityCheckerService
         }
 
         return issues;
+    }
+
+    private static void AddStructuredTableIssues(List<AccessibilityIssue> issues, Sheet sheet)
+    {
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.HeaderRowCount.GetValueOrDefault(1) <= 0)
+                continue;
+
+            var startCol = (int)table.Range.Start.Col;
+            var endCol = (int)table.Range.End.Col;
+            for (var col = startCol; col <= endCol; col++)
+            {
+                var columnOffset = col - startCol;
+                var columnName = columnOffset < table.Columns.Count ? table.Columns[columnOffset].Name : null;
+                var headerAddress = new CellAddress(sheet.Id, table.Range.Start.Row, (uint)col);
+                var headerText = ReadHeaderText(sheet, headerAddress, columnName);
+                if (!string.IsNullOrWhiteSpace(headerText))
+                    continue;
+
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.TableMissingHeaderText,
+                    sheet.Id,
+                    sheet.Name,
+                    headerAddress.ToA1(),
+                    "Table headers should not be blank."));
+            }
+        }
     }
 
     private static void AddHiddenContentIssues(List<AccessibilityIssue> issues, Sheet sheet)
@@ -229,6 +259,22 @@ public static class AccessibilityCheckerService
     private static bool IsDefaultWorksheetName(string name) =>
         name.StartsWith("Sheet", StringComparison.OrdinalIgnoreCase) &&
         int.TryParse(name["Sheet".Length..], out _);
+
+    private static string? ReadHeaderText(Sheet sheet, CellAddress headerAddress, string? columnName)
+    {
+        if (!string.IsNullOrWhiteSpace(columnName))
+            return columnName;
+
+        return sheet.GetCell(headerAddress)?.Value switch
+        {
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeValue dateTime => dateTime.ToDateTime().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            _ => null
+        };
+    }
 
     private static bool IsGenericChartTitle(string title)
     {

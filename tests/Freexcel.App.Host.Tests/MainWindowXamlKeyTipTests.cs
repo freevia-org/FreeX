@@ -530,6 +530,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         var description = accessibilityButton.Attribute(local + "RibbonTooltip.Description")?.Value;
         description.Should().Contain("merged cells");
+        description.Should().Contain("blank table headers");
         description.Should().Contain("alternate text");
         description.Should().Contain("charts without titles");
     }
