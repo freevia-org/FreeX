@@ -70,6 +70,12 @@ public sealed class WorksheetPageBreaksMetadataModel
     public Dictionary<uint, Dictionary<string, string>> BreakNativeAttributes { get; set; } = [];
 }
 
+public sealed class WorksheetCellWatchesMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
 public sealed class WorksheetSingleXmlCellsModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
@@ -259,6 +265,9 @@ public sealed partial class Sheet
 
     /// <summary>Worksheet XML-map single-cell mapping metadata loaded from XLSX.</summary>
     public WorksheetSingleXmlCellsModel? SingleXmlCells { get; set; }
+
+    /// <summary>Native Excel cell watch metadata not yet modeled as editable fields.</summary>
+    public WorksheetCellWatchesMetadataModel? CellWatchesMetadata { get; set; }
 
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
