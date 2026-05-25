@@ -1043,6 +1043,23 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotCalculatedFieldDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotCalculatedDialogs.cs",
+            "public sealed class PivotCalculatedFieldDialog",
+            "public sealed record PivotCalculatedItemDialogResult");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated field name.\", _nameBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated field formula.\", _formulaBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
     public void PivotCalculatedFieldDialog_InsertFormulaReference_InsertsQuotedFieldAtCaret()
     {
         PivotCalculatedFieldDialog.InsertFormulaReference("Sales+Cost", "[Region Name]", 6, 0)
@@ -1091,6 +1108,23 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Insert _Item");
         source.Should().Contain("RefreshItemList");
         source.Should().Contain("InsertSelectedItem");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialogInvalidRequiredInputs_ShowOwnedWarningAndRefocusBadInput()
+    {
+        var source = ReadClassSource(
+            "PivotCalculatedDialogs.cs",
+            "public sealed class PivotCalculatedItemDialog",
+            "");
+
+        source.Should().Contain("if (!ValidateInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated item name.\", _nameBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a calculated item formula.\", _formulaBox);");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("target.Focus();");
+        source.Should().Contain("target.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(target);");
     }
 
     [Fact]
