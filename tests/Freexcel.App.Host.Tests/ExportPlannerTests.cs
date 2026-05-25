@@ -2033,6 +2033,21 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_ExposesKeyboardPrintGridlineAndHeadingToggles()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_Print gridlines\"");
+        source.Should().Contain("Content = \"Print row and column _headings\"");
+        source.Should().Contain("gridlinesBox.Checked +=");
+        source.Should().Contain("gridlinesBox.Unchecked +=");
+        source.Should().Contain("headingsBox.Checked +=");
+        source.Should().Contain("headingsBox.Unchecked +=");
+        source.Should().Contain("new SetPrintOptionsCommand(");
+        source.Should().Contain("refreshPreview();");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
     {
         var source = ReadPrintPreviewDialogSources();

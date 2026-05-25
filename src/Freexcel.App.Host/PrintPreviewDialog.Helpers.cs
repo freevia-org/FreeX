@@ -127,6 +127,15 @@ public sealed partial class PrintPreviewDialog
             return box;
         }
 
+        void ApplyPrintOptions(bool printGridlines, bool printHeadings)
+        {
+            if (executeCommand is null)
+                return;
+
+            executeCommand(new SetPrintOptionsCommand(sheetId, printGridlines, printHeadings));
+            refreshPreview();
+        }
+
         // Orientation
         AddLabel("Orientation");
         var orientIndex = sheet?.PageOrientation == WorksheetPageOrientation.Landscape ? 1 : 0;
@@ -213,6 +222,26 @@ public sealed partial class PrintPreviewDialog
             refreshPreview();
         };
         panel.Children.Add(scaleBox);
+
+        AddLabel("Print Options");
+        var gridlinesBox = new CheckBox
+        {
+            Content = "_Print gridlines",
+            IsChecked = sheet?.PrintGridlines ?? false,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        var headingsBox = new CheckBox
+        {
+            Content = "Print row and column _headings",
+            IsChecked = sheet?.PrintHeadings ?? false,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        gridlinesBox.Checked += (_, _) => ApplyPrintOptions(true, headingsBox.IsChecked == true);
+        gridlinesBox.Unchecked += (_, _) => ApplyPrintOptions(false, headingsBox.IsChecked == true);
+        headingsBox.Checked += (_, _) => ApplyPrintOptions(gridlinesBox.IsChecked == true, true);
+        headingsBox.Unchecked += (_, _) => ApplyPrintOptions(gridlinesBox.IsChecked == true, false);
+        panel.Children.Add(gridlinesBox);
+        panel.Children.Add(headingsBox);
 
         return panel;
     }
