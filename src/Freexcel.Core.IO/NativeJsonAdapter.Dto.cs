@@ -19,6 +19,7 @@ public sealed partial class NativeJsonAdapter
         public WorkbookFileVersionDto? FileVersion { get; set; }
         public WorkbookFileSharingDto? FileSharing { get; set; }
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
+        public WorkbookPropertiesDto? Properties { get; set; }
         public WorkbookFunctionGroupsDto? FunctionGroups { get; set; }
         public WorkbookSmartTagMetadataDto? SmartTags { get; set; }
         public WorkbookAdditionalViewsDto? AdditionalViews { get; set; }
@@ -69,6 +70,12 @@ public sealed partial class NativeJsonAdapter
         public string? RupBuild { get; set; }
         public string? CodeName { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorkbookPropertiesDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
     }
 
     private class WorkbookFileRecoveryPropertiesDto
