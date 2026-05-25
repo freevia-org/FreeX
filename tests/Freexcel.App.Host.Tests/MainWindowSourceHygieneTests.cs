@@ -1288,14 +1288,14 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDBar)");
         source.Should().Contain("InsertChartOfType(ChartType.Surface)");
         source.Should().Contain("InsertChartOfType(ChartType.ThreeDSurface)");
-        xaml.Should().Contain("Content=\"Treemap\"      Width=\"72\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartTreemapMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Sunburst\"     Width=\"78\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartSunburstMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Histogram\"    Width=\"82\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartHistogramMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Pareto\"       Width=\"66\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartParetoMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Box Plot\"     Width=\"72\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartBoxAndWhiskerMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Waterfall\"    Width=\"82\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartWaterfallMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Funnel\"       Width=\"66\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"ChartFunnelMenuItem_Click\"");
-        xaml.Should().Contain("Content=\"Map\"          Width=\"58\"  Height=\"22\" Margin=\"1,1\" Style=\"{StaticResource RibbonBtn}\" Click=\"DeferredChartFamilyMenuItem_Click\"");
+        AssertChartButtonRoutesTo(xaml, "Treemap", "ChartTreemapMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Sunburst", "ChartSunburstMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Histogram", "ChartHistogramMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Pareto", "ChartParetoMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Box Plot", "ChartBoxAndWhiskerMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Waterfall", "ChartWaterfallMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Funnel", "ChartFunnelMenuItem_Click", isDeferred: false);
+        AssertChartButtonRoutesTo(xaml, "Map", "DeferredChartFamilyMenuItem_Click", isDeferred: true);
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
@@ -1312,13 +1312,6 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Waterfall");
         xaml.Should().Contain("Funnel");
         xaml.Should().Contain("Map");
-        xaml.Should().NotContain("Treemap Chart\" local:RibbonTooltip.KeyTip=\"T7\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
-        xaml.Should().NotContain("Sunburst Chart\" local:RibbonTooltip.KeyTip=\"SU\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
-        xaml.Should().NotContain("Histogram Chart\" local:RibbonTooltip.KeyTip=\"HI\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
-        xaml.Should().NotContain("Pareto Chart\" local:RibbonTooltip.KeyTip=\"PA\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
-        xaml.Should().NotContain("Box and Whisker Chart\" local:RibbonTooltip.KeyTip=\"BW\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
-        xaml.Should().NotContain("Waterfall Chart\" local:RibbonTooltip.KeyTip=\"WF\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
-        xaml.Should().NotContain("Funnel Chart\" local:RibbonTooltip.KeyTip=\"FU\"\r\n                                            local:RibbonTooltip.Description=\"Deferred:");
         xaml.Should().Contain("3D Pie");
         xaml.Should().Contain("3D Line");
         xaml.Should().Contain("3D Area");
@@ -2068,6 +2061,38 @@ public sealed class MainWindowSourceHygieneTests
                 "MainWindow.ChartCommands.cs",
                 "MainWindow.ChartAxisCommands.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
+    }
+
+    private static void AssertChartButtonRoutesTo(string xaml, string content, string clickHandler, bool isDeferred)
+    {
+        var button = ExtractButtonElementByContent(xaml, content);
+
+        button.Should().Contain($"Click=\"{clickHandler}\"");
+        button.Should().Contain("Style=\"{StaticResource RibbonBtn}\"");
+        button.Should().Contain("local:RibbonTooltip.Title=");
+
+        if (isDeferred)
+        {
+            button.Should().Contain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+        else
+        {
+            button.Should().NotContain("local:RibbonTooltip.Description=\"Deferred:");
+        }
+    }
+
+    private static string ExtractButtonElementByContent(string xaml, string content)
+    {
+        var contentIndex = xaml.IndexOf($"Content=\"{content}\"", StringComparison.Ordinal);
+        contentIndex.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should be present");
+
+        var start = xaml.LastIndexOf("<Button", contentIndex, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should have a Button start tag");
+
+        var end = xaml.IndexOf("/>", contentIndex, StringComparison.Ordinal);
+        end.Should().BeGreaterThanOrEqualTo(contentIndex, $"the {content} chart button should be self-closing");
+
+        return xaml.Substring(start, end - start + 2);
     }
 
     private static string ReadPivotCommandSource()
