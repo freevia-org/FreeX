@@ -23,11 +23,41 @@ internal static class XlsxWorkbookMetadataWriter
         var workbookProperties = root.Element(workbookNs + "workbookPr");
         if (workbookProperties is null)
         {
-            if (!workbook.Uses1904DateSystem)
+            if (!workbook.Uses1904DateSystem && workbook.Properties is null)
                 return;
 
             workbookProperties = new XElement(workbookNs + "workbookPr");
             root.AddFirst(workbookProperties);
+        }
+
+        if (workbook.Properties is not null)
+        {
+            foreach (var attribute in workbook.Properties.NativeAttributes)
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                    string.Equals(attribute.Key, "date1904", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                workbookProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            workbookProperties.Elements().Remove();
+            foreach (var childXml in workbook.Properties.NativeChildXmls)
+            {
+                if (string.IsNullOrWhiteSpace(childXml))
+                    continue;
+
+                try
+                {
+                    workbookProperties.Add(XElement.Parse(childXml));
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
+            }
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
