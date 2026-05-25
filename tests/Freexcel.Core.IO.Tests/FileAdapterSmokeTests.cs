@@ -14382,6 +14382,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetDimensionNativeAttributeNames()
+    {
+        var workbook = new Workbook("DimensionInvalidNativeMetadata");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        sheet.DimensionMetadata = new WorksheetDimensionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validDimensionAttr"] = "kept",
+                ["invalid dimension attr"] = "skip"
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dimension = worksheetXml.Root!.Element(worksheetNs + "dimension");
+        dimension.Should().NotBeNull();
+        dimension!.Attribute("validDimensionAttr")!.Value.Should().Be("kept");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectModeledPrintOptionsAttributes()
     {
         var workbook = new Workbook("WorksheetPrintOptionsAuthority");
