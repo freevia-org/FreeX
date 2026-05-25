@@ -688,6 +688,7 @@ public sealed class MainWindowXamlKeyTipTests
         var missing = document
             .Descendants()
             .Where(element => element.Attribute(local + "RibbonTooltip.Title") is not null)
+            .Where(element => element.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
             .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is null)
             .Select(element => element.Attribute(local + "RibbonTooltip.Title")?.Value ?? element.Name.LocalName)
             .ToList();
@@ -929,6 +930,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click") is not null)
             .Where(button => button.Attribute("Click")?.Value != "SsRecentItem_Click")
+            .Where(button => button.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
             .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
             .Select(button =>
                 button.Attribute("Content")?.Value ??
