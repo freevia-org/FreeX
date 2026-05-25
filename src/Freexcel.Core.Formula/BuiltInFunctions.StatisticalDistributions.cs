@@ -685,10 +685,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double df = Math.Truncate(ToNumber(args[1]));
-        bool cum = ToBool(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqDistScalar(value, df, cum));
-        return ChiSqDistScalar(args[0], df, cum);
+        return MapTernaryTextArgs(args[0], args[1], args[2], ChiSqDistScalar);
+    }
+
+    private static ScalarValue ChiSqDistScalar(ScalarValue xValue, ScalarValue dfValue, ScalarValue cumulativeValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        bool cum = ToBool(cumulativeValue);
+        return ChiSqDistScalar(xValue, df, cum);
     }
 
     private static ScalarValue ChiSqDistScalar(ScalarValue xValue, double df, bool cum)
@@ -702,9 +706,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double df = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqDistRtScalar(value, df));
-        return ChiSqDistRtScalar(args[0], df);
+        return MapBinaryMathArgs(args[0], args[1], ChiSqDistRtScalar);
+    }
+
+    private static ScalarValue ChiSqDistRtScalar(ScalarValue xValue, ScalarValue dfValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        return ChiSqDistRtScalar(xValue, df);
     }
 
     private static ScalarValue ChiSqDistRtScalar(ScalarValue xValue, double df)
@@ -718,9 +726,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double df = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqInvScalar(value, df));
-        return ChiSqInvScalar(args[0], df);
+        return MapBinaryMathArgs(args[0], args[1], ChiSqInvScalar);
+    }
+
+    private static ScalarValue ChiSqInvScalar(ScalarValue probabilityValue, ScalarValue dfValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        return ChiSqInvScalar(probabilityValue, df);
     }
 
     private static ScalarValue ChiSqInvScalar(ScalarValue probabilityValue, double df)
@@ -734,9 +746,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        double df = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => ChiSqInvRtScalar(value, df));
-        return ChiSqInvRtScalar(args[0], df);
+        return MapBinaryMathArgs(args[0], args[1], ChiSqInvRtScalar);
+    }
+
+    private static ScalarValue ChiSqInvRtScalar(ScalarValue probabilityValue, ScalarValue dfValue)
+    {
+        double df = Math.Truncate(ToNumber(dfValue));
+        return ChiSqInvRtScalar(probabilityValue, df);
     }
 
     private static ScalarValue ChiSqInvRtScalar(ScalarValue probabilityValue, double df)
