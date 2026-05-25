@@ -329,6 +329,7 @@ public sealed partial class NativeJsonAdapter
         public PageMarginsDto? PageMargins { get; set; }
         public double? HeaderMargin { get; set; }
         public double? FooterMargin { get; set; }
+        public WorksheetPageMarginsMetadataDto? PageMarginsMetadata { get; set; }
         public bool PrintGridlines { get; set; }
         public bool PrintHeadings { get; set; }
         public WorksheetPrintOptionsMetadataDto? PrintOptionsMetadata { get; set; }
@@ -404,6 +405,12 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetSheetFormatMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPageMarginsMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];
