@@ -293,6 +293,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (sourceBlock.Name == workbookNs + "scenarios")
                     continue;
 
+                if (ShouldSkipClearedModeledWorksheetBlock(sourceBlock.Name, workbookNs, workbook, sheetName))
+                    continue;
+
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
 
@@ -605,6 +608,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (sourceBlock.Name == workbookNs + "scenarios")
                     continue;
 
+                if (ShouldSkipClearedModeledWorksheetBlock(sourceBlock.Name, workbookNs, workbook, sheetName))
+                    continue;
+
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
 
@@ -618,6 +624,25 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool ShouldSkipClearedModeledWorksheetBlock(
+        XName sourceBlockName,
+        XNamespace workbookNs,
+        Workbook workbook,
+        string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return false;
+
+        if (sourceBlockName == workbookNs + "sortState")
+            return sheet.SortState is null;
+
+        if (sourceBlockName == workbookNs + "dataConsolidate")
+            return sheet.DataConsolidation is null;
+
+        return false;
     }
 }
 
