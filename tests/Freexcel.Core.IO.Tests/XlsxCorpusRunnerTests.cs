@@ -88,6 +88,29 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void WorkbookSummary_IncludesPopulatedCellStyles()
+    {
+        var workbook = new Workbook("StyledCells");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("styled"),
+            StyleId = workbook.RegisterStyle(new CellStyle
+            {
+                Bold = true,
+                FillColor = new CellColor(1, 2, 3),
+                NumberFormat = "0.00"
+            })
+        });
+        var baseline = new Workbook("StyledCells");
+        var baselineSheet = baseline.AddSheet("Sheet1");
+        baselineSheet.SetCell(new CellAddress(baselineSheet.Id, 1, 1), new TextValue("styled"));
+
+        CaptureSummary(workbook).Should().NotBe(CaptureSummary(baseline));
+    }
+
+    [Fact]
     public void GeneratedCorpusRows_IncludeNamedVisualObjects()
     {
         var rows = ReadManifestRows()
@@ -1056,7 +1079,8 @@ public class XlsxCorpusRunnerTests
             address.Col,
             cell.HasFormula ? new ScalarValueSummary("FormulaCachedValue", "") : CaptureScalarValueSummary(cell.Value),
             cell.FormulaText ?? "",
-            cell.IgnoreFormulaError);
+            cell.IgnoreFormulaError,
+            CaptureStyleSummary(workbook.GetStyle(cell.StyleId)));
 
     private static ScalarValueSummary CaptureScalarValueSummary(ScalarValue value) =>
         value switch
@@ -2251,7 +2275,8 @@ public class XlsxCorpusRunnerTests
         uint Column,
         ScalarValueSummary Value,
         string FormulaText,
-        bool IgnoreFormulaError);
+        bool IgnoreFormulaError,
+        CellStyleSummary? Style);
 
     private sealed record ScalarValueSummary(string Kind, string Value);
 

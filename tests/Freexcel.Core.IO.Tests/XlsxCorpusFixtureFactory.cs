@@ -802,19 +802,23 @@ internal static class XlsxCorpusFixtureFactory
     {
         var workbook = NewWorkbook("generated-comments-hyperlinks-002");
         var sheet = workbook.AddSheet("Links Notes");
+        var hyperlinkStyle = RegisterHyperlinkStyle(workbook);
         Set(sheet, "A1", new TextValue("Documentation"));
         Set(sheet, "A2", new TextValue("Release notes"));
         Set(sheet, "B1", new TextValue("Review"));
         Set(sheet, "B2", new TextValue("Follow-up"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel/docs";
+        sheet.GetCell(Addr(sheet, "A1"))!.StyleId = hyperlinkStyle;
         sheet.HyperlinkMetadata[Addr(sheet, "A1")] = new HyperlinkMetadata(
             HyperlinkTargetKind.ExistingFileOrWebPage,
             "Open the Freexcel documentation");
         sheet.Hyperlinks[Addr(sheet, "A2")] = "mailto:review@example.com";
+        sheet.GetCell(Addr(sheet, "A2"))!.StyleId = hyperlinkStyle;
         sheet.HyperlinkMetadata[Addr(sheet, "A2")] = new HyperlinkMetadata(
             HyperlinkTargetKind.EmailAddress,
             "Send a workbook review note");
         sheet.Hyperlinks[Addr(sheet, "B2")] = "Links Notes!A1";
+        sheet.GetCell(Addr(sheet, "B2"))!.StyleId = hyperlinkStyle;
         sheet.HyperlinkMetadata[Addr(sheet, "B2")] = new HyperlinkMetadata(
             HyperlinkTargetKind.PlaceInThisDocument,
             "Jump to the documentation link",
@@ -1121,9 +1125,11 @@ internal static class XlsxCorpusFixtureFactory
     {
         var workbook = NewWorkbook("generated-objects-001");
         var sheet = workbook.AddSheet("Objects");
+        var hyperlinkStyle = RegisterHyperlinkStyle(workbook);
         Set(sheet, "A1", new TextValue("Documentation"));
         Set(sheet, "B1", new TextValue("Review note"));
         sheet.Hyperlinks[Addr(sheet, "A1")] = "https://example.com/freexcel";
+        sheet.GetCell(Addr(sheet, "A1"))!.StyleId = hyperlinkStyle;
         sheet.Comments[Addr(sheet, "B1")] = "Round-trip comment fixture";
         return workbook;
     }
@@ -1593,6 +1599,13 @@ internal static class XlsxCorpusFixtureFactory
         sheet.SetCell(address, value);
         sheet.GetCell(address)!.StyleId = styleId;
     }
+
+    private static StyleId RegisterHyperlinkStyle(Workbook workbook) =>
+        workbook.RegisterStyle(new CellStyle
+        {
+            Underline = true,
+            FontColor = new CellColor(5, 99, 193)
+        });
 
     private static void Formula(Sheet sheet, string a1, string formula) =>
         sheet.SetFormula(Addr(sheet, a1), formula);
