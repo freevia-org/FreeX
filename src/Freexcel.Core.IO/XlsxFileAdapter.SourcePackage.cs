@@ -20,7 +20,7 @@ public sealed partial class XlsxFileAdapter
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive);
-        PreserveSourceChartExParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        PreserveSourceChartExParts(workbook, sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
@@ -53,23 +53,68 @@ public sealed partial class XlsxFileAdapter
         archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
     private static void PreserveSourceChartExParts(
+        Workbook workbook,
         ZipArchive sourceArchive,
         ZipArchive generatedArchive,
         IReadOnlySet<string> generatedEntriesBeforeMerge)
     {
         foreach (var chartExPartPath in GetChartExPartPaths(sourceArchive))
         {
-            if (generatedEntriesBeforeMerge.Contains(chartExPartPath))
-                continue;
-
             var sourceEntry = sourceArchive.GetEntry(chartExPartPath);
             if (sourceEntry is null)
                 continue;
+
+            if (!WorkbookStillContainsSourceChartModel(workbook, sourceEntry))
+                continue;
+
+            var generatedEntry = generatedArchive.GetEntry(chartExPartPath);
+            if (generatedEntry is not null &&
+                !GeneratedChartMatchesSourceModel(sourceEntry, generatedEntry))
+            {
+                continue;
+            }
 
             generatedArchive.GetEntry(chartExPartPath)?.Delete();
             XlsxPackageMetadataMerger.CopyEntry(sourceEntry, generatedArchive);
         }
     }
+
+    private static bool WorkbookStillContainsSourceChartModel(Workbook workbook, ZipArchiveEntry sourceEntry)
+    {
+        var sheetId = SheetId.New();
+        var sourceXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        return XlsxChartPartReader.TryReadSupportedChart(sourceXml, sheetId, out var sourceChart) &&
+               workbook.Sheets
+                   .SelectMany(sheet => sheet.Charts)
+                   .Any(chart => ChartModelsMatch(sourceChart, chart));
+    }
+
+    private static bool GeneratedChartMatchesSourceModel(ZipArchiveEntry sourceEntry, ZipArchiveEntry generatedEntry)
+    {
+        var sheetId = SheetId.New();
+        var sourceXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var generatedXml = XlsxPackageXmlEditor.LoadXml(generatedEntry);
+        if (!XlsxChartPartReader.TryReadSupportedChart(sourceXml, sheetId, out var sourceChart) ||
+            !XlsxChartPartReader.TryReadSupportedChart(generatedXml, sheetId, out var generatedChart))
+        {
+            return false;
+        }
+
+        return ChartModelsMatch(sourceChart, generatedChart);
+    }
+
+    private static bool ChartModelsMatch(ChartModel sourceChart, ChartModel candidate) =>
+        sourceChart.Type == candidate.Type &&
+        RangesMatchIgnoringSheet(sourceChart.DataRange, candidate.DataRange) &&
+        sourceChart.FirstRowIsHeader == candidate.FirstRowIsHeader &&
+        sourceChart.FirstColIsCategories == candidate.FirstColIsCategories &&
+        string.Equals(sourceChart.Title ?? "", candidate.Title ?? "", StringComparison.Ordinal);
+
+    private static bool RangesMatchIgnoringSheet(GridRange left, GridRange right) =>
+        left.Start.Row == right.Start.Row &&
+        left.Start.Col == right.Start.Col &&
+        left.End.Row == right.End.Row &&
+        left.End.Col == right.End.Col;
 
     private static IEnumerable<string> GetChartExPartPaths(ZipArchive archive)
     {
