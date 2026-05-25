@@ -426,6 +426,21 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void SelectDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesRange()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
+        var chartCommandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
+
+        dialogSource.Should().Contain("if (!ValidateInputs())");
+        dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _)");
+        dialogSource.Should().Contain("ShowInvalidInputWarning(\"Enter a valid chart data range.\", _rangeBox);");
+        dialogSource.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
+        chartCommandSource.Should().Contain("sheetId: _currentSheetId");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_InferPreviewEntriesFromChartRange()
     {
         var preview = SelectDataSourceDialog.InferPreviewEntries("Sheet1!$A$1:$C$5", firstColumnIsCategories: true);
