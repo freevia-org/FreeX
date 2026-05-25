@@ -6,58 +6,6 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed class ScreenTipDialog : TextEntryDialog
-{
-    public ScreenTipDialog(string? initialText = "")
-        : base("Set Hyperlink ScreenTip", "_ScreenTip text:", initialText)
-    {
-    }
-}
-
-public sealed class BookmarkDialog : TextEntryDialog
-{
-    public BookmarkDialog(string? initialText = "")
-        : base("Select Place in Document", "_Bookmark or cell reference:", initialText)
-    {
-    }
-}
-
-public sealed record TextEntryDialogResult(string Text);
-
-public class TextEntryDialog : Window
-{
-    private readonly TextBox _textBox = new();
-
-    public TextEntryDialogResult Result { get; private set; }
-
-    public TextEntryDialog(string title, string label, string? initialText = "")
-    {
-        Result = CreateResult(initialText);
-        Title = title;
-        Width = 420;
-        Height = 170;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ResizeMode = ResizeMode.NoResize;
-        ShowInTaskbar = false;
-        _textBox.Text = initialText ?? "";
-        Content = ObjectSizeDialog.CreateSingleInputContent(label, _textBox, () =>
-        {
-            Result = CreateResult(_textBox.Text);
-            DialogResult = true;
-        });
-        Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    public static TextEntryDialogResult CreateResult(string? text) => new((text ?? "").Trim());
-
-    private void FocusInitialKeyboardTarget()
-    {
-        _textBox.Focus();
-        _textBox.SelectAll();
-        Keyboard.Focus(_textBox);
-    }
-}
-
 public sealed record ThreadedCommentDialogResult(string? RootText, string? ReplyText, bool IsResolved);
 
 public sealed class ThreadedCommentDialog : Window
@@ -70,7 +18,7 @@ public sealed class ThreadedCommentDialog : Window
 
     public ThreadedCommentDialog(string cellRef, ThreadedComment? existing)
     {
-        Title = $"Comment — {cellRef}";
+        Title = $"Comment \u2014 {cellRef}";
         Width = 480;
         MinHeight = 280;
         MaxHeight = 600;
@@ -87,7 +35,6 @@ public sealed class ThreadedCommentDialog : Window
 
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        // Button row at bottom
         var ok = new Button { Content = existing is null ? "_Add" : "_Reply", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 80 };
         ok.Click += (_, _) => SubmitThreadedCommentDialog(existing);
@@ -102,7 +49,6 @@ public sealed class ThreadedCommentDialog : Window
         DockPanel.SetDock(btnRow, Dock.Bottom);
         root.Children.Add(btnRow);
 
-        // Content
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 300 };
         var threadPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
         if (existing is not null)

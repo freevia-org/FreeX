@@ -644,7 +644,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void ThreadedCommentDialog_BlankNewCommentWarnsAndRefocusesCommentBox()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public sealed class ThreadedCommentDialog", "");
+        var source = ReadClassSource("ThreadedCommentDialog.cs", "public sealed class ThreadedCommentDialog", "");
 
         source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
         source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? \"Enter a comment.\", _rootBox);");
@@ -657,7 +657,7 @@ public sealed class ObjectDialogTests
     [Fact]
     public void TextEntryDialogOpenedFromKeyboard_FocusesTextBox()
     {
-        var source = ReadClassSource("ObjectDialogs.cs", "public class TextEntryDialog", "");
+        var source = ReadClassSource("TextEntryDialogs.cs", "public class TextEntryDialog", "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -670,7 +670,8 @@ public sealed class ObjectDialogTests
         string.Join(
             Environment.NewLine,
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HyperlinkDialog.cs")),
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextEntryDialogs.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ThreadedCommentDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectSizeDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PictureCropDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RotationDialog.cs")));
