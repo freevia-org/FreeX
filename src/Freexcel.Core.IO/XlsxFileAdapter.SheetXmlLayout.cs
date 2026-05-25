@@ -14,6 +14,7 @@ public sealed partial class XlsxFileAdapter
         HashSet<uint> HiddenCols,
         bool IsProtected,
         string? ProtectionPasswordHash,
+        WorksheetProtectionMetadataModel? ProtectionMetadata,
         IReadOnlyList<GridRange> AllowEditRanges,
         WorksheetViewMode ViewMode,
         bool ShowGridlines,
@@ -253,6 +254,7 @@ public sealed partial class XlsxFileAdapter
         var passwordHash =
             protection?.Attribute("password")?.Value ??
             protection?.Attribute("hashValue")?.Value;
+        var protectionMetadata = ReadWorksheetProtectionMetadata(protection);
         var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs);
 
         var sheetView = worksheetXml.Root?
@@ -304,6 +306,7 @@ public sealed partial class XlsxFileAdapter
             hiddenCols,
             isProtected,
             passwordHash,
+            protectionMetadata,
             allowEditRanges,
             ParseWorksheetViewMode(sheetView?.Attribute("view")?.Value),
             !IsFalse(sheetView?.Attribute("showGridLines")?.Value),
@@ -363,6 +366,35 @@ public sealed partial class XlsxFileAdapter
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
+    }
+
+    private static WorksheetProtectionMetadataModel? ReadWorksheetProtectionMetadata(XElement? protection)
+    {
+        if (protection is null)
+            return null;
+
+        var model = new WorksheetProtectionMetadataModel
+        {
+            NativeChildXmls = protection.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in protection.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                string.Equals(attribute.Name.LocalName, "sheet", StringComparison.Ordinal) ||
+                string.Equals(attribute.Name.LocalName, "password", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
     }
 
     private static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(XDocument worksheetXml, XNamespace worksheetNs)

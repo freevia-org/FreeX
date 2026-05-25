@@ -23,6 +23,12 @@ public sealed record HyperlinkMetadata(
 
 public sealed record WorksheetAutoFilterModel(string? Reference, string? NativeXml);
 
+public sealed class WorksheetProtectionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -433,6 +439,9 @@ public sealed partial class Sheet
 
     /// <summary>Password hash for sheet protection. Null means no password required.</summary>
     public string? ProtectionPassword { get; set; }
+
+    /// <summary>Native Excel sheet protection metadata not yet modeled as editable fields.</summary>
+    public WorksheetProtectionMetadataModel? ProtectionMetadata { get; set; }
 
     /// <summary>Actions that remain available while the sheet is protected.</summary>
     public List<SheetProtectionPermission> ProtectionPermissions { get; } =

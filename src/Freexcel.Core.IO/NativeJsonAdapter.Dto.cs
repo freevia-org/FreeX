@@ -286,6 +286,7 @@ public sealed partial class NativeJsonAdapter
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
         public List<SheetProtectionPermission> ProtectionPermissions { get; set; } = [];
+        public WorksheetProtectionMetadataDto? ProtectionMetadata { get; set; }
         public List<WorksheetCustomPropertyDto> CustomProperties { get; set; } = [];
         public List<UIntDoubleDto> RowHeights { get; set; } = [];
         public List<UIntDoubleDto> ColumnWidths { get; set; } = [];
@@ -379,6 +380,12 @@ public sealed partial class NativeJsonAdapter
         public List<ConditionalFormatDto> ConditionalFormats { get; set; } = [];
         public List<CellDto> Cells { get; set; } = [];
         public List<StyleOnlyCellDto> StyleOnlyCells { get; set; } = [];
+    }
+
+    private class WorksheetProtectionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
     }
 
     private class WorksheetCustomPropertyDto
