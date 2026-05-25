@@ -1327,6 +1327,103 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_CompactMergeAndCenterLabelsMergesRepeatedColumnHeaderLabels()
+    {
+        var workbook = new Workbook("PivotCompactMatrixMergeColumnHeadersTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesProductChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "E5"),
+            TargetRange = Range(sheet, "G2", "M10"),
+            ReportLayout = PivotReportLayout.Compact,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.ColumnFields.Add(new PivotFieldModel(3));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "G2"), Addr(sheet, "G3")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "H2"), Addr(sheet, "I2")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "J2"), Addr(sheet, "K2")));
+        Text(sheet, "H2").Should().Be("Q1");
+        sheet.GetCell(Addr(sheet, "I2")).Should().BeNull();
+        Text(sheet, "J2").Should().Be("Q2");
+        sheet.GetCell(Addr(sheet, "K2")).Should().BeNull();
+        Text(sheet, "H3").Should().Be("Retail");
+        Text(sheet, "I3").Should().Be("Wholesale");
+        Text(sheet, "J3").Should().Be("Retail");
+        Text(sheet, "K3").Should().Be("Wholesale");
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "H2"))!.StyleId);
+        headerStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        headerStyle.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+    }
+
+    [Fact]
+    public void Refresh_CompactMergeAndCenterLabelsMergesColumnHeadersWithSingleRowField()
+    {
+        var workbook = new Workbook("PivotCompactMatrixSingleRowFieldMergeColumnHeadersTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesProductChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "E5"),
+            TargetRange = Range(sheet, "G2", "M10"),
+            ReportLayout = PivotReportLayout.Compact,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.ColumnFields.Add(new PivotFieldModel(3));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "H2"), Addr(sheet, "I2")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "J2"), Addr(sheet, "K2")));
+    }
+
+    [Fact]
+    public void Refresh_CompactMergeAndCenterLabelsDoesNotMergeColumnHeadersAcrossAncestorBoundaries()
+    {
+        var workbook = new Workbook("PivotCompactMatrixAncestorBoundaryMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesThreeLevelColumnData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "F5"),
+            TargetRange = Range(sheet, "H2", "P10"),
+            ReportLayout = PivotReportLayout.Compact,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.ColumnFields.Add(new PivotFieldModel(3));
+        pivot.ColumnFields.Add(new PivotFieldModel(4));
+        pivot.DataFields.Add(new PivotDataFieldModel(5, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "I2"), Addr(sheet, "J2")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "K2"), Addr(sheet, "L2")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "I3"), Addr(sheet, "J3")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "K3"), Addr(sheet, "L3")));
+        sheet.MergedRegions.Should().NotContain(new GridRange(Addr(sheet, "J3"), Addr(sheet, "K3")));
+        Text(sheet, "I3").Should().Be("Shared");
+        Text(sheet, "K3").Should().Be("Shared");
+    }
+
+    [Fact]
     public void Refresh_CanShowValuesAsPercentOfGrandTotal()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -2543,6 +2640,40 @@ public sealed class PivotTableRefreshServiceTests
         sheet.SetCell(Addr(sheet, "C5"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "D5"), new TextValue("Wholesale"));
         sheet.SetCell(Addr(sheet, "E5"), new NumberValue(25));
+    }
+
+    private static void SeedSalesThreeLevelColumnData(Sheet sheet)
+    {
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Product"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "D1"), new TextValue("Channel"));
+        sheet.SetCell(Addr(sheet, "E1"), new TextValue("Segment"));
+        sheet.SetCell(Addr(sheet, "F1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Widget"));
+        sheet.SetCell(Addr(sheet, "C2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "D2"), new TextValue("Shared"));
+        sheet.SetCell(Addr(sheet, "E2"), new TextValue("Retail"));
+        sheet.SetCell(Addr(sheet, "F2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Widget"));
+        sheet.SetCell(Addr(sheet, "C3"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "D3"), new TextValue("Shared"));
+        sheet.SetCell(Addr(sheet, "E3"), new TextValue("Wholesale"));
+        sheet.SetCell(Addr(sheet, "F3"), new NumberValue(15));
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Gadget"));
+        sheet.SetCell(Addr(sheet, "C4"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "D4"), new TextValue("Shared"));
+        sheet.SetCell(Addr(sheet, "E4"), new TextValue("Retail"));
+        sheet.SetCell(Addr(sheet, "F4"), new NumberValue(20));
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B5"), new TextValue("Gadget"));
+        sheet.SetCell(Addr(sheet, "C5"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "D5"), new TextValue("Shared"));
+        sheet.SetCell(Addr(sheet, "E5"), new TextValue("Wholesale"));
+        sheet.SetCell(Addr(sheet, "F5"), new NumberValue(25));
     }
 
     private static void SeedSalesWithUnitsData(Sheet sheet)
