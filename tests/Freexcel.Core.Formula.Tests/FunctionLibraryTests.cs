@@ -7321,6 +7321,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void EngineeringBaseConversions_SameShapeNumberAndPlacesRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),      (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)),      (2, 2, new NumberValue(5)),
+            (1, 3, new TextValue("101")),    (2, 3, new TextValue("111")),
+            (1, 4, new NumberValue(3)),      (2, 4, new NumberValue(4)));
+
+        AssertTextColumn(_eval.Evaluate("=DEC2BIN(A1:A2,B1:B2)", sheet), "0101", "00110");
+        AssertTextColumn(_eval.Evaluate("=BIN2HEX(C1:C2,D1:D2)", sheet), "005", "0007");
+    }
+
+    [Fact]
+    public void EngineeringBaseConversions_MismatchedNumberAndPlacesRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
+
+        _eval.Evaluate("=DEC2BIN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BIN2HEX(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sqrtpi_One_ReturnsSqrtPi() =>
         _eval.Evaluate("=SQRTPI(1)", MakeSheet())
             .Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(Math.Sqrt(Math.PI), 1e-12);
