@@ -116,7 +116,8 @@ public partial class MainWindow
     private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)
     {
         if (Keyboard.FocusedElement is not UIElement focusedElement ||
-            !IsDescendantOf(focusedElement, PivotFieldListPane) ||
+            (!IsDescendantOf(focusedElement, PivotFieldListPane) &&
+             !IsDescendantOf(focusedElement, SlicerTimelinePane)) ||
             Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift)
         {
             return false;
@@ -201,7 +202,8 @@ public partial class MainWindow
             if (IsDescendantOf(focusedElement, StatusBarGrid))
                 return ShellFocusTarget.StatusBar;
 
-            if (IsDescendantOf(focusedElement, PivotFieldListPane))
+            if (IsDescendantOf(focusedElement, PivotFieldListPane) ||
+                IsDescendantOf(focusedElement, SlicerTimelinePane))
                 return ShellFocusTarget.TaskPane;
         }
 
@@ -226,7 +228,7 @@ public partial class MainWindow
                 return TryFocusCurrentSheetTab() || AddSheetButton.Focus();
 
             case ShellFocusTarget.TaskPane:
-                return FocusPivotFieldListPane();
+                return FocusVisibleTaskPane();
 
             case ShellFocusTarget.StatusBar:
                 return FocusStatusBar();
@@ -256,6 +258,12 @@ public partial class MainWindow
         return StatusZoomOutButton.Focus() || ZoomSlider.Focus();
     }
 
+    private bool FocusVisibleTaskPane()
+    {
+        return FocusPivotFieldListPane() ||
+               FocusSlicerTimelinePane();
+    }
+
     private bool FocusPivotFieldListPane()
     {
         if (PivotFieldListPane?.Visibility != Visibility.Visible)
@@ -264,6 +272,14 @@ public partial class MainWindow
         return PivotFieldListSearchBox.Focus() ||
                PivotAvailableFieldsList.Focus() ||
                PivotFieldListCloseBtn.Focus();
+    }
+
+    private bool FocusSlicerTimelinePane()
+    {
+        if (SlicerTimelinePane?.Visibility != Visibility.Visible)
+            return false;
+
+        return SlicerTimelinePaneCloseBtn.Focus();
     }
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
