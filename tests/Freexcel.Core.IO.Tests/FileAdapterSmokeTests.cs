@@ -15054,6 +15054,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_FallsBackWhenWorksheetSortStateNativeXmlHasWrongNamespace()
+    {
+        var workbook = new Workbook("SortStateWrongNamespaceFallbackTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:A2",
+            CaseSensitive = true,
+            NativeXml = "<sortState xmlns=\"urn:freexcel:wrong\" ref=\"Z1:Z2\" wrongNamespace=\"1\" />",
+            NativeAttributes = new Dictionary<string, string> { ["customSortStateFlag"] = "keep" },
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A2",
+                    Descending = true,
+                    SortBy = "cellColor",
+                    NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sortState = worksheetXml.Root!.Element(worksheetNs + "sortState");
+        sortState.Should().NotBeNull();
+        sortState!.Attribute("ref")!.Value.Should().Be("A1:A2");
+        sortState.Attribute("caseSensitive")!.Value.Should().Be("1");
+        sortState.Attribute("wrongNamespace").Should().BeNull();
+        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep");
+        sortState.Elements(worksheetNs + "sortCondition").Should().ContainSingle()
+            .Which.Attribute("customSortConditionFlag")!.Value.Should().Be("keep");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDataConsolidation()
     {
         var workbook = new Workbook("DataConsolidationRetentionTest");

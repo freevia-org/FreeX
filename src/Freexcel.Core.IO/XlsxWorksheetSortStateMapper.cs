@@ -82,7 +82,9 @@ internal static class XlsxWorksheetSortStateMapper
         {
             try
             {
-                return XElement.Parse(model.NativeXml);
+                var nativeElement = XElement.Parse(model.NativeXml);
+                if (nativeElement.Name == WorksheetNs + "sortState")
+                    return nativeElement;
             }
             catch
             {
