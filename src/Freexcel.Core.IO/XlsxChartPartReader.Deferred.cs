@@ -39,7 +39,7 @@ public static partial class XlsxChartPartReader
             var primarySeries = chartExSeries.FirstOrDefault(series =>
                 !string.Equals(series.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase));
             if (primarySeries is not null && ToChartExChartType(primarySeries.Attribute("layoutId")?.Value, hasParetoLine) is { } chartType)
-                return (primarySeries, chartType);
+                return (primarySeries.Parent ?? primarySeries, chartType);
         }
 
         var mapChart = plotArea
@@ -92,8 +92,15 @@ public static partial class XlsxChartPartReader
             Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
-        var seriesElements = plotChart.Name.LocalName == "series"
+        var chartExSeries = plotChart.Name.LocalName == "series"
             ? [plotChart]
+            : plotChart.Descendants()
+                .Where(element =>
+                    element.Name.LocalName == "series" &&
+                    !string.Equals(element.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        var seriesElements = chartExSeries.Length > 0
+            ? chartExSeries
             : plotChart.Descendants().Where(element => element.Name.LocalName == "ser");
         foreach (var series in seriesElements)
         {

@@ -20,7 +20,7 @@ public sealed partial class XlsxFileAdapter
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
 
         XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive);
-        PreserveSourceChartExParts(sourceArchive, generatedArchive);
+        PreserveSourceChartExParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
@@ -52,10 +52,16 @@ public sealed partial class XlsxFileAdapter
     private static bool HasSourcePackagePart(ZipArchive archive, string prefix) =>
         archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
-    private static void PreserveSourceChartExParts(ZipArchive sourceArchive, ZipArchive generatedArchive)
+    private static void PreserveSourceChartExParts(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        IReadOnlySet<string> generatedEntriesBeforeMerge)
     {
         foreach (var chartExPartPath in GetChartExPartPaths(sourceArchive))
         {
+            if (generatedEntriesBeforeMerge.Contains(chartExPartPath))
+                continue;
+
             var sourceEntry = sourceArchive.GetEntry(chartExPartPath);
             if (sourceEntry is null)
                 continue;
