@@ -2012,6 +2012,25 @@ public class ExportPlannerTests
         copies.Should().Be(expectedCopies);
     }
 
+    [Theory]
+    [InlineData(null, 5, false, 0)]
+    [InlineData("", 5, false, 0)]
+    [InlineData("0", 5, false, 0)]
+    [InlineData("1", 5, true, 1)]
+    [InlineData("5", 5, true, 5)]
+    [InlineData("6", 5, false, 0)]
+    [InlineData("2.5", 5, false, 0)]
+    [InlineData("not a number", 5, false, 0)]
+    public void PrintPreviewDialog_TryParsePageNumber_ValidatesPreviewPageRange(
+        string? text,
+        int totalPages,
+        bool expectedResult,
+        int expectedPage)
+    {
+        PrintPreviewDialog.TryParsePageNumber(text, totalPages, out var pageNumber).Should().Be(expectedResult);
+        pageNumber.Should().Be(expectedPage);
+    }
+
     [Fact]
     public void PrintSettingsPlanner_SummarizesExcelLikeActiveSheetSettings()
     {
@@ -2114,6 +2133,11 @@ public class ExportPlannerTests
         source.Should().Contain("pageStatusText");
         source.Should().Contain("Page 1 of");
         source.Should().Contain("NavigationCommands.GoToPage");
+        source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
+        source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
+        source.Should().Contain("Enter a page number from 1 to");
+        source.Should().Contain("pageNumberBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(pageNumberBox);");
     }
 
     [Fact]

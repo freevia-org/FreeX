@@ -76,6 +76,7 @@ public sealed partial class XlsxFileAdapter
         WorksheetDataConsolidationModel? DataConsolidation,
         WorksheetSortStateModel? SortState,
         WorksheetAdditionalViewsModel? AdditionalViews,
+        WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
@@ -375,6 +376,7 @@ public sealed partial class XlsxFileAdapter
             dataConsolidation,
             sortState,
             additionalViews,
+            ReadWorksheetPrimaryViewMetadata(sheetView),
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
@@ -428,6 +430,39 @@ public sealed partial class XlsxFileAdapter
 
     private static bool IsModeledSheetPropertiesElement(string name) =>
         name is "tabColor" or "outlinePr" or "pageSetUpPr";
+
+    private static WorksheetPrimaryViewMetadataModel? ReadWorksheetPrimaryViewMetadata(XElement? sheetView)
+    {
+        if (sheetView is null)
+            return null;
+
+        var model = new WorksheetPrimaryViewMetadataModel
+        {
+            NativeChildXmls = sheetView.Elements()
+                .Where(element => !IsModeledPrimaryViewElement(element.Name.LocalName))
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in sheetView.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledPrimaryViewAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledPrimaryViewAttribute(string name) =>
+        name is "workbookViewId" or "view" or "showGridLines" or "showRowColHeaders" or "showRuler" or
+            "zoomScale" or "showFormulas" or "topLeftCell";
+
+    private static bool IsModeledPrimaryViewElement(string name) =>
+        name is "pane";
 
     private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
     {

@@ -2917,6 +2917,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Large_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(8)),
+            (4, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=LARGE(A1:A4,B1:B2)", sheet), new NumberValue(8), new NumberValue(5));
+    }
+
+    [Fact]
     public void Large_OutOfRange_ReturnsNumError()
     {
         var sheet = MakeSheet(
@@ -3000,6 +3014,20 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new NumberValue(5)), (1, 2, new TextValue("1E309")));
         _eval.Evaluate("=SMALL(A1:A1,B1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Small_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(8)),
+            (4, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=SMALL(A1:A4,B1:B2)", sheet), new NumberValue(1), new NumberValue(3));
     }
 
     [Fact]

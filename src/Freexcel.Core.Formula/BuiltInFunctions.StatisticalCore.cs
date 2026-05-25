@@ -161,7 +161,13 @@ public static partial class BuiltInFunctions
             ? rangeArg
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e1) return e1;
-        var kD = ToNumber(args[1]);
+        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, kValue => LargeScalar(range, kValue));
+        return LargeScalar(range, args[1]);
+    }
+
+    private static ScalarValue LargeScalar(RangeValue range, ScalarValue kValue)
+    {
+        var kD = ToNumber(kValue);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
         int k = (int)kD;
         var (values, err) = CollectRangeNumbers(range);
@@ -178,7 +184,13 @@ public static partial class BuiltInFunctions
             ? rangeArg
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e1) return e1;
-        var kD = ToNumber(args[1]);
+        if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, kValue => SmallScalar(range, kValue));
+        return SmallScalar(range, args[1]);
+    }
+
+    private static ScalarValue SmallScalar(RangeValue range, ScalarValue kValue)
+    {
+        var kD = ToNumber(kValue);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
         int k = (int)kD;
         var (values, err) = CollectRangeNumbers(range);
