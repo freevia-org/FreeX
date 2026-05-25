@@ -1466,6 +1466,25 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedTaskPaneKeyboardNavigation(e))");
+        keyboardFocusSource.Should().Contain("private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        keyboardFocusSource.Should().Contain("!IsDescendantOf(focusedElement, PivotFieldListPane)");
+        keyboardFocusSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
+        keyboardFocusSource.Should().Contain("e.Key != Key.Tab");
+        keyboardFocusSource.Should().Contain("focusedElement.MoveFocus(request);");
+        keyboardFocusSource.Should().Contain("e.Handled = true;");
+        xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
+    }
+
+    [Fact]
     public void FocusedRibbon_TabAndArrowKeysRequestFocusTraversal()
     {
         var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
