@@ -239,15 +239,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw)) return ErrorValue.Num;
+        return MapTernaryTextArgs(args[0], args[1], args[2], DatedifScalar);
+    }
+
+    private static ScalarValue DatedifScalar(ScalarValue startValue, ScalarValue endValue, ScalarValue unitValue)
+    {
+        if (startValue is ErrorValue startError) return startError;
+        if (endValue is ErrorValue endError) return endError;
+        if (unitValue is ErrorValue unitError) return unitError;
+        if (!TryOADateToDateTime(startValue, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endValue, out var endRaw)) return ErrorValue.Num;
         // DATEDIF operates on whole dates — discard any time portion so that
         // e.g. DATEDIF(2024-01-01 23:00, 2024-01-02 01:00, "D") returns 1 (Excel)
         // rather than 0 (TimeSpan.Days would otherwise round toward zero).
         var start = startRaw.Date;
         var end = endRaw.Date;
         if (end < start) return ErrorValue.Num;
-        var unit  = ToText(args[2]).ToUpperInvariant();
+        var unit  = ToText(unitValue).ToUpperInvariant();
 
         return unit switch
         {
