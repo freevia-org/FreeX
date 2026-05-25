@@ -4117,7 +4117,6 @@
                                                     Style="{StaticResource RibbonBtn}"
                                                     Click="SsPinItem_Click"
                                                     local:RibbonTooltip.Title="Pin File"
-                                                    local:RibbonTooltip.KeyTip="PI"
                                                     local:RibbonTooltip.Description="Pin or unpin this workbook in the recent files list."
                                                     AutomationProperties.Name="Pin file"
                                                     ToolTip="Pin to list">
@@ -4192,7 +4191,6 @@
                                                     Style="{StaticResource RibbonBtn}"
                                                     Click="SsUnpinItem_Click"
                                                     local:RibbonTooltip.Title="Unpin File"
-                                                    local:RibbonTooltip.KeyTip="UP"
                                                     local:RibbonTooltip.Description="Remove this workbook from the pinned files list."
                                                     AutomationProperties.Name="Unpin file"
                                                     ToolTip="Unpin from list">
