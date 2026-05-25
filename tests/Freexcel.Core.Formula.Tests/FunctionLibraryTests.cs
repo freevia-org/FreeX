@@ -1407,6 +1407,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Find_SameShapeStartNumArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=FIND(\"a\",A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(5));
+    }
+
+    [Fact]
+    public void Find_MismatchedStartNumArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=FIND(\"a\",A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Search_CaseInsensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -1484,6 +1508,30 @@ public class FunctionLibraryTests
             (1, 3, new TextValue("Banana")));
 
         _eval.Evaluate("=SEARCH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Search_SameShapeStartNumArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=SEARCH(\"A\",A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(5));
+    }
+
+    [Fact]
+    public void Search_MismatchedStartNumArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=SEARCH(\"A\",A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
