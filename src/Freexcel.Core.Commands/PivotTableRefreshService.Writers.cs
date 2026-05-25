@@ -302,7 +302,9 @@ public static partial class PivotTableRefreshService
                     pivotTable.DataFields[index],
                     pivotTable,
                     headers),
-                pivotTable.DataFields[index]);
+                pivotTable.DataFields[index],
+                pivotTable,
+                isEmptyIntersection: subtotalRows.Count == 0);
     }
 
     private static bool ShouldSuppressRepeatedRowLabel(
