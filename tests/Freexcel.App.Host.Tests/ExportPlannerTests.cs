@@ -2016,7 +2016,7 @@ public class ExportPlannerTests
 
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
-        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage)");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
         source.Should().Contain("PrintDocument(paginator");
     }
 
@@ -2076,10 +2076,17 @@ public class ExportPlannerTests
 
             var allPages = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.AllPages, currentPage: 2);
             var currentPage = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.CurrentPage, currentPage: 2);
+            var pageRange = PrintPreviewDialog.ResolvePrintPaginator(
+                document,
+                PrintPreviewPageRangeMode.Pages,
+                currentPage: 1,
+                new ExportPageRange(2, 3));
 
             allPages.PageCount.Should().Be(3);
             currentPage.PageCount.Should().Be(1);
+            pageRange.PageCount.Should().Be(2);
             currentPage.GetPage(1).Should().Be(DocumentPage.Missing);
+            pageRange.GetPage(2).Should().Be(DocumentPage.Missing);
         });
     }
 
@@ -2255,10 +2262,17 @@ public class ExportPlannerTests
 
         source.Should().Contain("Content = \"_All pages\"");
         source.Should().Contain("Content = \"Current pa_ge\"");
+        source.Should().Contain("Content = \"Pa_ges\"");
+        source.Should().Contain("fromPageBox");
+        source.Should().Contain("toPageBox");
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
-        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage)");
+        source.Should().Contain("PrintPreviewPageRangeMode.Pages");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError)");
+        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError)");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
+        source.Should().Contain("ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError)");
     }
 
     [Fact]
