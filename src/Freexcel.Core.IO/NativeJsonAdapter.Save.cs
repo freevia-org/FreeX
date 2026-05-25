@@ -107,7 +107,8 @@ public sealed partial class NativeJsonAdapter
                     .Select(property => new WorksheetCustomPropertyDto
                     {
                         Name = property.Name,
-                        Id = property.Id
+                        Id = property.Id,
+                        Metadata = FromWorksheetCustomPropertyMetadata(property.Metadata)
                     })
                     .ToList(),
                 RowHeights = s.RowHeights
