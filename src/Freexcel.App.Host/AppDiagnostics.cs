@@ -50,18 +50,26 @@ public sealed class AppDiagnostics : IAppDiagnostics
 {
     private readonly AppDiagnosticsFileStore _fileStore;
     private readonly AppDiagnosticsMetadata _metadata;
+    private readonly ICrashAnalytics _crashAnalytics;
 
-    public AppDiagnostics(AppDiagnosticsFileStore fileStore, AppDiagnosticsMetadata metadata)
+    public AppDiagnostics(
+        AppDiagnosticsFileStore fileStore,
+        AppDiagnosticsMetadata metadata,
+        ICrashAnalytics? crashAnalytics = null)
     {
         _fileStore = fileStore;
         _metadata = metadata;
+        _crashAnalytics = crashAnalytics ?? new DisabledCrashAnalytics();
     }
 
     public void RecordEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
     {
         try
         {
-            _fileStore.RecordEvent(eventName, _metadata, properties);
+            var safeProperties = AppDiagnosticsFileStore.SanitizeProperties(properties)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            _fileStore.RecordEvent(eventName, _metadata, safeProperties);
+            _crashAnalytics.RecordBreadcrumb(eventName, safeProperties);
         }
         catch
         {
@@ -73,6 +81,7 @@ public sealed class AppDiagnostics : IAppDiagnostics
     {
         try
         {
+            _crashAnalytics.CaptureCrash(exception, source);
             return _fileStore.RecordCrash(exception, source, _metadata);
         }
         catch
@@ -171,7 +180,7 @@ public sealed class AppDiagnosticsFileStore
             ["processArchitecture"] = metadata.ProcessArchitecture
         };
 
-    private static IEnumerable<KeyValuePair<string, string?>> SanitizeProperties(
+    public static IEnumerable<KeyValuePair<string, string?>> SanitizeProperties(
         IReadOnlyDictionary<string, string?>? properties)
     {
         if (properties is null)

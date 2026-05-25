@@ -390,6 +390,13 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
                         <TextBlock Text="Security and privacy settings for Freexcel."
                                    FontSize="12" Foreground="#555" Margin="0,0,0,12"/>
+                        <CheckBox x:Name="OptCrashAnalytics"
+                                  Content="Send opt-in crash reports"
+                                  FontSize="12"
+                                  Margin="0,0,0,6"
+                                  AutomationProperties.HelpText="Crash reports include app version, runtime, operating system, session ID, and exception details. Workbook contents, formulas, filenames, and paths are not collected by default."/>
+                        <TextBlock Text="Crash reports are sent only when this option is enabled and the tester build is configured with a crash analytics endpoint."
+                                   FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="18,0,0,12"/>
                         <Button x:Name="TrustCenterSettingsButton" Content="Trust Center _Settings..." Width="170" Height="26"
                                 HorizontalAlignment="Left" Click="TrustCenterSettingsButton_Click"/>
                     </StackPanel>

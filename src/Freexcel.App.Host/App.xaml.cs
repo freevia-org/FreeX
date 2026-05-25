@@ -35,6 +35,17 @@ public partial class App : Application
         var serviceCollection = new ServiceCollection();
         ConfigureServices(serviceCollection);
         Services = serviceCollection.BuildServiceProvider();
+        var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
+        var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();
+        var diagnosticsMetadata = Services.GetRequiredService<AppDiagnosticsMetadata>();
+        var options = Services.GetRequiredService<FreexcelOptions>();
+        PromptForCrashAnalyticsConsentIfNeeded(options, crashAnalyticsOptions);
+        if (options.CrashAnalyticsEnabled != crashAnalyticsOptions.IsEnabled)
+        {
+            crashAnalyticsOptions = AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled);
+        }
+
+        crashAnalytics.Initialize(crashAnalyticsOptions, diagnosticsMetadata);
         var diagnostics = Services.GetRequiredService<IAppDiagnostics>();
         RegisterCrashHandlers(diagnostics);
         diagnostics.RecordEvent("app_start");
@@ -56,10 +67,15 @@ public partial class App : Application
             builder.AddSerilog();
         });
 
+        var options = FreexcelOptions.Load();
+        services.AddSingleton(options);
+
         // Local tester diagnostics. No network upload; files stay under LocalAppData.
         services.AddSingleton(AppDiagnosticsOptions.CreateDefault());
+        services.AddSingleton(AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled));
         services.AddSingleton(AppDiagnosticsMetadata.Create(AppInfo.VersionText));
         services.AddSingleton<AppDiagnosticsFileStore>();
+        services.AddSingleton<ICrashAnalytics, SentryCrashAnalytics>();
         services.AddSingleton<IAppDiagnostics, AppDiagnostics>();
 
         // Core services
@@ -115,6 +131,22 @@ public partial class App : Application
         {
             diagnostics.RecordCrash(args.Exception, "task");
         };
+    }
+
+    private static void PromptForCrashAnalyticsConsentIfNeeded(
+        FreexcelOptions options,
+        AppCrashAnalyticsOptions crashAnalyticsOptions)
+    {
+        if (!CrashAnalyticsConsentPlanner.ShouldPrompt(options, crashAnalyticsOptions))
+            return;
+
+        var result = MessageBox.Show(
+            "Freexcel can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, and exception details. Workbook contents, formulas, filenames, and paths are not collected by default.\n\nSend crash reports for this tester build?",
+            "Crash Reports",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        CrashAnalyticsConsentPlanner.ApplyConsent(options, result == MessageBoxResult.Yes);
+        options.Save();
     }
 
     protected override void OnExit(ExitEventArgs e)
