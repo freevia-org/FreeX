@@ -77,6 +77,8 @@ public sealed partial class XlsxFileAdapter
         WorksheetSortStateModel? SortState,
         WorksheetAdditionalViewsModel? AdditionalViews,
         WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata,
+        WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
+        WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
@@ -279,6 +281,8 @@ public sealed partial class XlsxFileAdapter
         var headerFooter = worksheetXml.Root?.Element(worksheetNs + "headerFooter");
         var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");
         var printOptions = worksheetXml.Root?.Element(worksheetNs + "printOptions");
+        var rowBreaks = worksheetXml.Root?.Element(worksheetNs + "rowBreaks");
+        var colBreaks = worksheetXml.Root?.Element(worksheetNs + "colBreaks");
         var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
@@ -377,6 +381,8 @@ public sealed partial class XlsxFileAdapter
             sortState,
             additionalViews,
             ReadWorksheetPrimaryViewMetadata(sheetView),
+            ReadWorksheetPageBreaksMetadata(rowBreaks, CellAddress.MaxRow),
+            ReadWorksheetPageBreaksMetadata(colBreaks, CellAddress.MaxCol),
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
@@ -463,6 +469,51 @@ public sealed partial class XlsxFileAdapter
 
     private static bool IsModeledPrimaryViewElement(string name) =>
         name is "pane";
+
+    private static WorksheetPageBreaksMetadataModel? ReadWorksheetPageBreaksMetadata(XElement? pageBreaks, uint maxBreakId)
+    {
+        if (pageBreaks is null)
+            return null;
+
+        var model = new WorksheetPageBreaksMetadataModel();
+        foreach (var attribute in pageBreaks.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "count", StringComparison.Ordinal))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        foreach (var breakElement in pageBreaks.Elements().Where(element => string.Equals(element.Name.LocalName, "brk", StringComparison.Ordinal)))
+        {
+            if (!TryReadPageBreakId(breakElement, maxBreakId, out var id))
+                continue;
+
+            var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var attribute in breakElement.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "id", StringComparison.Ordinal))
+                    continue;
+
+                attributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            if (attributes.Count > 0)
+                model.BreakNativeAttributes[id] = attributes;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.BreakNativeAttributes.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool TryReadPageBreakId(XElement breakElement, uint maxBreakId, out uint id)
+    {
+        id = 0;
+        return uint.TryParse(breakElement.Attribute("id")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out id) &&
+            id >= 2 &&
+            id <= maxBreakId;
+    }
 
     private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
     {

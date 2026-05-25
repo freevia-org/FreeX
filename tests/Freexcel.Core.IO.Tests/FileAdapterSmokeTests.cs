@@ -2124,6 +2124,36 @@ public partial class FileAdapterSmokeTests
         };
         sheet.RowPageBreaks.Add(20);
         sheet.ColumnPageBreaks.Add(5);
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "1"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [20] = new(StringComparer.Ordinal)
+                {
+                    ["pt"] = "1",
+                    ["customAttr"] = "row-native"
+                }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "1"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [5] = new(StringComparer.Ordinal)
+                {
+                    ["pt"] = "1",
+                    ["customAttr"] = "col-native"
+                }
+            }
+        };
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -2174,6 +2204,8 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PageSetupMetadata.Should().BeEquivalentTo(sheet.PageSetupMetadata);
         loadedSheet.RowPageBreaks.Should().Contain(20u);
         loadedSheet.ColumnPageBreaks.Should().Contain(5u);
+        loadedSheet.RowPageBreaksMetadata.Should().BeEquivalentTo(sheet.RowPageBreaksMetadata);
+        loadedSheet.ColumnPageBreaksMetadata.Should().BeEquivalentTo(sheet.ColumnPageBreaksMetadata);
     }
 
     [Fact]
@@ -11977,6 +12009,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidAdditionalWorkbookViewNativeAttributeNames()
+    {
+        var workbook = new Workbook("AdditionalWorkbookViewInvalidNativeAttributeTest")
+        {
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                Views =
+                [
+                    new WorkbookAdditionalViewModel
+                    {
+                        NativeAttributes = new Dictionary<string, string>
+                        {
+                            ["visibility"] = "hidden",
+                            ["customWorkbookViewFlag"] = "kept",
+                            ["bad attribute name"] = "skip"
+                        }
+                    }
+                ]
+            }
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("fallback view"));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var view = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!
+            .Elements(workbookNs + "workbookView")
+            .Last();
+        view.Attribute("visibility")!.Value.Should().Be("hidden");
+        view.Attribute("customWorkbookViewFlag")!.Value.Should().Be("kept");
+        view.Attributes().Select(attribute => attribute.Name.LocalName)
+            .Should().NotContain("bad attribute name");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPrimaryWorkbookViewNativeMetadata()
     {
         var workbook = new Workbook("PrimaryWorkbookViewRetentionTest");
@@ -13353,9 +13428,22 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).RowPageBreaks.Should().Contain(20u);
-        loaded.GetSheetAt(0).ColumnPageBreaks.Should().Contain(5u);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.RowPageBreaks.Should().Contain(20u);
+        loadedSheet.ColumnPageBreaks.Should().Contain(5u);
+        loadedSheet.RowPageBreaksMetadata.Should().NotBeNull();
+        loadedSheet.RowPageBreaksMetadata!.NativeAttributes.Should().Contain("manualBreakCount", "1");
+        loadedSheet.RowPageBreaksMetadata.BreakNativeAttributes[20].Should().Contain("customAttr", "row-native");
+        loadedSheet.RowPageBreaksMetadata.BreakNativeAttributes[20].Should().Contain("max", "16383");
+        loadedSheet.RowPageBreaksMetadata.BreakNativeAttributes[20].Should().Contain("man", "1");
+        loadedSheet.RowPageBreaksMetadata.BreakNativeAttributes[20].Should().Contain("pt", "1");
+        loadedSheet.ColumnPageBreaksMetadata.Should().NotBeNull();
+        loadedSheet.ColumnPageBreaksMetadata!.NativeAttributes.Should().Contain("manualBreakCount", "1");
+        loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("customAttr", "col-native");
+        loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("max", "1048575");
+        loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("man", "1");
+        loadedSheet.ColumnPageBreaksMetadata.BreakNativeAttributes[5].Should().Contain("pt", "1");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -13367,12 +13455,87 @@ public partial class FileAdapterSmokeTests
         var rowBreak = worksheetXml.Root!.Element(worksheetNs + "rowBreaks")!
             .Elements(worksheetNs + "brk")
             .Single(element => element.Attribute("id")?.Value == "20");
+        rowBreak.Attribute("max")!.Value.Should().Be("16383");
+        rowBreak.Attribute("man")!.Value.Should().Be("1");
         rowBreak.Attribute("pt")!.Value.Should().Be("1");
         rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native");
 
         var columnBreak = worksheetXml.Root!.Element(worksheetNs + "colBreaks")!
             .Elements(worksheetNs + "brk")
             .Single(element => element.Attribute("id")?.Value == "5");
+        columnBreak.Attribute("max")!.Value.Should().Be("1048575");
+        columnBreak.Attribute("man")!.Value.Should().Be("1");
+        columnBreak.Attribute("pt")!.Value.Should().Be("1");
+        columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetPageBreakMetadata()
+    {
+        var workbook = new Workbook("WorksheetPageBreakMetadataSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page breaks"));
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "1"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [20] = new(StringComparer.Ordinal)
+                {
+                    ["max"] = "16383",
+                    ["man"] = "1",
+                    ["pt"] = "1",
+                    ["customAttr"] = "row-native"
+                }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "1"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [5] = new(StringComparer.Ordinal)
+                {
+                    ["max"] = "1048575",
+                    ["man"] = "1",
+                    ["pt"] = "1",
+                    ["customAttr"] = "col-native"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rowBreaks = worksheetXml.Root!.Element(worksheetNs + "rowBreaks");
+        rowBreaks.Should().NotBeNull();
+        rowBreaks!.Attribute("manualBreakCount")!.Value.Should().Be("1");
+        var rowBreak = rowBreaks.Elements(worksheetNs + "brk")
+            .Single(element => element.Attribute("id")?.Value == "20");
+        rowBreak.Attribute("max")!.Value.Should().Be("16383");
+        rowBreak.Attribute("man")!.Value.Should().Be("1");
+        rowBreak.Attribute("pt")!.Value.Should().Be("1");
+        rowBreak.Attribute("customAttr")!.Value.Should().Be("row-native");
+
+        var columnBreaks = worksheetXml.Root!.Element(worksheetNs + "colBreaks");
+        columnBreaks.Should().NotBeNull();
+        columnBreaks!.Attribute("manualBreakCount")!.Value.Should().Be("1");
+        var columnBreak = columnBreaks.Elements(worksheetNs + "brk")
+            .Single(element => element.Attribute("id")?.Value == "5");
+        columnBreak.Attribute("max")!.Value.Should().Be("1048575");
+        columnBreak.Attribute("man")!.Value.Should().Be("1");
         columnBreak.Attribute("pt")!.Value.Should().Be("1");
         columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
     }
