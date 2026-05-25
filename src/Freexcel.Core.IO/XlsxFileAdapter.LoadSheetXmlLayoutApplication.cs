@@ -228,6 +228,7 @@ public sealed partial class XlsxFileAdapter
         }
         foreach (var property in layout.CustomProperties)
             sheet.CustomProperties.Add(property);
+        sheet.SmartTags = layout.SmartTags;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
     }

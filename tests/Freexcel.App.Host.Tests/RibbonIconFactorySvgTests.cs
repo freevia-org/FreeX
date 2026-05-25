@@ -101,7 +101,7 @@ public sealed class RibbonIconFactorySvgTests
             "fill-large.svg",
             "clear-large.svg",
             "sort-large.svg",
-            "find-large.svg"
+            "find.svg"
         };
 
         var normalizedArtwork = homeCommands
@@ -120,5 +120,35 @@ public sealed class RibbonIconFactorySvgTests
             .Distinct(StringComparer.Ordinal)
             .Should()
             .HaveCount(homeCommands.Length);
+    }
+
+    [Fact]
+    public void SizeSpecificSvgCommandIcons_DoNotUseDocumentPlaceholderArtwork()
+    {
+        var iconDirectory = Path.Combine(
+            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Freexcel.App.Host.csproj"))!,
+            "Resources",
+            "CommandIconsSvg");
+
+        var placeholderFragments = new[]
+        {
+            "H13 L16 5.5 V17 H5 Z M13 2.5 V5.5 H16",
+            "H20.8 L25.6 8.8 V27.2 H8 Z M20.8 4 V8.8 H25.6"
+        };
+
+        var placeholderFiles = Directory
+            .EnumerateFiles(iconDirectory, "*.svg")
+            .Where(path => path.EndsWith("-small.svg", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith("-large.svg", StringComparison.OrdinalIgnoreCase))
+            .Where(path =>
+            {
+                var text = File.ReadAllText(path);
+                return placeholderFragments.Any(fragment => text.Contains(fragment, StringComparison.Ordinal));
+            })
+            .Select(Path.GetFileName)
+            .ToList();
+
+        placeholderFiles.Should().BeEmpty(
+            "size-specific ribbon icons should be deliberately drawn or absent so the base SVG can be used as the fallback");
     }
 }
