@@ -70,6 +70,16 @@ public sealed partial class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(copiesBox, "Copies");
         AutomationProperties.SetHelpText(copiesBox, "Enter a copy count from 1 to 999.");
+        var collatedBox = new CheckBox
+        {
+            Content = "C_ollated",
+            IsChecked = true,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print multiple copies as collated sets when the printer supports collation."
+        };
+        AutomationProperties.SetName(collatedBox, "Collated");
+        AutomationProperties.SetHelpText(collatedBox, "When checked, multiple copies print as collated sets.");
         var statusText = new TextBlock
         {
             Margin = new Thickness(4, 0, 8, 0),
@@ -143,7 +153,8 @@ public sealed partial class PrintPreviewDialog : Window
             ShowNativePrintDialog(
                 ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage),
                 printerBox.SelectedItem as PrintQueue,
-                copies);
+                copies,
+                collatedBox.IsChecked == true);
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
         };
         closeButton.Click += (_, _) => Close();
@@ -165,6 +176,7 @@ public sealed partial class PrintPreviewDialog : Window
             VerticalAlignment = VerticalAlignment.Center
         });
         toolbar.Items.Add(copiesBox);
+        toolbar.Items.Add(collatedBox);
         toolbar.Items.Add(statusText);
         toolbar.Items.Add(new Separator());
         var allPagesButton = new RadioButton

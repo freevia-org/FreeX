@@ -69,14 +69,17 @@ public sealed partial class PrintPreviewDialog
             ? new PageRangeDocumentPaginator(document.DocumentPaginator, new ExportPageRange(currentPage, currentPage))
             : document.DocumentPaginator;
 
-    private static void ShowNativePrintDialog(DocumentPaginator paginator, PrintQueue? printQueue, int copies)
+    private static void ShowNativePrintDialog(DocumentPaginator paginator, PrintQueue? printQueue, int copies, bool collated)
     {
         var dialog = new PrintDialog();
         if (printQueue is not null)
             dialog.PrintQueue = printQueue;
 
         if (dialog.PrintTicket is not null)
+        {
             dialog.PrintTicket.CopyCount = copies;
+            dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
+        }
 
         if (dialog.ShowDialog() == true)
             dialog.PrintDocument(paginator, "Freexcel worksheet");
