@@ -13,7 +13,8 @@ internal static class XlsxWorksheetChartWriter
         Stream xlsxStream,
         Workbook workbook,
         Func<ChartModel, bool> isSupportedChart,
-        Func<ChartModel, Sheet, XDocument> createChartXml)
+        Func<ChartModel, Sheet, XDocument> createChartXml,
+        Func<ChartModel, string> getChartContentType)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -56,7 +57,7 @@ internal static class XlsxWorksheetChartWriter
             if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
 
-            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml);
+            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex, createChartXml, getChartContentType);
         }
     }
 
@@ -67,7 +68,8 @@ internal static class XlsxWorksheetChartWriter
         IReadOnlyList<ChartModel> charts,
         int drawingIndex,
         ref int chartIndex,
-        Func<ChartModel, Sheet, XDocument> createChartXml)
+        Func<ChartModel, Sheet, XDocument> createChartXml,
+        Func<ChartModel, string> getChartContentType)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -87,9 +89,11 @@ internal static class XlsxWorksheetChartWriter
 
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         var anchors = new List<XElement>();
+        var chartContentTypes = new Dictionary<int, string>();
         foreach (var chart in charts)
         {
             var currentChartIndex = chartIndex++;
+            chartContentTypes[currentChartIndex] = getChartContentType(chart);
             var chartPath = $"xl/charts/chart{currentChartIndex}.xml";
             archive.GetEntry(chartPath)?.Delete();
             var chartEntry = archive.CreateEntry(chartPath);
@@ -117,8 +121,8 @@ internal static class XlsxWorksheetChartWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingRelsPath, drawingRelsXml);
 
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
-        for (var i = chartIndex - charts.Count; i < chartIndex; i++)
-            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/xl/charts/chart{i}.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+        foreach (var (index, contentType) in chartContentTypes)
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/xl/charts/chart{index}.xml", contentType);
 
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(relsPath) is { } relsEntry

@@ -214,7 +214,12 @@ public sealed partial class XlsxFileAdapter
         if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
         {
             packageStream.Position = 0;
-            XlsxWorksheetChartWriter.Save(packageStream, workbook, XlsxChartXmlWriter.IsSupportedXlsxChart, XlsxChartXmlWriter.ToChartXml);
+            XlsxWorksheetChartWriter.Save(
+                packageStream,
+                workbook,
+                XlsxChartXmlWriter.IsSupportedXlsxChart,
+                XlsxChartXmlWriter.ToChartXml,
+                XlsxChartXmlWriter.GetContentType);
         }
 
         if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))
