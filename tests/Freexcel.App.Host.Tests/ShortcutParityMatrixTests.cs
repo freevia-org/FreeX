@@ -26,6 +26,9 @@ public sealed class ShortcutParityMatrixTests
         rows.Count(row => row[2] is "Not Implemented" or "Missing").Should().Be(summary.NotImplemented);
         rows.Count(row => row[2] == "Excluded").Should().Be(summary.Excluded);
         rows.Count(row => row[2] is not "Excluded").Should().Be(summary.TotalInScope);
+        summary.ParityPercent.Should().Be(ToPercent(summary.Parity, summary.TotalInScope));
+        summary.PartialPercent.Should().Be(ToPercent(summary.Partial, summary.TotalInScope));
+        summary.NotImplementedPercent.Should().Be(ToPercent(summary.NotImplemented, summary.TotalInScope));
         summary.NotImplemented.Should().Be(0, "the visible shortcut matrix should not regress to undocumented missing shortcuts");
     }
 
@@ -36,7 +39,18 @@ public sealed class ShortcutParityMatrixTests
         var notImplemented = ReadSummaryCount(lines, "Not Implemented");
         var excluded = ReadSummaryCount(lines, "Excluded");
         var total = ReadSummaryCount(lines, "**Total in-scope**");
-        return new CoverageSummary(parity, partial, notImplemented, excluded, total);
+        var parityPercent = ReadSummaryPercent(lines, "Parity");
+        var partialPercent = ReadSummaryPercent(lines, "Partial");
+        var notImplementedPercent = ReadSummaryPercent(lines, "Not Implemented");
+        return new CoverageSummary(
+            parity,
+            partial,
+            notImplemented,
+            excluded,
+            total,
+            parityPercent,
+            partialPercent,
+            notImplementedPercent);
     }
 
     private static int ReadSummaryCount(IReadOnlyList<string> lines, string label)
@@ -45,8 +59,27 @@ public sealed class ShortcutParityMatrixTests
         return int.Parse(SplitMarkdownRow(row)[1].Trim('*'), System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    private static int ReadSummaryPercent(IReadOnlyList<string> lines, string label)
+    {
+        var row = lines.Single(line => line.StartsWith($"| {label} |", StringComparison.Ordinal));
+        return int.Parse(
+            SplitMarkdownRow(row)[2].Trim('*', '%'),
+            System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static int ToPercent(int count, int total) =>
+        total == 0 ? 0 : (int)Math.Round(count * 100.0 / total);
+
     private static IReadOnlyList<string> SplitMarkdownRow(string row) =>
         row.Trim().Trim('|').Split('|').Select(column => column.Trim()).ToArray();
 
-    private sealed record CoverageSummary(int Parity, int Partial, int NotImplemented, int Excluded, int TotalInScope);
+    private sealed record CoverageSummary(
+        int Parity,
+        int Partial,
+        int NotImplemented,
+        int Excluded,
+        int TotalInScope,
+        int ParityPercent,
+        int PartialPercent,
+        int NotImplementedPercent);
 }
