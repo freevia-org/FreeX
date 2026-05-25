@@ -188,6 +188,7 @@ public sealed partial class NativeJsonAdapter
                 DifferentOddEvenHeaderFooter = s.DifferentOddEvenHeaderFooter,
                 HeaderFooterScaleWithDocument = s.HeaderFooterScaleWithDocument,
                 HeaderFooterAlignWithMargins = s.HeaderFooterAlignWithMargins,
+                HeaderFooterMetadata = FromWorksheetHeaderFooterMetadata(s.HeaderFooterMetadata),
                 CenterHorizontallyOnPage = s.CenterHorizontallyOnPage,
                 CenterVerticallyOnPage = s.CenterVerticallyOnPage,
                 PageOrder = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrder, WorksheetPageOrder.DownThenOver),
@@ -518,6 +519,25 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         return new WorksheetPageMarginsMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetHeaderFooterMetadataDto? FromWorksheetHeaderFooterMetadata(WorksheetHeaderFooterMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = model.NativeChildXmls
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetHeaderFooterMetadataDto
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls

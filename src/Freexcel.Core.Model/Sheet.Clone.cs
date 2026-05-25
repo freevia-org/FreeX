@@ -91,6 +91,13 @@ public sealed partial class Sheet
                     NativeAttributes = new Dictionary<string, string>(PrintOptionsMetadata.NativeAttributes, StringComparer.Ordinal),
                     NativeChildXmls = [.. PrintOptionsMetadata.NativeChildXmls]
                 },
+            HeaderFooterMetadata          = HeaderFooterMetadata is null
+                ? null
+                : new WorksheetHeaderFooterMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(HeaderFooterMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. HeaderFooterMetadata.NativeChildXmls]
+                },
             PageSetupMetadata             = PageSetupMetadata is null
                 ? null
                 : new WorksheetPageSetupMetadataModel

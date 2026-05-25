@@ -180,17 +180,17 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
-        if (args.Count > 1 && args[1] is RangeValue returnTypeRange)
-            return MapUnaryTextRange(returnTypeRange, value =>
-            {
-                double rawType = ToNumber(value);
-                return double.IsFinite(rawType) ? WeekdayScalar(args[0], (int)rawType) : ErrorValue.Num;
-            });
-        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var returnTypeArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], returnTypeArg, WeekdayScalarWithReturnType);
+    }
+
+    private static ScalarValue WeekdayScalarWithReturnType(ScalarValue value, ScalarValue returnTypeValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (returnTypeValue is ErrorValue returnTypeError) return returnTypeError;
+        double rawReturnType = ToNumber(returnTypeValue);
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
-        int returnType = (int)rawReturnType;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeekdayScalar(value, returnType));
-        return WeekdayScalar(args[0], returnType);
+        return WeekdayScalar(value, (int)rawReturnType);
     }
 
     private static ScalarValue WeekdayScalar(ScalarValue value, int returnType)
@@ -239,15 +239,23 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var endRaw)) return ErrorValue.Num;
+        return MapTernaryTextArgs(args[0], args[1], args[2], DatedifScalar);
+    }
+
+    private static ScalarValue DatedifScalar(ScalarValue startValue, ScalarValue endValue, ScalarValue unitValue)
+    {
+        if (startValue is ErrorValue startError) return startError;
+        if (endValue is ErrorValue endError) return endError;
+        if (unitValue is ErrorValue unitError) return unitError;
+        if (!TryOADateToDateTime(startValue, out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(endValue, out var endRaw)) return ErrorValue.Num;
         // DATEDIF operates on whole dates — discard any time portion so that
         // e.g. DATEDIF(2024-01-01 23:00, 2024-01-02 01:00, "D") returns 1 (Excel)
         // rather than 0 (TimeSpan.Days would otherwise round toward zero).
         var start = startRaw.Date;
         var end = endRaw.Date;
         if (end < start) return ErrorValue.Num;
-        var unit  = ToText(args[2]).ToUpperInvariant();
+        var unit  = ToText(unitValue).ToUpperInvariant();
 
         return unit switch
         {
