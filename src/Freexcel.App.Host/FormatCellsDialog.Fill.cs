@@ -35,6 +35,12 @@ public partial class FormatCellsDialog
     private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFontColorBox, allowNoColor: false, "Font Color");
 
+    private void DlgFontColorSwatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string colorText })
+            DlgFontColorBox.Text = colorText;
+    }
+
     private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFillColorBox, allowNoColor: true, "Fill Color");
 
