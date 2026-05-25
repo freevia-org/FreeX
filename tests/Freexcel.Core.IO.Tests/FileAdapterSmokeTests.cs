@@ -13058,6 +13058,48 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_FallsBackWhenAdditionalWorksheetViewNativeXmlHasWrongNamespace()
+    {
+        var workbook = new Workbook("AdditionalSheetViewWrongNamespaceFallbackTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+        sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+        {
+            Views =
+            [
+                new WorksheetAdditionalViewModel
+                {
+                    WorkbookViewId = "1",
+                    NativeXml = "<sheetView xmlns=\"urn:freexcel:wrong\" workbookViewId=\"9\" wrongNamespace=\"1\" />",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["view"] = "pageBreakPreview",
+                        ["topLeftCell"] = "C3",
+                        ["customSheetViewFlag"] = "kept"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetView = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .Single(view => view.Attribute("workbookViewId")?.Value == "1");
+        sheetView.Attribute("view")!.Value.Should().Be("pageBreakPreview");
+        sheetView.Attribute("topLeftCell")!.Value.Should().Be("C3");
+        sheetView.Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+        sheetView.Attribute("wrongNamespace").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesExistingWorksheetSheetViewNativeMetadata()
     {
         var workbook = new Workbook("ExistingWorksheetSheetViewMetadata");
