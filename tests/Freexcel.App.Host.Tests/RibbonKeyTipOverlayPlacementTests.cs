@@ -31,4 +31,17 @@ public sealed class RibbonKeyTipOverlayPlacementTests
         point.X.Should().Be(128);
         point.Y.Should().Be(56);
     }
+
+    [Fact]
+    public void PlaceBadge_AnchorsTallRibbonCommandsNearLowerCenter()
+    {
+        var elementBounds = new Rect(220, 140, 72, 46);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(26, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(elementBounds, overlaySize, badgeSize);
+
+        point.X.Should().Be(243);
+        point.Y.Should().Be(178);
+    }
 }

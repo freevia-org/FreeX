@@ -17,6 +17,7 @@ public sealed class XlsxFileAdapterFormatTests
         var worksheetMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.cs"))
             .ReplaceLineEndings("\n");
         var worksheetCellMetadataSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetMetadataPreserver.CellMetadata.cs"));
+        var drawingPartMergerSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxWorksheetDrawingPartMerger.cs"));
         var pivotReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxPivotXmlReferencePreserver.cs"));
         var tableReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxStructuredTableReferencePreserver.cs"));
         var styleOnlyStripperSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
@@ -37,6 +38,8 @@ public sealed class XlsxFileAdapterFormatTests
         worksheetMetadataSource.Should().Contain("MergeWorksheetCellNativeMetadata(sourceSheetData, GetTargetCellsByAddress, targetArchive, workbookNs)");
         worksheetCellMetadataSource.Should().Contain("private static bool MergeWorksheetCellNativeMetadata");
         worksheetCellMetadataSource.Should().Contain("GetSourceCellNativeMetadata(sourceCell, workbookNs)");
+        drawingPartMergerSource.Should().Contain("ReadWorksheetDrawingRelId(worksheetEntry, worksheetNs, relNs)");
+        drawingPartMergerSource.Should().Contain("XmlReader.Create");
         pivotReferencePreserverSource.Should().Contain("GetWorksheetPathsWithPivotTableRelationships(sourceArchive, context)");
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");

@@ -48,7 +48,7 @@ public sealed class RibbonTabParityTests
             "Comments");
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Insert Picture\"");
+        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Pictures\"");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Shapes\"");
         ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonTooltip.Title=\"Recommended Charts\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
