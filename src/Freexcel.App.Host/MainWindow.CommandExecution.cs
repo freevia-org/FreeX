@@ -20,7 +20,10 @@ public partial class MainWindow
     {
         outcome = _commandBus.Execute(_workbook.Id, command);
         if (outcome.Success)
+        {
+            InvalidateStatusBarStats();
             return true;
+        }
 
         ShowCommandError(outcome, title);
         return false;
@@ -84,6 +87,7 @@ public partial class MainWindow
         if (outcome.Success)
         {
             _repeatPostAction = null;
+            InvalidateStatusBarStats();
             return true;
         }
 
@@ -108,6 +112,7 @@ public partial class MainWindow
         if (outcome.Success)
         {
             _repeatPostAction = null;
+            InvalidateStatusBarStats();
             return true;
         }
 
@@ -136,6 +141,7 @@ public partial class MainWindow
         if (outcome.Success)
         {
             _repeatPostAction = null;
+            InvalidateStatusBarStats();
             return true;
         }
 
@@ -219,6 +225,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Undo(_workbook.Id);
         if (!outcome.Success) return;
+        InvalidateStatusBarStats();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
@@ -229,6 +236,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success) return;
+        InvalidateStatusBarStats();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
@@ -240,6 +248,7 @@ public partial class MainWindow
         var postAction = _repeatPostAction;
         var outcome = _commandBus.RepeatLast(_workbook.Id);
         if (!outcome.Success) return;
+        InvalidateStatusBarStats();
         postAction?.Invoke(outcome);
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();

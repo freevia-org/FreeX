@@ -38,19 +38,24 @@ public partial class MainWindow
     private void RecalculateWorkbook()
     {
         _recalcEngine.RecalculateAllFormulas(_workbook);
+        InvalidateStatusBarStats();
     }
 
     private void RebuildDependenciesAndCalculate()
     {
         _recalcEngine.RebuildFormulaDependencies(_workbook);
         _recalcEngine.RecalculateAllFormulas(_workbook);
+        InvalidateStatusBarStats();
         UpdateViewport();
     }
 
     private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
         if (_workbook.CalculationMode == WorkbookCalculationMode.Automatic)
+        {
             _recalcEngine.Recalculate(_workbook, changedCells);
+            InvalidateStatusBarStats();
+        }
     }
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
