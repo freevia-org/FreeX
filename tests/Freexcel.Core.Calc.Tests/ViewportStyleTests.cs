@@ -85,6 +85,28 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void GetViewport_NumberFormatColorUsesWorkbookThemeColor()
+    {
+        var workbook = new Workbook("test")
+        {
+            Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent2, CellColor.FromArgb(100, 120, 140))
+        };
+        var sheet = workbook.AddSheet("Sheet1");
+        var style = new CellStyle { NumberFormat = "[ThemeColor Accent2 Tint 0.25]0.0" };
+        var styleId = workbook.RegisterStyle(style);
+        var cell = Cell.FromValue(new NumberValue(12.5));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var displayCell = vp.Cells.Single(c => c.Row == 1 && c.Col == 1);
+        displayCell.DisplayText.Should().Be("12.5");
+        displayCell.Style!.FontColor.Should().Be(CellColor.FromArgb(139, 154, 169));
+    }
+
+    [Fact]
     public void GetViewport_CommentOnlyCell_PopulatesDisplayCellWithCommentIndicator()
     {
         var workbook = new Workbook("test");

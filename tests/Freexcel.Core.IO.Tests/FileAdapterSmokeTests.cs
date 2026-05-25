@@ -12912,6 +12912,35 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Load_PreservesThemeNumberFormatColorDirective()
+    {
+        var workbook = new Workbook("ThemeNumberFormatColorLoadTest")
+        {
+            Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent2, CellColor.FromArgb(100, 120, 140))
+        };
+        var sheet = workbook.AddSheet("Data");
+        var style = new CellStyle { NumberFormat = "[ThemeColor Accent2 Tint 0.25]0.0" };
+        var styleId = workbook.RegisterStyle(style);
+        var cell = Cell.FromValue(new NumberValue(12.5));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+
+        var loadedSheet = loaded.GetSheet("Data")!;
+        var loadedCell = loadedSheet.GetCell(1, 1)!;
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent2)
+            .Should().Be(CellColor.FromArgb(100, 120, 140));
+        loaded.GetStyle(loadedCell.StyleId).NumberFormat
+            .Should().Be("[ThemeColor Accent2 Tint 0.25]0.0");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesAuthoredWorkbookIndexedColors()
     {
         var workbook = new Workbook("IndexedColorSaveTest");
