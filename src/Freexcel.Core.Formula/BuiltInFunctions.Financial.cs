@@ -267,13 +267,12 @@ public static partial class BuiltInFunctions
     private static ScalarValue Effect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double npery   = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => EffectScalar(value, npery));
-        return EffectScalar(args[0], npery);
+        return MapBinaryMathArgs(args[0], args[1], EffectScalar);
     }
 
-    private static ScalarValue EffectScalar(ScalarValue rateValue, double npery)
+    private static ScalarValue EffectScalar(ScalarValue rateValue, ScalarValue nperyValue)
     {
+        double npery = Math.Truncate(ToNumber(nperyValue));
         double nomRate = ToNumber(rateValue);
         if (!double.IsFinite(nomRate) || !double.IsFinite(npery)) return ErrorValue.Num;
         if (nomRate <= 0 || npery < 1) return ErrorValue.Num;
@@ -283,13 +282,12 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nominal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double npery      = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => NominalScalar(value, npery));
-        return NominalScalar(args[0], npery);
+        return MapBinaryMathArgs(args[0], args[1], NominalScalar);
     }
 
-    private static ScalarValue NominalScalar(ScalarValue rateValue, double npery)
+    private static ScalarValue NominalScalar(ScalarValue rateValue, ScalarValue nperyValue)
     {
+        double npery = Math.Truncate(ToNumber(nperyValue));
         double effectRate = ToNumber(rateValue);
         if (!double.IsFinite(effectRate) || !double.IsFinite(npery)) return ErrorValue.Num;
         if (effectRate <= 0 || npery < 1) return ErrorValue.Num;
