@@ -872,6 +872,47 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_AcceptsHexColorTextForFontFillPatternAndBorders()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<TextBox>(dialog, "DlgFontColorBox").Text = "#C00000";
+                GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "#00B050";
+                GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "#5B9BD5";
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
+                GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "#7030A0";
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thin);
+                GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "#FFC000";
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Medium);
+                GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "#4472C4";
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "#70AD47";
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.Double);
+                GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "#ED7D31";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontColor.Should().Be(new CellColor(192, 0, 0));
+                dialog.ResultDiff.FillColor.Should().Be(new CellColor(0, 176, 80));
+                dialog.ResultDiff.FillPatternColor.Should().Be(new CellColor(91, 155, 213));
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+                dialog.ResultDiff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(255, 192, 0)));
+                dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.Medium, new CellColor(68, 114, 196)));
+                dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(112, 173, 71)));
+                dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Double, new CellColor(237, 125, 49)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
