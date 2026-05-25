@@ -332,6 +332,24 @@ public class ExportPlannerTests
         ExportPlanner.NormalizePdfLanguage(input).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(" uk_ua ", true, "uk-UA", null)]
+    [InlineData("", true, "en-US", null)]
+    [InlineData("not a culture", false, "en-US", "Enter a valid PDF language tag, for example en-US.")]
+    public void TryNormalizePdfLanguage_ValidatesTypedLanguageTags(
+        string input,
+        bool expectedSuccess,
+        string expectedLanguage,
+        string? expectedError)
+    {
+        ExportPlanner.TryNormalizePdfLanguage(input, out var language, out var error)
+            .Should()
+            .Be(expectedSuccess);
+
+        language.Should().Be(expectedLanguage);
+        error.Should().Be(expectedError);
+    }
+
     [Fact]
     public void ExportOptionsDialog_ExposesKeyboardAccessKeys()
     {
@@ -391,6 +409,20 @@ public class ExportPlannerTests
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_InvalidPdfLanguage_RefocusesLanguageEntry()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
+        source.Should().Contain("MessageBox.Show(this, pdfLanguageError, \"Export Options\", MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("FocusInvalidPdfLanguageInput();");
+        source.Should().Contain("private void FocusInvalidPdfLanguageInput()");
+        source.Should().Contain("_pdfLanguageBox.Focus();");
+        source.Should().Contain("_pdfLanguageBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_pdfLanguageBox);");
     }
 
     [Theory]
