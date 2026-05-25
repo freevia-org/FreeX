@@ -687,6 +687,10 @@ public partial class MainWindow
 
     private bool? ShowOwnedDialog(Window dialog)
     {
+        RecordDiagnosticEvent("dialog_opened", new Dictionary<string, string?>
+        {
+            ["dialog"] = dialog.GetType().Name
+        });
         dialog.Owner = this;
         dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         dialog.ShowActivated = true;

@@ -103,6 +103,7 @@ public sealed class AppDiagnosticsFileStore
     private static readonly HashSet<string> AllowedPropertyNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "command",
+        "dialog",
         "extension",
         "fileType",
         "format",
