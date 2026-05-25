@@ -34,9 +34,9 @@
                     <ComboBox x:Name="TypeCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
                               SelectionChanged="TypeCombo_SelectionChanged">
                         <ComboBoxItem Content="Any Value" Tag="Any"/>
-                        <ComboBoxItem Content="List" Tag="List"/>
                         <ComboBoxItem Content="Whole Number" Tag="WholeNumber"/>
                         <ComboBoxItem Content="Decimal" Tag="Decimal"/>
+                        <ComboBoxItem Content="List" Tag="List"/>
                         <ComboBoxItem Content="Date" Tag="Date"/>
                         <ComboBoxItem Content="Time" Tag="Time"/>
                         <ComboBoxItem Content="Text Length" Tag="TextLength"/>
