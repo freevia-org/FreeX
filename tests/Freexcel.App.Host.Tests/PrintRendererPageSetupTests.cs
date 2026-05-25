@@ -143,6 +143,37 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_AddsPdfTextOverlaysForHeaderAndFooterText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Header footer overlay export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.PageHeader = new WorksheetHeaderFooter("Left Header", "Center Header", "Right Header");
+            sheet.PageFooter = new WorksheetHeaderFooter("Left Footer", "Center Footer", "Right Footer");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Body"));
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = (FixedPage)document.Pages.Single().Child;
+            var overlays = PdfTextOverlayExtractor.Extract(page);
+
+            overlays.Select(overlay => overlay.Text).Should().Contain([
+                "Left Header",
+                "Center Header",
+                "Right Header",
+                "Left Footer",
+                "Center Footer",
+                "Right Footer",
+                "Body"
+            ]);
+            overlays.Single(overlay => overlay.Text == "Left Header").X
+                .Should().BeLessThan(overlays.Single(overlay => overlay.Text == "Center Header").X);
+            overlays.Single(overlay => overlay.Text == "Center Header").X
+                .Should().BeLessThan(overlays.Single(overlay => overlay.Text == "Right Header").X);
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_CanIgnoreConfiguredPrintAreaForExport()
     {
         StaTestRunner.Run(() =>

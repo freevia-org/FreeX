@@ -57,6 +57,7 @@ public static partial class PrintRenderer
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
         DrawHeaderFooter(
             dc,
+            textOverlays,
             pageW,
             pageH,
             marginLeft,
