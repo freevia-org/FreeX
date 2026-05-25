@@ -312,6 +312,35 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_AdditionalWorksheetViews()
+    {
+        var workbook = new Workbook("AdditionalWorksheetViewsNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["nativeSheetViewsAttr"] = "kept" },
+            Views =
+            [
+                new WorksheetAdditionalViewModel
+                {
+                    WorkbookViewId = "1",
+                    NativeXml = "<sheetView xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" workbookViewId=\"1\" view=\"pageLayout\" customSheetViewFlag=\"keep\" />",
+                    NativeAttributes = new Dictionary<string, string> { ["customSheetViewFlag"] = "keep" }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.AdditionalViews.Should().BeEquivalentTo(sheet.AdditionalViews);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -12456,6 +12485,15 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AdditionalViews.Should().NotBeNull();
+        var loadedAdditionalView = loaded.GetSheetAt(0).AdditionalViews!.Views.Should().ContainSingle().Which;
+        loadedAdditionalView.WorkbookViewId.Should().Be("1");
+        loadedAdditionalView.NativeXml.Should().Contain("sheetView");
+        loadedAdditionalView.NativeXml.Should().Contain("workbookViewId=\"1\"");
+        loadedAdditionalView.NativeAttributes.Should().Contain("view", "pageBreakPreview");
+        loadedAdditionalView.NativeAttributes.Should().Contain("topLeftCell", "C3");
+        loadedAdditionalView.NativeAttributes.Should().Contain("zoomScale", "80");
+        loadedAdditionalView.NativeAttributes.Should().Contain("customSheetViewFlag", "kept");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -12472,6 +12510,9 @@ public partial class FileAdapterSmokeTests
             string.Equals(view.Attribute("view")?.Value, "pageBreakPreview", StringComparison.Ordinal) &&
             string.Equals(view.Attribute("topLeftCell")?.Value, "C3", StringComparison.Ordinal));
         hasAdditionalSheetView.Should().BeTrue();
+        sheetViews.Elements(worksheetNs + "sheetView")
+            .Single(view => view.Attribute("workbookViewId")?.Value == "1")
+            .Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -17904,7 +17945,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("workbookViewId", "1"),
                 new XAttribute("view", "pageBreakPreview"),
                 new XAttribute("topLeftCell", "C3"),
-                new XAttribute("zoomScale", "80")));
+                new XAttribute("zoomScale", "80"),
+                new XAttribute("customSheetViewFlag", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
