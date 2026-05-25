@@ -152,6 +152,7 @@ public sealed partial class NativeJsonAdapter
                     : NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.SplitColumn),
                 AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter),
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
+                DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
