@@ -55,7 +55,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 continue;
 
             var newX14DataBars = advancedRules
-                .Where(cf => cf.RuleType == CfRuleType.DataBar && !cf.DataBarGradient && !HasExistingX14Id(cf))
+                .Where(cf => cf.RuleType == CfRuleType.DataBar && RequiresGeneratedOrExistingX14DataBar(cf))
                 .ToList();
 
             foreach (var cf in advancedRules)
@@ -145,7 +145,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 if (cf.DataBarMaxLength.HasValue)
                     dataBar.SetAttributeValue("maxLength", cf.DataBarMaxLength.Value.ToString(CultureInfo.InvariantCulture));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(dataBar, cf, worksheetNs));
-                if (!cf.DataBarGradient && !HasExistingX14Id(cf))
+                if (RequiresGeneratedOrExistingX14DataBar(cf) && TryGetExistingX14Id(cf) is null)
                 {
                     XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
                     rule.Add(new XElement(
@@ -153,7 +153,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                         new XElement(
                             worksheetNs + "ext",
                             new XAttribute("uri", "{B025F937-6E4E-48BE-B07C-B91C50BE2FA4}"),
-                            new XElement(x14Ns + "id", $"{{{cf.Id.ToString().ToUpperInvariant()}}}"))));
+                            new XElement(x14Ns + "id", GetX14DataBarId(cf)))));
                 }
 
                 break;
@@ -226,19 +226,32 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         ConditionalFormat cf,
         XNamespace worksheetNs)
     {
+        var modeledDataBarAttributes = cf.RuleType == CfRuleType.DataBar
+            ? ModeledDataBarPayloadAttributes(cf)
+            : [];
         foreach (var (name, value) in cf.NativePayloadAttributes ?? new Dictionary<string, string>())
         {
-            if (!string.IsNullOrWhiteSpace(name) && payload.Attribute(name) is null)
+            if (!string.IsNullOrWhiteSpace(name) &&
+                !modeledDataBarAttributes.Contains(name) &&
+                payload.Attribute(name) is null)
+            {
                 payload.SetAttributeValue(name, value);
+            }
         }
 
+        var modeledDataBarChildren = cf.RuleType == CfRuleType.DataBar
+            ? ModeledDataBarPayloadChildren(cf)
+            : [];
         foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
             try
             {
                 var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == worksheetNs)
+                if (nativeChild.Name.Namespace == worksheetNs &&
+                    !modeledDataBarChildren.Contains(nativeChild.Name.LocalName))
+                {
                     payload.Add(nativeChild);
+                }
             }
             catch
             {
@@ -297,10 +310,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             _ => "solid"
         };
 
-    private static bool HasExistingX14Id(ConditionalFormat cf)
+    private static string GetX14DataBarId(ConditionalFormat cf) =>
+        TryGetExistingX14Id(cf) ?? $"{{{cf.Id.ToString().ToUpperInvariant()}}}";
+
+    private static string? TryGetExistingX14Id(ConditionalFormat cf)
     {
         if (cf.NativeChildXmls is null)
-            return false;
+            return null;
 
         XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
         foreach (var xml in cf.NativeChildXmls)
@@ -308,8 +324,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             try
             {
                 var el = XElement.Parse(xml);
-                if (el.Name.LocalName == "extLst" && el.Descendants(x14Ns + "id").Any())
-                    return true;
+                if (el.Name.LocalName != "extLst")
+                    continue;
+
+                var id = el.Descendants(x14Ns + "id").FirstOrDefault()?.Value?.Trim();
+                if (!string.IsNullOrWhiteSpace(id))
+                    return id;
             }
             catch
             {
@@ -317,7 +337,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             }
         }
 
-        return false;
+        return null;
     }
 
     private static void AppendX14ConditionalFormattingsExt(
@@ -328,20 +348,31 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
         const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
 
-        var x14CfElements = newGradientFalseRules.Select(cf => new XElement(
+        var x14CfElements = newGradientFalseRules.Select(cf =>
+        {
+            var dataBar = new XElement(
+                x14Ns + "dataBar",
+                new XAttribute("minLength", (cf.DataBarMinLength ?? 0).ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("maxLength", (cf.DataBarMaxLength ?? 100).ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("gradient", cf.DataBarGradient ? "1" : "0"),
+                cf.DataBarBorder ? new XAttribute("border", "1") : null,
+                string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ? null : new XAttribute("axisPosition", cf.DataBarAxisPosition),
+                new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMin")),
+                new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMax")),
+                ToX14ColorXml(x14Ns, "axisColor", cf.DataBarAxisColor),
+                ToX14ColorXml(x14Ns, "negativeFillColor", cf.DataBarNegativeFillColor),
+                ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor));
+            AddNativeX14DataBarChildren(dataBar, cf, x14Ns);
+
+            return new XElement(
             x14Ns + "conditionalFormatting",
             new XAttribute("sqref", cf.AppliesTo.ToString()),
             new XElement(
                 x14Ns + "cfRule",
                 new XAttribute("type", "dataBar"),
-                new XAttribute("id", $"{{{cf.Id.ToString().ToUpperInvariant()}}}"),
-                new XElement(
-                    x14Ns + "dataBar",
-                    new XAttribute("minLength", (cf.DataBarMinLength ?? 0).ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("maxLength", (cf.DataBarMaxLength ?? 100).ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("gradient", "0"),
-                    new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMin")),
-                    new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMax")))))).ToList();
+                new XAttribute("id", GetX14DataBarId(cf)),
+                dataBar));
+        }).ToList();
 
         worksheetRoot.Add(new XElement(
             worksheetNs + "extLst",
@@ -359,6 +390,86 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith or
             CfRuleType.DateOccurring or
             CfRuleType.Blanks or CfRuleType.NoBlanks or CfRuleType.Errors or CfRuleType.NoErrors;
+
+    private static bool RequiresGeneratedX14DataBar(ConditionalFormat cf) =>
+        !cf.DataBarGradient ||
+        cf.DataBarBorder ||
+        !string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ||
+        cf.DataBarAxisColor is not null ||
+        cf.DataBarNegativeFillColor is not null ||
+        cf.DataBarNegativeBorderColor is not null;
+
+    private static bool RequiresGeneratedOrExistingX14DataBar(ConditionalFormat cf) =>
+        RequiresGeneratedX14DataBar(cf) ||
+        TryGetExistingX14Id(cf) is not null ||
+        HasNativeX14DataBarPayloadChildren(cf);
+
+    private static HashSet<string> ModeledDataBarPayloadAttributes(ConditionalFormat cf)
+    {
+        var attributes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (cf.DataBarBorder)
+            attributes.Add("border");
+        if (!string.IsNullOrWhiteSpace(cf.DataBarAxisPosition))
+            attributes.Add("axisPosition");
+        return attributes;
+    }
+
+    private static HashSet<string> ModeledDataBarPayloadChildren(ConditionalFormat cf)
+    {
+        var children = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (cf.DataBarAxisColor is not null)
+            children.Add("axisColor");
+        if (cf.DataBarNegativeFillColor is not null)
+            children.Add("negativeFillColor");
+        if (cf.DataBarNegativeBorderColor is not null)
+            children.Add("negativeBorderColor");
+        return children;
+    }
+
+    private static XElement? ToX14ColorXml(XNamespace x14Ns, string elementName, RgbColor? color) =>
+        color is null
+            ? null
+            : new XElement(x14Ns + elementName, new XAttribute("rgb", $"FF{color.Value.R:X2}{color.Value.G:X2}{color.Value.B:X2}"));
+
+    private static void AddNativeX14DataBarChildren(XElement dataBar, ConditionalFormat cf, XNamespace x14Ns)
+    {
+        var modeledChildren = ModeledDataBarPayloadChildren(cf);
+        foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == x14Ns &&
+                    !modeledChildren.Contains(nativeChild.Name.LocalName))
+                {
+                    dataBar.Add(nativeChild);
+                }
+            }
+            catch
+            {
+                // Ignore malformed native x14 data-bar payload metadata from older saves.
+            }
+        }
+    }
+
+    private static bool HasNativeX14DataBarPayloadChildren(ConditionalFormat cf)
+    {
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                if (XElement.Parse(nativeChildXml).Name.Namespace == x14Ns)
+                    return true;
+            }
+            catch
+            {
+                // Ignore malformed native payloads from older saves.
+            }
+        }
+
+        return false;
+    }
 
     private static string ToAdvancedCfRuleType(CfRuleType type) =>
         type switch

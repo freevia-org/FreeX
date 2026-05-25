@@ -161,6 +161,7 @@ public sealed partial class NativeJsonAdapter
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 SortState = ToWorksheetSortStateDto(s.SortState),
+                SingleXmlCells = ToWorksheetSingleXmlCellsDto(s.SingleXmlCells),
                 AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrimaryViewMetadata = FromWorksheetPrimaryViewMetadata(s.PrimaryViewMetadata),
                 PrintArea = s.PrintArea?.ToString(),

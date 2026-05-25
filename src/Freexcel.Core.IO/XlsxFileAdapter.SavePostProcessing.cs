@@ -196,6 +196,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.SingleXmlCells is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
         {
             packageStream.Position = 0;
@@ -220,7 +226,13 @@ public sealed partial class XlsxFileAdapter
         if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
         {
             packageStream.Position = 0;
-            XlsxWorksheetChartWriter.Save(packageStream, workbook, XlsxChartXmlWriter.IsSupportedXlsxChart, XlsxChartXmlWriter.ToChartXml);
+            XlsxWorksheetChartWriter.Save(
+                packageStream,
+                workbook,
+                XlsxChartXmlWriter.IsSupportedXlsxChart,
+                XlsxChartXmlWriter.ToChartXml,
+                XlsxChartXmlWriter.GetContentType,
+                XlsxChartXmlWriter.GetRelationshipType);
         }
 
         if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))

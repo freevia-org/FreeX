@@ -39,6 +39,15 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsResult_RejectsEmptyDelimiterSelection()
+    {
+        var act = () => TextToColumnsDialog.CreateResult([]);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("Select at least one delimiter.*");
+    }
+
+    [Fact]
     public void TextToColumnsPreview_UsesSelectedTextRows()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -280,6 +289,23 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_customBox.Focus();");
         source.Should().Contain("_customBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_customBox);");
+    }
+
+    [Fact]
+    public void TextToColumnsDialogNoDelimiterSelected_ReturnsToStepTwoAndFocusesDelimiterGroup()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("SelectedDelimiterKinds().Count == 0");
+        source.Should().Contain("FocusInvalidDelimiterSelectionInput();");
+        source.Should().Contain("throw new ArgumentException(\"Select at least one delimiter.\");");
+        source.Should().Contain("case \"Select at least one delimiter.\":");
+        source.Should().Contain("private void FocusInvalidDelimiterSelectionInput()");
+        source.Should().Contain("_wizardStep = 2;");
+        source.Should().Contain("_delimitedButton.IsChecked = true;");
+        source.Should().Contain("_tabBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(_tabBox);");
+        source.Should().NotContain("return kinds.Count == 0 ? [TextToColumnsDelimiterKind.Comma] : kinds;");
     }
 
     [Fact]
