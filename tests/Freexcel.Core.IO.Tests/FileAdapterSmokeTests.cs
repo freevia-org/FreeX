@@ -13957,6 +13957,63 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsInvalidWorksheetPageBreakNativeAttributeNames()
+    {
+        var workbook = new Workbook("WorksheetPageBreakInvalidNativeAttributeSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page breaks"));
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validRowBreaksAttr"] = "kept",
+                ["invalid rowBreaks attr"] = "skip"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [20] = new(StringComparer.Ordinal)
+                {
+                    ["validRowBreakAttr"] = "row-kept",
+                    ["invalid rowBreak attr"] = "skip"
+                }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["validColumnBreaksAttr"] = "kept",
+                ["invalid columnBreaks attr"] = "skip"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [5] = new(StringComparer.Ordinal)
+                {
+                    ["validColumnBreakAttr"] = "column-kept",
+                    ["invalid columnBreak attr"] = "skip"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        var save = () => new XlsxFileAdapter().Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        xml.Should().Contain("validRowBreaksAttr=\"kept\"");
+        xml.Should().Contain("validRowBreakAttr=\"row-kept\"");
+        xml.Should().Contain("validColumnBreaksAttr=\"kept\"");
+        xml.Should().Contain("validColumnBreakAttr=\"column-kept\"");
+        xml.Should().NotContain("invalid ");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetPageBreaks()
     {
         var workbook = new Workbook("WorksheetPageBreakRemoval");
