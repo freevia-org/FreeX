@@ -457,6 +457,16 @@ public sealed class FormulaEvaluator
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
             }
+            else if (arg is CellRefNode structuredCell && IsConditionalAggregateRangeArgument(node.FunctionName, argIndex))
+            {
+                if (structuredCell.SheetName is not null && !context.SheetExists(structuredCell.SheetName))
+                {
+                    expandedArgs.Add(ErrorValue.Ref);
+                    continue;
+                }
+
+                expandedArgs.Add(BuildRangeValue(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
+            }
             else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(node.FunctionName, argIndex))
             {
                 if (aggregateCell.SheetName is not null && !context.SheetExists(aggregateCell.SheetName))
@@ -1263,6 +1273,16 @@ public sealed class FormulaEvaluator
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
+
+    private static bool IsConditionalAggregateRangeArgument(string name, int argIndex) =>
+        name switch
+        {
+            "SUMIF" or "AVERAGEIF" => argIndex is 0 or 2,
+            "COUNTIF" => argIndex == 0,
+            "SUMIFS" or "AVERAGEIFS" => argIndex == 0 || (argIndex > 0 && (argIndex & 1) == 1),
+            "COUNTIFS" => (argIndex & 1) == 0,
+            _ => false
+        };
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {

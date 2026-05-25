@@ -612,6 +612,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sumif_ShorterSumRange_ExpandsFromTopLeftCell()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("A")), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("B")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=SUMIF(A1:A3,\"A\",B1)", sheet).Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
     public void Sumif_TextCriteria()
     {
         var sheet = MakeSheet(
@@ -778,6 +789,17 @@ public class FunctionLibraryTests
             (2, 1, new NumberValue(2)), (2, 2, new NumberValue(20)),
             (3, 1, new NumberValue(3)), (3, 2, new NumberValue(30)));
         _eval.Evaluate("=AVERAGEIF(A1:A3,\">1\",B1:B3)", sheet).Should().Be(new NumberValue(25));
+    }
+
+    [Fact]
+    public void Averageif_ShorterAverageRange_ExpandsFromTopLeftCell()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("A")), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("B")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=AVERAGEIF(A1:A3,\"A\",B1)", sheet).Should().Be(new NumberValue(15));
     }
 
     [Fact]
