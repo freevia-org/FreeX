@@ -12314,6 +12314,39 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_WritesWorkbookFunctionGroupsBeforeExtensionList()
+    {
+        var workbook = new Workbook("WorkbookFunctionGroupsOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("function group"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFunctionGroups(source);
+        AddWorkbookExtensionList(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = workbookXml.Root!.Elements().ToList();
+        var functionGroupsIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "functionGroups");
+        var extensionListIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "extLst");
+
+        functionGroupsIndex.Should().BeGreaterThanOrEqualTo(0);
+        extensionListIndex.Should().BeGreaterThan(functionGroupsIndex);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesStylesheetNativeMetadata()
     {
         var workbook = new Workbook("StylesheetNativeMetadataRetentionTest");
