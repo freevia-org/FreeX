@@ -311,13 +311,16 @@ public partial class FileAdapterSmokeTests
                 new XElement(
                     workbookNs + "smartTagPr",
                     new XAttribute("embed", "1"),
-                    new XAttribute("show", "all")),
+                    new XAttribute("show", "all"),
+                    new XAttribute("customSmartTagFlag", "keep")),
                 new XElement(
                     workbookNs + "smartTagTypes",
+                    new XAttribute("customSmartTagTypesFlag", "keep"),
                     new XElement(
                         workbookNs + "smartTagType",
                         new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
-                        new XAttribute("name", "place"))));
+                        new XAttribute("name", "place"),
+                        new XAttribute("customSmartTagTypeFlag", "keep"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

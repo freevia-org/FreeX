@@ -276,6 +276,68 @@ internal static class XlsxWorkbookMetadataWriter
         static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    public static void SaveSmartTags(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        root.Element(workbookNs + "smartTagPr")?.Remove();
+        root.Element(workbookNs + "smartTagTypes")?.Remove();
+        if (workbook.SmartTags is null)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        var smartTagProperties = new XElement(workbookNs + "smartTagPr");
+        foreach (var attribute in workbook.SmartTags.PropertiesNativeAttributes)
+        {
+            if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key is not "embed" and not "show")
+                smartTagProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+        }
+
+        smartTagProperties.SetAttributeValue("embed", workbook.SmartTags.Embed is { } embed ? embed ? "1" : "0" : null);
+        smartTagProperties.SetAttributeValue("show", NullIfWhiteSpace(workbook.SmartTags.Show));
+
+        var smartTagTypes = new XElement(workbookNs + "smartTagTypes");
+        foreach (var attribute in workbook.SmartTags.TypesNativeAttributes)
+        {
+            if (!string.IsNullOrWhiteSpace(attribute.Key))
+                smartTagTypes.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+        }
+
+        foreach (var type in workbook.SmartTags.Types)
+        {
+            var element = new XElement(workbookNs + "smartTagType");
+            foreach (var attribute in type.NativeAttributes)
+            {
+                if (!string.IsNullOrWhiteSpace(attribute.Key) &&
+                    attribute.Key is not "namespaceUri" and not "name" and not "url")
+                {
+                    element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                }
+            }
+
+            element.SetAttributeValue("namespaceUri", NullIfWhiteSpace(type.NamespaceUri));
+            element.SetAttributeValue("name", NullIfWhiteSpace(type.Name));
+            element.SetAttributeValue("url", NullIfWhiteSpace(type.Url));
+            smartTagTypes.Add(element);
+        }
+
+        root.Add(smartTagProperties, smartTagTypes);
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+
+        static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
