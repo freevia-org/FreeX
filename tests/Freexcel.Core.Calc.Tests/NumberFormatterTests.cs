@@ -63,6 +63,27 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("_(EUR* #,##0.00_);_(EUR* (#,##0.00);_(EUR* \"-\"??_);_(@_)", 1234.5, "EUR 1,234.50")]
+    [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -")]
+    public void AccountingSubset_PreservesRawMultiCharacterSymbolFillGap(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void AccountingSubset_KeepsTrailingSkipDirectiveAtValueEndForTargetWidth()
+    {
+        var result = NumberFormatter.Format(new NumberValue(12), "0_)", 5);
+
+        Assert.Equal("12 ", result);
+    }
+
+    [Theory]
     [InlineData("0*-", 12, 6, "12----")]
     [InlineData("$* #,##0.00", 1234.5, 14, "$     1,234.50")]
     public void CustomNumberSubset_ExpandsFillDirectiveToRequestedCharacterWidth(
