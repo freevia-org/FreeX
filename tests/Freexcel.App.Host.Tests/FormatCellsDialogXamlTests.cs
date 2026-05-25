@@ -716,6 +716,20 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_RejectsInvalidBorderColorsWithOwnedWarnings()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("if (!ValidateBorderInputs())");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a border color as #RRGGBB or R, G, B.\", DlgBorderLineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a top border color as #RRGGBB or R, G, B.\", DlgBorderTopColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a right border color as #RRGGBB or R, G, B.\", DlgBorderRightColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a bottom border color as #RRGGBB or R, G, B.\", DlgBorderBottomColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a left border color as #RRGGBB or R, G, B.\", DlgBorderLeftColorBox);");
+        source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;");
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFontFieldsIntoStyleDiff()
     {
         StaTestRunner.Run(() =>
