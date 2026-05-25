@@ -100,6 +100,7 @@ public sealed partial class NativeJsonAdapter
                     .Where(Enum.IsDefined)
                     .Distinct()
                     .ToList(),
+                ProtectionMetadata = FromWorksheetProtectionMetadata(s.ProtectionMetadata),
                 CustomProperties = s.CustomProperties
                     .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
                     .Select(property => new WorksheetCustomPropertyDto
@@ -418,6 +419,25 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         return new WorkbookProtectionMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetProtectionMetadataDto? FromWorksheetProtectionMetadata(WorksheetProtectionMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = model.NativeChildXmls
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetProtectionMetadataDto
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls

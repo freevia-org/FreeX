@@ -302,6 +302,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.ProtectionMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetProtectionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.SmartTags is not null))
         {
             packageStream.Position = 0;

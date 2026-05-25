@@ -15,6 +15,7 @@ public sealed partial class XlsxFileAdapter
         sheet.HiddenCols.UnionWith(layout.HiddenCols);
         sheet.IsProtected = layout.IsProtected;
         sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+        sheet.ProtectionMetadata = layout.ProtectionMetadata;
         foreach (var range in layout.AllowEditRanges)
             sheet.AllowEditRanges.Add(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
