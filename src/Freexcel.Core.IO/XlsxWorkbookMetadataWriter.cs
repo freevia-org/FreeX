@@ -298,6 +298,8 @@ internal static class XlsxWorkbookMetadataWriter
         var oleSize = root.Element(workbookNs + "oleSize");
         if (oleSize is not null)
             oleSize.AddBeforeSelf(functionGroups);
+        else if (root.Element(workbookNs + "extLst") is { } extensionList)
+            extensionList.AddBeforeSelf(functionGroups);
         else
             root.Add(functionGroups);
 
