@@ -96,7 +96,8 @@ public partial class MainWindow
 
         var dialog = new SelectDataSourceDialog(
             FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
-            chart.FirstColIsCategories)
+            chart.FirstColIsCategories,
+            sheetId: _currentSheetId)
         {
             Owner = this
         };
