@@ -10,6 +10,12 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public enum PrintPreviewPageRangeMode
+{
+    AllPages,
+    CurrentPage
+}
+
 public sealed partial class PrintPreviewDialog
 {
     public static string CreateTitle(string workbookName) =>
@@ -55,7 +61,15 @@ public sealed partial class PrintPreviewDialog
         Keyboard.Focus(pageNumberBox);
     }
 
-    private static void ShowNativePrintDialog(FixedDocument document, PrintQueue? printQueue, int copies)
+    public static DocumentPaginator ResolvePrintPaginator(
+        FixedDocument document,
+        PrintPreviewPageRangeMode pageRangeMode,
+        int currentPage) =>
+        pageRangeMode == PrintPreviewPageRangeMode.CurrentPage
+            ? new PageRangeDocumentPaginator(document.DocumentPaginator, new ExportPageRange(currentPage, currentPage))
+            : document.DocumentPaginator;
+
+    private static void ShowNativePrintDialog(DocumentPaginator paginator, PrintQueue? printQueue, int copies)
     {
         var dialog = new PrintDialog();
         if (printQueue is not null)
@@ -65,7 +79,7 @@ public sealed partial class PrintPreviewDialog
             dialog.PrintTicket.CopyCount = copies;
 
         if (dialog.ShowDialog() == true)
-            dialog.PrintDocument(document.DocumentPaginator, "Freexcel worksheet");
+            dialog.PrintDocument(paginator, "Freexcel worksheet");
     }
 
     private static void PopulatePrinterBox(ComboBox printerBox)
