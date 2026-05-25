@@ -132,6 +132,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
             sheet.SingleXmlCells = ToWorksheetSingleXmlCells(sDto.SingleXmlCells);
+            sheet.CellWatchesMetadata = ToWorksheetCellWatchesMetadata(sDto.CellWatchesMetadata);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
             sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
@@ -399,7 +400,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
 
             if (changes.Count > 0)
-                workbook.Scenarios.Add(new WorkbookScenario(scenarioDto.Name, changes));
+                workbook.Scenarios.Add(new WorkbookScenario(
+                    scenarioDto.Name,
+                    changes,
+                    string.IsNullOrWhiteSpace(scenarioDto.Comment) ? null : scenarioDto.Comment));
         }
 
         return workbook;
