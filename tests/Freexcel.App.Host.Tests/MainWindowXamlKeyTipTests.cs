@@ -1236,6 +1236,31 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void FormulaBarTextFields_UseReadableExcelScaleSizing()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var formulaBar = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBar");
+        var nameBox = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
+        var overlay = document
+            .Descendants(presentation + "TextBlock")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarReferenceOverlay");
+
+        formulaBar.Attribute("FontSize")?.Value.Should().Be("18");
+        formulaBar.Attribute("MinHeight")?.Value.Should().Be("30");
+        formulaBar.Attribute("Padding")?.Value.Should().Be("6,3");
+        nameBox.Attribute("FontSize")?.Value.Should().Be("15");
+        nameBox.Attribute("MinHeight")?.Value.Should().Be("30");
+        overlay.Attribute("FontSize")?.Value.Should().Be("18");
+    }
+
+    [Fact]
     public void BackstageSearchBox_HasAccessibleNameAndHelpText()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
