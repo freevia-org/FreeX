@@ -92,6 +92,26 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialogInvalidGeneralInputs_ShowOwnedWarningsAndRefocusEditors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+
+        source.Should().Contain("OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive default font size.\", OptDefaultFontSize);");
+        source.Should().Contain("OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
+        source.Should().Contain("ShowInvalidInputWarning(\"Enter the number of sheets to include from 1 to 255.\", OptSheetCount);");
+        source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("if (target is TextBox textBox)");
+        source.Should().Contain("textBox.SelectAll();");
+        source.Should().Contain("else if (target is ComboBox comboBox)");
+        source.Should().Contain("comboBox.Focus();");
+        source.Should().Contain("Keyboard.Focus(target);");
+        source.Should().NotContain("ParseDefaultFontSizeOrFallback");
+        source.Should().NotContain("ParseDefaultSheetCountOrFallback");
+    }
+
+    [Fact]
     public void OptionsDialog_ExposesExcelLikeAdvancedAndDisplayAffordances()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
