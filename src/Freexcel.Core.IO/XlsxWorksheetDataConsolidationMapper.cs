@@ -77,7 +77,9 @@ internal static class XlsxWorksheetDataConsolidationMapper
         {
             try
             {
-                return XElement.Parse(model.NativeXml);
+                var nativeElement = XElement.Parse(model.NativeXml);
+                if (nativeElement.Name == WorksheetNs + "dataConsolidate")
+                    return nativeElement;
             }
             catch
             {
