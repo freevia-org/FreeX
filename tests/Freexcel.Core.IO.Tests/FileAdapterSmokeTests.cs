@@ -11574,6 +11574,11 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SingleXmlCells.Should().NotBeNull();
+        loadedSheet.SingleXmlCells!.Cells.Should().ContainSingle(cell =>
+            cell.Id == 1 &&
+            cell.Reference == "A1" &&
+            cell.XmlCellPropertyId == 1);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11584,6 +11589,86 @@ public partial class FileAdapterSmokeTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("singleXmlCells");
         worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("xmlCellPrId=\"1\"");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetSingleXmlCells()
+    {
+        var workbook = new Workbook("SingleXmlCellsNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeSingleXmlCellsAttr"] = "kept"
+            },
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1,
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["nativeSingleXmlCellAttr"] = "cell-kept"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        var loaded = adapter.Load(saved);
+
+        loaded.GetSheetAt(0).SingleXmlCells.Should().BeEquivalentTo(sheet.SingleXmlCells);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorksheetSingleXmlCells()
+    {
+        var workbook = new Workbook("SingleXmlCellsSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("mapped"));
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeSingleXmlCellsAttr"] = "kept"
+            },
+            Cells =
+            [
+                new WorksheetSingleXmlCellModel
+                {
+                    Id = 1,
+                    Reference = "A1",
+                    XmlCellPropertyId = 1,
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["nativeSingleXmlCellAttr"] = "cell-kept"
+                    }
+                }
+            ]
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var singleXmlCells = worksheetXml.Root!.Element(worksheetNs + "singleXmlCells");
+        singleXmlCells.Should().NotBeNull();
+        singleXmlCells!.Attribute("nativeSingleXmlCellsAttr")!.Value.Should().Be("kept");
+        var singleXmlCell = singleXmlCells.Elements(worksheetNs + "singleXmlCell").Should().ContainSingle().Which;
+        singleXmlCell.Attribute("id")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("r")!.Value.Should().Be("A1");
+        singleXmlCell.Attribute("xmlCellPrId")!.Value.Should().Be("1");
+        singleXmlCell.Attribute("nativeSingleXmlCellAttr")!.Value.Should().Be("cell-kept");
     }
 
     [Fact]
