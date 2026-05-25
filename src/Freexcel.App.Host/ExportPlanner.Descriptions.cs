@@ -28,11 +28,13 @@ internal static partial class ExportPlanner
             ? "bitmap text when fonts may not be embedded"
             : null;
         var language = DescribePdfLanguage(options.PdfLanguage, ExportFormat.Pdf);
+        var conformance = DescribePdfConformance(options.PdfConformance, ExportFormat.Pdf);
+        var tags = DescribeDocumentStructureTags(options.IncludeDocumentStructureTags, ExportFormat.Pdf);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, conformance, tags, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -73,11 +75,13 @@ internal static partial class ExportPlanner
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, format);
         var bitmapText = DescribeBitmapTextOption(options.BitmapTextWhenFontsMayNotBeEmbedded, format);
         var language = DescribePdfLanguage(options.PdfLanguage, format);
+        var conformance = DescribePdfConformance(options.PdfConformance, format);
+        var tags = DescribeDocumentStructureTags(options.IncludeDocumentStructureTags, format);
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, conformance, tags, open);
     }
 
 
@@ -129,6 +133,26 @@ internal static partial class ExportPlanner
         return format == ExportFormat.Xps
             ? "PDF language is PDF-only"
             : $"PDF language {normalized}";
+    }
+
+    private static string? DescribePdfConformance(PdfConformance conformance, ExportFormat format)
+    {
+        if (conformance == PdfConformance.Standard)
+            return null;
+
+        return format == ExportFormat.Xps
+            ? "PDF/A compliance is PDF-only and not supported"
+            : "PDF/A compliance is not supported";
+    }
+
+    private static string? DescribeDocumentStructureTags(bool includeDocumentStructureTags, ExportFormat format)
+    {
+        if (!includeDocumentStructureTags)
+            return null;
+
+        return format == ExportFormat.Xps
+            ? "tagged PDF structure is PDF-only and not supported"
+            : "tagged PDF structure is not supported";
     }
 
     private static string? DescribeInitialView(PdfInitialView initialView) =>

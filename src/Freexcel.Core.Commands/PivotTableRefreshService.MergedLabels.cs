@@ -7,9 +7,14 @@ public static partial class PivotTableRefreshService
     private static void ApplyMergedRowLabels(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
     {
         if (!pivotTable.MergeAndCenterLabels ||
-            pivotTable.ReportLayout == PivotReportLayout.Compact ||
             pivotTable.RowFields.Count <= 1)
         {
+            return;
+        }
+
+        if (pivotTable.ReportLayout == PivotReportLayout.Compact)
+        {
+            MergeCompactRowLabelHeaderAcrossColumnHeaderRows(workbook, sheet, pivotTable);
             return;
         }
 
@@ -35,6 +40,31 @@ public static partial class PivotTableRefreshService
             bodyStart.Row + 1,
             bodyStart.Col,
             bodyStart.Col + (uint)rowLabelColumnCount - 1);
+    }
+
+    private static void MergeCompactRowLabelHeaderAcrossColumnHeaderRows(
+        Workbook workbook,
+        Sheet sheet,
+        PivotTableModel pivotTable)
+    {
+        if (pivotTable.ColumnFields.Count <= 1)
+            return;
+
+        var bodyStart = GetPivotBodyStart(pivotTable);
+        var endRow = bodyStart.Row + (uint)pivotTable.ColumnFields.Count - 1;
+        if (sheet.GetCell(bodyStart.Row, bodyStart.Col)?.Value is not TextValue text ||
+            !string.Equals(text.Value, "Row Labels", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        for (var row = bodyStart.Row + 1; row <= endRow; row++)
+        {
+            if (sheet.GetCell(row, bodyStart.Col) is not null)
+                return;
+        }
+
+        MergeLabelRegion(workbook, sheet, bodyStart.Row, endRow, bodyStart.Col, bodyStart.Col);
     }
 
     private static void MergeRepeatedLabelsInColumn(
