@@ -1020,6 +1020,77 @@ public sealed class ChartDialogTests
         }
     }
 
+    [Fact]
+    public void ChartBarFormatDialogResult_ClampsGapWidthTo0To500()
+    {
+        ChartBarFormatDialogResult.CreateResult(-10, 0).BarGapWidth.Should().Be(0);
+        ChartBarFormatDialogResult.CreateResult(600, 0).BarGapWidth.Should().Be(500);
+        ChartBarFormatDialogResult.CreateResult(150, 0).BarGapWidth.Should().Be(150);
+        ChartBarFormatDialogResult.CreateResult(0, 0).BarGapWidth.Should().Be(0);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_ClampsOverlapToMinus100To100()
+    {
+        ChartBarFormatDialogResult.CreateResult(150, -200).BarOverlap.Should().Be(-100);
+        ChartBarFormatDialogResult.CreateResult(150, 200).BarOverlap.Should().Be(100);
+        ChartBarFormatDialogResult.CreateResult(150, 50).BarOverlap.Should().Be(50);
+        ChartBarFormatDialogResult.CreateResult(150, -50).BarOverlap.Should().Be(-50);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel { Type = ChartType.Column, BarGapWidth = 200, BarOverlap = 30 };
+        var result = ChartBarFormatDialogResult.FromChart(chart);
+        result.BarGapWidth.Should().Be(200);
+        result.BarOverlap.Should().Be(30);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_UsesDefaultsWhenChartHasNoGapWidth()
+    {
+        var chart = new ChartModel { Type = ChartType.Column };
+        var result = ChartBarFormatDialogResult.FromChart(chart);
+        result.BarGapWidth.Should().Be(150);
+        result.BarOverlap.Should().Be(0);
+    }
+
+    [Fact]
+    public void ChartBarFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartBarFormatDialogResult.CreateResult(200, 30);
+        result.ToOptions().BarGapWidth.Should().Be(200);
+        result.ToOptions().BarOverlap.Should().Be(30);
+    }
+
+    [Fact]
+    public void ChartBubbleFormatDialogResult_ClampsBubbleScaleTo1To300()
+    {
+        ChartBubbleFormatDialogResult.CreateResult(0, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(1);
+        ChartBubbleFormatDialogResult.CreateResult(400, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(300);
+        ChartBubbleFormatDialogResult.CreateResult(100, false, ChartBubbleSizeRepresents.Area).BubbleScale.Should().Be(100);
+    }
+
+    [Fact]
+    public void ChartBubbleFormatDialogResult_LoadsFromChart()
+    {
+        var chart = new ChartModel { Type = ChartType.Bubble, BubbleScale = 150, ShowNegativeBubbles = true, BubbleSizeRepresents = ChartBubbleSizeRepresents.Width };
+        var result = ChartBubbleFormatDialogResult.FromChart(chart);
+        result.BubbleScale.Should().Be(150);
+        result.ShowNegativeBubbles.Should().BeTrue();
+        result.BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
+    [Fact]
+    public void ChartBubbleFormatDialogResult_MapsToLayoutOptions()
+    {
+        var result = ChartBubbleFormatDialogResult.CreateResult(150, true, ChartBubbleSizeRepresents.Width);
+        result.ToOptions().BubbleScale.Should().Be(150);
+        result.ToOptions().ShowNegativeBubbles.Should().BeTrue();
+        result.ToOptions().BubbleSizeRepresents.Should().Be(ChartBubbleSizeRepresents.Width);
+    }
+
     private static string ReadChartDialogSource() =>
         string.Join(Environment.NewLine, new[]
         {
