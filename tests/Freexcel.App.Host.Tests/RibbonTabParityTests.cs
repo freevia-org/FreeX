@@ -73,6 +73,7 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
         ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
+        ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonTooltip.Title=\"Shape Fill\"");
     }
 
     [Fact]

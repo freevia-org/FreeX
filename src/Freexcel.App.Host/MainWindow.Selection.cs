@@ -389,6 +389,9 @@ public partial class MainWindow
         if (TryHandleFocusedSheetTabKeyboardNavigation(e))
             return;
 
+        if (TryHandleFocusedTaskPaneKeyboardNavigation(e))
+            return;
+
         if (TryHandleFocusedStatusBarKeyboardNavigation(e))
             return;
 
