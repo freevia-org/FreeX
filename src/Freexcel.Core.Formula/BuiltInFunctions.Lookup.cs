@@ -231,17 +231,21 @@ public static partial class BuiltInFunctions
         if (lookupArr.RowCount != 1 && lookupArr.ColCount != 1) return ErrorValue.Value;
 
         var lookupFlat = lookupArr.Flatten();
-        double rawMatchMode  = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
-        double rawSearchMode = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        var matchModeArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        var searchModeArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], matchModeArg, searchModeArg, (lookupValue, matchModeValue, searchModeValue) => XmatchScalar(lookupValue, lookupFlat, matchModeValue, searchModeValue));
+    }
+
+    private static ScalarValue XmatchScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, ScalarValue matchModeValue, ScalarValue searchModeValue)
+    {
+        double rawMatchMode  = matchModeValue is not BlankValue ? ToNumber(matchModeValue) : 0;
+        double rawSearchMode = searchModeValue is not BlankValue ? ToNumber(searchModeValue) : 1;
         if (!double.IsFinite(rawMatchMode) || !double.IsFinite(rawSearchMode)) return ErrorValue.Value;
         int matchMode  = (int)rawMatchMode;
         int searchMode = (int)rawSearchMode;
         if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
         if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
-        if (args[0] is RangeValue lookupValueRange)
-            return MapUnaryTextRange(lookupValueRange, value => XmatchScalar(value, lookupFlat, matchMode, searchMode));
-
-        return XmatchScalar(args[0], lookupFlat, matchMode, searchMode);
+        return XmatchScalar(lookupValue, lookupFlat, matchMode, searchMode);
     }
 
     private static ScalarValue XmatchScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, int matchMode, int searchMode)

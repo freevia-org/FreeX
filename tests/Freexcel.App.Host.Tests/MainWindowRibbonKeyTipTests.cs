@@ -248,6 +248,27 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ConditionalFormattingNestedMenuKeyTips_RoutePrefixedChildChoices()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.L);
+            harness.HandleKeyTip(Key.I);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemSubmenuIsOpen("Icon Sets").Should().BeTrue();
+            harness.ActiveMenuItemGestureText("3 Arrows").Should().Be("I3");
+
+            harness.HandleKeyTip(Key.D3);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupKeyTip_RoutesThroughVisibleOverflowGroup()
     {
         RunSta(() =>
