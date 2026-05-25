@@ -278,6 +278,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetSortState()
+    {
+        var workbook = new Workbook("WorksheetSortStateNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:A3",
+            CaseSensitive = true,
+            SortMethod = "stroke",
+            NativeXml = "<sortState xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" ref=\"A1:A3\" caseSensitive=\"1\" sortMethod=\"stroke\" customSortStateFlag=\"keep\"><sortCondition ref=\"A2:A3\" descending=\"1\" sortBy=\"cellColor\" customSortConditionFlag=\"keep\" /></sortState>",
+            NativeAttributes = new Dictionary<string, string> { ["customSortStateFlag"] = "keep" },
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A3",
+                    Descending = true,
+                    SortBy = "cellColor",
+                    NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.SortState.Should().BeEquivalentTo(sheet.SortState);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -14463,6 +14497,19 @@ public partial class FileAdapterSmokeTests
         loaded.GetSheetAt(0).AutoFilter.Should().NotBeNull();
         loaded.GetSheetAt(0).AutoFilter!.Reference.Should().Be("A1:B3");
         loaded.GetSheetAt(0).AutoFilter!.NativeXml.Should().Contain("filterColumn");
+        var loadedSortState = loaded.GetSheetAt(0).SortState;
+        loadedSortState.Should().NotBeNull();
+        loadedSortState!.Reference.Should().Be("A1:A3");
+        loadedSortState.CaseSensitive.Should().BeTrue();
+        loadedSortState.SortMethod.Should().Be("stroke");
+        loadedSortState.NativeAttributes.Should().Contain("customSortStateFlag", "keep");
+        loadedSortState.Conditions.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorksheetSortConditionModel
+        {
+            Reference = "A2:A3",
+            Descending = true,
+            SortBy = "cellColor",
+            NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14475,7 +14522,10 @@ public partial class FileAdapterSmokeTests
         var sortState = worksheetXml.Root!.Element(worksheetNs + "sortState");
         sortState.Should().NotBeNull();
         sortState!.ToString().Should().Contain("ref=\"A1:A3\"");
+        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep");
         sortState.ToString().Should().Contain("descending=\"1\"");
+        sortState.ToString().Should().Contain("sortBy=\"cellColor\"");
+        sortState.ToString().Should().Contain("customSortConditionFlag=\"keep\"");
     }
 
     [Fact]
@@ -18656,10 +18706,15 @@ public partial class FileAdapterSmokeTests
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sortState",
                 new XAttribute("ref", "A1:A3"),
+                new XAttribute("caseSensitive", "1"),
+                new XAttribute("sortMethod", "stroke"),
+                new XAttribute("customSortStateFlag", "keep"),
                 new XElement(
                     worksheetNs + "sortCondition",
                     new XAttribute("ref", "A2:A3"),
-                    new XAttribute("descending", "1"))));
+                    new XAttribute("descending", "1"),
+                    new XAttribute("sortBy", "cellColor"),
+                    new XAttribute("customSortConditionFlag", "keep"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

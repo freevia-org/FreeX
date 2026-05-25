@@ -230,6 +230,7 @@ public sealed partial class XlsxFileAdapter
             sheet.CustomProperties.Add(property);
         sheet.SmartTags = layout.SmartTags;
         sheet.DataConsolidation = layout.DataConsolidation;
+        sheet.SortState = layout.SortState;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
     }

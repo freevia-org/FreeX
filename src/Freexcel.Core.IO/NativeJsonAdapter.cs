@@ -123,6 +123,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.AutoFilter = ToWorksheetAutoFilter(sDto.AutoFilter);
             sheet.SmartTags = ToWorksheetSmartTags(sDto.SmartTags);
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
+            sheet.SortState = ToWorksheetSortState(sDto.SortState);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }
