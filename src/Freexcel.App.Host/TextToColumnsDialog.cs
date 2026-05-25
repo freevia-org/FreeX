@@ -201,6 +201,18 @@ public sealed partial class TextToColumnsDialog : Window
                 throw new ArgumentException("Custom delimiter is required.");
             }
 
+            if (!TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _))
+            {
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                throw new ArgumentException("Enter a single decimal separator.");
+            }
+
+            if (!TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _))
+            {
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
+                throw new ArgumentException("Enter a single thousands separator.");
+            }
+
             Result = _fixedWidthButton.IsChecked == true
                 ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text, destination, BuildColumnFormats(_previewColumnCount), BuildAdvancedOptions())
                 : CreateResult(
@@ -232,6 +244,12 @@ public sealed partial class TextToColumnsDialog : Window
                 break;
             case "Custom delimiter is required.":
                 FocusInvalidCustomDelimiterInput();
+                break;
+            case "Enter a single decimal separator.":
+                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+                break;
+            case "Enter a single thousands separator.":
+                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
                 break;
         }
     }

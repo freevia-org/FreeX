@@ -100,6 +100,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Decimal separator:");
         source.Should().Contain("_Thousands separator:");
         source.Should().Contain("_Trailing minus for negative numbers");
+        source.Should().Contain("TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _)");
+        source.Should().Contain("TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _)");
+        source.Should().Contain("FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);");
+        source.Should().Contain("FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);");
     }
 
     [Fact]
@@ -662,6 +666,21 @@ public sealed class DataToolDialogTests
             advancedOptions: advanced);
 
         result.AdvancedOptions.Should().Be(advanced);
+    }
+
+    [Theory]
+    [InlineData(".", true, ".")]
+    [InlineData(" , ", true, ",")]
+    [InlineData("", false, "")]
+    [InlineData("  ", false, "")]
+    [InlineData("..", false, "")]
+    public void TextToColumnsResult_TryParseAdvancedSeparatorRequiresSingleCharacter(
+        string text,
+        bool expectedResult,
+        string expectedSeparator)
+    {
+        TextToColumnsDialog.TryParseAdvancedSeparator(text, out var separator).Should().Be(expectedResult);
+        separator.Should().Be(expectedSeparator);
     }
 
     [Fact]
