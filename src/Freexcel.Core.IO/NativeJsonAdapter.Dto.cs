@@ -20,6 +20,7 @@ public sealed partial class NativeJsonAdapter
         public WorkbookFileSharingDto? FileSharing { get; set; }
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
         public WorkbookFunctionGroupsDto? FunctionGroups { get; set; }
+        public WorkbookSmartTagMetadataDto? SmartTags { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
@@ -88,6 +89,23 @@ public sealed partial class NativeJsonAdapter
     private class WorkbookFunctionGroupDto
     {
         public string? Name { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorkbookSmartTagMetadataDto
+    {
+        public bool? Embed { get; set; }
+        public string? Show { get; set; }
+        public Dictionary<string, string> PropertiesNativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public Dictionary<string, string> TypesNativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorkbookSmartTagTypeDto> Types { get; set; } = [];
+    }
+
+    private class WorkbookSmartTagTypeDto
+    {
+        public string? NamespaceUri { get; set; }
+        public string? Name { get; set; }
+        public string? Url { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
