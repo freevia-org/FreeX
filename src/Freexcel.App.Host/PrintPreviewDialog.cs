@@ -122,7 +122,12 @@ public sealed partial class PrintPreviewDialog : Window
         AutomationProperties.SetHelpText(printButton, "Opens the Windows print dialog and applies the selected printer and copies when possible.");
         printButton.Click += (_, _) =>
         {
-            var copies = NormalizeCopyCount(copiesBox.Text);
+            if (!TryParseCopyCount(copiesBox.Text, out var copies))
+            {
+                ShowInvalidCopiesWarning(copiesBox);
+                return;
+            }
+
             copiesBox.Text = copies.ToString(CultureInfo.InvariantCulture);
             ShowNativePrintDialog(previewDocument, printerBox.SelectedItem as PrintQueue, copies);
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);

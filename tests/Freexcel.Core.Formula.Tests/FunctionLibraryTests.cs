@@ -7387,6 +7387,25 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WorkdayIntl_StartAndDaysRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2026, 5, 18).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2026, 5, 19).ToOADate())),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(-1)),
+            (3, 2, new NumberValue(1)));
+
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY.INTL(A1:A2,B1:B2,\"0000011\")", sheet),
+            new NumberValue(new DateTime(2026, 5, 21).ToOADate()),
+            new NumberValue(new DateTime(2026, 5, 18).ToOADate()));
+
+        _eval.Evaluate("=WORKDAY.INTL(A1:A2,B1:B3,\"0000011\")", sheet)
+            .Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void NetworkdaysIntl_UsesWeekendMaskAndHolidays()
     {
         var holiday = DateTimeValue.FromDateTime(new DateTime(2026, 5, 20));

@@ -134,6 +134,7 @@ public sealed partial class NativeJsonAdapter
                 ApplyOutlineStyles = s.ApplyOutlineStyles,
                 SheetFormatMetadata = FromWorksheetSheetFormatMetadata(s.SheetFormatMetadata),
                 DimensionMetadata = FromWorksheetDimensionMetadata(s.DimensionMetadata),
+                SheetPropertiesMetadata = FromWorksheetSheetPropertiesMetadata(s.SheetPropertiesMetadata),
                 GroupHiddenRows = s.GroupHiddenRows.Where(NativeJsonValueSanitizer.IsValidRowIndex).OrderBy(row => row).ToList(),
                 GroupHiddenCols = s.GroupHiddenCols.Where(NativeJsonValueSanitizer.IsValidColumnIndex).OrderBy(column => column).ToList(),
                 ViewMode = NativeJsonValueSanitizer.ValidEnumOrDefault(s.ViewMode, WorksheetViewMode.Normal),
@@ -519,6 +520,25 @@ public sealed partial class NativeJsonAdapter
         return new WorksheetDimensionMetadataDto
         {
             NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorksheetSheetPropertiesMetadataDto? FromWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = model.NativeChildXmls
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetSheetPropertiesMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
         };
     }
 
