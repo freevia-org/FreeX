@@ -121,6 +121,12 @@ public sealed partial class Sheet
                     NativeAttributes = new Dictionary<string, string>(SheetFormatMetadata.NativeAttributes, StringComparer.Ordinal),
                     NativeChildXmls = [.. SheetFormatMetadata.NativeChildXmls]
                 },
+            DimensionMetadata             = DimensionMetadata is null
+                ? null
+                : new WorksheetDimensionMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(DimensionMetadata.NativeAttributes, StringComparer.Ordinal)
+                },
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
             ProtectionMetadata            = ProtectionMetadata is null

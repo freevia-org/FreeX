@@ -25,6 +25,7 @@ public sealed partial class XlsxFileAdapter
         double? DefaultColumnWidth,
         double? DefaultRowHeight,
         WorksheetSheetFormatMetadataModel? SheetFormatMetadata,
+        WorksheetDimensionMetadataModel? DimensionMetadata,
         bool FullCalculationOnLoad,
         WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
@@ -267,6 +268,7 @@ public sealed partial class XlsxFileAdapter
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
+        var dimension = worksheetXml.Root?.Element(worksheetNs + "dimension");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
         var pageSetUpPr = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
@@ -327,6 +329,7 @@ public sealed partial class XlsxFileAdapter
                 ? defaultRowHeightPoints * (96.0 / 72.0)
                 : null,
             ReadWorksheetSheetFormatMetadata(sheetFormatPr),
+            ReadWorksheetDimensionMetadata(dimension),
             XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
@@ -379,6 +382,23 @@ public sealed partial class XlsxFileAdapter
             cachedFormulaErrors,
             explicitStyleOnlyCells,
             codeName);
+    }
+
+    private static WorksheetDimensionMetadataModel? ReadWorksheetDimensionMetadata(XElement? dimension)
+    {
+        if (dimension is null)
+            return null;
+
+        var model = new WorksheetDimensionMetadataModel();
+        foreach (var attribute in dimension.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || string.Equals(attribute.Name.LocalName, "ref", StringComparison.Ordinal))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 ? null : model;
     }
 
     private static WorksheetHeaderFooterMetadataModel? ReadWorksheetHeaderFooterMetadata(XElement? headerFooter)
