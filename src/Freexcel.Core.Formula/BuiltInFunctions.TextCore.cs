@@ -14,9 +14,14 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue formatError) return formatError;
-        var fmt = ToText(args[1]);
-        if (args[0] is RangeValue range) return MapTextFuncRange(range, fmt);
-        return TextFormatValue(args[0], fmt);
+        return MapBinaryMathArgs(args[0], args[1], TextScalarWithFormat);
+    }
+
+    private static ScalarValue TextScalarWithFormat(ScalarValue value, ScalarValue formatValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (formatValue is ErrorValue formatError) return formatError;
+        return TextFormatValue(value, ToText(formatValue));
     }
 
     private static RangeValue MapTextFuncRange(RangeValue range, string fmt)
