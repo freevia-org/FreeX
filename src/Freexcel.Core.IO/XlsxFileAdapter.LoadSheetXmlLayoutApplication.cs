@@ -55,6 +55,7 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
             ? null
             : layout.PrintQualityVerticalDpi;
+        sheet.PageMarginsMetadata = layout.PageMarginsMetadata;
         sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
         sheet.PageSetupMetadata = layout.PageSetupMetadata;
 
