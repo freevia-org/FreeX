@@ -24,6 +24,7 @@ public sealed partial class XlsxFileAdapter
         bool ShowFormulas,
         double? DefaultColumnWidth,
         double? DefaultRowHeight,
+        WorksheetSheetFormatMetadataModel? SheetFormatMetadata,
         bool FullCalculationOnLoad,
         WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
@@ -321,6 +322,7 @@ public sealed partial class XlsxFileAdapter
             ParseOptionalDouble(sheetFormatPr?.Attribute("defaultRowHeight")?.Value) is { } defaultRowHeightPoints
                 ? defaultRowHeightPoints * (96.0 / 72.0)
                 : null,
+            ReadWorksheetSheetFormatMetadata(sheetFormatPr),
             XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
@@ -372,6 +374,34 @@ public sealed partial class XlsxFileAdapter
             explicitStyleOnlyCells,
             codeName);
     }
+
+    private static WorksheetSheetFormatMetadataModel? ReadWorksheetSheetFormatMetadata(XElement? sheetFormatProperties)
+    {
+        if (sheetFormatProperties is null)
+            return null;
+
+        var model = new WorksheetSheetFormatMetadataModel
+        {
+            NativeChildXmls = sheetFormatProperties.Elements()
+                .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                .ToList()
+        };
+
+        foreach (var attribute in sheetFormatProperties.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration || IsModeledSheetFormatAttribute(attribute.Name.LocalName))
+                continue;
+
+            model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+            ? null
+            : model;
+    }
+
+    private static bool IsModeledSheetFormatAttribute(string name) =>
+        name is "defaultColWidth" or "defaultRowHeight";
 
     private static WorksheetPrintOptionsMetadataModel? ReadWorksheetPrintOptionsMetadata(XElement? printOptions)
     {
