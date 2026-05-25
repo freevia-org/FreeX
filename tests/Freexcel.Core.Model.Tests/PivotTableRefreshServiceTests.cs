@@ -1503,7 +1503,12 @@ public sealed class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().BeNull();
+        var pageCaptionStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        pageCaptionStyle.Bold.Should().BeTrue();
+        pageCaptionStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        var pageValueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId);
+        pageValueStyle.Bold.Should().BeTrue();
+        pageValueStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
         var bodyHeaderStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
         bodyHeaderStyle.Bold.Should().BeTrue();
         bodyHeaderStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
