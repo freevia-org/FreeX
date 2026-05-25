@@ -100,6 +100,24 @@ public sealed class DataTableDialog : Window
             return false;
         }
 
+        if (rowInputCell is { } rowCell && range.Contains(rowCell))
+        {
+            error = "Row input cell cannot be inside the data table range.";
+            return false;
+        }
+
+        if (columnInputCell is { } columnCell && range.Contains(columnCell))
+        {
+            error = "Column input cell cannot be inside the data table range.";
+            return false;
+        }
+
+        if (rowInputCell is { } rowInput && columnInputCell is { } columnInput && rowInput == columnInput)
+        {
+            error = "Row and column input cells must be different.";
+            return false;
+        }
+
         var mode = hasRowInput && hasColumnInput ? DataTableMode.TwoVariable : DataTableMode.OneVariable;
         var orientation = hasRowInput && !hasColumnInput
             ? DataTableInputOrientation.Row
@@ -193,7 +211,9 @@ public sealed class DataTableDialog : Window
 
     private void FocusInvalidInput(string? error)
     {
-        var target = string.Equals(error, "Enter a valid column input cell.", StringComparison.Ordinal)
+        var target = string.Equals(error, "Enter a valid column input cell.", StringComparison.Ordinal) ||
+            string.Equals(error, "Column input cell cannot be inside the data table range.", StringComparison.Ordinal) ||
+            string.Equals(error, "Row and column input cells must be different.", StringComparison.Ordinal)
             ? _columnInputBox
             : _rowInputBox;
         target.Focus();
