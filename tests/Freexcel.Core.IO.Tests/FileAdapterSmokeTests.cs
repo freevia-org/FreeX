@@ -2011,6 +2011,18 @@ public partial class FileAdapterSmokeTests
         sheet.FooterMargin = 0.45;
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
+        sheet.PrintOptionsMetadata = new WorksheetPrintOptionsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gridLinesSet"] = "1",
+                ["customAttr"] = "print-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePrintOptionsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PrintTitleRows = new WorksheetRepeatRange(1, 2);
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
@@ -2065,6 +2077,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.FooterMargin.Should().Be(0.45);
         loadedSheet.PrintGridlines.Should().BeTrue();
         loadedSheet.PrintHeadings.Should().BeTrue();
+        loadedSheet.PrintOptionsMetadata.Should().BeEquivalentTo(sheet.PrintOptionsMetadata);
         loadedSheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
         loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
@@ -13109,7 +13122,11 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrintOptionsMetadata.Should().NotBeNull();
+        loadedSheet.PrintOptionsMetadata!.NativeAttributes.Should().Contain("gridLinesSet", "1");
+        loadedSheet.PrintOptionsMetadata.NativeAttributes.Should().Contain("customAttr", "print-native");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
