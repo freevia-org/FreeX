@@ -1380,31 +1380,31 @@
                                             local:RibbonTooltip.Description="Insert a 3D surface chart using the same matrix renderer."/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <Button Content="Treemap"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Treemap"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTreemapMenuItem_Click"
                                             local:RibbonTooltip.Title="Treemap Chart" local:RibbonTooltip.KeyTip="T7"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Sunburst"     Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a treemap chart to compare hierarchical proportions."/>
+                                    <Button Content="Sunburst"     Width="78"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSunburstMenuItem_Click"
                                             local:RibbonTooltip.Title="Sunburst Chart" local:RibbonTooltip.KeyTip="SU"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Histogram"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a sunburst chart to compare hierarchical rings."/>
+                                    <Button Content="Histogram"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartHistogramMenuItem_Click"
                                             local:RibbonTooltip.Title="Histogram Chart" local:RibbonTooltip.KeyTip="HI"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a histogram chart to show value distribution."/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <Button Content="Pareto"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Pareto"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartParetoMenuItem_Click"
                                             local:RibbonTooltip.Title="Pareto Chart" local:RibbonTooltip.KeyTip="PA"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Box Plot"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a Pareto chart to rank values with a cumulative line."/>
+                                    <Button Content="Box Plot"     Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBoxAndWhiskerMenuItem_Click"
                                             local:RibbonTooltip.Title="Box and Whisker Chart" local:RibbonTooltip.KeyTip="BW"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
-                                    <Button Content="Waterfall"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                            local:RibbonTooltip.Description="Insert a box and whisker chart to summarize distributions."/>
+                                    <Button Content="Waterfall"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartWaterfallMenuItem_Click"
                                             local:RibbonTooltip.Title="Waterfall Chart" local:RibbonTooltip.KeyTip="WF"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a waterfall chart to show running value changes."/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <Button Content="Funnel"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                    <Button Content="Funnel"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFunnelMenuItem_Click"
                                             local:RibbonTooltip.Title="Funnel Chart" local:RibbonTooltip.KeyTip="FU"
-                                            local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                            local:RibbonTooltip.Description="Insert a funnel chart to compare staged values."/>
                                     <Button Content="Map"          Width="58"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
                                             local:RibbonTooltip.Title="Map Chart" local:RibbonTooltip.KeyTip="MP"
                                             local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
@@ -3121,7 +3121,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 2  Formula bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="FormulaBarBorder" Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4">
+        <Border x:Name="FormulaBarBorder" Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4,5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="80"/>
@@ -3131,12 +3131,13 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
-                         FontFamily="Consolas" FontSize="13"
+                         FontFamily="Consolas" FontSize="15"
+                         MinHeight="30"
                          TextOptions.TextFormattingMode="Display"
                          TextOptions.TextRenderingMode="ClearType"
                          TextOptions.TextHintingMode="Fixed"
                          VerticalContentAlignment="Center"
-                         BorderBrush="#C0C0C0" Padding="4,2"
+                         BorderBrush="#C0C0C0" Padding="5,3"
                          AutomationProperties.Name="Name Box"
                          AutomationProperties.HelpText="Go to a cell or named range"/>
 
@@ -3152,23 +3153,24 @@
 
                 <Grid Grid.Column="2">
                     <TextBlock x:Name="FormulaBarReferenceOverlay"
-                               Margin="6,3,4,2"
+                               Margin="7,3,5,2"
                                FontFamily="Calibri"
-                               FontSize="15"
+                               FontSize="18"
                                IsHitTestVisible="False"
                                VerticalAlignment="Center"
                                Visibility="Collapsed"
                                TextOptions.TextFormattingMode="Display"
                                TextOptions.TextRenderingMode="ClearType"
                                TextOptions.TextHintingMode="Fixed"/>
-                    <TextBox x:Name="FormulaBar" FontFamily="Calibri" FontSize="15"
+                    <TextBox x:Name="FormulaBar" FontFamily="Calibri" FontSize="18"
+                             MinHeight="30"
                              TextOptions.TextFormattingMode="Display"
                              TextOptions.TextRenderingMode="ClearType"
                              TextOptions.TextHintingMode="Fixed"
                              AcceptsReturn="True"
                              Background="Transparent"
                              CaretBrush="Black"
-                             VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
+                             VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="6,3"
                              AutomationProperties.Name="Formula Bar"
                              AutomationProperties.HelpText="Edit the active cell value or formula"
                              PreviewKeyDown="FormulaBar_KeyDown"/>
@@ -3727,9 +3729,9 @@
                             MinWidth="210"
                             Background="{StaticResource FreexcelStatusSurfaceBrush}"
                             Panel.ZIndex="1">
-                    <Button x:Name="StatusZoomOutButton" Content="−" Width="18" Height="18" Margin="0,0,2,0"
+                    <Button x:Name="StatusZoomOutButton" Content="−" Width="22" Height="22" Margin="0,0,2,0"
                             Background="Transparent" BorderThickness="0"
-                            Foreground="White" FontSize="14" Padding="0"
+                            Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
                             local:RibbonTooltip.Title="Zoom Out"
                             local:RibbonTooltip.KeyTip="SZ"/>
@@ -3741,9 +3743,9 @@
                             SmallChange="5" LargeChange="10"
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
-                    <Button x:Name="StatusZoomInButton" Content="+" Width="18" Height="18" Margin="0,0,6,0"
+                    <Button x:Name="StatusZoomInButton" Content="+" Width="22" Height="22" Margin="0,0,6,0"
                             Background="Transparent" BorderThickness="0"
-                            Foreground="White" FontSize="14" Padding="0"
+                            Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
                             local:RibbonTooltip.Title="Zoom In"
                             local:RibbonTooltip.KeyTip="SX"/>

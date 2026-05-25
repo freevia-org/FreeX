@@ -19,6 +19,39 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ConditionalFormatThresholdDialog_TryCreateResult_RejectsBlankThreshold()
+    {
+        ConditionalFormatThresholdDialog.TryCreateResult(" ", out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a threshold value.");
+    }
+
+    [Fact]
+    public void ConditionalFormatThresholdDialog_TryCreateResult_AcceptsTrimmedThreshold()
+    {
+        ConditionalFormatThresholdDialog.TryCreateResult("  100  ", out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new ConditionalFormatThresholdDialogResult("100"));
+    }
+
+    [Fact]
+    public void ConditionalFormatThresholdDialog_AcceptWarnsAndRefocusesBlankThreshold()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+
+        source.Should().Contain("if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter a threshold value.\");");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("_thresholdBox.Focus();");
+        source.Should().Contain("_thresholdBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_thresholdBox);");
+    }
+
+    [Fact]
     public void ConditionalFormatThresholdDialogOpenedFromKeyboard_FocusesThresholdBox()
     {
         var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
@@ -625,6 +658,43 @@ public sealed class RemainingDialogTests
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
+    }
+
+    [Theory]
+    [InlineData("", "Sheet name is invalid: it cannot be blank.")]
+    [InlineData("   ", "Sheet name is invalid: it cannot be blank.")]
+    [InlineData("This sheet name is far too long for Excel", "Sheet name is invalid: it cannot exceed 31 characters.")]
+    [InlineData("Bad/Name", "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].")]
+    public void SheetNameDialog_TryCreateResult_RejectsInvalidExcelSheetNames(string input, string expectedError)
+    {
+        SheetNameDialog.TryCreateResult(input, out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be(expectedError);
+    }
+
+    [Fact]
+    public void SheetNameDialog_TryCreateResult_AcceptsTrimmedValidSheetName()
+    {
+        SheetNameDialog.TryCreateResult("  Report  ", out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new SheetNameDialogResult("Report"));
+    }
+
+    [Fact]
+    public void SheetNameDialog_AcceptWarnsAndRefocusesInvalidName()
+    {
+        var source = ReadClassSource("SheetNameDialog.cs", "public sealed class SheetNameDialog", "public sealed record __NoNextSheetNameDialog");
+
+        source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(\"Sheet _name:\", _nameBox, Accept);");
+        source.Should().Contain("if (!TryCreateResult(_nameBox.Text, out var result, out var error))");
+        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("_nameBox.Focus();");
+        source.Should().Contain("_nameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_nameBox);");
     }
 
     [Fact]

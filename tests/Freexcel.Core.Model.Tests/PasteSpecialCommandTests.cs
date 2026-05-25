@@ -570,6 +570,151 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteDataValidationCommand_RebasesRelativeCustomFormulaWhenPasted()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.Custom,
+            Formula1 = "=B1+$C1+B$1+$C$1>0"
+        });
+
+        new PasteDataValidationCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new CellAddress(sheet.Id, 3, 3),
+            transpose: false).Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.DataValidations.Should()
+            .ContainSingle(rule => rule.AppliesTo.Start.Row == 3 && rule.AppliesTo.Start.Col == 3)
+            .Which;
+        pasted.Formula1.Should().Be("=D3+$C3+D$1+$C$1>0");
+    }
+
+    [Fact]
+    public void PasteDataValidationCommand_RebasesBothBoundaryFormulasWhenPasted()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 4, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "=B4",
+            Formula2 = "=C4"
+        });
+
+        new PasteDataValidationCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new CellAddress(sheet.Id, 6, 3),
+            transpose: false).Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.DataValidations.Should()
+            .ContainSingle(rule => rule.AppliesTo.Start.Row == 6 && rule.AppliesTo.Start.Col == 3)
+            .Which;
+        pasted.Formula1.Should().Be("=D6");
+        pasted.Formula2.Should().Be("=E6");
+    }
+
+    [Fact]
+    public void PasteDataValidationCommand_RebasesRelativeListRangeAndKeepsAbsoluteListRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 3, 1));
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1)),
+            Type = DvType.List,
+            Formula1 = "=B1:B3"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 3, 1)),
+            Type = DvType.List,
+            Formula1 = "=$B$1:$B$3"
+        });
+
+        new PasteDataValidationCommand(
+            sheet.Id,
+            sourceRange,
+            new CellAddress(sheet.Id, 4, 3),
+            transpose: false).Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == new GridRange(new CellAddress(sheet.Id, 4, 3), new CellAddress(sheet.Id, 4, 3))
+            && rule.Formula1 == "=D3:D5");
+        sheet.DataValidations.Should().Contain(rule =>
+            rule.AppliesTo == new GridRange(new CellAddress(sheet.Id, 5, 3), new CellAddress(sheet.Id, 5, 3))
+            && rule.Formula1 == "=$B$1:$B$3");
+    }
+
+    [Fact]
+    public void PasteDataValidationCommand_PreservesInlineListAndNamedRangeSourcesWhenPasted()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana"
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1)),
+            Type = DvType.List,
+            Formula1 = "=Codes"
+        });
+
+        new PasteDataValidationCommand(
+            sheet.Id,
+            sourceRange,
+            new CellAddress(sheet.Id, 4, 3),
+            transpose: false).Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().Contain(rule => rule.AppliesTo.Start.Row == 4 && rule.Formula1 == "Apple,Banana");
+        sheet.DataValidations.Should().Contain(rule => rule.AppliesTo.Start.Row == 5 && rule.Formula1 == "=Codes");
+    }
+
+    [Fact]
+    public void PasteDataValidationCommand_RebasesSheetQualifiedRelativeListSourceWhenPasted()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 3, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.List,
+            Formula1 = "=Lookup!A1:A3"
+        });
+
+        new PasteDataValidationCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new CellAddress(sheet.Id, 5, 3),
+            transpose: false).Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DataValidations.Should().ContainSingle(rule =>
+            rule.AppliesTo.Start.Row == 5
+            && rule.AppliesTo.Start.Col == 3
+            && rule.Formula1 == "=Lookup!C3:C5");
+    }
+
+    [Fact]
     public void PasteLinkService_CreatesFormulasReferencingSourceCells()
     {
         var sheetId = SheetId.New();

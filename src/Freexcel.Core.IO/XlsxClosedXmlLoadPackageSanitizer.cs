@@ -32,6 +32,8 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
         {
             if (requirements.HasPivotPackageMetadata)
                 XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
+            if (requirements.HasChartExChartParts)
+                RemoveChartExDrawingRelationships(archive);
             if (requirements.HasUnsupportedConditionalFormattingBlocks)
                 RemoveUnsupportedConditionalFormattingBlocks(archive);
         }
@@ -49,11 +51,12 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
             using var archive = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
             return new SanitizationRequirements(
                 HasPivotPackageMetadata(archive),
+                HasChartExChartParts(archive),
                 scanUnsupportedConditionalFormatting && HasUnsupportedConditionalFormattingBlocks(archive));
         }
         catch
         {
-            return new SanitizationRequirements(true, true);
+            return new SanitizationRequirements(true, true, true);
         }
         finally
         {
@@ -64,15 +67,74 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
 
     private readonly record struct SanitizationRequirements(
         bool HasPivotPackageMetadata,
+        bool HasChartExChartParts,
         bool HasUnsupportedConditionalFormattingBlocks)
     {
-        public bool RequiresAny => HasPivotPackageMetadata || HasUnsupportedConditionalFormattingBlocks;
+        public bool RequiresAny => HasPivotPackageMetadata || HasChartExChartParts || HasUnsupportedConditionalFormattingBlocks;
     }
 
     private static bool HasPivotPackageMetadata(ZipArchive archive) =>
         archive.Entries.Any(entry =>
             entry.FullName.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
             entry.FullName.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase));
+
+    private static bool HasChartExChartParts(ZipArchive archive) =>
+        GetChartExPartNames(archive).Count > 0;
+
+    private static HashSet<string> GetChartExPartNames(ZipArchive archive)
+    {
+        const string chartExContentType = "application/vnd.ms-office.chartex+xml";
+        XNamespace contentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return [];
+
+        var contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        return contentTypesXml.Root?
+            .Elements(contentTypesNs + "Override")
+            .Where(element => string.Equals(element.Attribute("ContentType")?.Value, chartExContentType, StringComparison.OrdinalIgnoreCase))
+            .Select(element => element.Attribute("PartName")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.TrimStart('/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? [];
+    }
+
+    private static void RemoveChartExDrawingRelationships(ZipArchive archive)
+    {
+        var chartExParts = GetChartExPartNames(archive);
+        if (chartExParts.Count == 0)
+            return;
+
+        const string chartRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+        const string chartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        foreach (var relsEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/drawings/_rels/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml.rels", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var drawingPath = "xl/drawings/" + relsEntry.FullName["xl/drawings/_rels/".Length..^".rels".Length];
+            var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+            var chartExRelationships = relsXml.Root?
+                .Elements(packageRelNs + "Relationship")
+                .Where(element =>
+                    (string.Equals(element.Attribute("Type")?.Value, chartRelationshipType, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(element.Attribute("Type")?.Value, chartExRelationshipType, StringComparison.OrdinalIgnoreCase)) &&
+                    element.Attribute("Target")?.Value is { Length: > 0 } target &&
+                    chartExParts.Contains(XlsxPackagePath.ResolveRelationshipTarget(drawingPath, target)))
+                .ToList()
+                ?? [];
+
+            if (chartExRelationships.Count == 0)
+                continue;
+
+            chartExRelationships.Remove();
+            XlsxPackageXmlEditor.ReplaceXml(archive, relsEntry.FullName, relsXml);
+        }
+    }
 
     private static bool HasUnsupportedConditionalFormattingBlocks(ZipArchive archive)
     {

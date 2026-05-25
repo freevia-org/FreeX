@@ -10,31 +10,79 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public enum PrintPreviewPageRangeMode
+{
+    AllPages,
+    CurrentPage
+}
+
 public sealed partial class PrintPreviewDialog
 {
     public static string CreateTitle(string workbookName) =>
         $"Print Preview - {workbookName.Trim()}";
 
-    public static int NormalizeCopyCount(string? text)
+    public static bool TryParseCopyCount(string? text, out int copies)
     {
-        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var copies))
-            return 1;
+        copies = 0;
+        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed is < 1 or > 999)
+            return false;
 
-        return Math.Clamp(copies, 1, 999);
+        copies = parsed;
+        return true;
     }
 
-    private static void ShowNativePrintDialog(FixedDocument document, PrintQueue? printQueue, int copies)
+    public static bool TryParsePageNumber(string? text, int totalPages, out int pageNumber)
+    {
+        pageNumber = 0;
+        if (totalPages < 1
+            || !int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed < 1
+            || parsed > totalPages)
+            return false;
+
+        pageNumber = parsed;
+        return true;
+    }
+
+    private void ShowInvalidCopiesWarning(TextBox copiesBox)
+    {
+        MessageBox.Show(this, "Enter a copy count from 1 to 999.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        copiesBox.Focus();
+        copiesBox.SelectAll();
+        Keyboard.Focus(copiesBox);
+    }
+
+    private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
+    {
+        MessageBox.Show(this, $"Enter a page number from 1 to {totalPages}.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        pageNumberBox.Focus();
+        pageNumberBox.SelectAll();
+        Keyboard.Focus(pageNumberBox);
+    }
+
+    public static DocumentPaginator ResolvePrintPaginator(
+        FixedDocument document,
+        PrintPreviewPageRangeMode pageRangeMode,
+        int currentPage) =>
+        pageRangeMode == PrintPreviewPageRangeMode.CurrentPage
+            ? new PageRangeDocumentPaginator(document.DocumentPaginator, new ExportPageRange(currentPage, currentPage))
+            : document.DocumentPaginator;
+
+    private static void ShowNativePrintDialog(DocumentPaginator paginator, PrintQueue? printQueue, int copies, bool collated)
     {
         var dialog = new PrintDialog();
         if (printQueue is not null)
             dialog.PrintQueue = printQueue;
 
-        copies = NormalizeCopyCount(copies.ToString(CultureInfo.InvariantCulture));
         if (dialog.PrintTicket is not null)
+        {
             dialog.PrintTicket.CopyCount = copies;
+            dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
+        }
 
         if (dialog.ShowDialog() == true)
-            dialog.PrintDocument(document.DocumentPaginator, "Freexcel worksheet");
+            dialog.PrintDocument(paginator, "Freexcel worksheet");
     }
 
     private static void PopulatePrinterBox(ComboBox printerBox)
@@ -71,9 +119,10 @@ public sealed partial class PrintPreviewDialog
 
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
     {
-        var copies = NormalizeCopyCount(copiesBox.Text);
+        var copyText = TryParseCopyCount(copiesBox.Text, out var copies)
+            ? copies == 1 ? "1 copy" : $"{copies} copies"
+            : "invalid copies";
         var pages = totalPages == 1 ? "1 page" : $"{totalPages} pages";
-        var copyText = copies == 1 ? "1 copy" : $"{copies} copies";
         var printerName = printerBox.SelectedItem is PrintQueue queue
             ? queue.FullName
             : "Windows print dialog";
@@ -81,12 +130,14 @@ public sealed partial class PrintPreviewDialog
         statusText.Text = $"Ready: {printerName}; {copyText}; {pages}";
     }
 
-    private static void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
+    private void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
     {
-        if (!int.TryParse(pageNumberBox.Text.Trim(), out var pageNumber))
+        if (!TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber))
+        {
+            ShowInvalidPageNumberWarning(pageNumberBox, totalPages);
             return;
+        }
 
-        pageNumber = Math.Clamp(pageNumber, 1, totalPages);
         viewer.GoToPage(pageNumber);
         pageNumberBox.Text = pageNumber.ToString(CultureInfo.InvariantCulture);
         pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
@@ -102,7 +153,8 @@ public sealed partial class PrintPreviewDialog
         SheetId sheetId,
         Sheet? sheet,
         Action<IWorkbookCommand>? executeCommand,
-        Action refreshPreview)
+        Action refreshPreview,
+        Action<PrintPreviewSettings>? setPrintPreviewSettings = null)
     {
         var panel = new StackPanel
         {
@@ -232,6 +284,29 @@ public sealed partial class PrintPreviewDialog
             refreshPreview();
         };
         panel.Children.Add(scaleBox);
+
+        var ignorePrintAreaBox = new CheckBox
+        {
+            Content = "_Ignore print area",
+            IsChecked = false,
+            IsEnabled = sheet?.PrintArea is not null && setPrintPreviewSettings is not null,
+            Margin = new Thickness(0, 6, 0, 4),
+            ToolTip = "Preview and print the active sheet instead of the stored print area."
+        };
+        AutomationProperties.SetName(ignorePrintAreaBox, "Ignore print area");
+        AutomationProperties.SetHelpText(ignorePrintAreaBox, "When checked, the preview prints the active sheet instead of the stored print area.");
+        void ApplyPrintPreviewSettings()
+        {
+            if (setPrintPreviewSettings is null)
+                return;
+
+            setPrintPreviewSettings(new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true));
+            refreshPreview();
+        }
+
+        ignorePrintAreaBox.Checked += (_, _) => ApplyPrintPreviewSettings();
+        ignorePrintAreaBox.Unchecked += (_, _) => ApplyPrintPreviewSettings();
+        panel.Children.Add(ignorePrintAreaBox);
 
         AddSectionLabel("Print Options");
         var gridlinesBox = new CheckBox

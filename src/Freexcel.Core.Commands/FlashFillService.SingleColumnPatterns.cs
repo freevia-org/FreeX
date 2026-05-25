@@ -132,6 +132,37 @@ public static partial class FlashFillService
         return true;
     }
 
+    private static Func<string, string?>? TryStripThousandSeparators(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (!source.Contains(',', StringComparison.Ordinal))
+                return null;
+            if (source.Replace(",", string.Empty) != expected)
+                return null;
+        }
+
+        return s => s.Replace(",", string.Empty);
+    }
+
+    private static Func<string, string?>? TryExtractDigitsOnly(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var (source, expected) in examples)
+        {
+            if (source.All(char.IsDigit))
+                return null;
+            var digits = ExtractDigits(source);
+            if (digits.Length == 0 || digits != expected)
+                return null;
+        }
+
+        return s =>
+        {
+            var digits = ExtractDigits(s);
+            return digits.Length > 0 ? digits : null;
+        };
+    }
+
     private static Func<string, string?>? TryDelimitedPartReorder(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var sourceDelimiter in Delimiters)

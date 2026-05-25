@@ -763,6 +763,66 @@ public sealed class FlashFillCommandTests
         sheet.GetCell(3, 3)!.Value.Should().Be(new TextValue("Alan Turing"));
     }
 
+    [Fact]
+    public void Fill_StripThousandSeparators_RemovesCommasFromNumbers()
+    {
+        var result = FlashFillService.Fill(
+            [("1,234", "1234"), ("5,678", "5678")],
+            ["9,000", "12,345"]);
+
+        result.Should().BeEquivalentTo(["9000", "12345"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_StripThousandSeparators_HandlesMultipleGroupSeparators()
+    {
+        var result = FlashFillService.Fill(
+            [("1,234,567", "1234567"), ("9,000,001", "9000001")],
+            ["2,500,000"]);
+
+        result.Should().BeEquivalentTo(["2500000"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_StripThousandSeparators_HandlesMixedDecimalAndGrouping()
+    {
+        var result = FlashFillService.Fill(
+            [("1,234.56", "1234.56"), ("9,000.00", "9000.00")],
+            ["2,500.75"]);
+
+        result.Should().BeEquivalentTo(["2500.75"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractDigitsOnly_StripsAllNonDigitCharacters()
+    {
+        var result = FlashFillService.Fill(
+            [("(555) 867-5309", "5558675309"), ("(800) 555-0100", "8005550100")],
+            ["(212) 555-1234"]);
+
+        result.Should().BeEquivalentTo(["2125551234"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractDigitsOnly_WorksWithDashSeparatedFormats()
+    {
+        var result = FlashFillService.Fill(
+            [("123-45-6789", "123456789"), ("987-65-4321", "987654321")],
+            ["555-12-3456"]);
+
+        result.Should().BeEquivalentTo(["555123456"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_ExtractDigitsOnly_ReturnsNullWhenSourceHasNoDigits()
+    {
+        var result = FlashFillService.Fill(
+            [("(555) 867-5309", "5558675309"), ("(800) 555-0100", "8005550100")],
+            ["no digits here"]);
+
+        result.Should().BeNull();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

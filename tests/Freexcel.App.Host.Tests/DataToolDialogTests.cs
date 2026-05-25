@@ -100,6 +100,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Decimal separator:");
         source.Should().Contain("_Thousands separator:");
         source.Should().Contain("_Trailing minus for negative numbers");
+        source.Should().Contain("TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _)");
+        source.Should().Contain("TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _)");
+        source.Should().Contain("FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);");
+        source.Should().Contain("FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);");
     }
 
     [Fact]
@@ -249,6 +253,7 @@ public sealed class DataToolDialogTests
     {
         var source = ReadTextToColumnsDialogSources();
 
+        source.Should().Contain("TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _)");
         source.Should().Contain("FocusInvalidFixedWidthBreaksInput();");
         source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
         source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
@@ -287,6 +292,24 @@ public sealed class DataToolDialogTests
         var result = TextToColumnsDialog.CreateFixedWidthResult("4,8");
         result.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
         result.FixedWidthBreakPositions.Should().Equal(4, 8);
+    }
+
+    [Theory]
+    [InlineData("4,bad", 12)]
+    [InlineData("0,4", 12)]
+    [InlineData("4,12", 12)]
+    [InlineData("", 12)]
+    public void TextToColumnsResult_RejectsInvalidFixedWidthBreakPositions(string text, int maxLength)
+    {
+        TextToColumnsDialog.TryParseFixedWidthBreakPositions(text, maxLength, out var positions).Should().BeFalse();
+        positions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TextToColumnsResult_TryParseFixedWidthBreakPositionsRequiresPreviewRange()
+    {
+        TextToColumnsDialog.TryParseFixedWidthBreakPositions("8, 4; 4", 12, out var positions).Should().BeTrue();
+        positions.Should().Equal(4, 8);
     }
 
     [Fact]
@@ -349,17 +372,17 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsResult_ParsesDestinationCellOrDefaultsToSelectionStart()
+    public void TextToColumnsResult_RequiresSingleDestinationCell()
     {
         var sheetId = SheetId.New();
         var defaultDestination = new CellAddress(sheetId, 2, 1);
 
-        TextToColumnsDialog.TryParseDestination("", defaultDestination, out var blankDestination).Should().BeTrue();
-        blankDestination.Should().Be(defaultDestination);
+        TextToColumnsDialog.TryParseDestination("", defaultDestination, out _).Should().BeFalse();
 
         TextToColumnsDialog.TryParseDestination(" F2 ", defaultDestination, out var parsedDestination).Should().BeTrue();
         parsedDestination.Should().Be(new CellAddress(sheetId, 2, 6));
 
+        TextToColumnsDialog.TryParseDestination(" ", defaultDestination, out _).Should().BeFalse();
         TextToColumnsDialog.TryParseDestination("F2:G3", defaultDestination, out _).Should().BeFalse();
     }
 
@@ -643,6 +666,21 @@ public sealed class DataToolDialogTests
             advancedOptions: advanced);
 
         result.AdvancedOptions.Should().Be(advanced);
+    }
+
+    [Theory]
+    [InlineData(".", true, ".")]
+    [InlineData(" , ", true, ",")]
+    [InlineData("", false, "")]
+    [InlineData("  ", false, "")]
+    [InlineData("..", false, "")]
+    public void TextToColumnsResult_TryParseAdvancedSeparatorRequiresSingleCharacter(
+        string text,
+        bool expectedResult,
+        string expectedSeparator)
+    {
+        TextToColumnsDialog.TryParseAdvancedSeparator(text, out var separator).Should().Be(expectedResult);
+        separator.Should().Be(expectedSeparator);
     }
 
     [Fact]
@@ -1255,6 +1293,51 @@ public sealed class DataToolDialogTests
         error.Should().Be("Enter a valid column input cell.");
     }
 
+    [Theory]
+    [InlineData("B2", "", "Row input cell cannot be inside the data table range.")]
+    [InlineData("", "C3", "Column input cell cannot be inside the data table range.")]
+    public void DataTableDialog_RejectsInputCellInsideTableRange(
+        string rowInputCellText,
+        string columnInputCellText,
+        string expectedError)
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            range,
+            rowInputCellText,
+            columnInputCellText,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be(expectedError);
+    }
+
+    [Fact]
+    public void DataTableDialog_RejectsSameRowAndColumnInputCell()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            range,
+            rowInputCellText: "A1",
+            columnInputCellText: "A1",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Row and column input cells must be different.");
+    }
+
     [Fact]
     public void DataTableDialog_ExposesReferencePickersForCellInputs()
     {
@@ -1295,6 +1378,8 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string? error)");
+        source.Should().Contain("Column input cell cannot be inside the data table range.");
+        source.Should().Contain("Row and column input cells must be different.");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");

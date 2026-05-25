@@ -33,6 +33,52 @@ public sealed partial class AutoFilterDialog
             : Visibility.Collapsed;
     }
 
+    private void ConfigureFilterFamilySubmenu(AutoFilterMenuPlan menuPlan)
+    {
+        var family = menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
+        if (family is null || family.Children.Count == 0)
+            return;
+
+        var parentButton = menuPlan.FilterKind switch
+        {
+            AutoFilterMenuFilterKind.Number => _numberFiltersButton,
+            AutoFilterMenuFilterKind.Date => _dateFiltersButton,
+            _ => _textFiltersButton
+        };
+        var submenu = new ContextMenu();
+        foreach (var child in family.Children)
+        {
+            var menuItem = new MenuItem
+            {
+                Header = child.Header,
+                Tag = child
+            };
+            menuItem.Click += (_, _) => ApplyFilterFamilyChild(child);
+            submenu.Items.Add(menuItem);
+        }
+
+        parentButton.ContextMenu = submenu;
+    }
+
+    private void ApplyFilterFamilyChild(AutoFilterMenuEntry child)
+    {
+        if (child.Kind != AutoFilterMenuEntryKind.FilterFamilyCommand)
+            return;
+
+        var option = _criteriaOperatorBox.Items
+            .OfType<AutoFilterCriteriaOption>()
+            .FirstOrDefault(item => string.Equals(item.CriteriaPrefix, child.Value, StringComparison.Ordinal));
+        if (option is not null)
+            _criteriaOperatorBox.SelectedItem = option;
+
+        _criteriaBox.Text = child.Value;
+        UpdateCriteriaTextFromTypedControls();
+        if (option?.RequiresValue == false)
+            _criteriaBox.Text = child.Value;
+        else
+            _criteriaValueBox.Focus();
+    }
+
     public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
         filterKind switch
         {

@@ -74,7 +74,7 @@ public partial class FormatCellsDialog : Window
         DlgFontSizeBox.Text         = s.FontSize.ToString("0.#");
         DlgFontStyleList.ItemsSource = new[] { "Regular", "Italic", "Bold", "Bold Italic" };
         DlgFontStyleList.SelectedItem = FontStyleLabel(s.Bold, s.Italic);
-        DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double" };
+        DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double", "Single Accounting", "Double Accounting" };
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
         DlgUnderlineStyleBox.SelectedItem = s.DoubleUnderline ? "Double" : s.Underline ? "Single" : "None";
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
@@ -167,7 +167,7 @@ public partial class FormatCellsDialog : Window
         if (DlgUnderlineStyleBox.SelectedItem is not string underline)
             return;
 
-        DlgDoubleUnderlineCheck.IsChecked = underline == "Double";
+        DlgDoubleUnderlineCheck.IsChecked = underline is "Double" or "Double Accounting";
         UpdateFontPreview();
     }
 

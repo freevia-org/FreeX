@@ -116,6 +116,13 @@ internal sealed class ExportOptionsDialog : Window
                 return;
             }
 
+            if (!ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError))
+            {
+                MessageBox.Show(this, pdfLanguageError, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
+                FocusInvalidPdfLanguageInput();
+                return;
+            }
+
             Result = CreateResult(
                 _entireWorkbookButton.IsChecked == true
                     ? ExportContentScope.EntireWorkbook
@@ -134,7 +141,7 @@ internal sealed class ExportOptionsDialog : Window
                 GetSelectedInitialView(),
                 GetSelectedOpenMode(),
                 _bitmapTextBox.IsChecked == true,
-                _pdfLanguageBox.Text);
+                pdfLanguage);
             DialogResult = true;
         };
         buttons.Children.Add(ok);
@@ -179,6 +186,13 @@ internal sealed class ExportOptionsDialog : Window
         }
 
         return _fromPageBox;
+    }
+
+    private void FocusInvalidPdfLanguageInput()
+    {
+        _pdfLanguageBox.Focus();
+        _pdfLanguageBox.SelectAll();
+        Keyboard.Focus(_pdfLanguageBox);
     }
 
     public static ExportOptions CreateResult(

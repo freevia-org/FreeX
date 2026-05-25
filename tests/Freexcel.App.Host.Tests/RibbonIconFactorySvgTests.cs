@@ -123,6 +123,25 @@ public sealed class RibbonIconFactorySvgTests
     }
 
     [Fact]
+    public void HelpIcon_UsesCenteredPathQuestionMark()
+    {
+        var iconPath = WorkspaceFileLocator.Find(
+            "src",
+            "Freexcel.App.Host",
+            "Resources",
+            "CommandIconsSvg",
+            "help.svg");
+
+        var svg = File.ReadAllText(iconPath);
+
+        svg.Should().Contain("width=\"32\"");
+        svg.Should().Contain("viewBox=\"0 0 32 32\"");
+        svg.Should().Contain("cx=\"16\" cy=\"16\"");
+        svg.Should().NotContain("<text");
+        svg.Should().Contain("aria-label=\"Help\"");
+    }
+
+    [Fact]
     public void SizeSpecificSvgCommandIcons_DoNotUseDocumentPlaceholderArtwork()
     {
         var iconDirectory = Path.Combine(

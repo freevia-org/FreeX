@@ -27,6 +27,8 @@ public static partial class FlashFillService
             ?? TryInitials(examples)
             ?? TryEmailDisplayName(examples)
             ?? TryDigitMask(examples)
+            ?? TryStripThousandSeparators(examples)
+            ?? TryExtractDigitsOnly(examples)
             ?? TryDelimitedPartReorder(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)

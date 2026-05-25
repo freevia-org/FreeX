@@ -324,13 +324,13 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
-    public void DialogBlankSearch_ShowsStatusAndFocusesFindWhatBox()
+    public void DialogBlankSearch_ShowsOwnedWarningAndFocusesFindWhatBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml.cs"));
 
         source.Should().Contain("ShowBlankSearchWarning()");
         source.Should().Contain("private bool ShowBlankSearchWarning()");
-        source.Should().Contain("StatusLabel.Text = \"Enter text in Find what.\";");
+        source.Should().Contain("MessageBox.Show(this, \"Enter text in Find what.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");

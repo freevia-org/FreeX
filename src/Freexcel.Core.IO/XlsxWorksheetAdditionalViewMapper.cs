@@ -92,7 +92,9 @@ internal static class XlsxWorksheetAdditionalViewMapper
         {
             try
             {
-                return XElement.Parse(model.NativeXml);
+                var nativeElement = XElement.Parse(model.NativeXml);
+                if (nativeElement.Name == WorksheetNs + "sheetView")
+                    return nativeElement;
             }
             catch
             {
@@ -136,7 +138,20 @@ internal static class XlsxWorksheetAdditionalViewMapper
             if (string.IsNullOrWhiteSpace(attribute.Key) || modeledNames.Contains(attribute.Key, StringComparer.Ordinal))
                 continue;
 
-            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            if (TryGetAttributeName(attribute.Key) is { } attributeName)
+                element.SetAttributeValue(attributeName, attribute.Value);
+        }
+    }
+
+    private static XName? TryGetAttributeName(string key)
+    {
+        try
+        {
+            return XName.Get(key);
+        }
+        catch
+        {
+            return null;
         }
     }
 }

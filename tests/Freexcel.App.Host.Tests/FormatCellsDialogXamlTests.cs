@@ -44,6 +44,7 @@ public sealed class FormatCellsDialogXamlTests
         {
             "_Wrap text",
             "S_hrink to fit",
+            "_Normal font",
             "_Double underline",
             "_Strikethrough",
             "Super_script",
@@ -90,7 +91,7 @@ public sealed class FormatCellsDialogXamlTests
             "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck",
             "DlgIndentLevelBox", "DlgTextRotationBox",
             "DlgFontNameBox", "DlgFontSizeBox", "DlgFontStyleList",
-            "DlgUnderlineStyleBox", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
+            "DlgUnderlineStyleBox", "DlgNormalFontCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
             "DlgSuperscriptCheck", "DlgSubscriptCheck",
             "DlgFillColorBox", "DlgClearFillCheck", "DlgFillPalettePanel",
             "DlgBorderTopStyleBox", "DlgBorderTopColorBox",
@@ -629,6 +630,63 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_NormalFontResetsModeledFontFields()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+        xaml.Should().Contain("x:Name=\"DlgNormalFontCheck\" Content=\"_Normal font\"");
+        xaml.Should().Contain("Checked=\"DlgNormalFontCheck_Checked\"");
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle
+            {
+                FontName = "Verdana",
+                FontSize = 18,
+                Bold = true,
+                Italic = true,
+                Underline = true,
+                DoubleUnderline = true,
+                Strikethrough = true,
+                Superscript = true,
+                Subscript = true,
+                FontColor = new CellColor(192, 0, 0)
+            });
+            try
+            {
+                InvokeDialogHandler(dialog, "DlgNormalFontCheck_Checked", GetControl<CheckBox>(dialog, "DlgNormalFontCheck"));
+
+                GetControl<ComboBox>(dialog, "DlgFontNameBox").Text.Should().Be(CellStyle.Default.FontName);
+                GetControl<ComboBox>(dialog, "DlgFontSizeBox").Text.Should().Be("11");
+                GetControl<ListBox>(dialog, "DlgFontStyleList").SelectedItem.Should().Be("Regular");
+                GetControl<ComboBox>(dialog, "DlgUnderlineStyleBox").SelectedItem.Should().Be("None");
+                GetControl<CheckBox>(dialog, "DlgDoubleUnderlineCheck").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "DlgStrikeCheck").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "DlgSuperscriptCheck").IsChecked.Should().BeFalse();
+                GetControl<CheckBox>(dialog, "DlgSubscriptCheck").IsChecked.Should().BeFalse();
+                GetControl<TextBox>(dialog, "DlgFontColorBox").Text.Should().Be("0,0,0");
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontName.Should().Be(CellStyle.Default.FontName);
+                dialog.ResultDiff.FontSize.Should().Be(CellStyle.Default.FontSize);
+                dialog.ResultDiff.Bold.Should().BeFalse();
+                dialog.ResultDiff.Italic.Should().BeFalse();
+                dialog.ResultDiff.Underline.Should().BeFalse();
+                dialog.ResultDiff.DoubleUnderline.Should().BeFalse();
+                dialog.ResultDiff.Strikethrough.Should().BeFalse();
+                dialog.ResultDiff.Superscript.Should().BeFalse();
+                dialog.ResultDiff.Subscript.Should().BeFalse();
+                dialog.ResultDiff.FontColor.Should().Be(CellColor.Black);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_DoesNotDuplicateFontStyleAndUnderlineControlsAsEffects()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
@@ -805,6 +863,85 @@ public sealed class FormatCellsDialogXamlTests
                 dialog.ResultDiff.Superscript.Should().BeTrue();
                 dialog.ResultDiff.Subscript.Should().BeFalse();
                 dialog.ResultDiff.FontColor.Should().Be(new CellColor(20, 40, 60));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("Checked=\"DlgSuperscriptCheck_Checked\"");
+        xaml.Should().Contain("Checked=\"DlgSubscriptCheck_Checked\"");
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var superscript = GetControl<CheckBox>(dialog, "DlgSuperscriptCheck");
+                var subscript = GetControl<CheckBox>(dialog, "DlgSubscriptCheck");
+
+                superscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSuperscriptCheck_Checked", superscript);
+                subscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSubscriptCheck_Checked", subscript);
+
+                superscript.IsChecked.Should().BeFalse();
+                subscript.IsChecked.Should().BeTrue();
+
+                superscript.IsChecked = true;
+                InvokeDialogHandler(dialog, "DlgSuperscriptCheck_Checked", superscript);
+
+                superscript.IsChecked.Should().BeTrue();
+                subscript.IsChecked.Should().BeFalse();
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.Superscript.Should().BeTrue();
+                dialog.ResultDiff.Subscript.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_ListsExcelUnderlineOptions()
+    {
+        var source = ReadFormatCellsDialogSource();
+
+        source.Should().Contain("\"None\", \"Single\", \"Double\", \"Single Accounting\", \"Double Accounting\"");
+    }
+
+    [Theory]
+    [InlineData("Single Accounting", true, false)]
+    [InlineData("Double Accounting", false, true)]
+    public void FormatCellsDialog_MapsAccountingUnderlineOptionsIntoCurrentStyleModel(
+        string underlineOption,
+        bool expectedUnderline,
+        bool expectedDoubleUnderline)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgUnderlineStyleBox").SelectedItem = underlineOption;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.Underline.Should().Be(expectedUnderline);
+                dialog.ResultDiff.DoubleUnderline.Should().Be(expectedDoubleUnderline);
             }
             finally
             {
