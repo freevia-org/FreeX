@@ -362,7 +362,12 @@ internal static class XlsxWorkbookMetadataWriter
             smartTagTypes.Add(element);
         }
 
-        root.Add(smartTagProperties, smartTagTypes);
+        var extensionList = root.Element(workbookNs + "extLst");
+        if (extensionList is not null)
+            extensionList.AddBeforeSelf(smartTagProperties, smartTagTypes);
+        else
+            root.Add(smartTagProperties, smartTagTypes);
+
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
 
         static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
