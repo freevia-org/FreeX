@@ -35,6 +35,7 @@ public sealed partial class Sheet
             AutoFilter                    = AutoFilter,
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
+            SortState                     = SortState,
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
             PageMargins                   = PageMargins,

@@ -188,6 +188,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetSmartTagMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.SortState is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.DataConsolidation is not null))
         {
             packageStream.Position = 0;
@@ -289,6 +295,12 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorksheetSmartTagMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.SortState is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.DataConsolidation is not null))
