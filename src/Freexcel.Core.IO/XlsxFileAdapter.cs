@@ -59,6 +59,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
         packageStream.Position = 0;
+        var indexedColors = XlsxIndexedColorPaletteMapper.Load(packageStream);
+        packageStream.Position = 0;
         var pivotMetadata = XlsxPivotTableReader.Load(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
         var slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageStream);
@@ -110,6 +112,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.MaxCalculationChange = calculationProperties.MaxChange;
         foreach (var (numberFormatId, formatCode) in numberFormatCatalog)
             workbook.NumberFormatCatalog[numberFormatId] = formatCode;
+        foreach (var (index, color) in indexedColors.Colors)
+            workbook.IndexedColors.SetColor(index, color);
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
         foreach (var slicer in slicerTimelineMetadata.Slicers)

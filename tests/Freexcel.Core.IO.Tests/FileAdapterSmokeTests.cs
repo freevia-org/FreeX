@@ -12419,6 +12419,52 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadsWorkbookIndexedColorsFromStylesheet()
+    {
+        var workbook = new Workbook("IndexedColorLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("style metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddStylesheetNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.IndexedColors.TryGetColor(1, out var color).Should().BeTrue();
+        color.Should().Be(CellColor.FromArgb(1, 2, 3));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredWorkbookIndexedColors()
+    {
+        var workbook = new Workbook("IndexedColorSaveTest");
+        workbook.IndexedColors.SetColor(5, CellColor.FromArgb(10, 20, 30));
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(12));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var colors = stylesXml.Root!.Element(workbookNs + "colors")!;
+        colors.Element(workbookNs + "indexedColors")!
+            .Elements(workbookNs + "rgbColor")
+            .ElementAt(4)
+            .Attribute("rgb")!
+            .Value
+            .Should()
+            .Be("FF0A141E");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesAuthoredPivotTableStyleMetadata()
     {
         var workbook = new Workbook("AuthoredPivotStyleMetadataTest");
