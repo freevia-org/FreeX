@@ -572,12 +572,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
-        bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
-        return MapBinaryMathArgs(args[0], args[1], (startDate, endDate) => Days360Scalar(startDate, endDate, european));
+        var methodArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapTernaryTextArgs(args[0], args[1], methodArg, Days360Scalar);
     }
 
-    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, bool european)
+    private static ScalarValue Days360Scalar(ScalarValue startDate, ScalarValue endDate, ScalarValue methodValue)
     {
+        bool european = methodValue is not BlankValue && ToNumber(methodValue) != 0;
         if (!TryOADateToDateTime(startDate, out var startRaw)) return ErrorValue.Num;
         if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
