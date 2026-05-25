@@ -60,5 +60,40 @@ public sealed partial class SelectionPaneDialog
                 .Select(state => (state.Id, state.IsVisible, Name: originalItems.FirstOrDefault(item => item.Id == state.Id)?.Name ?? ""))
                 .ToList());
 
+    public static IReadOnlyList<SelectionPaneMoveChange> CreateDragMoveChanges(
+        IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
+        Guid draggedId,
+        Guid targetId)
+    {
+        var draggedIndex = FindIndex(currentOrder, draggedId);
+        var targetIndex = FindIndex(currentOrder, targetId);
+        if (draggedIndex < 0 || targetIndex < 0 || draggedIndex == targetIndex)
+            return [];
+
+        var dragged = currentOrder[draggedIndex];
+        var target = currentOrder[targetIndex];
+        if (dragged.Kind != target.Kind)
+            return [];
+
+        var moves = new List<SelectionPaneMoveChange>();
+        var forward = draggedIndex > targetIndex;
+        var step = forward ? -1 : 1;
+        for (var index = draggedIndex; index != targetIndex; index += step)
+            moves.Add(new SelectionPaneMoveChange(dragged.Kind, dragged.Id, forward));
+
+        return moves;
+    }
+
+    private static int FindIndex(IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> items, Guid id)
+    {
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (items[index].Id == id)
+                return index;
+        }
+
+        return -1;
+    }
+
     private static string NormalizeName(string name) => name.Trim();
 }
