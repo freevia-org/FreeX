@@ -1871,7 +1871,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Margin="1,0">
                                     <Button Content="Fill" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
-                                            local:RibbonTooltip.Title="Object Fill"
+                                            local:RibbonTooltip.Title="Shape Fill"
                                             local:RibbonTooltip.KeyTip="OF"
                                             local:RibbonTooltip.Description="Change the fill color of the selected drawing object."/>
                                     <Button Content="Outline" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
