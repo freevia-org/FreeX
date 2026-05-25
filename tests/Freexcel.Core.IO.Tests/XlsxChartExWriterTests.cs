@@ -10,8 +10,12 @@ public sealed class XlsxChartExWriterTests
 {
     private const string ChartExContentType = "application/vnd.ms-office.chartex+xml";
     private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+    private const string ChartExDrawingUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
     private static readonly XNamespace ContentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace ClassicChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace ChartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
 
     [Theory]
@@ -93,6 +97,13 @@ public sealed class XlsxChartExWriterTests
                     element.Attribute("Target")?.Value == "../charts/chart1.xml")
                 .ToList();
             chartExRelationships.Should().ContainSingle();
+
+            var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            var graphicData = drawingXml.Descendants(DrawingNs + "graphicData").Should().ContainSingle().Subject;
+            graphicData.Attribute("uri")!.Value.Should().Be(ChartExDrawingUri);
+            graphicData.Elements(ChartExNs + "chart").Should().ContainSingle()
+                .Which.Attribute(RelNs + "id")!.Value.Should().Be("rIdFreexcelChart1");
+            graphicData.Elements(ClassicChartNs + "chart").Should().BeEmpty();
         }
 
         saved.Position = 0;
