@@ -57,21 +57,27 @@ public sealed class HeaderFooterPictureFormatDialog : Window
 
     private void Accept()
     {
-        if (!ObjectSizeDialog.TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var size))
+        if (!TryParsePositiveSize(_widthBox.Text, out var width))
         {
             MessageBox.Show(this, "Enter positive width and height values.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            FocusInvalidSizeInput();
+            FocusAndSelect(_widthBox);
             return;
         }
 
-        Result = Result with { Width = size.Width, Height = size.Height };
+        if (!TryParsePositiveSize(_heightBox.Text, out var height))
+        {
+            MessageBox.Show(this, "Enter positive width and height values.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            FocusAndSelect(_heightBox);
+            return;
+        }
+
+        Result = Result with { Width = width, Height = height };
         DialogResult = true;
     }
 
-    private void FocusInvalidSizeInput()
-    {
-        FocusAndSelect(string.IsNullOrWhiteSpace(_widthBox.Text) ? _widthBox : _heightBox);
-    }
+    private static bool TryParsePositiveSize(string text, out double value) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value)
+        && value > 0;
 
     private static void FocusAndSelect(TextBox box)
     {

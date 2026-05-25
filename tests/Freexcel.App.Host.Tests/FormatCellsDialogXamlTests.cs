@@ -218,7 +218,7 @@ public sealed class FormatCellsDialogXamlTests
                 });
 
                 FormatCellsDialog.ResolveNumberFormat("Accounting ($#,##0.00)", 3)
-                    .Should().Be("$#,##0.00");
+                    .Should().Be("_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)");
                 FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
                     .Should().Be("# ?/?");
                 FormatCellsDialog.ResolveNumberFormat("Long date ([$-F800])", 0)

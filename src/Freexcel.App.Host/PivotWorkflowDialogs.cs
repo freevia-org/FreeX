@@ -365,6 +365,18 @@ public sealed class PivotFieldGroupingDialog : Window
         var grouping = _groupingBox.SelectedItem is PivotFieldGrouping selectedGrouping
             ? selectedGrouping
             : PivotFieldGrouping.None;
+        if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_startBox.Text, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid starting value or leave it blank.", _startBox);
+            return;
+        }
+
+        if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_endBox.Text, out _))
+        {
+            ShowInvalidInputWarning("Enter a valid ending value or leave it blank.", _endBox);
+            return;
+        }
+
         var groupInterval = 0d;
         if (_ungroupBox.IsChecked != true
             && grouping == PivotFieldGrouping.NumberRange
@@ -412,6 +424,22 @@ public sealed class PivotFieldGroupingDialog : Window
         double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+
+    private static bool TryParseOptionalFiniteDouble(string? value, out double? parsedValue)
+    {
+        parsedValue = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            || !double.IsFinite(parsed))
+        {
+            return false;
+        }
+
+        parsedValue = parsed;
+        return true;
+    }
 
     private static bool TryParsePositiveInterval(string? value, out double interval)
     {

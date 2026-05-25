@@ -153,12 +153,44 @@ public sealed class FormatPictureDialog : Window
         if (string.Equals(error, "Enter positive width and height values.", StringComparison.Ordinal))
         {
             _tabs.SelectedItem = _sizeTab;
-            FocusAndSelect(string.IsNullOrWhiteSpace(_heightBox.Text) ? _heightBox : _widthBox);
+            FocusAndSelect(ResolveInvalidSizeInput());
             return;
         }
 
         _tabs.SelectedItem = _cropTab;
-        FocusAndSelect(_cropLeftBox);
+        FocusAndSelect(ResolveInvalidCropInput(error));
+    }
+
+    private TextBox ResolveInvalidSizeInput()
+    {
+        if (!TryParsePositiveSize(_heightBox.Text))
+            return _heightBox;
+
+        if (!TryParsePositiveSize(_widthBox.Text))
+            return _widthBox;
+
+        return _heightBox;
+    }
+
+    private static bool TryParsePositiveSize(string text) =>
+        DrawingInputParser.TryParseSize($"{text}x{text}", out var width, out _)
+        && width > 0;
+
+    private TextBox ResolveInvalidCropInput(string? error)
+    {
+        if (string.Equals(error, "Enter four crop percentages.", StringComparison.Ordinal))
+        {
+            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+                return _cropLeftBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+                return _cropTopBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+                return _cropRightBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+                return _cropBottomBox;
+        }
+
+        return _cropLeftBox;
     }
 
     private static void FocusAndSelect(TextBox box)

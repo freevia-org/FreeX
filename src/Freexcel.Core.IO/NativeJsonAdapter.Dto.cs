@@ -150,6 +150,61 @@ public sealed partial class NativeJsonAdapter
         public List<WorksheetCellSmartTagsDto> Cells { get; set; } = [];
     }
 
+    private class WorksheetDataConsolidationDto
+    {
+        public string? Function { get; set; }
+        public bool? LeftLabels { get; set; }
+        public bool? TopLabels { get; set; }
+        public bool? Link { get; set; }
+        public string? NativeXml { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetDataConsolidationReferenceDto> References { get; set; } = [];
+    }
+
+    private class WorksheetDataConsolidationReferenceDto
+    {
+        public string? Reference { get; set; }
+        public string? Sheet { get; set; }
+        public string? Name { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetSortStateDto
+    {
+        public string? Reference { get; set; }
+        public bool? ColumnSort { get; set; }
+        public bool? CaseSensitive { get; set; }
+        public string? SortMethod { get; set; }
+        public string? NativeXml { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetSortConditionDto> Conditions { get; set; } = [];
+    }
+
+    private class WorksheetSortConditionDto
+    {
+        public string? Reference { get; set; }
+        public bool? Descending { get; set; }
+        public string? SortBy { get; set; }
+        public string? CustomList { get; set; }
+        public string? DxfId { get; set; }
+        public string? IconSet { get; set; }
+        public string? IconId { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetAdditionalViewsDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorksheetAdditionalViewDto> Views { get; set; } = [];
+    }
+
+    private class WorksheetAdditionalViewDto
+    {
+        public string? WorkbookViewId { get; set; }
+        public string? NativeXml { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
     private class WorksheetCellSmartTagsDto
     {
         public string? Reference { get; set; }
@@ -236,6 +291,9 @@ public sealed partial class NativeJsonAdapter
         public uint? SplitColumn { get; set; }
         public WorksheetAutoFilterDto? AutoFilter { get; set; }
         public WorksheetSmartTagsDto? SmartTags { get; set; }
+        public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
+        public WorksheetSortStateDto? SortState { get; set; }
+        public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }

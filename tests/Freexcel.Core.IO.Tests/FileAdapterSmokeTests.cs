@@ -244,6 +244,103 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetDataConsolidation()
+    {
+        var workbook = new Workbook("WorksheetDataConsolidationNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.DataConsolidation = new WorksheetDataConsolidationModel
+        {
+            Function = "sum",
+            LeftLabels = true,
+            TopLabels = true,
+            Link = true,
+            NativeXml = "<dataConsolidate xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" function=\"sum\" leftLabels=\"1\" topLabels=\"1\" link=\"1\" customDataConsolidationFlag=\"keep\"><dataRefs count=\"1\"><dataRef ref=\"A1:B2\" sheet=\"Data\" customDataRefFlag=\"keep\" /></dataRefs></dataConsolidate>",
+            NativeAttributes = new Dictionary<string, string> { ["customDataConsolidationFlag"] = "keep" },
+            References =
+            [
+                new WorksheetDataConsolidationReferenceModel
+                {
+                    Reference = "A1:B2",
+                    Sheet = "Data",
+                    NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.DataConsolidation.Should().BeEquivalentTo(sheet.DataConsolidation);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetSortState()
+    {
+        var workbook = new Workbook("WorksheetSortStateNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:A3",
+            CaseSensitive = true,
+            SortMethod = "stroke",
+            NativeXml = "<sortState xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" ref=\"A1:A3\" caseSensitive=\"1\" sortMethod=\"stroke\" customSortStateFlag=\"keep\"><sortCondition ref=\"A2:A3\" descending=\"1\" sortBy=\"cellColor\" customSortConditionFlag=\"keep\" /></sortState>",
+            NativeAttributes = new Dictionary<string, string> { ["customSortStateFlag"] = "keep" },
+            Conditions =
+            [
+                new WorksheetSortConditionModel
+                {
+                    Reference = "A2:A3",
+                    Descending = true,
+                    SortBy = "cellColor",
+                    NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.SortState.Should().BeEquivalentTo(sheet.SortState);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_AdditionalWorksheetViews()
+    {
+        var workbook = new Workbook("AdditionalWorksheetViewsNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["nativeSheetViewsAttr"] = "kept" },
+            Views =
+            [
+                new WorksheetAdditionalViewModel
+                {
+                    WorkbookViewId = "1",
+                    NativeXml = "<sheetView xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" workbookViewId=\"1\" view=\"pageLayout\" customSheetViewFlag=\"keep\" />",
+                    NativeAttributes = new Dictionary<string, string> { ["customSheetViewFlag"] = "keep" }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.AdditionalViews.Should().BeEquivalentTo(sheet.AdditionalViews);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -12388,6 +12485,15 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AdditionalViews.Should().NotBeNull();
+        var loadedAdditionalView = loaded.GetSheetAt(0).AdditionalViews!.Views.Should().ContainSingle().Which;
+        loadedAdditionalView.WorkbookViewId.Should().Be("1");
+        loadedAdditionalView.NativeXml.Should().Contain("sheetView");
+        loadedAdditionalView.NativeXml.Should().Contain("workbookViewId=\"1\"");
+        loadedAdditionalView.NativeAttributes.Should().Contain("view", "pageBreakPreview");
+        loadedAdditionalView.NativeAttributes.Should().Contain("topLeftCell", "C3");
+        loadedAdditionalView.NativeAttributes.Should().Contain("zoomScale", "80");
+        loadedAdditionalView.NativeAttributes.Should().Contain("customSheetViewFlag", "kept");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -12404,6 +12510,9 @@ public partial class FileAdapterSmokeTests
             string.Equals(view.Attribute("view")?.Value, "pageBreakPreview", StringComparison.Ordinal) &&
             string.Equals(view.Attribute("topLeftCell")?.Value, "C3", StringComparison.Ordinal));
         hasAdditionalSheetView.Should().BeTrue();
+        sheetViews.Elements(worksheetNs + "sheetView")
+            .Single(view => view.Attribute("workbookViewId")?.Value == "1")
+            .Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -14429,6 +14538,19 @@ public partial class FileAdapterSmokeTests
         loaded.GetSheetAt(0).AutoFilter.Should().NotBeNull();
         loaded.GetSheetAt(0).AutoFilter!.Reference.Should().Be("A1:B3");
         loaded.GetSheetAt(0).AutoFilter!.NativeXml.Should().Contain("filterColumn");
+        var loadedSortState = loaded.GetSheetAt(0).SortState;
+        loadedSortState.Should().NotBeNull();
+        loadedSortState!.Reference.Should().Be("A1:A3");
+        loadedSortState.CaseSensitive.Should().BeTrue();
+        loadedSortState.SortMethod.Should().Be("stroke");
+        loadedSortState.NativeAttributes.Should().Contain("customSortStateFlag", "keep");
+        loadedSortState.Conditions.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorksheetSortConditionModel
+        {
+            Reference = "A2:A3",
+            Descending = true,
+            SortBy = "cellColor",
+            NativeAttributes = new Dictionary<string, string> { ["customSortConditionFlag"] = "keep" }
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14441,7 +14563,10 @@ public partial class FileAdapterSmokeTests
         var sortState = worksheetXml.Root!.Element(worksheetNs + "sortState");
         sortState.Should().NotBeNull();
         sortState!.ToString().Should().Contain("ref=\"A1:A3\"");
+        sortState.Attribute("customSortStateFlag")!.Value.Should().Be("keep");
         sortState.ToString().Should().Contain("descending=\"1\"");
+        sortState.ToString().Should().Contain("sortBy=\"cellColor\"");
+        sortState.ToString().Should().Contain("customSortConditionFlag=\"keep\"");
     }
 
     [Fact]
@@ -14462,6 +14587,19 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        var loadedData = loaded.GetSheetAt(0).DataConsolidation;
+        loadedData.Should().NotBeNull();
+        loadedData!.Function.Should().Be("sum");
+        loadedData.LeftLabels.Should().BeTrue();
+        loadedData.TopLabels.Should().BeTrue();
+        loadedData.Link.Should().BeTrue();
+        loadedData.NativeAttributes.Should().Contain("customDataConsolidationFlag", "keep");
+        loadedData.References.Should().ContainSingle().Which.Should().BeEquivalentTo(new WorksheetDataConsolidationReferenceModel
+        {
+            Reference = "A1:B2",
+            Sheet = "Data",
+            NativeAttributes = new Dictionary<string, string> { ["customDataRefFlag"] = "keep" }
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -14475,8 +14613,10 @@ public partial class FileAdapterSmokeTests
         dataConsolidate.Should().NotBeNull();
         dataConsolidate!.Attribute("function")!.Value.Should().Be("sum");
         dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1");
+        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep");
         dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
         dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
+        dataConsolidate.ToString().Should().Contain("customDataRefFlag=\"keep\"");
     }
 
     [Fact]
@@ -14674,6 +14814,62 @@ public partial class FileAdapterSmokeTests
         smartTags.ToString().Should().Contain("key=\"place\"");
         smartTags.ToString().Should().Contain("val=\"Seattle\"");
         smartTags.ToString().Should().Contain("customSmartTagPropertyFlag=\"keep\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetSmartTagsBeforeDrawing()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Seattle"));
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            Cells =
+            [
+                new WorksheetCellSmartTagsModel
+                {
+                    Reference = "A1",
+                    Tags =
+                    [
+                        new WorksheetCellSmartTagModel
+                        {
+                            Type = "0",
+                            Properties =
+                            [
+                                new WorksheetCellSmartTagPropertyModel { Key = "place", Value = "Seattle" }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 3),
+            Name = "Marker",
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 80,
+            Height = 40
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedElements = worksheetXml.Root!
+            .Elements()
+            .Where(element => element.Name.Namespace == worksheetNs)
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        orderedElements.Should().Contain("smartTags");
+        orderedElements.Should().Contain("drawing");
+        orderedElements.IndexOf("smartTags").Should().BeLessThan(orderedElements.IndexOf("drawing"));
+        worksheetXml.Root!.Element(worksheetNs + "smartTags")!.ToString().Should().Contain("val=\"Seattle\"");
     }
 
     [Fact]
@@ -17749,7 +17945,8 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("workbookViewId", "1"),
                 new XAttribute("view", "pageBreakPreview"),
                 new XAttribute("topLeftCell", "C3"),
-                new XAttribute("zoomScale", "80")));
+                new XAttribute("zoomScale", "80"),
+                new XAttribute("customSheetViewFlag", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -18607,10 +18804,15 @@ public partial class FileAdapterSmokeTests
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sortState",
                 new XAttribute("ref", "A1:A3"),
+                new XAttribute("caseSensitive", "1"),
+                new XAttribute("sortMethod", "stroke"),
+                new XAttribute("customSortStateFlag", "keep"),
                 new XElement(
                     worksheetNs + "sortCondition",
                     new XAttribute("ref", "A2:A3"),
-                    new XAttribute("descending", "1"))));
+                    new XAttribute("descending", "1"),
+                    new XAttribute("sortBy", "cellColor"),
+                    new XAttribute("customSortConditionFlag", "keep"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -18630,13 +18832,15 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("leftLabels", "1"),
                 new XAttribute("topLabels", "1"),
                 new XAttribute("link", "1"),
+                new XAttribute("customDataConsolidationFlag", "keep"),
                 new XElement(
                     worksheetNs + "dataRefs",
                     new XAttribute("count", "1"),
                     new XElement(
                         worksheetNs + "dataRef",
                         new XAttribute("ref", "A1:B2"),
-                        new XAttribute("sheet", "Data")))));
+                        new XAttribute("sheet", "Data"),
+                        new XAttribute("customDataRefFlag", "keep")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
