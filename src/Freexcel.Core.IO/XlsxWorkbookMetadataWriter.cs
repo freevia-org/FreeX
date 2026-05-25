@@ -200,8 +200,10 @@ internal static class XlsxWorkbookMetadataWriter
             return element;
         }).ToArray();
 
-        var extensionList = root.Element(workbookNs + "extLst");
-        if (extensionList is not null)
+        var webPublishObjects = root.Element(workbookNs + "webPublishObjects");
+        if (webPublishObjects is not null)
+            webPublishObjects.AddBeforeSelf(recoveryElements);
+        else if (root.Element(workbookNs + "extLst") is { } extensionList)
             extensionList.AddBeforeSelf(recoveryElements);
         else
             root.Add(recoveryElements);
