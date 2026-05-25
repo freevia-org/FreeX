@@ -6,6 +6,18 @@ namespace Freexcel.App.Host.Tests;
 public sealed class TestDistributionPlanTests
 {
     [Fact]
+    public void DistributionPlan_MarksImplementedDistributionPhasesComplete()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
+
+        source.Should().Contain("| 4. Hosted release channel | Complete |");
+        source.Should().Contain("| 5. Crash analytics | Complete |");
+        source.Should().Contain("| 6. Lightweight usage analytics | Complete |");
+        source.Should().Contain("| 7. Auto-update readiness | Complete |");
+        source.Should().Contain("Future Velopack auto-update work");
+    }
+
+    [Fact]
     public void DistributionPlan_DocumentsPhaseSixUsageAnalyticsContract()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
