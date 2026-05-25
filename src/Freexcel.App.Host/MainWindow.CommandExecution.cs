@@ -21,7 +21,7 @@ public partial class MainWindow
         outcome = _commandBus.Execute(_workbook.Id, command);
         if (outcome.Success)
         {
-            InvalidateStatusBarStats();
+            InvalidateNavigationCaches();
             return true;
         }
 
@@ -87,7 +87,7 @@ public partial class MainWindow
         if (outcome.Success)
         {
             _repeatPostAction = null;
-            InvalidateStatusBarStats();
+            InvalidateNavigationCaches();
             return true;
         }
 
@@ -112,7 +112,7 @@ public partial class MainWindow
         if (outcome.Success)
         {
             _repeatPostAction = null;
-            InvalidateStatusBarStats();
+            InvalidateNavigationCaches();
             return true;
         }
 
@@ -141,7 +141,7 @@ public partial class MainWindow
         if (outcome.Success)
         {
             _repeatPostAction = null;
-            InvalidateStatusBarStats();
+            InvalidateNavigationCaches();
             return true;
         }
 
@@ -225,7 +225,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Undo(_workbook.Id);
         if (!outcome.Success) return;
-        InvalidateStatusBarStats();
+        InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
@@ -236,7 +236,7 @@ public partial class MainWindow
     {
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success) return;
-        InvalidateStatusBarStats();
+        InvalidateNavigationCaches();
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();
         RefreshToolbar();
@@ -248,7 +248,7 @@ public partial class MainWindow
         var postAction = _repeatPostAction;
         var outcome = _commandBus.RepeatLast(_workbook.Id);
         if (!outcome.Success) return;
-        InvalidateStatusBarStats();
+        InvalidateNavigationCaches();
         postAction?.Invoke(outcome);
         RecalculateAfterCommandOutcome(outcome);
         UpdateViewport();

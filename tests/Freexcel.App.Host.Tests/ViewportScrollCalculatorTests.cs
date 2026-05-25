@@ -1,10 +1,12 @@
+using System.Diagnostics;
 using FluentAssertions;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
+using Xunit.Abstractions;
 
 namespace Freexcel.App.Host.Tests;
 
-public sealed class ViewportScrollCalculatorTests
+public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
 {
     [Fact]
     public void CalculateViewportOrigin_DoesNotScrollToFrozenPaneBoundary()
@@ -57,5 +59,39 @@ public sealed class ViewportScrollCalculatorTests
                 currentScrollValue: 1,
                 absoluteLimit: CellAddress.MaxRow)
             .Should().Be(40);
+    }
+
+    [Fact]
+    public void CalculateUsedRangeExtents_BoundsSparseSheetWithoutUsedCellDictionaryCopy()
+    {
+        var empty = new Sheet(SheetId.New(), "Empty");
+        MainWindow.CalculateUsedRangeExtents(empty).Should().Be((1u, 1u));
+
+        var sheet = new Sheet(SheetId.New(), "Sparse");
+        for (uint i = 1; i <= 10_000; i++)
+        {
+            sheet.SetCell(
+                new CellAddress(sheet.Id, i * 100, (i % 100) + 1),
+                new NumberValue(i));
+        }
+        sheet.SetCell(new CellAddress(sheet.Id, 1_000_000, 16_000), new TextValue("edge"));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100;
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        (uint UsedMaxRow, uint UsedMaxCol) extents = default;
+        for (var i = 0; i < repetitions; i++)
+            extents = MainWindow.CalculateUsedRangeExtents(sheet);
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        extents.Should().Be((1_000_000u, 16_000u));
+        allocated.Should().BeLessThan(100_000);
+        output.WriteLine(
+            $"CalculateUsedRangeExtents repeated {repetitions}x over {sheet.CellCount:N0} cells: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
     }
 }

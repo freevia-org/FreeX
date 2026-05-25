@@ -231,7 +231,7 @@ public partial class MainWindow
         _workbook = wb;
         _workbookRef.Current = wb;
         _currentSheetId = wb.Sheets[0].Id;
-        InvalidateStatusBarStats();
+        InvalidateNavigationCaches();
         _currentFilePath = null;
         _currentXlsxFeatureReport = null;
         UpdateTitleBar();
@@ -268,7 +268,7 @@ public partial class MainWindow
             _workbookRef.Current = result.Workbook;
             _workbook.Name = result.DisplayName;
             _currentSheetId = _workbook.Sheets[0].Id;
-            InvalidateStatusBarStats();
+            InvalidateNavigationCaches();
             _currentFilePath = result.OpenedAsTemplate ? null : path;
             UpdateTitleBar();
 
