@@ -16106,7 +16106,46 @@ public partial class FileAdapterSmokeTests
 
         loaded.GetSheetAt(0).CustomProperties.Should()
             .ContainSingle()
-            .Which.Should().Be(new WorksheetCustomProperty("FreexcelNativeProperty", 1));
+            .Which.Should().BeEquivalentTo(new WorksheetCustomProperty(
+                "FreexcelNativeProperty",
+                1,
+                new WorksheetCustomPropertyMetadataModel
+                {
+                    NativeAttributes =
+                    {
+                        ["unsupportedAttr"] = "kept"
+                    }
+                }));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCustomPropertyMetadata()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesNativeJson");
+        var sheet = workbook.AddSheet("Data");
+        sheet.CustomProperties.Add(new WorksheetCustomProperty(
+            "FreexcelModeledProperty",
+            7,
+            new WorksheetCustomPropertyMetadataModel
+            {
+                NativeAttributes =
+                {
+                    ["unsupportedAttr"] = "kept"
+                },
+                NativeChildXmls =
+                [
+                    "<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+                ]
+            }));
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        loaded.GetSheetAt(0).CustomProperties.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(sheet.CustomProperties[0]);
     }
 
     [Fact]
@@ -16115,7 +16154,20 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("WorksheetCustomPropertiesSaveTest");
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
-        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty(
+            "FreexcelModeledProperty",
+            7,
+            new WorksheetCustomPropertyMetadataModel
+            {
+                NativeAttributes =
+                {
+                    ["unsupportedAttr"] = "kept"
+                },
+                NativeChildXmls =
+                [
+                    "<fx:customPrChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+                ]
+            }));
 
         var saved = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -16132,6 +16184,8 @@ public partial class FileAdapterSmokeTests
 
         customProperty.Attribute("name")!.Value.Should().Be("FreexcelModeledProperty");
         customProperty.Attribute("id")!.Value.Should().Be("7");
+        customProperty.Attribute("unsupportedAttr")!.Value.Should().Be("kept");
+        customProperty.Elements(XName.Get("customPrChild", "urn:freexcel:test")).Should().ContainSingle();
     }
 
     [Fact]
