@@ -117,6 +117,21 @@ public sealed class ScenarioManagerDialog : Window
         return false;
     }
 
+    public static bool RequiresScenarioName(ScenarioManagerAction action) =>
+        action is ScenarioManagerAction.Add or ScenarioManagerAction.Edit or ScenarioManagerAction.Save;
+
+    public static bool TryValidateScenarioName(string? name, out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Enter a scenario name.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
     private static void AddField(Grid grid, int row, string label, Control field)
     {
         var text = new Label
@@ -172,11 +187,25 @@ public sealed class ScenarioManagerDialog : Window
 
     private void Accept(ScenarioManagerAction action)
     {
+        if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter scenario details.", _newNameBox);
+            return;
+        }
+
         SelectedAction = action;
         SelectedScenarioName = (_scenarioList.SelectedItem as ScenarioManagerItem)?.Name;
         NewScenarioName = _newNameBox.Text;
         ChangingCellsText = _changingCellsBox.Text;
         CommentText = _commentBox.Text;
         DialogResult = true;
+    }
+
+    private void ShowInvalidInputWarning(string message, TextBox target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
     }
 }
