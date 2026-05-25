@@ -104,6 +104,21 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void DirectAltQatKeyTips_InvokeUndoRedoQuickAccessToolbarCommands()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.HandleDirectTopLevelKeyTip(Key.D3).Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void CrossTabMenuKeyTips_RouteThroughStaticRibbonMenus()
     {
         RunSta(() =>
