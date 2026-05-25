@@ -11977,6 +11977,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_SkipsInvalidAdditionalWorkbookViewNativeAttributeNames()
+    {
+        var workbook = new Workbook("AdditionalWorkbookViewInvalidNativeAttributeTest")
+        {
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                Views =
+                [
+                    new WorkbookAdditionalViewModel
+                    {
+                        NativeAttributes = new Dictionary<string, string>
+                        {
+                            ["visibility"] = "hidden",
+                            ["customWorkbookViewFlag"] = "kept",
+                            ["bad attribute name"] = "skip"
+                        }
+                    }
+                ]
+            }
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("fallback view"));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        var save = () => adapter.Save(workbook, saved);
+
+        save.Should().NotThrow();
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var view = workbookXml.Root!
+            .Element(workbookNs + "bookViews")!
+            .Elements(workbookNs + "workbookView")
+            .Last();
+        view.Attribute("visibility")!.Value.Should().Be("hidden");
+        view.Attribute("customWorkbookViewFlag")!.Value.Should().Be("kept");
+        view.Attributes().Select(attribute => attribute.Name.LocalName)
+            .Should().NotContain("bad attribute name");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPrimaryWorkbookViewNativeMetadata()
     {
         var workbook = new Workbook("PrimaryWorkbookViewRetentionTest");
