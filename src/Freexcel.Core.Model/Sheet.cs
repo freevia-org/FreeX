@@ -29,6 +29,12 @@ public sealed class WorksheetProtectionMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetPageSetupMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -303,6 +309,9 @@ public sealed partial class Sheet
 
     /// <summary>How cell comments are included in printed output.</summary>
     public WorksheetPrintComments PrintComments { get; set; } = WorksheetPrintComments.None;
+
+    /// <summary>Native Excel pageSetup metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageSetupMetadataModel? PageSetupMetadata { get; set; }
 
     /// <summary>Manual row page breaks, stored as the first row after each break.</summary>
     public SortedSet<uint> RowPageBreaks { get; } = [];
