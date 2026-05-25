@@ -488,6 +488,13 @@ public class PhaseBDistributionTests
         AssertColumnApproximately(Eval("CONFIDENCE.NORM(A1:A2,2.5,50)", sheet), Calc("CONFIDENCE.NORM(0.05,2.5,50)"), Calc("CONFIDENCE.NORM(0.10,2.5,50)"));
         AssertColumnApproximately(Eval("CONFIDENCE(A1:A2,2.5,50)", sheet), Calc("CONFIDENCE(0.05,2.5,50)"), Calc("CONFIDENCE(0.10,2.5,50)"));
         AssertColumnApproximately(Eval("CONFIDENCE.T(A1:A2,2.5,10)", sheet), Calc("CONFIDENCE.T(0.05,2.5,10)"), Calc("CONFIDENCE.T(0.10,2.5,10)"));
+
+        var parameters = MakeSheet((1, 1, 2.5), (2, 1, 3.0), (1, 2, 50.0), (2, 2, 75.0));
+        AssertColumnApproximately(Eval("CONFIDENCE.NORM(0.05,A1:A2,B1:B2)", parameters), Calc("CONFIDENCE.NORM(0.05,2.5,50)"), Calc("CONFIDENCE.NORM(0.05,3,75)"));
+        AssertColumnApproximately(Eval("CONFIDENCE(0.05,A1:A2,B1:B2)", parameters), Calc("CONFIDENCE(0.05,2.5,50)"), Calc("CONFIDENCE(0.05,3,75)"));
+        AssertColumnApproximately(Eval("CONFIDENCE.T(0.05,A1:A2,B1:B2)", parameters), Calc("CONFIDENCE.T(0.05,2.5,50)"), Calc("CONFIDENCE.T(0.05,3,75)"));
+
+        Eval("CONFIDENCE.NORM(0.05,A1:A2,B1:C1)", parameters).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
