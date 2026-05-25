@@ -40,8 +40,8 @@ public static partial class PivotTableRefreshService
         else
             WriteRowPivot(workbook, targetSheet, pivotTable, headers, rows);
 
-        ApplyMergedRowLabels(targetSheet, pivotTable);
         ApplyPivotTableStyle(workbook, targetSheet, pivotTable);
+        ApplyMergedRowLabels(workbook, targetSheet, pivotTable);
     }
 
     public static GridRange GetMaterializedOutputRange(Sheet sheet, PivotTableModel pivotTable)

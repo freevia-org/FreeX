@@ -944,7 +944,8 @@ public sealed class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I10"),
             ShowSubtotals = false,
-            MergeAndCenterLabels = true
+            MergeAndCenterLabels = true,
+            ShowRowStripes = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -955,8 +956,16 @@ public sealed class PivotTableRefreshServiceTests
         sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E3"), Addr(sheet, "E4")));
         sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E5"), Addr(sheet, "E6")));
         Text(sheet, "E3").Should().Be("East");
+        var eastStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId);
+        eastStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        eastStyle.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        eastStyle.FillColor.Should().NotBeNull();
         sheet.GetCell(Addr(sheet, "E4")).Should().BeNull();
         Text(sheet, "E5").Should().Be("West");
+        var westStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
+        westStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        westStyle.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        westStyle.FillColor.Should().NotBeNull();
         sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
     }
 
