@@ -18,4 +18,17 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("workbook contents, formulas, filenames, or paths");
         source.Should().Contain("FREEXCEL_DIAGNOSTICS=0");
     }
+
+    [Fact]
+    public void DistributionPlan_DocumentsPhaseSevenAutoUpdateReadiness()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
+
+        source.Should().Contain("7. Auto-update readiness");
+        source.Should().Contain("Help > Check for Updates");
+        source.Should().Contain("stable latest release page");
+        source.Should().Contain("Velopack");
+        source.Should().Contain("custom `Main`");
+        source.Should().Contain("no background update download");
+    }
 }

@@ -3092,6 +3092,13 @@
                                         local:RibbonTooltip.Title="Copy Diagnostics"
                                         local:RibbonTooltip.KeyTip="DG"
                                         local:RibbonTooltip.Description="Copy safe app version, runtime, OS, and session diagnostics for tester reports."/>
+                                <local:AutomationInvokeButton x:Name="HelpCheckForUpdatesButton"
+                                                              Content="Check for Updates" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
+                                                              AutomationProperties.Name="Check for Updates"
+                                                              AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
+                                                              local:RibbonTooltip.Title="Check for Updates"
+                                                              local:RibbonTooltip.KeyTip="UP"
+                                                              local:RibbonTooltip.Description="Open the latest Freexcel tester release in a web browser."/>
                                 <Button Content="Show Training" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Show Training"
                                         local:RibbonTooltip.KeyTip="TR"

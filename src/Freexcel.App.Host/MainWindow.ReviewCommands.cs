@@ -395,6 +395,17 @@ public partial class MainWindow
         { FileName = AppInfo.HelpUrl, UseShellExecute = true });
     }
 
+    private void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        RecordDiagnosticEvent("update_check_opened", new Dictionary<string, string?>
+        {
+            ["source"] = "help"
+        });
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        { FileName = AppUpdateSource.CreateDefault().ReleasePageUrl, UseShellExecute = true });
+    }
+
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowOwnedMessage(

@@ -38,4 +38,18 @@ public sealed class AppDiagnosticsActivitySourceTests
         editingSource.Should().Contain("RecordDiagnosticEvent(\"dialog_opened\"");
         editingSource.Should().Contain("[\"dialog\"] = dialog.GetType().Name");
     }
+
+    [Fact]
+    public void MainWindow_RecordsManualUpdateCheckUsageEvent()
+    {
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        reviewSource.Should().Contain("private void CheckForUpdatesBtn_Click(");
+        reviewSource.Should().Contain("RecordDiagnosticEvent(\"update_check_opened\"");
+        reviewSource.Should().Contain("[\"source\"] = \"help\"");
+        reviewSource.Should().Contain("AppUpdateSource.CreateDefault().ReleasePageUrl");
+        xaml.Should().Contain("Click=\"CheckForUpdatesBtn_Click\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"HelpCheckForUpdatesButton\"");
+    }
 }

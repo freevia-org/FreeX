@@ -10,6 +10,8 @@ public sealed class AppInfoTests
     {
         AppInfo.HelpUrl.Should().Be("https://github.com/tony-xmelon/Freexcel");
         AppInfo.FeedbackUrl.Should().Be("https://github.com/tony-xmelon/Freexcel/issues/new");
+        AppInfo.LatestReleaseUrl.Should().Be("https://github.com/tony-xmelon/Freexcel/releases/latest");
+        AppInfo.LatestTesterDownloadUrl.Should().Be("https://github.com/tony-xmelon/Freexcel/releases/latest/download/Freexcel-latest-win-x64.exe");
     }
 
     [Fact]
