@@ -39,6 +39,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             workbook.FileRecoveryProperties.Add(fileRecoveryProperties);
         workbook.FunctionGroups = ToWorkbookFunctionGroups(dto.FunctionGroups);
         workbook.SmartTags = ToWorkbookSmartTags(dto.SmartTags);
+        workbook.AdditionalViews = ToWorkbookAdditionalViews(dto.AdditionalViews);
         workbook.IsStructureProtected = dto.IsStructureProtected;
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
@@ -559,6 +560,43 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             NamespaceUri = namespaceUri,
             Name = name,
             Url = url,
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorkbookAdditionalViewsModel? ToWorkbookAdditionalViews(WorkbookAdditionalViewsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var views = (dto.Views ?? [])
+            .Select(ToWorkbookAdditionalView)
+            .OfType<WorkbookAdditionalViewModel>()
+            .ToList();
+        if (nativeAttributes.Count == 0 && views.Count == 0)
+            return null;
+
+        return new WorkbookAdditionalViewsModel
+        {
+            NativeAttributes = nativeAttributes,
+            Views = views
+        };
+    }
+
+    private static WorkbookAdditionalViewModel? ToWorkbookAdditionalView(WorkbookAdditionalViewDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeXml = string.IsNullOrWhiteSpace(dto.NativeXml) ? null : dto.NativeXml;
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        if (nativeXml is null && nativeAttributes.Count == 0)
+            return null;
+
+        return new WorkbookAdditionalViewModel
+        {
+            NativeXml = nativeXml,
             NativeAttributes = nativeAttributes
         };
     }

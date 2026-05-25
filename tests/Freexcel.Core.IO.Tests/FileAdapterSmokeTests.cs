@@ -200,6 +200,38 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_AdditionalWorkbookViews()
+    {
+        var workbook = new Workbook("AdditionalWorkbookViewsNativeJson");
+        workbook.AdditionalViews = new WorkbookAdditionalViewsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["nativeBookViewsAttr"] = "kept" },
+            Views =
+            [
+                new WorkbookAdditionalViewModel
+                {
+                    NativeXml = "<workbookView xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" visibility=\"hidden\" tabRatio=\"700\" customWorkbookViewFlag=\"keep\" />",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["visibility"] = "hidden",
+                        ["tabRatio"] = "700",
+                        ["customWorkbookViewFlag"] = "keep"
+                    }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.AdditionalViews.Should().BeEquivalentTo(workbook.AdditionalViews);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorksheetSmartTags()
     {
         var workbook = new Workbook("WorksheetSmartTagsNativeJson");
@@ -11569,6 +11601,12 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.AdditionalViews.Should().NotBeNull();
+        var loadedAdditionalView = loaded.AdditionalViews!.Views.Should().ContainSingle().Which;
+        loadedAdditionalView.NativeXml.Should().Contain("workbookView");
+        loadedAdditionalView.NativeAttributes.Should().Contain("visibility", "hidden");
+        loadedAdditionalView.NativeAttributes.Should().Contain("tabRatio", "700");
+        loadedAdditionalView.NativeAttributes.Should().Contain("customWorkbookViewFlag", "kept");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11582,7 +11620,8 @@ public partial class FileAdapterSmokeTests
         views.Should().HaveCount(2);
         views.Any(view =>
             string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
-            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal))
+            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("customWorkbookViewFlag")?.Value, "kept", StringComparison.Ordinal))
             .Should().BeTrue();
     }
 

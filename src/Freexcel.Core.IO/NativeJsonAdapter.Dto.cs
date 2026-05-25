@@ -21,6 +21,7 @@ public sealed partial class NativeJsonAdapter
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
         public WorkbookFunctionGroupsDto? FunctionGroups { get; set; }
         public WorkbookSmartTagMetadataDto? SmartTags { get; set; }
+        public WorkbookAdditionalViewsDto? AdditionalViews { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
@@ -106,6 +107,18 @@ public sealed partial class NativeJsonAdapter
         public string? NamespaceUri { get; set; }
         public string? Name { get; set; }
         public string? Url { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorkbookAdditionalViewsDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorkbookAdditionalViewDto> Views { get; set; } = [];
+    }
+
+    private class WorkbookAdditionalViewDto
+    {
+        public string? NativeXml { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
