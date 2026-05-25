@@ -77,7 +77,11 @@ public partial class MainWindow
         _internalClipboard = new InternalClipboard(range, clipCells, text, isCut);
     }
 
-    private void ExecutePaste(PasteMode mode = PasteMode.All, PasteSpecialOptions options = default, bool keepColumnWidths = false)
+    private void ExecutePaste(
+        PasteMode mode = PasteMode.All,
+        PasteSpecialOptions options = default,
+        bool keepColumnWidths = false,
+        bool externalTextAsText = false)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
@@ -184,7 +188,8 @@ public partial class MainWindow
             return PasteCommandFactory.CreateExternalTextPasteCommand(
                 _currentSheetId,
                 currentRange.Start,
-                capturedRows);
+                capturedRows,
+                preserveText: externalTextAsText);
         }
 
         var fallbackOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateExternalPasteCommand);
@@ -378,6 +383,9 @@ public partial class MainWindow
                 return;
             case PasteSpecialAction.Link:
                 ExecutePasteLink(plan.Options.Transpose, plan.KeepColumnWidths);
+                return;
+            case PasteSpecialAction.ExternalText:
+                ExecutePaste(plan.PasteMode, plan.Options, plan.KeepColumnWidths, externalTextAsText: true);
                 return;
             default:
                 ExecutePaste(plan.PasteMode, plan.Options, plan.KeepColumnWidths);

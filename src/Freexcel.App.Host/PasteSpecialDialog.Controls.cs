@@ -10,7 +10,7 @@ public sealed partial class PasteSpecialDialog
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition());
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 9; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddPasteChoice(grid, _rbAll, 0, 0);
@@ -20,6 +20,8 @@ public sealed partial class PasteSpecialDialog
         AddPasteChoice(grid, _rbComments, 4, 0);
         AddPasteChoice(grid, _rbValidation, 5, 0);
         AddPasteChoice(grid, _rbColumnWidths, 6, 0);
+        AddPasteChoice(grid, _rbText, 7, 0);
+        AddPasteChoice(grid, _rbUnicodeText, 8, 0);
         AddPasteChoice(grid, _rbAllUsingSourceTheme, 0, 1);
         AddPasteChoice(grid, _rbAllExceptBorders, 1, 1);
         AddPasteChoice(grid, _rbAllMergingConditionalFormats, 2, 1);

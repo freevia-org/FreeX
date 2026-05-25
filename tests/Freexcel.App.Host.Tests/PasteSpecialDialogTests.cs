@@ -16,6 +16,8 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbFormulasAndNumberFormats", PasteSpecialDialogMode.FormulasAndNumberFormats)]
     [InlineData("_rbValuesAndNumberFormats", PasteSpecialDialogMode.ValuesAndNumberFormats)]
     [InlineData("_rbValuesAndSourceFormatting", PasteSpecialDialogMode.ValuesAndSourceFormatting)]
+    [InlineData("_rbText", PasteSpecialDialogMode.Text)]
+    [InlineData("_rbUnicodeText", PasteSpecialDialogMode.UnicodeText)]
     [InlineData("_rbLinkedPicture", PasteSpecialDialogMode.LinkedPicture)]
     public void Mode_ExposesExcelPasteSpecialChoices(string fieldName, PasteSpecialDialogMode expectedMode)
     {
@@ -49,6 +51,8 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbFormulasAndNumberFormats", "Formulas and number fo_rmats")]
     [InlineData("_rbValuesAndNumberFormats", "Values and number for_mats")]
     [InlineData("_rbValuesAndSourceFormatting", "Values and source f_ormatting")]
+    [InlineData("_rbText", "T_ext")]
+    [InlineData("_rbUnicodeText", "_Unicode Text")]
     [InlineData("_rbPicture", "_Picture")]
     [InlineData("_rbLinkedPicture", "_Linked picture")]
     public void Choices_ExposeKeyboardAccessKeys(string fieldName, string expectedContent)
