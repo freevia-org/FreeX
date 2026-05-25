@@ -1,8 +1,8 @@
-namespace Freexcel.Core.Model;
+﻿namespace Freexcel.Core.Model;
 
 /// <summary>
 /// Represents a worksheet within a workbook.
-/// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
+/// Storage is Dictionary-based (sparse) per the build plan â€” NOT sparse columnar.
 /// </summary>
 public sealed partial class Sheet
 {
@@ -18,10 +18,10 @@ public sealed partial class Sheet
     /// <summary>Display name of the sheet (shown on tab).</summary>
     public string Name { get; set; }
 
-    /// <summary>Column widths override (1-based column index → width in characters).</summary>
+    /// <summary>Column widths override (1-based column index â†’ width in characters).</summary>
     public Dictionary<uint, double> ColumnWidths { get; } = [];
 
-    /// <summary>Row heights override (1-based row index → height in pixels).</summary>
+    /// <summary>Row heights override (1-based row index â†’ height in pixels).</summary>
     public Dictionary<uint, double> RowHeights { get; } = [];
 
     /// <summary>Default column width in characters.</summary>
@@ -83,6 +83,9 @@ public sealed partial class Sheet
 
     /// <summary>Native Excel cell watch metadata not yet modeled as editable fields.</summary>
     public WorksheetCellWatchesMetadataModel? CellWatchesMetadata { get; set; }
+
+    /// <summary>Native Excel ignored-errors metadata not yet modeled as editable fields.</summary>
+    public WorksheetIgnoredErrorsMetadataModel? IgnoredErrorsMetadata { get; set; }
 
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
@@ -312,10 +315,10 @@ public sealed partial class Sheet
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];
 
-    /// <summary>Outline level (1–8) per row. 0 = no grouping.</summary>
+    /// <summary>Outline level (1â€“8) per row. 0 = no grouping.</summary>
     public Dictionary<uint, int> RowOutlineLevels { get; } = [];
 
-    /// <summary>Outline level (1–8) per column. 0 = no grouping.</summary>
+    /// <summary>Outline level (1â€“8) per column. 0 = no grouping.</summary>
     public Dictionary<uint, int> ColOutlineLevels { get; } = [];
 
     /// <summary>Whether row outline summary rows appear below detail rows. Null means Excel default.</summary>
@@ -478,7 +481,7 @@ public sealed partial class Sheet
     /// <summary>
     /// Write the spill range for a dynamic-array anchor cell.
     /// Clears any previous spill from this anchor first.
-    /// Does NOT check for blockage — call IsSpillBlocked first.
+    /// Does NOT check for blockage â€” call IsSpillBlocked first.
     /// </summary>
     public void SetSpillRange(CellAddress anchor, RangeValue rv)
     {
@@ -570,3 +573,4 @@ public sealed partial class Sheet
     }
 
 }
+

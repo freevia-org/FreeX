@@ -1,4 +1,4 @@
-using Freexcel.Core.Model;
+﻿using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
@@ -338,6 +338,60 @@ public sealed partial class NativeJsonAdapter
         {
             NativeAttributes = nativeAttributes,
             WatchNativeAttributes = watchNativeAttributes
+        };
+    }
+
+    private static WorksheetIgnoredErrorsMetadataModel? ToWorksheetIgnoredErrorsMetadata(WorksheetIgnoredErrorsMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var errorNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in dto.ErrorNativeAttributes ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+                continue;
+
+            var attributes = CleanNativeAttributes(pair.Value);
+            if (attributes.Count > 0)
+                errorNativeAttributes[pair.Key.Trim()] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && errorNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            ErrorNativeAttributes = errorNativeAttributes
+        };
+    }
+
+    private static WorksheetIgnoredErrorsMetadataDto? ToWorksheetIgnoredErrorsMetadataDto(WorksheetIgnoredErrorsMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var errorNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in model.ErrorNativeAttributes)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key))
+                continue;
+
+            var attributes = CleanNativeAttributesForSave(pair.Value);
+            if (attributes.Count > 0)
+                errorNativeAttributes[pair.Key.Trim()] = attributes;
+        }
+
+        if (nativeAttributes.Count == 0 && errorNativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetIgnoredErrorsMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            ErrorNativeAttributes = errorNativeAttributes
         };
     }
 
@@ -798,3 +852,4 @@ public sealed partial class NativeJsonAdapter
                 Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(value.Height, 48)
             };
 }
+

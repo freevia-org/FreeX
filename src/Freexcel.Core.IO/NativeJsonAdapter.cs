@@ -133,6 +133,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
             sheet.SingleXmlCells = ToWorksheetSingleXmlCells(sDto.SingleXmlCells);
             sheet.CellWatchesMetadata = ToWorksheetCellWatchesMetadata(sDto.CellWatchesMetadata);
+            sheet.IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadata(sDto.IgnoredErrorsMetadata);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
             sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))

@@ -164,6 +164,7 @@ public sealed partial class NativeJsonAdapter
                 SortState = ToWorksheetSortStateDto(s.SortState),
                 SingleXmlCells = ToWorksheetSingleXmlCellsDto(s.SingleXmlCells),
                 CellWatchesMetadata = ToWorksheetCellWatchesMetadataDto(s.CellWatchesMetadata),
+                IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadataDto(s.IgnoredErrorsMetadata),
                 AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrimaryViewMetadata = FromWorksheetPrimaryViewMetadata(s.PrimaryViewMetadata),
                 PrintArea = s.PrintArea?.ToString(),

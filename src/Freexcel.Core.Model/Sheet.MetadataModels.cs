@@ -76,6 +76,12 @@ public sealed class WorksheetCellWatchesMetadataModel
     public Dictionary<string, Dictionary<string, string>> WatchNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
+public sealed class WorksheetIgnoredErrorsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, Dictionary<string, string>> ErrorNativeAttributes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
 public sealed class WorksheetSingleXmlCellsModel
 {
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
