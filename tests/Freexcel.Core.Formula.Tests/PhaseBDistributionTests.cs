@@ -259,6 +259,26 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void TDistributionFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, 0.0), (2, 1, 1.0),
+            (1, 2, 10.0), (2, 2, 5.0),
+            (1, 3, 1.0), (2, 3, 0.0),
+            (3, 2, 8.0));
+
+        AssertColumnApproximately(Eval("T.DIST(A1:A2,B1:B2,C1:C2)", sheet), Calc("T.DIST(0,10,TRUE)"), Calc("T.DIST(1,5,FALSE)"));
+        AssertColumnApproximately(Eval("T.DIST.RT(A1:A2,B1:B2)", sheet), Calc("T.DIST.RT(0,10)"), Calc("T.DIST.RT(1,5)"));
+        AssertColumnApproximately(Eval("T.DIST.2T(A1:A2,B1:B2)", sheet), Calc("T.DIST.2T(0,10)"), Calc("T.DIST.2T(1,5)"));
+
+        var probabilities = MakeSheet((1, 1, 0.5), (2, 1, 0.75), (1, 2, 10.0), (2, 2, 5.0));
+        AssertColumnApproximately(Eval("T.INV(A1:A2,B1:B2)", probabilities), Calc("T.INV(0.5,10)"), Calc("T.INV(0.75,5)"));
+        AssertColumnApproximately(Eval("T.INV.2T(A1:A2,B1:B2)", probabilities), Calc("T.INV.2T(0.5,10)"), Calc("T.INV.2T(0.75,5)"));
+
+        Eval("T.DIST(A1:A2,B1:B3,TRUE)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void TInv_At0Point5_Returns0()
         => Calc("T.INV(0.5,10)").Should().BeApproximately(0.0, 1e-5);
 
