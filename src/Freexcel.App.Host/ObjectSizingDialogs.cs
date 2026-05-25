@@ -300,7 +300,7 @@ public sealed class PictureCropDialog : Window
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            FocusInvalidCropInput(_cropLeftBox);
+            FocusInvalidCropInput(ResolveInvalidCropInput(error));
             return;
         }
 
@@ -313,6 +313,23 @@ public sealed class PictureCropDialog : Window
         _cropLeftBox.Focus();
         _cropLeftBox.SelectAll();
         Keyboard.Focus(_cropLeftBox);
+    }
+
+    private TextBox ResolveInvalidCropInput(string? error)
+    {
+        if (string.Equals(error, "Enter four crop percentages.", StringComparison.Ordinal))
+        {
+            if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
+                return _cropLeftBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropTopBox.Text, out _))
+                return _cropTopBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropRightBox.Text, out _))
+                return _cropRightBox;
+            if (!DrawingInputParser.TryParseCropPercent(_cropBottomBox.Text, out _))
+                return _cropBottomBox;
+        }
+
+        return _cropLeftBox;
     }
 
     private static void FocusInvalidCropInput(TextBox textBox)
