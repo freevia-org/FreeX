@@ -43,4 +43,84 @@ public static partial class PivotTableRefreshService
 
         return true;
     }
+
+    private static List<PivotKey> BuildColumnKeys(
+        Workbook workbook,
+        PivotTableModel pivotTable,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        var keys = rows
+            .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
+            .Distinct()
+            .ToList();
+
+        if (!pivotTable.ShowItemsWithNoDataOnColumns || columnFields.Count == 0)
+            return keys.Order(PivotKeyComparer.Instance).ToList();
+
+        var itemSets = columnFields
+            .Select(field => GetFieldItemsWithNoData(workbook, pivotTable, rows, field))
+            .ToList();
+        foreach (var key in BuildKeyCombinations(itemSets))
+        {
+            if (!keys.Contains(key))
+                keys.Add(key);
+        }
+
+        return keys.Order(PivotKeyComparer.Instance).ToList();
+    }
+
+    private static IReadOnlyList<string> GetFieldItemsWithNoData(
+        Workbook workbook,
+        PivotTableModel pivotTable,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        PivotFieldModel field)
+    {
+        var items = new List<string>();
+        var cache = workbook.PivotCaches.FirstOrDefault(cache => cache.CacheId == pivotTable.CacheId);
+        if (cache is not null &&
+            field.SourceFieldIndex >= 0 &&
+            field.SourceFieldIndex < cache.Fields.Count &&
+            cache.Fields[field.SourceFieldIndex].SharedItems is { Count: > 0 } sharedItems)
+        {
+            items.AddRange(sharedItems.Where(item => !string.IsNullOrEmpty(item)));
+        }
+
+        foreach (var item in rows.Select(row => GroupKeyText(row[field.SourceFieldIndex], field)))
+        {
+            if (!items.Contains(item, StringComparer.CurrentCultureIgnoreCase))
+                items.Add(item);
+        }
+
+        return items;
+    }
+
+    private static IEnumerable<PivotKey> BuildKeyCombinations(IReadOnlyList<IReadOnlyList<string>> itemSets)
+    {
+        if (itemSets.Count == 0 || itemSets.Any(items => items.Count == 0))
+            yield break;
+
+        var values = new string[itemSets.Count];
+        foreach (var key in BuildKeyCombinations(itemSets, values, 0))
+            yield return key;
+    }
+
+    private static IEnumerable<PivotKey> BuildKeyCombinations(
+        IReadOnlyList<IReadOnlyList<string>> itemSets,
+        string[] values,
+        int depth)
+    {
+        if (depth == itemSets.Count)
+        {
+            yield return new PivotKey(values.ToArray());
+            yield break;
+        }
+
+        foreach (var item in itemSets[depth])
+        {
+            values[depth] = item;
+            foreach (var key in BuildKeyCombinations(itemSets, values, depth + 1))
+                yield return key;
+        }
+    }
 }
