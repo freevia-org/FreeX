@@ -1526,12 +1526,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[1]);
-        double pv   = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PmtScalar(value, nperValue, pv, fv, type));
-        return PmtScalar(args[0], nperValue, pv, fv, type);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => PmtScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue PmtScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PmtScalar(rateValue, ToNumber(nperValueArg), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue PmtScalar(ScalarValue rateValue, double nperValue, double pv, double fv, double type)
@@ -1552,12 +1559,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[1]);
-        double pmt  = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PvScalar(value, nperValue, pmt, fv, type));
-        return PvScalar(args[0], nperValue, pmt, fv, type);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => PvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue PvScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PvScalar(rateValue, ToNumber(nperValueArg), ToNumber(pmtValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue PvScalar(ScalarValue rateValue, double nperValue, double pmt, double fv, double type)
@@ -1578,12 +1592,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[1]);
-        double pmt  = ToNumber(args[2]);
-        double pv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => FvScalar(value, nperValue, pmt, pv, type));
-        return FvScalar(args[0], nperValue, pmt, pv, type);
+        var pvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], pvArg, typeArg], values => FvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue FvScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return FvScalar(rateValue, ToNumber(nperValueArg), ToNumber(pmtValue), ToNumber(pvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue FvScalar(ScalarValue rateValue, double nperValue, double pmt, double pv, double type)
@@ -1602,12 +1623,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pmt  = ToNumber(args[1]);
-        double pv   = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => NperScalar(value, pmt, pv, fv, type));
-        return NperScalar(args[0], pmt, pv, fv, type);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => NperScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue NperScalar(ScalarValue rateValue, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return NperScalar(rateValue, ToNumber(pmtValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue NperScalar(ScalarValue rateValue, double pmt, double pv, double fv, double type)
@@ -1630,13 +1658,21 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pmt   = ToNumber(args[1]);
-        double pv    = ToNumber(args[2]);
-        double fv    = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double guess = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0.1;
-        if (args[0] is RangeValue nperRange) return MapUnaryTextRange(nperRange, value => RateScalar(value, pmt, pv, fv, type, guess));
-        return RateScalar(args[0], pmt, pv, fv, type, guess);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var guessArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0.1);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg, guessArg], values => RateScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue RateScalar(ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue, ScalarValue guessValue)
+    {
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        if (guessValue is ErrorValue guessError) return guessError;
+        return RateScalar(nperValueArg, ToNumber(pmtValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue), ToNumber(guessValue));
     }
 
     private static ScalarValue RateScalar(ScalarValue nperValueArg, double pmt, double pv, double fv, double type, double guess)
