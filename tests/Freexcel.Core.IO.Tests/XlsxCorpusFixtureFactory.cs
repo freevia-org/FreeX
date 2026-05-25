@@ -700,7 +700,15 @@ internal static class XlsxCorpusFixtureFactory
             DataBarMinThresholdValue = "0",
             DataBarMaxThresholdType = CfThresholdType.Number,
             DataBarMaxThresholdValue = "100",
-            DataBarShowValue = false
+            DataBarShowValue = false,
+            DataBarMinLength = 5,
+            DataBarMaxLength = 95,
+            DataBarGradient = false,
+            DataBarBorder = true,
+            DataBarAxisPosition = "middle",
+            DataBarAxisColor = new RgbColor(90, 90, 90),
+            DataBarNegativeFillColor = new RgbColor(220, 80, 80),
+            DataBarNegativeBorderColor = new RgbColor(160, 40, 40)
         });
         return workbook;
     }
