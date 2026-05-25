@@ -2061,6 +2061,7 @@ public class FunctionLibraryTests
             _eval.Evaluate("=WORKDAY(A1:A2,B1:B2)", sheet),
             new NumberValue(new DateTime(2024, 2, 1).ToOADate()),
             new NumberValue(new DateTime(2024, 3, 4).ToOADate()));
+        AssertColumn(_eval.Evaluate("=WEEKDAY(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(4));
     }
 
     [Fact]
@@ -2075,6 +2076,7 @@ public class FunctionLibraryTests
         _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WEEKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

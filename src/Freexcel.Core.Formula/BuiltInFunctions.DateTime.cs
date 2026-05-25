@@ -180,17 +180,17 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
-        if (args.Count > 1 && args[1] is RangeValue returnTypeRange)
-            return MapUnaryTextRange(returnTypeRange, value =>
-            {
-                double rawType = ToNumber(value);
-                return double.IsFinite(rawType) ? WeekdayScalar(args[0], (int)rawType) : ErrorValue.Num;
-            });
-        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        var returnTypeArg = args.Count > 1 && args[1] is not BlankValue ? args[1] : new NumberValue(1);
+        return MapBinaryMathArgs(args[0], returnTypeArg, WeekdayScalarWithReturnType);
+    }
+
+    private static ScalarValue WeekdayScalarWithReturnType(ScalarValue value, ScalarValue returnTypeValue)
+    {
+        if (value is ErrorValue valueError) return valueError;
+        if (returnTypeValue is ErrorValue returnTypeError) return returnTypeError;
+        double rawReturnType = ToNumber(returnTypeValue);
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
-        int returnType = (int)rawReturnType;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeekdayScalar(value, returnType));
-        return WeekdayScalar(args[0], returnType);
+        return WeekdayScalar(value, (int)rawReturnType);
     }
 
     private static ScalarValue WeekdayScalar(ScalarValue value, int returnType)
