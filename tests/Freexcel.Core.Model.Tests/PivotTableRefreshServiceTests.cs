@@ -447,6 +447,46 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_RowPivotShowsCacheItemsWithNoData()
+    {
+        var workbook = new Workbook("PivotShowNoDataRowItemsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            Fields =
+            {
+                new PivotCacheFieldModel("Region", SharedItems: ["East", "West", "North"]),
+                new PivotCacheFieldModel("Quarter", SharedItems: ["Q1", "Q2"]),
+                new PivotCacheFieldModel("Amount")
+            }
+        });
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "G7"),
+            EmptyValueText = "N/A",
+            ShowItemsWithNoDataOnRows = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Number(sheet, "F3").Should().Be(10);
+        Text(sheet, "E4").Should().Be("North");
+        Text(sheet, "F4").Should().Be("N/A");
+        Text(sheet, "E5").Should().Be("West");
+        Number(sheet, "F5").Should().Be(25);
+        Text(sheet, "E6").Should().Be("Grand Total");
+        Number(sheet, "F6").Should().Be(35);
+    }
+
+    [Fact]
     public void Refresh_MaterializesNestedColumnFieldMatrix()
     {
         var workbook = new Workbook("PivotRefreshTest");

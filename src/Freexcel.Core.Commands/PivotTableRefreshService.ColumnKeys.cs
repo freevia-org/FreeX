@@ -70,6 +70,42 @@ public static partial class PivotTableRefreshService
         return keys.Order(PivotKeyComparer.Instance).ToList();
     }
 
+    private static List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> BuildRowGroups(
+        Workbook workbook,
+        PivotTableModel pivotTable,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        IReadOnlyList<PivotFieldModel> rowFields)
+    {
+        var groups = rows
+            .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
+            .Cast<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>>()
+            .ToList();
+
+        if (!pivotTable.ShowItemsWithNoDataOnRows || rowFields.Count == 0)
+            return groups;
+
+        var itemSets = rowFields
+            .Select(field => GetFieldItemsWithNoData(workbook, pivotTable, rows, field))
+            .ToList();
+        foreach (var key in BuildKeyCombinations(itemSets))
+        {
+            if (!groups.Any(group => group.Key.Equals(key)))
+                groups.Add(new EmptyPivotGrouping(key));
+        }
+
+        return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
+    }
+
+    private sealed class EmptyPivotGrouping(PivotKey key) : IGrouping<PivotKey, IReadOnlyList<ScalarValue>>
+    {
+        public PivotKey Key { get; } = key;
+
+        public IEnumerator<IReadOnlyList<ScalarValue>> GetEnumerator() =>
+            Enumerable.Empty<IReadOnlyList<ScalarValue>>().GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
     private static IReadOnlyList<string> GetFieldItemsWithNoData(
         Workbook workbook,
         PivotTableModel pivotTable,
