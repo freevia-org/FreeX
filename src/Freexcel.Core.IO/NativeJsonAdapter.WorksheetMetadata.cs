@@ -18,6 +18,44 @@ public sealed partial class NativeJsonAdapter
                 NativeXml = autoFilter.NativeXml
             };
 
+    private static WorksheetCustomPropertyMetadataModel? ToWorksheetCustomPropertyMetadata(WorksheetCustomPropertyMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetCustomPropertyMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetCustomPropertyMetadataDto? FromWorksheetCustomPropertyMetadata(WorksheetCustomPropertyMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = (model.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetCustomPropertyMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
     private static WorksheetProtectionMetadataModel? ToWorksheetProtectionMetadata(WorksheetProtectionMetadataDto? dto)
     {
         if (dto is null)
@@ -208,7 +246,6 @@ public sealed partial class NativeJsonAdapter
             NativeChildXmls = nativeChildXmls
         };
     }
-
     private static WorksheetSingleXmlCellsModel? ToWorksheetSingleXmlCells(WorksheetSingleXmlCellsDto? dto)
     {
         if (dto is null)
@@ -744,4 +781,5 @@ public sealed partial class NativeJsonAdapter
                 Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(value.Height, 48)
             };
 }
+
 

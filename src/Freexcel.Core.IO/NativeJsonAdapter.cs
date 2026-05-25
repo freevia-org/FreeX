@@ -71,7 +71,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 if (string.IsNullOrWhiteSpace(property?.Name) || property.Id <= 0)
                     continue;
 
-                sheet.CustomProperties.Add(new WorksheetCustomProperty(property.Name, property.Id));
+                sheet.CustomProperties.Add(new WorksheetCustomProperty(
+                    property.Name,
+                    property.Id,
+                    ToWorksheetCustomPropertyMetadata(property.Metadata)));
             }
             foreach (var entry in sDto.RowHeights ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(entry.Index) && NativeJsonValueSanitizer.IsPositiveFinite(entry.Value))
