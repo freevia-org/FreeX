@@ -1,12 +1,21 @@
+using System.Diagnostics;
 using System.Text;
 using FluentAssertions;
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
+using Xunit.Abstractions;
 
 namespace Freexcel.Core.IO.Tests;
 
 public sealed class CsvFileAdapterTests
 {
+    private readonly ITestOutputHelper output;
+
+    public CsvFileAdapterTests(ITestOutputHelper output)
+    {
+        this.output = output;
+    }
+
     [Fact]
     public void Save_ScansCellsWithoutCopyingUsedCellDictionary()
     {
@@ -15,6 +24,44 @@ public sealed class CsvFileAdapterTests
         source.Should().NotContain(
             "GetUsedCells()",
             "CSV save should build its output index in one streaming pass over occupied cells");
+    }
+
+    [Fact]
+    public void Save_StreamsRowsWithoutPerRowStringArrayJoin()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "CsvFileAdapter.cs"));
+
+        source.Should().NotContain("new string[endCol - startCol + 1]");
+        source.Should().NotContain("string.Join(',', parts)");
+    }
+
+    [Fact]
+    public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
+    {
+        const int rowCount = 300;
+        const int colCount = 120;
+        var workbook = CreateDenseWorkbook(rowCount, colCount);
+        var adapter = new CsvFileAdapter();
+
+        using (var warmup = new MemoryStream(rowCount * colCount * 12))
+        {
+            adapter.Save(workbook, warmup);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        using var stream = new MemoryStream(rowCount * colCount * 12);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        adapter.Save(workbook, stream);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        output.WriteLine(
+            $"CSV dense save benchmark: rows={rowCount}, cols={colCount}, bytes={stream.Length}, elapsedMs={stopwatch.Elapsed.TotalMilliseconds:F2}, allocatedBytes={allocatedBytes}");
+        stream.Length.Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -285,6 +332,21 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Save_QuotesTextFieldsThatNeedCsvEscaping()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("a,b"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("say \"hi\""));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("line\nbreak"));
+
+        using var stream = new MemoryStream();
+        new CsvFileAdapter().Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"a,b\",\"say \"\"hi\"\"\",\"line\nbreak\"\r\n");
+    }
+
+    [Fact]
     public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
     {
         var workbook = new Workbook("Book1");
@@ -384,5 +446,20 @@ public sealed class CsvFileAdapterTests
         }
 
         throw new FileNotFoundException($"Could not locate workspace file {Path.Combine(parts)}.");
+    }
+
+    private static Workbook CreateDenseWorkbook(int rowCount, int colCount)
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (var row = 1; row <= rowCount; row++)
+        {
+            for (var col = 1; col <= colCount; col++)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, (uint)row, (uint)col), new NumberValue(row * col));
+            }
+        }
+
+        return workbook;
     }
 }
