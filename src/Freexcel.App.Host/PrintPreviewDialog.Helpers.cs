@@ -15,12 +15,23 @@ public sealed partial class PrintPreviewDialog
     public static string CreateTitle(string workbookName) =>
         $"Print Preview - {workbookName.Trim()}";
 
-    public static int NormalizeCopyCount(string? text)
+    public static bool TryParseCopyCount(string? text, out int copies)
     {
-        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var copies))
-            return 1;
+        copies = 0;
+        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed is < 1 or > 999)
+            return false;
 
-        return Math.Clamp(copies, 1, 999);
+        copies = parsed;
+        return true;
+    }
+
+    private void ShowInvalidCopiesWarning(TextBox copiesBox)
+    {
+        MessageBox.Show(this, "Enter a copy count from 1 to 999.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        copiesBox.Focus();
+        copiesBox.SelectAll();
+        Keyboard.Focus(copiesBox);
     }
 
     private static void ShowNativePrintDialog(FixedDocument document, PrintQueue? printQueue, int copies)
@@ -29,7 +40,6 @@ public sealed partial class PrintPreviewDialog
         if (printQueue is not null)
             dialog.PrintQueue = printQueue;
 
-        copies = NormalizeCopyCount(copies.ToString(CultureInfo.InvariantCulture));
         if (dialog.PrintTicket is not null)
             dialog.PrintTicket.CopyCount = copies;
 
@@ -71,9 +81,10 @@ public sealed partial class PrintPreviewDialog
 
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
     {
-        var copies = NormalizeCopyCount(copiesBox.Text);
+        var copyText = TryParseCopyCount(copiesBox.Text, out var copies)
+            ? copies == 1 ? "1 copy" : $"{copies} copies"
+            : "invalid copies";
         var pages = totalPages == 1 ? "1 page" : $"{totalPages} pages";
-        var copyText = copies == 1 ? "1 copy" : $"{copies} copies";
         var printerName = printerBox.SelectedItem is PrintQueue queue
             ? queue.FullName
             : "Windows print dialog";
