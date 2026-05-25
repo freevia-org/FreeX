@@ -2062,6 +2062,16 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_ToolbarZoomAccessKeyTargetsZoomCombo()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("var zoomBox = new ComboBox");
+        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Target = zoomBox");
+    }
+
+    [Fact]
     public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
     {
         var source = ReadPrintPreviewDialogSources();
