@@ -560,7 +560,10 @@ public partial class FileAdapterSmokeTests
                 new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
                 new ScenarioCellValue(new CellAddress(sheet.Id, 2, 1), new TextValue("manual"))
             ],
-            "Scenario comment"));
+            "Scenario comment",
+            Hidden: true,
+            Locked: true,
+            User: "FreexcelTest"));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -573,6 +576,9 @@ public partial class FileAdapterSmokeTests
         var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
         scenario.Name.Should().Be("Best Case");
         scenario.Comment.Should().Be("Scenario comment");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.User.Should().Be("FreexcelTest");
         scenario.ChangingCells.Should().Contain(new ScenarioCellValue(
             new CellAddress(loadedSheet.Id, 1, 1),
             new NumberValue(42)));
@@ -14587,6 +14593,9 @@ public partial class FileAdapterSmokeTests
         var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
         scenario.Name.Should().Be("BestCase");
         scenario.Comment.Should().Be("Scenario comment");
+        scenario.Hidden.Should().BeTrue();
+        scenario.Locked.Should().BeTrue();
+        scenario.User.Should().Be("FreexcelTest");
         scenario.ChangingCells.Should().ContainSingle()
             .Which.Should().Be(new ScenarioCellValue(
                 new CellAddress(loadedSheet.Id, 1, 1),
@@ -14605,7 +14614,10 @@ public partial class FileAdapterSmokeTests
                 new ScenarioCellValue(new CellAddress(data.Id, 1, 1), new NumberValue(42)),
                 new ScenarioCellValue(new CellAddress(assumptions.Id, 2, 2), new TextValue("manual"))
             ],
-            "Scenario comment"));
+            "Scenario comment",
+            Hidden: true,
+            Locked: true,
+            User: "FreexcelTest"));
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
@@ -14622,6 +14634,9 @@ public partial class FileAdapterSmokeTests
             .Should().ContainSingle().Subject;
         firstScenario.Attribute("name")!.Value.Should().Be("BestCase");
         firstScenario.Attribute("comment")!.Value.Should().Be("Scenario comment");
+        firstScenario.Attribute("hidden")!.Value.Should().Be("1");
+        firstScenario.Attribute("locked")!.Value.Should().Be("1");
+        firstScenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
         firstScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("A1");
         firstScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("42");
         firstScenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
@@ -14634,6 +14649,9 @@ public partial class FileAdapterSmokeTests
             .Should().ContainSingle().Subject;
         secondScenario.Attribute("name")!.Value.Should().Be("BestCase");
         secondScenario.Attribute("comment")!.Value.Should().Be("Scenario comment");
+        secondScenario.Attribute("hidden")!.Value.Should().Be("1");
+        secondScenario.Attribute("locked")!.Value.Should().Be("1");
+        secondScenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
         secondScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("B2");
         secondScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("manual");
     }
@@ -20234,6 +20252,7 @@ public partial class FileAdapterSmokeTests
                     worksheetNs + "scenario",
                     new XAttribute("name", "BestCase"),
                     new XAttribute("comment", "Scenario comment"),
+                    new XAttribute("hidden", "1"),
                     new XAttribute("locked", "1"),
                     new XAttribute("count", "1"),
                     new XAttribute("user", "FreexcelTest"),
