@@ -421,9 +421,80 @@ public static partial class BuiltInFunctions
         if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
         if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
         if (args[0] is RangeValue lookupValueRange)
-            return MapUnaryTextRange(lookupValueRange, value => XlookupScalar(value, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode));
+            return XlookupRangeLookupValues(lookupValueRange, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
 
         return XlookupScalar(lookupValue, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
+    }
+
+    private static ScalarValue XlookupRangeLookupValues(
+        RangeValue lookupValues,
+        IReadOnlyList<ScalarValue> lookupFlat,
+        RangeValue returnArr,
+        bool lookupIsVertical,
+        ScalarValue ifNotFound,
+        int matchMode,
+        int searchMode)
+    {
+        var results = new ScalarValue[lookupValues.RowCount, lookupValues.ColCount];
+        bool hasRangeResult = false;
+        for (int r = 0; r < lookupValues.RowCount; r++)
+            for (int c = 0; c < lookupValues.ColCount; c++)
+            {
+                var lookupValue = lookupValues.Cells[r, c];
+                var result = lookupValue is ErrorValue e
+                    ? e
+                    : XlookupScalar(lookupValue, lookupFlat, returnArr, lookupIsVertical, ifNotFound, matchMode, searchMode);
+                results[r, c] = result;
+                if (result is RangeValue) hasRangeResult = true;
+            }
+
+        if (!hasRangeResult) return new RangeValue(results);
+
+        if (lookupValues.ColCount == 1)
+        {
+            int outputCols = -1;
+            for (int r = 0; r < lookupValues.RowCount; r++)
+            {
+                if (results[r, 0] is not RangeValue rv) return ErrorValue.Value;
+                if (rv.RowCount != 1) return ErrorValue.Value;
+                if (outputCols < 0) outputCols = rv.ColCount;
+                else if (rv.ColCount != outputCols) return ErrorValue.Value;
+            }
+
+            var cells = new ScalarValue[lookupValues.RowCount, outputCols];
+            for (int r = 0; r < lookupValues.RowCount; r++)
+            {
+                var rv = (RangeValue)results[r, 0];
+                for (int c = 0; c < outputCols; c++)
+                    cells[r, c] = rv.Cells[0, c];
+            }
+
+            return new RangeValue(cells);
+        }
+
+        if (lookupValues.RowCount == 1)
+        {
+            int outputRows = -1;
+            for (int c = 0; c < lookupValues.ColCount; c++)
+            {
+                if (results[0, c] is not RangeValue rv) return ErrorValue.Value;
+                if (rv.ColCount != 1) return ErrorValue.Value;
+                if (outputRows < 0) outputRows = rv.RowCount;
+                else if (rv.RowCount != outputRows) return ErrorValue.Value;
+            }
+
+            var cells = new ScalarValue[outputRows, lookupValues.ColCount];
+            for (int c = 0; c < lookupValues.ColCount; c++)
+            {
+                var rv = (RangeValue)results[0, c];
+                for (int r = 0; r < outputRows; r++)
+                    cells[r, c] = rv.Cells[r, 0];
+            }
+
+            return new RangeValue(cells);
+        }
+
+        return ErrorValue.Value;
     }
 
     private static ScalarValue XlookupScalar(ScalarValue lookupValue, IReadOnlyList<ScalarValue> lookupFlat, RangeValue returnArr, bool lookupIsVertical, ScalarValue ifNotFound, int matchMode, int searchMode)
