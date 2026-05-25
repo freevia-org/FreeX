@@ -166,6 +166,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookSmartTags()
+    {
+        var workbook = new Workbook("SmartTagsNativeJson")
+        {
+            SmartTags = new WorkbookSmartTagMetadataModel
+            {
+                Embed = true,
+                Show = "all",
+                PropertiesNativeAttributes = new Dictionary<string, string> { ["customSmartTagFlag"] = "keep" },
+                TypesNativeAttributes = new Dictionary<string, string> { ["customSmartTagTypesFlag"] = "keep" },
+                Types =
+                [
+                    new WorkbookSmartTagTypeModel
+                    {
+                        NamespaceUri = "urn:schemas-microsoft-com:office:smarttags",
+                        Name = "place",
+                        NativeAttributes = new Dictionary<string, string> { ["customSmartTagTypeFlag"] = "keep" }
+                    }
+                ]
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.SmartTags.Should().BeEquivalentTo(workbook.SmartTags);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_HeaderFooterPictures()
     {
         var workbook = new Workbook("HeaderPicture");
@@ -11701,6 +11735,22 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.SmartTags.Should().BeEquivalentTo(new WorkbookSmartTagMetadataModel
+        {
+            Embed = true,
+            Show = "all",
+            PropertiesNativeAttributes = new Dictionary<string, string> { ["customSmartTagFlag"] = "keep" },
+            TypesNativeAttributes = new Dictionary<string, string> { ["customSmartTagTypesFlag"] = "keep" },
+            Types =
+            [
+                new WorkbookSmartTagTypeModel
+                {
+                    NamespaceUri = "urn:schemas-microsoft-com:office:smarttags",
+                    Name = "place",
+                    NativeAttributes = new Dictionary<string, string> { ["customSmartTagTypeFlag"] = "keep" }
+                }
+            ]
+        });
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11715,9 +11765,12 @@ public partial class FileAdapterSmokeTests
         smartTagProperties.Should().NotBeNull();
         smartTagProperties!.Attribute("embed")!.Value.Should().Be("1");
         smartTagProperties.Attribute("show")!.Value.Should().Be("all");
+        smartTagProperties.Attribute("customSmartTagFlag")!.Value.Should().Be("keep");
         smartTagTypes.Should().NotBeNull();
+        smartTagTypes!.Attribute("customSmartTagTypesFlag")!.Value.Should().Be("keep");
         smartTagTypes!.Element(workbookNs + "smartTagType")!.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags");
         smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("name")!.Value.Should().Be("place");
+        smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("customSmartTagTypeFlag")!.Value.Should().Be("keep");
     }
 
     [Fact]
