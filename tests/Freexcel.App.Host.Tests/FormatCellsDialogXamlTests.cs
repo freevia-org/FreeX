@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Globalization;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -1149,6 +1150,38 @@ public sealed class FormatCellsDialogXamlTests
                 decimals.Text = "1";
                 ClickOkForTest(dialog);
                 dialog.ResultDiff!.NumberFormat.Should().Be("0.0E+00");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_ListsLocalizedAccountingCurrencyLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var usRegion = new RegionInfo("en-US");
+                var usDollarLabel = $"{usRegion.CurrencySymbol} {usRegion.CurrencyNativeName}";
+
+                symbols.Items.Cast<string>().Should().Contain(usDollarLabel);
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "2";
+                symbols.SelectedItem = usDollarLabel;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.NumberFormat.Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
             }
             finally
             {
