@@ -40,7 +40,10 @@ internal static class XlsxWorksheetScenarioMapper
                 scenarios.Add(new WorkbookScenario(
                     name,
                     changes,
-                    NullIfWhiteSpace(scenario.Attribute("comment")?.Value)));
+                    NullIfWhiteSpace(scenario.Attribute("comment")?.Value),
+                    IsTruthy(scenario.Attribute("hidden")?.Value),
+                    IsTruthy(scenario.Attribute("locked")?.Value),
+                    NullIfWhiteSpace(scenario.Attribute("user")?.Value)));
         }
 
         return scenarios;
@@ -112,6 +115,12 @@ internal static class XlsxWorksheetScenarioMapper
                             new XAttribute("val", FormatValue(change.Value)))));
                     if (!string.IsNullOrWhiteSpace(item.Scenario.Comment))
                         scenario.SetAttributeValue("comment", item.Scenario.Comment);
+                    if (item.Scenario.Hidden)
+                        scenario.SetAttributeValue("hidden", "1");
+                    if (item.Scenario.Locked)
+                        scenario.SetAttributeValue("locked", "1");
+                    if (!string.IsNullOrWhiteSpace(item.Scenario.User))
+                        scenario.SetAttributeValue("user", item.Scenario.User);
 
                     return scenario;
                 })));
@@ -168,6 +177,11 @@ internal static class XlsxWorksheetScenarioMapper
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static bool IsTruthy(string? value) =>
+        value is not null &&
+        (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
 
     private static string FormatValue(ScalarValue value) => value switch
     {
