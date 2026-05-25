@@ -175,6 +175,9 @@ public sealed class Workbook
     /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
     public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
 
+    /// <summary>Workbook-level indexed color overrides loaded from XLSX styles.xml.</summary>
+    public WorkbookIndexedColorPalette IndexedColors { get; } = new();
+
     /// <summary>Excel workbook file-sharing/read-only recommendation metadata.</summary>
     public WorkbookFileSharingModel? FileSharing { get; set; }
 

@@ -299,6 +299,9 @@ public sealed partial class NativeJsonAdapter
         public bool? OutlineSummaryRight { get; set; }
         public bool? ShowOutlineSymbols { get; set; }
         public bool? ApplyOutlineStyles { get; set; }
+        public WorksheetSheetFormatMetadataDto? SheetFormatMetadata { get; set; }
+        public WorksheetDimensionMetadataDto? DimensionMetadata { get; set; }
+        public WorksheetSheetPropertiesMetadataDto? SheetPropertiesMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -322,12 +325,14 @@ public sealed partial class NativeJsonAdapter
         public WorksheetDataConsolidationDto? DataConsolidation { get; set; }
         public WorksheetSortStateDto? SortState { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
+        public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
         public PageMarginsDto? PageMargins { get; set; }
         public double? HeaderMargin { get; set; }
         public double? FooterMargin { get; set; }
+        public WorksheetPageMarginsMetadataDto? PageMarginsMetadata { get; set; }
         public bool PrintGridlines { get; set; }
         public bool PrintHeadings { get; set; }
         public WorksheetPrintOptionsMetadataDto? PrintOptionsMetadata { get; set; }
@@ -349,6 +354,7 @@ public sealed partial class NativeJsonAdapter
         public bool DifferentOddEvenHeaderFooter { get; set; }
         public bool? HeaderFooterScaleWithDocument { get; set; }
         public bool? HeaderFooterAlignWithMargins { get; set; }
+        public WorksheetHeaderFooterMetadataDto? HeaderFooterMetadata { get; set; }
         public bool CenterHorizontallyOnPage { get; set; }
         public bool CenterVerticallyOnPage { get; set; }
         public WorksheetPageOrder? PageOrder { get; set; }
@@ -397,6 +403,41 @@ public sealed partial class NativeJsonAdapter
     }
 
     private class WorksheetPrintOptionsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetSheetFormatMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetDimensionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorksheetSheetPropertiesMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPrimaryViewMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPageMarginsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetHeaderFooterMetadataDto
     {
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
         public List<string> NativeChildXmls { get; set; } = [];

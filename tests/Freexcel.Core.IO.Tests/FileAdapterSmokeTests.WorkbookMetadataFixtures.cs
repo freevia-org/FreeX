@@ -301,6 +301,30 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddWorkbookWebPublishObjects(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Elements(workbookNs + "extLst").Remove();
+            workbookXml.Root!.Elements(workbookNs + "webPublishObjects").Remove();
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "webPublishObjects",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "webPublishObject",
+                    new XAttribute("id", "1"),
+                    new XAttribute("divId", "FreexcelPublishObject"),
+                    new XAttribute("destinationFile", "publish.htm"),
+                    new XAttribute("sourceObject", "Sheet1!A1"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddWorkbookSmartTagMetadata(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))

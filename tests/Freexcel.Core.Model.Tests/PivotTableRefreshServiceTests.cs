@@ -1203,6 +1203,36 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MergeAndCenterLabelsMergesSubtotalCaptionsAcrossRowLabelColumns()
+    {
+        var workbook = new Workbook("PivotMergeSubtotalLabelsRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I12"),
+            ShowSubtotals = true,
+            MergeAndCenterLabels = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E5"), Addr(sheet, "F5")));
+        sheet.MergedRegions.Should().Contain(new GridRange(Addr(sheet, "E8"), Addr(sheet, "F8")));
+        Text(sheet, "E5").Should().Be("East Total");
+        Text(sheet, "E8").Should().Be("West Total");
+        var subtotalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
+        subtotalStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        subtotalStyle.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+    }
+
+    [Fact]
     public void Refresh_MergeAndCenterLabelsRemovesStalePivotMergesWhenDisabled()
     {
         var workbook = new Workbook("PivotMergeLabelsRefreshDisableTest");

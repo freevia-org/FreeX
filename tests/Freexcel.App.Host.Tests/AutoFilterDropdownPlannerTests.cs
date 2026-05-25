@@ -171,6 +171,41 @@ public sealed class AutoFilterDropdownPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_ExposesExcelVisualSectionsForNestedRendering()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        menu.Sections.Select(section => section.Kind).Should().Equal(
+            AutoFilterMenuSectionKind.Sort,
+            AutoFilterMenuSectionKind.FilterCommands,
+            AutoFilterMenuSectionKind.Search,
+            AutoFilterMenuSectionKind.Checklist);
+        menu.Sections.Select(section => section.Label).Should().Equal(
+            "Sort",
+            "Filter",
+            "Search",
+            "Values");
+        menu.Sections[0].Entries.Select(entry => entry.Header).Should().Equal("Sort A to Z", "Sort Z to A");
+        menu.Sections[1].Entries.Select(entry => entry.Header).Should().Equal(
+            "Clear Filter From \"Fruit\"",
+            "Filter by Color",
+            "Text Filters");
+        menu.Sections[2].Entries.Select(entry => entry.Header).Should().Equal("Search", "(Select All)");
+        menu.Sections[3].Entries.Select(entry => entry.Header).Should().Equal("Apple", "Banana");
+    }
+
+    [Fact]
     public void CreateMenuPlan_ChoosesNumberAndDateFilterFamiliesFromBodyValues()
     {
         var numberSheet = new Sheet(SheetId, "Sheet1");

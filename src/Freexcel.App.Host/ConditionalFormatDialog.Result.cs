@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -21,6 +22,12 @@ public partial class ConditionalFormatDialog
         {
             cf.RuleType = CfRuleType.Formula;
             var raw = _formulaBox?.Text.Trim() ?? "";
+            if (raw is "" or "=")
+            {
+                ShowInvalidInputWarning("Enter a formula for this conditional formatting rule.", _formulaBox);
+                return;
+            }
+
             cf.FormulaText = raw.StartsWith('=') ? raw[1..] : raw;
         }
         else
@@ -52,8 +59,22 @@ public partial class ConditionalFormatDialog
                     "Between"      => CfOperator.Between,
                     _              => CfOperator.NotEqual
                 };
-                cf.Value1 = _value1Box.Text.Trim();
-                cf.Value2 = _value2Box.Text.Trim();
+                var value1 = _value1Box.Text.Trim();
+                var value2 = _value2Box.Text.Trim();
+                if (string.IsNullOrWhiteSpace(value1))
+                {
+                    ShowInvalidInputWarning("Enter a value for this conditional formatting rule.", _value1Box);
+                    return;
+                }
+
+                if (cf.Operator == CfOperator.Between && string.IsNullOrWhiteSpace(value2))
+                {
+                    ShowInvalidInputWarning("Enter a maximum value for this conditional formatting rule.", _value2Box);
+                    return;
+                }
+
+                cf.Value1 = value1;
+                cf.Value2 = value2;
             }
             else if (cf.RuleType == CfRuleType.IconSet)
             {
@@ -84,25 +105,65 @@ public partial class ConditionalFormatDialog
                 cf.DataBarMaxThresholdValue = BlankToNull(_dataBarMaxValueBox.Text);
                 cf.DataBarShowValue = _dataBarShowValueBox.IsChecked != true;
                 cf.DataBarGradient = _dataBarGradientBox.IsChecked == true;
-                cf.DataBarMinLength = ParseOptionalPercent(_dataBarMinLengthBox.Text);
-                cf.DataBarMaxLength = ParseOptionalPercent(_dataBarMaxLengthBox.Text);
+                if (!TryParseOptionalPercent(_dataBarMinLengthBox.Text, out var minLength))
+                {
+                    ShowInvalidInputWarning("Enter a minimum bar length from 0 to 100 percent, or leave it blank.", _dataBarMinLengthBox);
+                    return;
+                }
+
+                if (!TryParseOptionalPercent(_dataBarMaxLengthBox.Text, out var maxLength))
+                {
+                    ShowInvalidInputWarning("Enter a maximum bar length from 0 to 100 percent, or leave it blank.", _dataBarMaxLengthBox);
+                    return;
+                }
+
+                cf.DataBarMinLength = minLength;
+                cf.DataBarMaxLength = maxLength;
             }
             else if (cf.RuleType == CfRuleType.ColorScale)
             {
                 cf.MinThresholdType = SelectedThresholdType(_colorScaleMinTypeBox, CfThresholdType.Min);
                 cf.MinThresholdValue = BlankToNull(_colorScaleMinValueBox.Text);
-                cf.MinColor = ParseRgbOrFallback(_colorScaleMinColorBox.Text, cf.MinColor);
+                if (!TryParseRgbColor(_colorScaleMinColorBox.Text, out var minColor))
+                {
+                    ShowInvalidInputWarning("Enter a minimum color as R, G, B.", _colorScaleMinColorBox);
+                    return;
+                }
+
+                cf.MinColor = minColor;
                 cf.UseThreeColorScale = _colorScaleUseThreeColorBox.IsChecked == true;
                 cf.MidThresholdType = SelectedThresholdType(_colorScaleMidTypeBox, CfThresholdType.Percentile);
                 cf.MidThresholdValue = BlankToNull(_colorScaleMidValueBox.Text);
-                cf.MidColor = ParseRgbOrFallback(_colorScaleMidColorBox.Text, cf.MidColor);
+                if (cf.UseThreeColorScale)
+                {
+                    if (!TryParseRgbColor(_colorScaleMidColorBox.Text, out var midColor))
+                    {
+                        ShowInvalidInputWarning("Enter a midpoint color as R, G, B.", _colorScaleMidColorBox);
+                        return;
+                    }
+
+                    cf.MidColor = midColor;
+                }
                 cf.MaxThresholdType = SelectedThresholdType(_colorScaleMaxTypeBox, CfThresholdType.Max);
                 cf.MaxThresholdValue = BlankToNull(_colorScaleMaxValueBox.Text);
-                cf.MaxColor = ParseRgbOrFallback(_colorScaleMaxColorBox.Text, cf.MaxColor);
+                if (!TryParseRgbColor(_colorScaleMaxColorBox.Text, out var maxColor))
+                {
+                    ShowInvalidInputWarning("Enter a maximum color as R, G, B.", _colorScaleMaxColorBox);
+                    return;
+                }
+
+                cf.MaxColor = maxColor;
             }
             else if (cf.RuleType is CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith)
             {
-                cf.TextRuleText = _value1Box.Text.Trim();
+                var text = _value1Box.Text.Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    ShowInvalidInputWarning("Enter text for this conditional formatting rule.", _value1Box);
+                    return;
+                }
+
+                cf.TextRuleText = text;
             }
             else if (cf.RuleType == CfRuleType.DateOccurring)
             {
@@ -112,7 +173,15 @@ public partial class ConditionalFormatDialog
             cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
             cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
             if (cf.RuleType == CfRuleType.Top10)
-                cf.TopBottomRank = ParseTopBottomRank(_topBottomRankBox.Text);
+            {
+                if (!TryParseTopBottomRank(_topBottomRankBox.Text, out var topBottomRank))
+                {
+                    ShowInvalidInputWarning("Enter a rank or percent from 1 to 1000.", _topBottomRankBox);
+                    return;
+                }
+
+                cf.TopBottomRank = topBottomRank;
+            }
         }
 
         if (cf.RuleType is not (CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale))
@@ -143,5 +212,17 @@ public partial class ConditionalFormatDialog
 
     private static CfThresholdType SelectedThresholdType(ComboBox comboBox, CfThresholdType fallback) =>
         comboBox.SelectedItem is CfThresholdType selected ? selected : fallback;
+
+    private bool ShowInvalidInputWarning(string message, TextBox? target)
+    {
+        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (target is null)
+            return false;
+
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+        return false;
+    }
 
 }

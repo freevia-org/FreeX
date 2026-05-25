@@ -1942,6 +1942,23 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
+
+        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        source.Should().Contain("\"Row Height\",");
+        source.Should().Contain("\"Column Width\",");
+        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
+        source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
+        source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, startRow, endRow, dialog.Result.Height)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, startCol, endCol, dialog.Result.Width)");
+        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
+        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
+    }
+
+    [Fact]
     public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));

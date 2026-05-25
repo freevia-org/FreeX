@@ -98,6 +98,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.OutlineSummaryRight = sDto.OutlineSummaryRight;
             sheet.ShowOutlineSymbols = sDto.ShowOutlineSymbols;
             sheet.ApplyOutlineStyles = sDto.ApplyOutlineStyles;
+            sheet.SheetFormatMetadata = ToWorksheetSheetFormatMetadata(sDto.SheetFormatMetadata);
+            sheet.DimensionMetadata = ToWorksheetDimensionMetadata(sDto.DimensionMetadata);
+            sheet.SheetPropertiesMetadata = ToWorksheetSheetPropertiesMetadata(sDto.SheetPropertiesMetadata);
             foreach (var row in sDto.GroupHiddenRows ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(row))
                     sheet.GroupHiddenRows.Add(row);
@@ -129,6 +132,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
+            sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }
@@ -144,6 +148,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     WorksheetPageMargins.Narrow);
             sheet.HeaderMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(sDto.HeaderMargin, 0.3);
             sheet.FooterMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(sDto.FooterMargin, 0.3);
+            sheet.PageMarginsMetadata = ToWorksheetPageMarginsMetadata(sDto.PageMarginsMetadata);
             sheet.PrintGridlines = sDto.PrintGridlines;
             sheet.PrintHeadings = sDto.PrintHeadings;
             sheet.PrintOptionsMetadata = ToWorksheetPrintOptionsMetadata(sDto.PrintOptionsMetadata);
@@ -165,6 +170,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.DifferentOddEvenHeaderFooter = sDto.DifferentOddEvenHeaderFooter;
             sheet.HeaderFooterScaleWithDocument = sDto.HeaderFooterScaleWithDocument ?? true;
             sheet.HeaderFooterAlignWithMargins = sDto.HeaderFooterAlignWithMargins ?? true;
+            sheet.HeaderFooterMetadata = ToWorksheetHeaderFooterMetadata(sDto.HeaderFooterMetadata);
             sheet.CenterHorizontallyOnPage = sDto.CenterHorizontallyOnPage;
             sheet.CenterVerticallyOnPage = sDto.CenterVerticallyOnPage;
             if (sDto.PageOrder is { } pageOrder && Enum.IsDefined(pageOrder))
@@ -594,6 +600,116 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             return null;
 
         return new WorksheetPrintOptionsMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetSheetFormatMetadataModel? ToWorksheetSheetFormatMetadata(WorksheetSheetFormatMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetSheetFormatMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetDimensionMetadataModel? ToWorksheetDimensionMetadata(WorksheetDimensionMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        if (nativeAttributes.Count == 0)
+            return null;
+
+        return new WorksheetDimensionMetadataModel
+        {
+            NativeAttributes = nativeAttributes
+        };
+    }
+
+    private static WorksheetSheetPropertiesMetadataModel? ToWorksheetSheetPropertiesMetadata(WorksheetSheetPropertiesMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetSheetPropertiesMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPrimaryViewMetadataModel? ToWorksheetPrimaryViewMetadata(WorksheetPrimaryViewMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetPrimaryViewMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPageMarginsMetadataModel? ToWorksheetPageMarginsMetadata(WorksheetPageMarginsMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetPageMarginsMetadataModel
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetHeaderFooterMetadataModel? ToWorksheetHeaderFooterMetadata(WorksheetHeaderFooterMetadataDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
+        var nativeChildXmls = (dto.NativeChildXmls ?? [])
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetHeaderFooterMetadataModel
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls

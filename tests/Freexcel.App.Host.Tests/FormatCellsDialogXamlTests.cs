@@ -586,6 +586,49 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_ExposesFontColorSwatchesAndPreviewUpdate()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "x:Name=\"DlgFontColorPalettePanel\"",
+            "Columns=\"8\" Rows=\"2\"",
+            "ToolTip=\"Automatic font color\"",
+            "ToolTip=\"Red font\"",
+            "ToolTip=\"Blue font\"",
+            "Click=\"DlgFontColorSwatchButton_Click\""
+        })
+            xaml.Should().Contain(expected);
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var colorBox = GetControl<TextBox>(dialog, "DlgFontColorBox");
+                var preview = GetControl<TextBlock>(dialog, "DlgFontSamplePreview");
+                var swatch = new Button { Tag = "192,0,0" };
+
+                InvokeDialogHandler(dialog, "DlgFontColorSwatchButton_Click", swatch);
+
+                colorBox.Text.Should().Be("192,0,0");
+                preview.Foreground.Should().BeOfType<SolidColorBrush>()
+                    .Which.Color.Should().Be(Color.FromRgb(192, 0, 0));
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontColor.Should().Be(new CellColor(192, 0, 0));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_DoesNotDuplicateFontStyleAndUnderlineControlsAsEffects()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
@@ -1123,9 +1166,12 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName)
+        => InvokeDialogHandler(dialog, methodName, dialog);
+
+    private static void InvokeDialogHandler(FormatCellsDialog dialog, string methodName, object sender)
     {
         var method = typeof(FormatCellsDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         method.Should().NotBeNull();
-        method!.Invoke(dialog, [dialog, new System.Windows.RoutedEventArgs()]);
+        method!.Invoke(dialog, [sender, new System.Windows.RoutedEventArgs()]);
     }
 }

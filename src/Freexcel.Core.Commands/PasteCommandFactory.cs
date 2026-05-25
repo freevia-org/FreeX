@@ -98,6 +98,8 @@ public static class PasteCommandFactory
                 if (options.Operation != PasteSpecialOperation.None)
                 {
                     pastedCell = Cell.FromValue(sourceCell.Value);
+                    if (options.ContentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
+                        pastedCell.StyleId = sourceCell.StyleId;
                 }
                 else
                 {

@@ -1995,11 +1995,17 @@ public class FunctionLibraryTests
             (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
             (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
-            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())),
+            (1, 3, new NumberValue(0)),
+            (2, 3, new NumberValue(3)),
+            (1, 4, new NumberValue(0)),
+            (2, 4, new NumberValue(1)));
 
         AssertColumn(_eval.Evaluate("=DAYS(B1:B2,A1:A2)", sheet), new NumberValue(4), new NumberValue(8));
         AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,B1:B2,D1:D2)", sheet), new NumberValue(4), new NumberValue(8));
         AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,0)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 360.0));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 365.0));
         AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B2)", sheet), new NumberValue(5), new NumberValue(7));
     }
 
@@ -2010,11 +2016,15 @@ public class FunctionLibraryTests
             (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
             (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
-            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())),
+            (1, 4, new NumberValue(0)),
+            (1, 5, new NumberValue(3)));
 
         _eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS360(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
@@ -2061,6 +2071,7 @@ public class FunctionLibraryTests
             _eval.Evaluate("=WORKDAY(A1:A2,B1:B2)", sheet),
             new NumberValue(new DateTime(2024, 2, 1).ToOADate()),
             new NumberValue(new DateTime(2024, 3, 4).ToOADate()));
+        AssertColumn(_eval.Evaluate("=WEEKDAY(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(4));
     }
 
     [Fact]
@@ -2075,6 +2086,7 @@ public class FunctionLibraryTests
         _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WEEKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -2220,6 +2232,35 @@ public class FunctionLibraryTests
     }
 
     // ── MOD ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Datedif_SameShapeRangeArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2020, 3, 15).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 11).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2024, 3, 15).ToOADate())),
+            (1, 3, new TextValue("D")),
+            (2, 3, new TextValue("Y")));
+
+        AssertColumn(_eval.Evaluate("=DATEDIF(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(10), new NumberValue(4));
+    }
+
+    [Fact]
+    public void Datedif_MismatchedRangeArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2020, 3, 15).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 11).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 3, 15).ToOADate())),
+            (1, 4, new TextValue("D")),
+            (1, 5, new TextValue("Y")));
+
+        _eval.Evaluate("=DATEDIF(A1:A2,B1:C1,\"D\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DATEDIF(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Datedif_UnitError_PropagatesError()
@@ -2876,6 +2917,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Large_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(8)),
+            (4, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=LARGE(A1:A4,B1:B2)", sheet), new NumberValue(8), new NumberValue(5));
+    }
+
+    [Fact]
     public void Large_OutOfRange_ReturnsNumError()
     {
         var sheet = MakeSheet(
@@ -2959,6 +3014,20 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new NumberValue(5)), (1, 2, new TextValue("1E309")));
         _eval.Evaluate("=SMALL(A1:A1,B1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Small_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(8)),
+            (4, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=SMALL(A1:A4,B1:B2)", sheet), new NumberValue(1), new NumberValue(3));
     }
 
     [Fact]
@@ -4460,6 +4529,17 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void Percentile_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)), (4, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(0)), (2, 2, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=PERCENTILE(A1:A4,B1:B2)", sheet), new NumberValue(1), new NumberValue(4));
+    }
+
     [Fact] public void PercentileExc_Middle_ReturnsInterpolated()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
@@ -4476,6 +4556,17 @@ public class FunctionLibraryTests
     [Fact] public void PercentileExc_RangeArgumentError_PropagatesError()
     {
         _eval.Evaluate("=PERCENTILE.EXC(NA(),0.4)", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void PercentileExc_KRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)), (4, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(0.4)), (2, 2, new NumberValue(0.6)));
+
+        AssertColumn(_eval.Evaluate("=PERCENTILE.EXC(A1:A4,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
     }
 
     [Fact] public void Quartile_Q1_Returns25th()
@@ -4509,6 +4600,17 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
         _eval.Evaluate("=QUARTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Quartile_QuartRangeArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)), (4, 1, new NumberValue(4)),
+            (1, 2, new NumberValue(0)), (2, 2, new NumberValue(4)));
+
+        AssertColumn(_eval.Evaluate("=QUARTILE(A1:A4,B1:B2)", sheet), new NumberValue(1), new NumberValue(4));
     }
 
     [Fact] public void Geomean_TwoNumbers_ReturnsGeometricMean()
@@ -4662,6 +4764,18 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
         _eval.Evaluate("=PERCENTRANK(A1:A2,1,B1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Percentrank_XAndSignificanceRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (3, 1, new NumberValue(3)),
+            (4, 1, new NumberValue(4)), (5, 1, new NumberValue(5)),
+            (1, 2, new NumberValue(2)), (2, 2, new NumberValue(4)),
+            (1, 3, new NumberValue(3)), (2, 3, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=PERCENTRANK(A1:A5,B1:B2,C1:C2)", sheet), new NumberValue(0.25), new NumberValue(0.75));
     }
 
     [Fact] public void Correl_PerfectPositive_Returns1()
@@ -7346,6 +7460,25 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WorkdayIntl_StartAndDaysRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2026, 5, 18).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2026, 5, 19).ToOADate())),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(-1)),
+            (3, 2, new NumberValue(1)));
+
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY.INTL(A1:A2,B1:B2,\"0000011\")", sheet),
+            new NumberValue(new DateTime(2026, 5, 21).ToOADate()),
+            new NumberValue(new DateTime(2026, 5, 18).ToOADate()));
+
+        _eval.Evaluate("=WORKDAY.INTL(A1:A2,B1:B3,\"0000011\")", sheet)
+            .Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void NetworkdaysIntl_UsesWeekendMaskAndHolidays()
     {
         var holiday = DateTimeValue.FromDateTime(new DateTime(2026, 5, 20));
@@ -7356,6 +7489,25 @@ public class FunctionLibraryTests
     }
 
     // ── UNICHAR / UNICODE additional cases ───────────────────────────────────
+
+    [Fact]
+    public void NetworkdaysIntl_StartAndEndRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2026, 5, 18).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2026, 5, 22).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2026, 5, 22).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2026, 5, 18).ToOADate())),
+            (3, 2, new NumberValue(new DateTime(2026, 5, 19).ToOADate())));
+
+        AssertColumn(
+            _eval.Evaluate("=NETWORKDAYS.INTL(A1:A2,B1:B2,\"0000011\")", sheet),
+            new NumberValue(5),
+            new NumberValue(-5));
+
+        _eval.Evaluate("=NETWORKDAYS.INTL(A1:A2,B1:B3,\"0000011\")", sheet)
+            .Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Unichar_BasicAscii_ReturnsLetter() =>
@@ -7615,6 +7767,33 @@ public class FunctionLibraryTests
     public void Numbervalue_LocalizedAccountingParentheses_ReturnsNegativeNumber() =>
         _eval.Evaluate("=NUMBERVALUE(\"(1.234,56)\",\",\",\".\")", MakeSheet())
             .Should().Be(new NumberValue(-1234.56));
+
+    [Fact]
+    public void Numbervalue_SameShapeSeparatorArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1.234,56")),
+            (2, 1, new TextValue("1 234.5")),
+            (1, 2, new TextValue(",")),
+            (2, 2, new TextValue(".")),
+            (1, 3, new TextValue(".")),
+            (2, 3, new TextValue(" ")));
+
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(1234.56), new NumberValue(1234.5));
+    }
+
+    [Fact]
+    public void Numbervalue_MismatchedSeparatorArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1.234,56")),
+            (2, 1, new TextValue("1 234.5")),
+            (1, 2, new TextValue(",")),
+            (1, 3, new TextValue(".")));
+
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:C1,\".\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Numbervalue_InvalidSeparators_ReturnsValueError() =>

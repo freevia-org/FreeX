@@ -10,7 +10,24 @@ public sealed record AutoFilterMenuPlan(
     string HeaderText,
     AutoFilterMenuFilterKind FilterKind,
     IReadOnlyList<AutoFilterMenuEntry> Entries,
-    IReadOnlyList<AutoFilterColorOption>? ColorOptions = null);
+    IReadOnlyList<AutoFilterColorOption>? ColorOptions = null,
+    IReadOnlyList<AutoFilterMenuSection>? Sections = null)
+{
+    public IReadOnlyList<AutoFilterMenuSection> Sections { get; init; } = Sections ?? [];
+}
+
+public sealed record AutoFilterMenuSection(
+    AutoFilterMenuSectionKind Kind,
+    string Label,
+    IReadOnlyList<AutoFilterMenuEntry> Entries);
+
+public enum AutoFilterMenuSectionKind
+{
+    Sort,
+    FilterCommands,
+    Search,
+    Checklist
+}
 
 public enum AutoFilterColorFilterKind
 {
@@ -187,7 +204,35 @@ public static class AutoFilterDropdownPlanner
         entries.AddRange(CreateChecklistItems(sheet, plan)
             .Select(item => new AutoFilterMenuEntry(item)));
 
-        return new AutoFilterMenuPlan(headerText, filterKind, entries, CollectColorOptions(workbook, sheet, plan));
+        return new AutoFilterMenuPlan(
+            headerText,
+            filterKind,
+            entries,
+            CollectColorOptions(workbook, sheet, plan),
+            CreateSections(entries));
+    }
+
+    private static IReadOnlyList<AutoFilterMenuSection> CreateSections(IReadOnlyList<AutoFilterMenuEntry> entries)
+    {
+        return
+        [
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.Sort,
+                "Sort",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.SortAscending or AutoFilterMenuEntryKind.SortDescending).ToList()),
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.FilterCommands,
+                "Filter",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.ClearFilter or AutoFilterMenuEntryKind.FilterByColor or AutoFilterMenuEntryKind.FilterFamily).ToList()),
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.Search,
+                "Search",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.Search or AutoFilterMenuEntryKind.SelectAll).ToList()),
+            new AutoFilterMenuSection(
+                AutoFilterMenuSectionKind.Checklist,
+                "Values",
+                entries.Where(entry => entry.Kind is AutoFilterMenuEntryKind.ChecklistItem).ToList())
+        ];
     }
 
     private static IReadOnlyList<AutoFilterColorOption> CollectColorOptions(

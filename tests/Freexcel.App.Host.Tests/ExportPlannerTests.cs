@@ -186,6 +186,25 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ResolveExportSheetIds_ActiveSheetUsesGroupedVisibleSheetsInWorkbookOrder()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var third = workbook.AddSheet("Third");
+        var hidden = workbook.AddSheet("Hidden");
+        hidden.IsHidden = true;
+
+        var result = ExportSheetSelectionPlanner.ResolveSheetIds(
+            workbook,
+            new ExportOptions(ExportContentScope.ActiveSheet, false, false),
+            second.Id,
+            [third.Id, hidden.Id, second.Id]);
+
+        result.Should().Equal(second.Id, third.Id);
+    }
+
+    [Fact]
     public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
@@ -1980,15 +1999,36 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData(null, 1)]
-    [InlineData("", 1)]
-    [InlineData("0", 1)]
-    [InlineData("2", 2)]
-    [InlineData("1000", 999)]
-    [InlineData("not a number", 1)]
-    public void PrintPreviewDialog_NormalizeCopyCount_ClampsToExcelLikeCopiesRange(string? text, int expected)
+    [InlineData(null, false, 0)]
+    [InlineData("", false, 0)]
+    [InlineData("0", false, 0)]
+    [InlineData("2", true, 2)]
+    [InlineData("999", true, 999)]
+    [InlineData("1000", false, 0)]
+    [InlineData("not a number", false, 0)]
+    public void PrintPreviewDialog_TryParseCopyCount_ValidatesExcelCopiesRange(string? text, bool expectedResult, int expectedCopies)
     {
-        PrintPreviewDialog.NormalizeCopyCount(text).Should().Be(expected);
+        PrintPreviewDialog.TryParseCopyCount(text, out var copies).Should().Be(expectedResult);
+        copies.Should().Be(expectedCopies);
+    }
+
+    [Theory]
+    [InlineData(null, 5, false, 0)]
+    [InlineData("", 5, false, 0)]
+    [InlineData("0", 5, false, 0)]
+    [InlineData("1", 5, true, 1)]
+    [InlineData("5", 5, true, 5)]
+    [InlineData("6", 5, false, 0)]
+    [InlineData("2.5", 5, false, 0)]
+    [InlineData("not a number", 5, false, 0)]
+    public void PrintPreviewDialog_TryParsePageNumber_ValidatesPreviewPageRange(
+        string? text,
+        int totalPages,
+        bool expectedResult,
+        int expectedPage)
+    {
+        PrintPreviewDialog.TryParsePageNumber(text, totalPages, out var pageNumber).Should().Be(expectedResult);
+        pageNumber.Should().Be(expectedPage);
     }
 
     [Fact]
@@ -2093,6 +2133,11 @@ public class ExportPlannerTests
         source.Should().Contain("pageStatusText");
         source.Should().Contain("Page 1 of");
         source.Should().Contain("NavigationCommands.GoToPage");
+        source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
+        source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
+        source.Should().Contain("Enter a page number from 1 to");
+        source.Should().Contain("pageNumberBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(pageNumberBox);");
     }
 
     [Fact]
@@ -2105,8 +2150,12 @@ public class ExportPlannerTests
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("statusText");
-        source.Should().Contain("NormalizeCopyCount(copiesBox.Text)");
+        source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
+        source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
+        source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("copiesBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("RefreshPrintStatus");
     }

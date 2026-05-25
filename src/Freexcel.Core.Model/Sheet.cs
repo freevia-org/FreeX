@@ -41,6 +41,41 @@ public sealed class WorksheetPrintOptionsMetadataModel
     public List<string> NativeChildXmls { get; set; } = [];
 }
 
+public sealed class WorksheetSheetFormatMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetDimensionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorksheetSheetPropertiesMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPrimaryViewMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetPageMarginsMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorksheetHeaderFooterMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorksheetSmartTagsModel
 {
     public string? NativeXml { get; set; }
@@ -154,6 +189,15 @@ public sealed partial class Sheet
     /// <summary>Default row height in pixels.</summary>
     public double DefaultRowHeight { get; set; } = 20.0;
 
+    /// <summary>Native Excel sheetFormatPr metadata not yet modeled as editable fields.</summary>
+    public WorksheetSheetFormatMetadataModel? SheetFormatMetadata { get; set; }
+
+    /// <summary>Native Excel dimension metadata not yet modeled as editable fields.</summary>
+    public WorksheetDimensionMetadataModel? DimensionMetadata { get; set; }
+
+    /// <summary>Native Excel sheetPr metadata not yet modeled as editable fields.</summary>
+    public WorksheetSheetPropertiesMetadataModel? SheetPropertiesMetadata { get; set; }
+
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public uint FrozenRows { get; set; } = 0;
 
@@ -196,6 +240,9 @@ public sealed partial class Sheet
     /// <summary>Non-primary Excel worksheet view metadata loaded from XLSX sheetViews.</summary>
     public WorksheetAdditionalViewsModel? AdditionalViews { get; set; }
 
+    /// <summary>Native Excel primary sheetView metadata not yet modeled as editable fields.</summary>
+    public WorksheetPrimaryViewMetadataModel? PrimaryViewMetadata { get; set; }
+
     /// <summary>Worksheet page orientation used for print preview/export.</summary>
     public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
 
@@ -210,6 +257,9 @@ public sealed partial class Sheet
 
     /// <summary>Distance from the page bottom to the printed footer, in inches.</summary>
     public double FooterMargin { get; set; } = 0.3;
+
+    /// <summary>Native Excel pageMargins metadata not yet modeled as editable fields.</summary>
+    public WorksheetPageMarginsMetadataModel? PageMarginsMetadata { get; set; }
 
     /// <summary>Whether gridlines are printed for this worksheet.</summary>
     public bool PrintGridlines { get; set; }
@@ -282,6 +332,9 @@ public sealed partial class Sheet
 
     /// <summary>Whether headers and footers align with the configured page margins.</summary>
     public bool HeaderFooterAlignWithMargins { get; set; } = true;
+
+    /// <summary>Native Excel headerFooter metadata not yet modeled as editable fields.</summary>
+    public WorksheetHeaderFooterMetadataModel? HeaderFooterMetadata { get; set; }
 
     /// <summary>Whether the printed grid is centered horizontally within the printable page area.</summary>
     public bool CenterHorizontallyOnPage { get; set; }

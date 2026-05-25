@@ -166,7 +166,9 @@ public sealed class RibbonIconFactorySvgTests
             "align-right-small.svg",
             "bottom-align-small.svg",
             "center-small.svg",
+            "decrease-indent-small.svg",
             "distributed-justify-small.svg",
+            "increase-indent-small.svg",
             "middle-align-small.svg",
             "top-align-small.svg"
         };
@@ -180,7 +182,7 @@ public sealed class RibbonIconFactorySvgTests
             .ToList();
 
         sizeSpecificFiles.Should().Equal(allowedSizeSpecificFiles,
-            "only alignment icons should need size-specific SVGs, so their 1 px rule lines do not get fractionally scaled");
+            "only alignment and indentation icons should need size-specific SVGs, so their 1 px rule lines do not get fractionally scaled");
 
         foreach (var fileName in allowedSizeSpecificFiles)
         {

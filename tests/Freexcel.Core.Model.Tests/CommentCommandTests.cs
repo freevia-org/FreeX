@@ -193,6 +193,58 @@ public class CommentCommandTests
     }
 
     [Fact]
+    public void UpdateThreadedCommentTextCommand_UpdatesRootTextAndPreservesThreadMetadata()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Old root", "Quinn")
+        {
+            Replies = [new CommentReply("Reply", "Codex")],
+            IsResolved = true
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var command = new UpdateThreadedCommentTextCommand(sheet.Id, addr, "New root");
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
+        sheet.ThreadedComments[addr].Should().Be(original with { Text = "New root" });
+
+        command.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
+    public void UpdateThreadedCommentTextCommand_MissingThreadedComment_Fails()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+
+        var outcome = new UpdateThreadedCommentTextCommand(sheet.Id, addr, "New root").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("No threaded comment");
+    }
+
+    [Fact]
+    public void UpdateThreadedCommentTextCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Old root", "Quinn");
+        sheet.ThreadedComments[addr] = original;
+
+        var outcome = new UpdateThreadedCommentTextCommand(sheet.Id, addr, "New root").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
     public void DeleteThreadedCommentCommand_RemovesThreadedCommentAndUndoRestoresIt()
     {
         var (_, sheet, ctx) = Setup();
