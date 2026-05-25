@@ -153,6 +153,16 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_DigitMask_FormatsPhoneNumberByExample()
+    {
+        var result = FlashFillService.Fill(
+            [("4255550101", "(425) 555-0101"), ("2065550199", "(206) 555-0199")],
+            ["3605550142"]);
+
+        result.Should().BeEquivalentTo(["(360) 555-0142"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void FillFromColumns_FirstInitialPeriodLast_CombinesSourceColumns()
     {
         var result = FlashFillService.FillFromColumns(
