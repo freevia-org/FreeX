@@ -166,6 +166,7 @@ public sealed partial class NativeJsonAdapter
                 PageMargins = FromPageMargins(NativeJsonValueSanitizer.ValidPageMarginsOrDefault(s.PageMargins, WorksheetPageMargins.Narrow)),
                 HeaderMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(s.HeaderMargin, 0.3),
                 FooterMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(s.FooterMargin, 0.3),
+                PageMarginsMetadata = FromWorksheetPageMarginsMetadata(s.PageMarginsMetadata),
                 PrintGridlines = s.PrintGridlines,
                 PrintHeadings = s.PrintHeadings,
                 PrintOptionsMetadata = FromWorksheetPrintOptionsMetadata(s.PrintOptionsMetadata),
@@ -498,6 +499,25 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         return new WorksheetSheetFormatMetadataDto
+        {
+            NativeAttributes = nativeAttributes,
+            NativeChildXmls = nativeChildXmls
+        };
+    }
+
+    private static WorksheetPageMarginsMetadataDto? FromWorksheetPageMarginsMetadata(WorksheetPageMarginsMetadataModel? model)
+    {
+        if (model is null)
+            return null;
+
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
+        var nativeChildXmls = model.NativeChildXmls
+            .Where(xml => !string.IsNullOrWhiteSpace(xml))
+            .ToList();
+        if (nativeAttributes.Count == 0 && nativeChildXmls.Count == 0)
+            return null;
+
+        return new WorksheetPageMarginsMetadataDto
         {
             NativeAttributes = nativeAttributes,
             NativeChildXmls = nativeChildXmls
