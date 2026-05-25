@@ -94,6 +94,28 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void F10KeyTips_AreHandledBeforeTextBoxPreviewKeyFiltering()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        const string previewHandler = "private void MainWindow_PreviewKeyDown";
+        const string f10PreviewCall = "if (TryHandleShowKeyTipsPreview(e, sender))";
+        var previewHandlerIndex = selectionSource.IndexOf(previewHandler, StringComparison.Ordinal);
+        var f10Index = selectionSource.IndexOf(f10PreviewCall, previewHandlerIndex, StringComparison.Ordinal);
+        var textBoxFilterIndex = selectionSource.IndexOf(
+            "if (Keyboard.FocusedElement is TextBox or ComboBox)",
+            previewHandlerIndex,
+            StringComparison.Ordinal);
+
+        previewHandlerIndex.Should().BeGreaterThanOrEqualTo(0);
+        f10Index.Should().BeGreaterThanOrEqualTo(0);
+        textBoxFilterIndex.Should().BeGreaterThanOrEqualTo(0);
+        f10Index.Should().BeLessThan(textBoxFilterIndex);
+        commandSource.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
+    }
+
+    [Fact]
     public void F6ShellFocusCycle_ContinuesWhenRegionRejectsFocus()
     {
         var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
