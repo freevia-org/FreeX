@@ -4,7 +4,7 @@ namespace Freexcel.Core.Commands;
 
 public static partial class PivotTableRefreshService
 {
-    private static void ApplyMergedRowLabels(Sheet sheet, PivotTableModel pivotTable)
+    private static void ApplyMergedRowLabels(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
     {
         if (!pivotTable.MergeAndCenterLabels ||
             pivotTable.ReportLayout == PivotReportLayout.Compact ||
@@ -21,6 +21,7 @@ public static partial class PivotTableRefreshService
 
         for (var colOffset = 0; colOffset < rowLabelColumnCount - 1; colOffset++)
             MergeRepeatedLabelsInColumn(
+                workbook,
                 sheet,
                 materialized,
                 bodyStart.Row + 1,
@@ -29,6 +30,7 @@ public static partial class PivotTableRefreshService
     }
 
     private static void MergeRepeatedLabelsInColumn(
+        Workbook workbook,
         Sheet sheet,
         GridRange materialized,
         uint firstBodyRow,
@@ -48,7 +50,7 @@ public static partial class PivotTableRefreshService
                 !suppressedContinuation &&
                 (!string.Equals(text, spanText, StringComparison.Ordinal) || text is null))
             {
-                MergeLabelSpan(sheet, spanStart.Value, row - 1, labelCol);
+                MergeLabelSpan(workbook, sheet, spanStart.Value, row - 1, labelCol);
                 spanStart = null;
                 spanText = null;
             }
@@ -85,7 +87,7 @@ public static partial class PivotTableRefreshService
         return false;
     }
 
-    private static void MergeLabelSpan(Sheet sheet, uint startRow, uint endRow, uint col)
+    private static void MergeLabelSpan(Workbook workbook, Sheet sheet, uint startRow, uint endRow, uint col)
     {
         if (endRow <= startRow)
             return;
@@ -94,6 +96,15 @@ public static partial class PivotTableRefreshService
             new CellAddress(sheet.Id, startRow, col),
             new CellAddress(sheet.Id, endRow, col));
         sheet.AddMergedRegion(region);
+
+        var labelCell = sheet.GetCell(startRow, col);
+        if (labelCell is not null)
+        {
+            var style = workbook.GetStyle(labelCell.StyleId);
+            style.HorizontalAlignment = HorizontalAlignment.Center;
+            style.VerticalAlignment = VerticalAlignment.Center;
+            labelCell.StyleId = workbook.RegisterStyle(style);
+        }
 
         for (var row = startRow + 1; row <= endRow; row++)
             sheet.ClearCell(row, col);

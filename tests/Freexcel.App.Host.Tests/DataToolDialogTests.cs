@@ -233,6 +233,9 @@ public sealed class DataToolDialogTests
         var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("FocusInvalidDestinationInput();");
+        source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
+        source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
+        source.Should().Contain("FocusInvalidDestinationInput();");
         source.Should().Contain("private void FocusInvalidDestinationInput()");
         source.Should().Contain("_wizardStep = 3;");
         source.Should().Contain("UpdateWizardStep();");
@@ -247,6 +250,8 @@ public sealed class DataToolDialogTests
         var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("FocusInvalidFixedWidthBreaksInput();");
+        source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
+        source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
         source.Should().Contain("private void FocusInvalidFixedWidthBreaksInput()");
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_fixedWidthButton.IsChecked = true;");
@@ -261,6 +266,8 @@ public sealed class DataToolDialogTests
         var source = ReadTextToColumnsDialogSources();
 
         source.Should().Contain("FocusInvalidCustomDelimiterInput();");
+        source.Should().Contain("RefocusInvalidInputAfterWarning(ex.Message);");
+        source.Should().Contain("private void RefocusInvalidInputAfterWarning(string message)");
         source.Should().Contain("private void FocusInvalidCustomDelimiterInput()");
         source.Should().Contain("_wizardStep = 2;");
         source.Should().Contain("_delimitedButton.IsChecked = true;");
