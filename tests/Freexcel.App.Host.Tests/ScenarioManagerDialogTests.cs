@@ -65,6 +65,36 @@ public sealed class ScenarioManagerDialogTests
     }
 
     [Fact]
+    public void TryValidateChangingCells_AllowsBlankToUseCurrentSelectionFallback()
+    {
+        ScenarioManagerDialog.TryValidateChangingCells(" ", SheetId.New(), _ => null, out var error)
+            .Should()
+            .BeTrue(error);
+    }
+
+    [Fact]
+    public void TryValidateChangingCells_RejectsInvalidTypedReference()
+    {
+        var sheetId = SheetId.New();
+
+        ScenarioManagerDialog.TryValidateChangingCells("not a range", sheetId, _ => null, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a valid changing cells reference.");
+    }
+
+    [Fact]
+    public void TryValidateChangingCells_AcceptsValidTypedReference()
+    {
+        var sheetId = SheetId.New();
+
+        ScenarioManagerDialog.TryValidateChangingCells("Sheet1!A1:B2", sheetId, name => name == "Sheet1" ? sheetId : null, out var error)
+            .Should()
+            .BeTrue(error);
+    }
+
+    [Fact]
     public void DialogSource_UsesExcelLikeScenarioListAndSideButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
@@ -125,8 +155,11 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("CommentText = _commentBox.Text");
         source.Should().Contain("if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _newNameBox);");
+        source.Should().Contain("!TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error)");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter scenario details.\", _changingCellsBox);");
         source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("target.SelectAll();");
+        handlerSource.Should().Contain("new ScenarioManagerDialog(_workbook, _currentSheetId, ResolveSheetIdByName)");
         handlerSource.Should().Contain("SaveScenarioFromDialog(dialog.NewScenarioName, dialog.ChangingCellsText, dialog.CommentText)");
         handlerSource.Should().Contain("TryParseScenarioChangingCells");
     }

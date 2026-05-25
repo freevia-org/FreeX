@@ -14,6 +14,8 @@ public sealed class ScenarioManagerDialog : Window
     private readonly TextBox _changingCellsBox = new();
     private readonly TextBox _commentBox = new();
     private readonly string _defaultScenarioName;
+    private readonly SheetId? _currentSheetId;
+    private readonly Func<string, SheetId?>? _resolveSheetIdByName;
     private Button? _editButton;
     private Button? _deleteButton;
     private Button? _showButton;
@@ -24,8 +26,13 @@ public sealed class ScenarioManagerDialog : Window
     public string? ChangingCellsText { get; private set; }
     public string? CommentText { get; private set; }
 
-    public ScenarioManagerDialog(Workbook workbook)
+    public ScenarioManagerDialog(
+        Workbook workbook,
+        SheetId? currentSheetId = null,
+        Func<string, SheetId?>? resolveSheetIdByName = null)
     {
+        _currentSheetId = currentSheetId;
+        _resolveSheetIdByName = resolveSheetIdByName;
         Title = "Scenario Manager";
         Width = 360;
         Height = 390;
@@ -132,6 +139,30 @@ public sealed class ScenarioManagerDialog : Window
         return true;
     }
 
+    public static bool TryValidateChangingCells(
+        string? changingCellsText,
+        SheetId? currentSheetId,
+        Func<string, SheetId?>? resolveSheetIdByName,
+        out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(changingCellsText) ||
+            currentSheetId is null ||
+            resolveSheetIdByName is null)
+        {
+            error = null;
+            return true;
+        }
+
+        if (WorkbookRangeTextCodec.TryParse(currentSheetId.Value, changingCellsText, resolveSheetIdByName, out _))
+        {
+            error = null;
+            return true;
+        }
+
+        error = "Enter a valid changing cells reference.";
+        return false;
+    }
+
     private static void AddField(Grid grid, int row, string label, Control field)
     {
         var text = new Label
@@ -190,6 +221,13 @@ public sealed class ScenarioManagerDialog : Window
         if (RequiresScenarioName(action) && !TryValidateScenarioName(_newNameBox.Text, out var error))
         {
             ShowInvalidInputWarning(error ?? "Enter scenario details.", _newNameBox);
+            return;
+        }
+
+        if (RequiresScenarioName(action) &&
+            !TryValidateChangingCells(_changingCellsBox.Text, _currentSheetId, _resolveSheetIdByName, out error))
+        {
+            ShowInvalidInputWarning(error ?? "Enter scenario details.", _changingCellsBox);
             return;
         }
 
