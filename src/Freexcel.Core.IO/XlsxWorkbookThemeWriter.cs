@@ -40,8 +40,27 @@ internal static class XlsxWorkbookThemeWriter
                         new XElement(drawingNs + "minorFont",
                             new XElement(drawingNs + "latin",
                                 new XAttribute("typeface", theme.MinorFontName)))),
-                    new XElement(drawingNs + "fmtScheme",
-                        new XAttribute("name", theme.EffectsName)))));
+                    CreateFormatSchemeElement(theme, drawingNs))));
+    }
+
+    private static XElement CreateFormatSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
+    {
+        if (!string.IsNullOrWhiteSpace(theme.NativeFormatSchemeXml))
+        {
+            try
+            {
+                var formatScheme = XElement.Parse(theme.NativeFormatSchemeXml);
+                if (formatScheme.Name == drawingNs + "fmtScheme")
+                    return new XElement(formatScheme);
+            }
+            catch
+            {
+                // Fall back to the modeled effect name when native theme XML is malformed.
+            }
+        }
+
+        return new XElement(drawingNs + "fmtScheme",
+            new XAttribute("name", theme.EffectsName));
     }
 
     private static string FormatColor(CellColor color) =>

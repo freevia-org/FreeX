@@ -109,6 +109,7 @@ public partial class MainWindow
         ShowStartScreen();
         SsPrintNavBtn.Focus();
         Keyboard.Focus(SsPrintNavBtn);
+        PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs());
     }
 
     private void ShowHomeView()

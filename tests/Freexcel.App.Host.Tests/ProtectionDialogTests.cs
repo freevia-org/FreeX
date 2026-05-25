@@ -163,6 +163,7 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("FocusConfirmationInput();");
         source.Should().Contain("private void FocusConfirmationInput()");
         source.Should().Contain("_confirmationBox.Focus();");
+        source.Should().Contain("_confirmationBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_confirmationBox);");
         source.Should().Contain("FocusRangeInput();");
         source.Should().Contain("private void FocusRangeInput()");

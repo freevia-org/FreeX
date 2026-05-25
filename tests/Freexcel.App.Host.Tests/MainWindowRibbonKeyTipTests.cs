@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -84,6 +85,27 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void FileKeyTip_DoesNotExposeDuplicateRecentFileRowKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var tempFiles = TempRecentFiles.Create(4);
+            using var harness = MainWindowHarness.Create();
+            harness.SetRecentFiles(tempFiles.Paths.Take(2), tempFiles.Paths.Skip(2));
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.F);
+
+            harness.OverlayBadgeTexts
+                .GroupBy(text => text, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .Should()
+                .BeEmpty("Backstage keytips must be unique within the visible File scope");
+        });
+    }
+
+    [Fact]
     public void DirectAltTopLevelKeyTips_OpenTabsAndBackstage()
     {
         RunSta(() =>
@@ -100,6 +122,21 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.StartScreenIsVisible.Should().BeTrue();
             harness.KeyTipScope.Should().Be("Commands");
             harness.VisibleCommandKeyTips("N").Should().ContainSingle().Which.Should().Be("New");
+        });
+    }
+
+    [Fact]
+    public void DirectAltQatKeyTips_InvokeUndoRedoQuickAccessToolbarCommands()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.HandleDirectTopLevelKeyTip(Key.D3).Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
         });
     }
 
@@ -159,6 +196,26 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveMenuItemGestureText("Formatting").Should().Be("R");
             harness.ActiveMenuItemGestureText("Transpose").Should().Be("T");
             harness.ActiveMenuItemGestureText("Paste Special...").Should().Be("S");
+        });
+    }
+
+    [Fact]
+    public void NestedMenuKeyTips_OpenSubmenuScopeBeforeRoutingChildKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.B);
+            harness.HandleKeyTip(Key.C);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemSubmenuIsOpen("Line Color").Should().BeTrue();
+
+            harness.HandleKeyTip(Key.K);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
         });
     }
 
@@ -238,9 +295,11 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _tryHandleDirectRibbonKeyTip;
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly MethodInfo _updateRibbonCompactMode;
+        private readonly MethodInfo _updateSsRecentList;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
+        private readonly FieldInfo _recentFilesField;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -255,12 +314,16 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
             _updateRibbonCompactMode = typeof(MainWindow).GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
+            _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSsRecentList");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_ribbonKeyTipScope");
             _activeMenuField = typeof(MainWindow).GetField("_activeRibbonKeyTipMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_activeRibbonKeyTipMenu");
+            _recentFilesField = typeof(MainWindow).GetField("_recentFiles", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_recentFiles");
         }
 
         public string? SelectedRibbonTabHeader =>
@@ -353,6 +416,26 @@ public sealed class MainWindowRibbonKeyTipTests
             PumpDispatcher();
         }
 
+        public void SetRecentFiles(IEnumerable<string> recentPaths, IEnumerable<string> pinnedPaths)
+        {
+            var store = (RecentFilesStore)_recentFilesField.GetValue(_window)!;
+            store.Entries.Clear();
+            store.Entries.AddRange(recentPaths.Select(path => new RecentFileEntry
+            {
+                Path = path,
+                LastOpened = DateTime.Now,
+                IsPinned = false
+            }));
+            store.Entries.AddRange(pinnedPaths.Select(path => new RecentFileEntry
+            {
+                Path = path,
+                LastOpened = DateTime.Now,
+                IsPinned = true
+            }));
+            _updateSsRecentList.Invoke(_window, [""]);
+            PumpDispatcher();
+        }
+
         public void EnterKeyTipScope(string scope)
         {
             var value = Enum.Parse(_scopeType, scope);
@@ -419,6 +502,40 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public Sheet GetSheet(SheetId sheetId) =>
             Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
+    }
+
+    private sealed class TempRecentFiles : IDisposable
+    {
+        private readonly string _directory;
+
+        private TempRecentFiles(string directory, IReadOnlyList<string> paths)
+        {
+            _directory = directory;
+            Paths = paths;
+        }
+
+        public IReadOnlyList<string> Paths { get; }
+
+        public static TempRecentFiles Create(int count)
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "FreexcelRecentKeyTips", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            var paths = Enumerable.Range(1, count)
+                .Select(index =>
+                {
+                    var path = Path.Combine(directory, $"Book{index}.xlsx");
+                    File.WriteAllText(path, "");
+                    return path;
+                })
+                .ToList();
+            return new TempRecentFiles(directory, paths);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(_directory))
+                Directory.Delete(_directory, recursive: true);
+        }
     }
 
     private static void RunSta(Action action)

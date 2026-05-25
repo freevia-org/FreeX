@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" role="img" aria-label="Create from Selection" shape-rendering="crispEdges">
-  <rect width="20" height="20" fill="none"/>
-  <rect x="3" y="4" width="14" height="12" fill="#ffffff" stroke="#5c5c5c" stroke-width="1"/>
-  <path d="M3 8H17M8 4V16M13 4V16" stroke="#b5b5b5" stroke-width="1"/>
-  <rect x="4" y="5" width="12" height="2" fill="#dff6dd"/>
-  <path d="M5 14H15" stroke="#107c41" stroke-width="1"/>
-</svg>

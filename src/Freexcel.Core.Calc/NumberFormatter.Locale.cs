@@ -146,10 +146,11 @@ public static partial class NumberFormatter
                 if (close > i)
                 {
                     string token = format[(i + 2)..close];
-                    int localeSeparator = token.LastIndexOf('-');
-                    var localeToken = localeSeparator >= 0 ? token[(localeSeparator + 1)..] : null;
-                    if (localeToken is not null &&
-                        TryCreateLocaleFormats(localeToken, out var localeNumberFormat, out var localeDateTimeFormat))
+                    int localeSeparator = FindLocaleSeparator(
+                        token,
+                        out var localeNumberFormat,
+                        out var localeDateTimeFormat);
+                    if (localeSeparator >= 0)
                     {
                         numberFormat = localeNumberFormat;
                         dateTimeFormat = localeDateTimeFormat;
@@ -186,6 +187,26 @@ public static partial class NumberFormatter
         }
 
         return sb.ToString();
+    }
+
+    private static int FindLocaleSeparator(
+        string token,
+        out NumberFormatInfo numberFormat,
+        out DateTimeFormatInfo dateTimeFormat)
+    {
+        numberFormat = CultureInfo.InvariantCulture.NumberFormat;
+        dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
+
+        for (int i = 0; i < token.Length - 1; i++)
+        {
+            if (token[i] != '-')
+                continue;
+
+            if (TryCreateLocaleFormats(token[(i + 1)..], out numberFormat, out dateTimeFormat))
+                return i;
+        }
+
+        return token.LastIndexOf('-');
     }
 
     private static bool TryCreateLocaleFormats(
@@ -248,6 +269,18 @@ public static partial class NumberFormatter
     {
         numberFormat = CultureInfo.InvariantCulture.NumberFormat;
         dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
+
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(normalizedLocaleToken);
+            numberFormat = (NumberFormatInfo)culture.NumberFormat.Clone();
+            dateTimeFormat = (DateTimeFormatInfo)culture.DateTimeFormat.Clone();
+            UseGregorianCalendarWhenAvailable(dateTimeFormat);
+            return true;
+        }
+        catch (CultureNotFoundException)
+        {
+        }
 
         if (!int.TryParse(
                 normalizedLocaleToken,

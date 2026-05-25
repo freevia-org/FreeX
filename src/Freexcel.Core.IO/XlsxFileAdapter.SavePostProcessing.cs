@@ -25,6 +25,8 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         XlsxWorkbookMetadataWriter.SaveWorkbookViewProperties(packageStream, workbook);
+        packageStream.Position = 0;
+        XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
 
         if (workbook.FileVersion is not null)
         {
@@ -56,7 +58,7 @@ public sealed partial class XlsxFileAdapter
             XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
         }
 
-        if (workbook.IsStructureProtected)
+        if (workbook.IsStructureProtected || workbook.ProtectionMetadata is not null)
         {
             packageStream.Position = 0;
             XlsxWorkbookMetadataWriter.SaveProtection(packageStream, workbook);
@@ -261,6 +263,9 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
 
+        packageStream.Position = 0;
+        XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
+
         if (workbook.FileVersion is not null)
         {
             packageStream.Position = 0;
@@ -295,6 +300,18 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.ProtectionMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetProtectionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.PrintOptionsMetadata is not null))
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.SmartTags is not null))

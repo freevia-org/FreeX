@@ -15,6 +15,7 @@ public sealed partial class XlsxFileAdapter
         sheet.HiddenCols.UnionWith(layout.HiddenCols);
         sheet.IsProtected = layout.IsProtected;
         sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+        sheet.ProtectionMetadata = layout.ProtectionMetadata;
         foreach (var range in layout.AllowEditRanges)
             sheet.AllowEditRanges.Add(new GridRange(
                 new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
@@ -29,6 +30,7 @@ public sealed partial class XlsxFileAdapter
             sheet.DefaultColumnWidth = defaultColumnWidth;
         if (layout.DefaultRowHeight is { } defaultRowHeight)
             sheet.DefaultRowHeight = defaultRowHeight;
+        sheet.SheetFormatMetadata = layout.SheetFormatMetadata;
         foreach (var (rowNum, height) in layout.RowHeights)
             sheet.RowHeights[rowNum] = height;
         foreach (var (colNum, width) in layout.ColumnWidths)
@@ -53,6 +55,8 @@ public sealed partial class XlsxFileAdapter
         sheet.PrintQualityVerticalDpi = layout.PrintQualityVerticalDpi == sheet.PrintQualityDpi
             ? null
             : layout.PrintQualityVerticalDpi;
+        sheet.PrintOptionsMetadata = layout.PrintOptionsMetadata;
+        sheet.PageSetupMetadata = layout.PageSetupMetadata;
 
         foreach (var (rowNum, level) in layout.RowOutlineLevels)
             sheet.RowOutlineLevels[rowNum] = level;

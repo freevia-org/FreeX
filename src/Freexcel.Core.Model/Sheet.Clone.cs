@@ -77,6 +77,20 @@ public sealed partial class Sheet
             PrintQualityVerticalDpi       = PrintQualityVerticalDpi,
             PrintErrorValue               = PrintErrorValue,
             PrintComments                 = PrintComments,
+            PrintOptionsMetadata          = PrintOptionsMetadata is null
+                ? null
+                : new WorksheetPrintOptionsMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PrintOptionsMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PrintOptionsMetadata.NativeChildXmls]
+                },
+            PageSetupMetadata             = PageSetupMetadata is null
+                ? null
+                : new WorksheetPageSetupMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(PageSetupMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. PageSetupMetadata.NativeChildXmls]
+                },
             ViewMode                      = ViewMode,
             IsHidden                      = false,
             IsVeryHidden                  = IsVeryHidden,
@@ -86,8 +100,22 @@ public sealed partial class Sheet
             OutlineSummaryRight           = OutlineSummaryRight,
             ShowOutlineSymbols            = ShowOutlineSymbols,
             ApplyOutlineStyles            = ApplyOutlineStyles,
+            SheetFormatMetadata           = SheetFormatMetadata is null
+                ? null
+                : new WorksheetSheetFormatMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(SheetFormatMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. SheetFormatMetadata.NativeChildXmls]
+                },
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
+            ProtectionMetadata            = ProtectionMetadata is null
+                ? null
+                : new WorksheetProtectionMetadataModel
+                {
+                    NativeAttributes = new Dictionary<string, string>(ProtectionMetadata.NativeAttributes, StringComparer.Ordinal),
+                    NativeChildXmls = [.. ProtectionMetadata.NativeChildXmls]
+                },
             // Previously missed fields:
             BackgroundImage               = BackgroundImage,
         };

@@ -312,6 +312,38 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_ResolvesSupportedLightPivotStyleFromWorkbookTheme()
+    {
+        var workbook = new Workbook("PivotStyleLightThemeRenderTest")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(10, 80, 120))
+        };
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleLight16",
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.95));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.9));
+    }
+
+    [Fact]
     public void Refresh_MaterializesColumnFieldMatrix()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -372,6 +404,177 @@ public sealed class PivotTableRefreshServiceTests
         Number(sheet, "G4").Should().Be(25);
         Number(sheet, "H3").Should().Be(10);
         Number(sheet, "H4").Should().Be(25);
+    }
+
+    [Fact]
+    public void Refresh_ColumnOnlyPivotShowsCacheItemsWithNoData()
+    {
+        var workbook = new Workbook("PivotShowNoDataColumnItemsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            Fields =
+            {
+                new PivotCacheFieldModel("Region", SharedItems: ["East", "West"]),
+                new PivotCacheFieldModel("Quarter", SharedItems: ["Q1", "Q2", "Q3"]),
+                new PivotCacheFieldModel("Amount")
+            }
+        });
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "I5"),
+            EmptyValueText = "N/A",
+            ShowItemsWithNoDataOnColumns = true
+        };
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Q1");
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Q3");
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Number(sheet, "E3").Should().Be(10);
+        Number(sheet, "F3").Should().Be(25);
+        Text(sheet, "G3").Should().Be("N/A");
+        Number(sheet, "H3").Should().Be(35);
+    }
+
+    [Fact]
+    public void Refresh_RowPivotShowsCacheItemsWithNoData()
+    {
+        var workbook = new Workbook("PivotShowNoDataRowItemsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            Fields =
+            {
+                new PivotCacheFieldModel("Region", SharedItems: ["East", "North", "West"]),
+                new PivotCacheFieldModel("Quarter", SharedItems: ["Q1", "Q2"]),
+                new PivotCacheFieldModel("Amount")
+            }
+        });
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "G7"),
+            EmptyValueText = "N/A",
+            ShowItemsWithNoDataOnRows = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Region");
+        Text(sheet, "F2").Should().Be("Sum of Amount");
+        Text(sheet, "E3").Should().Be("East");
+        Number(sheet, "F3").Should().Be(10);
+        Text(sheet, "E4").Should().Be("North");
+        Text(sheet, "F4").Should().Be("N/A");
+        Text(sheet, "E5").Should().Be("West");
+        Number(sheet, "F5").Should().Be(25);
+        Text(sheet, "E6").Should().Be("Grand Total");
+        Number(sheet, "F6").Should().Be(35);
+    }
+
+    [Fact]
+    public void Refresh_MatrixPivotShowsCacheRowItemsWithNoData()
+    {
+        var workbook = new Workbook("PivotShowNoDataMatrixRowItemsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            Fields =
+            {
+                new PivotCacheFieldModel("Region", SharedItems: ["East", "North", "West"]),
+                new PivotCacheFieldModel("Quarter", SharedItems: ["Q1", "Q2"]),
+                new PivotCacheFieldModel("Amount")
+            }
+        });
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "I7"),
+            EmptyValueText = "N/A",
+            ShowItemsWithNoDataOnRows = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Region");
+        Text(sheet, "F2").Should().Be("Q1");
+        Text(sheet, "G2").Should().Be("Q2");
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Text(sheet, "E3").Should().Be("East");
+        Number(sheet, "F3").Should().Be(10);
+        Text(sheet, "G3").Should().Be("N/A");
+        Number(sheet, "H3").Should().Be(10);
+        Text(sheet, "E4").Should().Be("North");
+        Text(sheet, "F4").Should().Be("N/A");
+        Text(sheet, "G4").Should().Be("N/A");
+        Text(sheet, "H4").Should().Be("N/A");
+        Text(sheet, "E5").Should().Be("West");
+        Text(sheet, "F5").Should().Be("N/A");
+        Number(sheet, "G5").Should().Be(25);
+        Number(sheet, "H5").Should().Be(25);
+    }
+
+    [Fact]
+    public void Refresh_RowPivotShowsEmptyTextForNoDataSubtotalGroups()
+    {
+        var workbook = new Workbook("PivotShowNoDataSubtotalItemsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            Fields =
+            {
+                new PivotCacheFieldModel("Region", SharedItems: ["East", "North", "West"]),
+                new PivotCacheFieldModel("Quarter", SharedItems: ["Q1", "Q2"]),
+                new PivotCacheFieldModel("Amount")
+            }
+        });
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "H12"),
+            EmptyValueText = "N/A",
+            ShowItemsWithNoDataOnRows = true,
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E8").Should().Be("North Total");
+        Text(sheet, "G8").Should().Be("N/A");
+        Text(sheet, "E11").Should().Be("West Total");
+        Number(sheet, "G11").Should().Be(25);
+        Text(sheet, "E12").Should().Be("Grand Total");
+        Number(sheet, "G12").Should().Be(35);
     }
 
     [Fact]
@@ -944,7 +1147,8 @@ public sealed class PivotTableRefreshServiceTests
             SourceRange = Range(sheet, "A1", "C5"),
             TargetRange = Range(sheet, "E2", "I10"),
             ShowSubtotals = false,
-            MergeAndCenterLabels = true
+            MergeAndCenterLabels = true,
+            ShowRowStripes = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.RowFields.Add(new PivotFieldModel(1));
@@ -958,11 +1162,13 @@ public sealed class PivotTableRefreshServiceTests
         var eastStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId);
         eastStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
         eastStyle.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        eastStyle.FillColor.Should().NotBeNull();
         sheet.GetCell(Addr(sheet, "E4")).Should().BeNull();
         Text(sheet, "E5").Should().Be("West");
         var westStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
         westStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
         westStyle.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        westStyle.FillColor.Should().NotBeNull();
         sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
     }
 
@@ -1500,7 +1706,12 @@ public sealed class PivotTableRefreshServiceTests
 
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().BeNull();
+        var pageCaptionStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        pageCaptionStyle.Bold.Should().BeTrue();
+        pageCaptionStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        var pageValueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId);
+        pageValueStyle.Bold.Should().BeTrue();
+        pageValueStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
         var bodyHeaderStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
         bodyHeaderStyle.Bold.Should().BeTrue();
         bodyHeaderStyle.FillColor.Should().Be(new CellColor(91, 155, 213));

@@ -215,6 +215,23 @@ public sealed partial class TextToColumnsDialog : Window
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            RefocusInvalidInputAfterWarning(ex.Message);
+        }
+    }
+
+    private void RefocusInvalidInputAfterWarning(string message)
+    {
+        switch (message)
+        {
+            case "Enter a single destination cell, such as F2.":
+                FocusInvalidDestinationInput();
+                break;
+            case "Enter at least one fixed-width break position.":
+                FocusInvalidFixedWidthBreaksInput();
+                break;
+            case "Custom delimiter is required.":
+                FocusInvalidCustomDelimiterInput();
+                break;
         }
     }
 

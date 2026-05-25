@@ -933,6 +933,32 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LeftAndRight_SameShapeNumCharsArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(4)));
+
+        AssertTextColumn(_eval.Evaluate("=LEFT(A1:A2,B1:B2)", sheet), "Ap", "Bana");
+        AssertTextColumn(_eval.Evaluate("=RIGHT(A1:A2,B1:B2)", sheet), "le", "nana");
+    }
+
+    [Fact]
+    public void LeftAndRight_MismatchedNumCharsArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(4)));
+
+        _eval.Evaluate("=LEFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=RIGHT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Left_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -999,6 +1025,30 @@ public class FunctionLibraryTests
             (1, 1, new TextValue("10")),
             (2, 1, new TextValue("x")));
         AssertColumn(_eval.Evaluate("=VALUE(A1:A2)", valueSheet), new NumberValue(10), ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Text_SameShapeFormatArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3.14159)),
+            (2, 1, new NumberValue(42)),
+            (1, 2, new TextValue("0.00")),
+            (2, 2, new TextValue("000")));
+
+        AssertTextColumn(_eval.Evaluate("=TEXT(A1:A2,B1:B2)", sheet), "3.14", "042");
+    }
+
+    [Fact]
+    public void Text_MismatchedFormatArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3.14159)),
+            (2, 1, new NumberValue(42)),
+            (1, 2, new TextValue("0.00")),
+            (1, 3, new TextValue("000")));
+
+        _eval.Evaluate("=TEXT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1158,6 +1208,36 @@ public class FunctionLibraryTests
     // ── FIND ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Substitute_SameShapeTextArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new TextValue("a")),
+            (2, 2, new TextValue("na")),
+            (1, 3, new TextValue("x")),
+            (2, 3, new TextValue("N")),
+            (1, 4, new NumberValue(2)),
+            (2, 4, new NumberValue(1)));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,B1:B2,C1:C2,D1:D2)", sheet), "axbabc", "baNna");
+    }
+
+    [Fact]
+    public void Substitute_MismatchedTextOrInstanceArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new TextValue("a")),
+            (1, 3, new TextValue("x")));
+
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,B1:C1,\"x\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"x\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Substitute_OldTextError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -1303,6 +1383,54 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Find_SameShapeFindAndWithinTextRanges_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("p")),
+            (2, 1, new TextValue("n")),
+            (1, 2, new TextValue("Apple")),
+            (2, 2, new TextValue("Banana")));
+
+        AssertColumn(_eval.Evaluate("=FIND(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
+    public void Find_MismatchedFindAndWithinTextRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("p")),
+            (2, 1, new TextValue("n")),
+            (1, 2, new TextValue("Apple")),
+            (1, 3, new TextValue("Banana")));
+
+        _eval.Evaluate("=FIND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Find_SameShapeStartNumArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=FIND(\"a\",A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(5));
+    }
+
+    [Fact]
+    public void Find_MismatchedStartNumArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=FIND(\"a\",A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Search_CaseInsensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -1357,6 +1485,54 @@ public class FunctionLibraryTests
     }
 
     // ── MID ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Search_SameShapeFindAndWithinTextRanges_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("P")),
+            (2, 1, new TextValue("N")),
+            (1, 2, new TextValue("Apple")),
+            (2, 2, new TextValue("Banana")));
+
+        AssertColumn(_eval.Evaluate("=SEARCH(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(3));
+    }
+
+    [Fact]
+    public void Search_MismatchedFindAndWithinTextRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("P")),
+            (2, 1, new TextValue("N")),
+            (1, 2, new TextValue("Apple")),
+            (1, 3, new TextValue("Banana")));
+
+        _eval.Evaluate("=SEARCH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Search_SameShapeStartNumArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(3)));
+
+        AssertColumn(_eval.Evaluate("=SEARCH(\"A\",A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(5));
+    }
+
+    [Fact]
+    public void Search_MismatchedStartNumArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("banana")),
+            (2, 1, new TextValue("cocoa")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=SEARCH(\"A\",A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Search_EmptyFindTextAtEndBoundary_ReturnsStartNum()
@@ -1419,6 +1595,33 @@ public class FunctionLibraryTests
     // ── REPT ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Mid_SameShapeStartAndLengthArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(3)),
+            (1, 3, new NumberValue(2)),
+            (2, 3, new NumberValue(3)));
+
+        AssertTextColumn(_eval.Evaluate("=MID(A1:A2,B1:B2,C1:C2)", sheet), "pp", "nan");
+    }
+
+    [Fact]
+    public void Mid_MismatchedStartOrLengthArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=MID(A1:A2,B1:C1,2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MID(A1:A2,2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Mid_DoesNotSplitSurrogatePairs()
     {
         var sheet = MakeSheet();
@@ -1473,6 +1676,30 @@ public class FunctionLibraryTests
     }
 
     // ── VALUE ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Rept_SameShapeTimesArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (2, 1, new TextValue("bc")),
+            (1, 2, new NumberValue(3)),
+            (2, 2, new NumberValue(2)));
+
+        AssertTextColumn(_eval.Evaluate("=REPT(A1:A2,B1:B2)", sheet), "aaa", "bcbc");
+    }
+
+    [Fact]
+    public void Rept_MismatchedTimesArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (2, 1, new TextValue("bc")),
+            (1, 2, new NumberValue(3)),
+            (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=REPT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Value_ParsesNumber()
@@ -1762,6 +1989,36 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DateDifference_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (2, 2, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        AssertColumn(_eval.Evaluate("=DAYS(B1:B2,A1:A2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=DAYS360(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=YEARFRAC(A1:A2,B1:B2,0)", sheet), new NumberValue(4.0 / 360.0), new NumberValue(8.0 / 360.0));
+        AssertColumn(_eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B2)", sheet), new NumberValue(5), new NumberValue(7));
+    }
+
+    [Fact]
+    public void DateDifference_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        _eval.Evaluate("=DAYS(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void DateTimeSecondRangeArguments_SpillElementwise()
     {
         var offsets = MakeSheet(
@@ -1781,6 +2038,43 @@ public class FunctionLibraryTests
             new NumberValue(new DateTime(2024, 1, 2).ToOADate()),
             new NumberValue(new DateTime(2024, 1, 3).ToOADate()));
         AssertColumn(_eval.Evaluate("=WEEKDAY(DATE(2024,1,7),A1:A2)", offsets), new NumberValue(1), new NumberValue(7));
+    }
+
+    [Fact]
+    public void DateOffset_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(2)));
+
+        AssertColumn(
+            _eval.Evaluate("=EDATE(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 4, 29).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=EOMONTH(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 29).ToOADate()),
+            new NumberValue(new DateTime(2024, 4, 30).ToOADate()));
+        AssertColumn(
+            _eval.Evaluate("=WORKDAY(A1:A2,B1:B2)", sheet),
+            new NumberValue(new DateTime(2024, 2, 1).ToOADate()),
+            new NumberValue(new DateTime(2024, 3, 4).ToOADate()));
+    }
+
+    [Fact]
+    public void DateOffset_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 31).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 2, 29).ToOADate())),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=EDATE(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=EOMONTH(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WORKDAY(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -2074,6 +2368,38 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void BinaryMath_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),  (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)),  (2, 2, new NumberValue(4)));
+
+        AssertColumn(_eval.Evaluate("=POWER(A1:A2,B1:B2)", sheet), new NumberValue(16), new NumberValue(6561));
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,B1:B2)", sheet), new NumberValue(0), new NumberValue(1));
+        AssertColumn(_eval.Evaluate("=LOG(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(Math.Log(9) / Math.Log(4)));
+        AssertColumn(_eval.Evaluate("=QUOTIENT(A1:A2,B1:B2)", sheet), new NumberValue(2), new NumberValue(2));
+        AssertColumn(_eval.Evaluate("=CEILING(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(12));
+        AssertColumn(_eval.Evaluate("=FLOOR(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+        AssertColumn(_eval.Evaluate("=MROUND(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+    }
+
+    [Fact]
+    public void BinaryMath_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)),  (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)),  (1, 3, new NumberValue(4)));
+
+        _eval.Evaluate("=POWER(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MOD(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=LOG(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=QUOTIENT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CEILING(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FLOOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MROUND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Int_TruncatesDown()
     {
         var sheet = MakeSheet();
@@ -2132,6 +2458,36 @@ public class FunctionLibraryTests
     }
 
     // ── CEILING ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Rounding_SameShapeDigitsArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12.345)),
+            (2, 1, new NumberValue(-12.345)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(-1)));
+
+        AssertColumn(_eval.Evaluate("=ROUND(A1:A2,B1:B2)", sheet), new NumberValue(12.3), new NumberValue(-10));
+        AssertColumn(_eval.Evaluate("=ROUNDUP(A1:A2,B1:B2)", sheet), new NumberValue(12.4), new NumberValue(-20));
+        AssertColumn(_eval.Evaluate("=ROUNDDOWN(A1:A2,B1:B2)", sheet), new NumberValue(12.3), new NumberValue(-10));
+        AssertColumn(_eval.Evaluate("=TRUNC(A1:A2,B1:B2)", sheet), new NumberValue(12.3), new NumberValue(-10));
+    }
+
+    [Fact]
+    public void Rounding_MismatchedDigitsArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12.345)),
+            (2, 1, new NumberValue(-12.345)),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(-1)));
+
+        _eval.Evaluate("=ROUND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUNDUP(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUNDDOWN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TRUNC(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Round_NonFiniteInput_ReturnsNumError()
@@ -3468,6 +3824,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (2, 2, new NumberValue(5)));
+
+        AssertColumn(_eval.Evaluate("=ATAN2(A1:A2,B1:B2)", sheet), new NumberValue(Math.Atan2(4, 2)), new NumberValue(Math.Atan2(5, 3)));
+        AssertColumn(_eval.Evaluate("=COMBIN(B1:B2,A1:A2)", sheet), new NumberValue(6), new NumberValue(10));
+        AssertColumn(_eval.Evaluate("=PERMUT(B1:B2,A1:A2)", sheet), new NumberValue(12), new NumberValue(60));
+    }
+
+    [Fact]
+    public void TwoArgumentCombinatoricsAndTrig_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)), (2, 1, new NumberValue(3)),
+            (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
+
+        _eval.Evaluate("=ATAN2(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=COMBIN(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=PERMUT(B1:C1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Atan2_NonFiniteInput_ReturnsNumError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
@@ -4407,6 +4787,34 @@ public class FunctionLibraryTests
             ((NumberValue)_eval.Evaluate("=NPER(A2,-188.71,10000)", rates)).Value);
     }
 
+    [Fact]
+    public void IpmtAndPpmt_SameShapeRateAndPeriodRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05 / 12)), (2, 1, new NumberValue(0.06 / 12)),
+            (1, 2, new NumberValue(1)),         (2, 2, new NumberValue(2)));
+
+        AssertApproxColumn(
+            _eval.Evaluate("=IPMT(A1:A2,B1:B2,60,10000)", sheet),
+            ((NumberValue)_eval.Evaluate("=IPMT(A1,B1,60,10000)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=IPMT(A2,B2,60,10000)", sheet)).Value);
+        AssertApproxColumn(
+            _eval.Evaluate("=PPMT(A1:A2,B1:B2,60,10000)", sheet),
+            ((NumberValue)_eval.Evaluate("=PPMT(A1,B1,60,10000)", sheet)).Value,
+            ((NumberValue)_eval.Evaluate("=PPMT(A2,B2,60,10000)", sheet)).Value);
+    }
+
+    [Fact]
+    public void IpmtAndPpmt_MismatchedRateAndPeriodRangeShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(0.05 / 12)), (2, 1, new NumberValue(0.06 / 12)),
+            (1, 2, new NumberValue(1)),         (1, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=IPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=PPMT(A1:A2,B1:C1,60,10000)", sheet).Should().Be(ErrorValue.Value);
+    }
+
     [Fact] public void Pmt_TypeError_PropagatesError() =>
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
@@ -4772,6 +5180,36 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Replace_SameShapeStartLengthAndNewTextArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (2, 2, new NumberValue(3)),
+            (1, 3, new NumberValue(2)),
+            (2, 3, new NumberValue(3)),
+            (1, 4, new TextValue("X")),
+            (2, 4, new TextValue("YZ")));
+
+        AssertTextColumn(_eval.Evaluate("=REPLACE(A1:A2,B1:B2,C1:C2,D1:D2)", sheet), "AXle", "BaYZa");
+    }
+
+    [Fact]
+    public void Replace_MismatchedStartLengthOrNewTextArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Apple")),
+            (2, 1, new TextValue("Banana")),
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)));
+
+        _eval.Evaluate("=REPLACE(A1:A2,B1:C1,2,\"X\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,2,B1:C1,\"X\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,2,2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Replace_DoesNotSplitSurrogatePairs()
     {
         var sheet = MakeSheet();
@@ -4979,6 +5417,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Hyperlink_SameShapeRangeArguments_SpillsDisplayTextElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("https://example.com/a")),
+            (2, 1, new TextValue("https://example.com/b")),
+            (1, 2, new TextValue("A")),
+            (2, 2, new TextValue("B")));
+
+        AssertTextColumn(_eval.Evaluate("=HYPERLINK(A1:A2,B1:B2)", sheet), "A", "B");
+    }
+
+    [Fact]
+    public void Hyperlink_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("https://example.com/a")),
+            (2, 1, new TextValue("https://example.com/b")),
+            (1, 2, new TextValue("A")),
+            (1, 3, new TextValue("B")));
+
+        _eval.Evaluate("=HYPERLINK(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void T_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -5010,6 +5472,32 @@ public class FunctionLibraryTests
             (2, 1, new NumberValue(42)));
         AssertTextColumn(_eval.Evaluate("=T(A1:A2)", mixed), "a b", "");
         AssertTextColumn(_eval.Evaluate("=ENCODEURL(A1:A2)", mixed), "a%20b", "42");
+    }
+
+    [Fact]
+    public void FixedAndDollar_SameShapeDecimalsArgument_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.34)),
+            (1, 2, new NumberValue(1)),
+            (2, 2, new NumberValue(0)));
+
+        AssertTextColumn(_eval.Evaluate("=FIXED(A1:A2,B1:B2,TRUE)", sheet), "1234.6", "-12");
+        AssertTextColumn(_eval.Evaluate("=DOLLAR(A1:A2,B1:B2)", sheet), "$1,234.6", "($12)");
+    }
+
+    [Fact]
+    public void FixedAndDollar_MismatchedDecimalsArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1234.56)),
+            (2, 1, new NumberValue(-12.34)),
+            (1, 2, new NumberValue(1)),
+            (1, 3, new NumberValue(0)));
+
+        _eval.Evaluate("=FIXED(A1:A2,B1:C1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DOLLAR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -7080,6 +7568,30 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filterxml_SameShapeRangeArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")),
+            (1, 2, new TextValue("/root/item")),
+            (2, 2, new TextValue("/root/item")));
+
+        AssertTextColumn(_eval.Evaluate("=FILTERXML(A1:A2,B1:B2)", sheet), "A", "B");
+    }
+
+    [Fact]
+    public void Filterxml_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("<root><item>A</item></root>")),
+            (2, 1, new TextValue("<root><item>B</item></root>")),
+            (1, 2, new TextValue("/root/item")),
+            (1, 3, new TextValue("/root/item")));
+
+        _eval.Evaluate("=FILTERXML(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Numbervalue_DefaultSeparators_ParsesPlainNumber() =>
         _eval.Evaluate("=NUMBERVALUE(\"1234.56\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
@@ -7105,6 +7617,33 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(-1234.56));
 
     [Fact]
+    public void Numbervalue_SameShapeSeparatorArguments_SpillsElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1.234,56")),
+            (2, 1, new TextValue("1 234.5")),
+            (1, 2, new TextValue(",")),
+            (2, 2, new TextValue(".")),
+            (1, 3, new TextValue(".")),
+            (2, 3, new TextValue(" ")));
+
+        AssertColumn(_eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B2,C1:C2)", sheet), new NumberValue(1234.56), new NumberValue(1234.5));
+    }
+
+    [Fact]
+    public void Numbervalue_MismatchedSeparatorArgument_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("1.234,56")),
+            (2, 1, new TextValue("1 234.5")),
+            (1, 2, new TextValue(",")),
+            (1, 3, new TextValue(".")));
+
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:C1,\".\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Numbervalue_InvalidSeparators_ReturnsValueError() =>
         _eval.Evaluate("=NUMBERVALUE(\"1.234\",\".\",\".\")", MakeSheet())
             .Should().Be(ErrorValue.Value);
@@ -7120,6 +7659,58 @@ public class FunctionLibraryTests
             .Should().Be(ErrorValue.Value);
 
     // ── SQRTPI additional ────────────────────────────────────────────────────
+
+    [Fact]
+    public void BitFunctions_SameShapeRangeArguments_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (2, 2, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=BITAND(A1:A2,B1:B2)", sheet), new NumberValue(1), new NumberValue(0));
+        AssertColumn(_eval.Evaluate("=BITOR(A1:A2,B1:B2)", sheet), new NumberValue(7), new NumberValue(7));
+        AssertColumn(_eval.Evaluate("=BITXOR(A1:A2,B1:B2)", sheet), new NumberValue(6), new NumberValue(7));
+        AssertColumn(_eval.Evaluate("=BITLSHIFT(A1:A2,B1:B2)", sheet), new NumberValue(40), new NumberValue(12));
+        AssertColumn(_eval.Evaluate("=BITRSHIFT(A1:A2,B1:B2)", sheet), new NumberValue(0), new NumberValue(3));
+    }
+
+    [Fact]
+    public void BitFunctions_MismatchedRangeArgumentShapes_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(3)), (1, 3, new NumberValue(1)));
+
+        _eval.Evaluate("=BITAND(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITXOR(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITLSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BITRSHIFT(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void EngineeringBaseConversions_SameShapeNumberAndPlacesRanges_SpillElementwise()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),      (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)),      (2, 2, new NumberValue(5)),
+            (1, 3, new TextValue("101")),    (2, 3, new TextValue("111")),
+            (1, 4, new NumberValue(3)),      (2, 4, new NumberValue(4)));
+
+        AssertTextColumn(_eval.Evaluate("=DEC2BIN(A1:A2,B1:B2)", sheet), "0101", "00110");
+        AssertTextColumn(_eval.Evaluate("=BIN2HEX(C1:C2,D1:D2)", sheet), "005", "0007");
+    }
+
+    [Fact]
+    public void EngineeringBaseConversions_MismatchedNumberAndPlacesRanges_ReturnValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(6)),
+            (1, 2, new NumberValue(4)), (1, 3, new NumberValue(5)));
+
+        _eval.Evaluate("=DEC2BIN(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=BIN2HEX(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+    }
 
     [Fact]
     public void Sqrtpi_One_ReturnsSqrtPi() =>

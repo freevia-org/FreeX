@@ -44,4 +44,17 @@ public sealed class RibbonKeyTipOverlayPlacementTests
         point.X.Should().Be(243);
         point.Y.Should().Be(178);
     }
+
+    [Fact]
+    public void PlaceBadge_SnapsFractionalCoordinatesToWholePixels()
+    {
+        var elementBounds = new Rect(100.5, 40.25, 81, 24.5);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(25, 15.5);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(elementBounds, overlaySize, badgeSize);
+
+        point.X.Should().Be(129);
+        point.Y.Should().Be(57);
+    }
 }

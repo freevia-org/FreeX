@@ -26,6 +26,18 @@ public sealed class WorkbookFileVersionModel
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class WorkbookPropertiesModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
+public sealed class WorkbookProtectionMetadataModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<string> NativeChildXmls { get; set; } = [];
+}
+
 public sealed class WorkbookFunctionGroupsModel
 {
     public string? BuiltInGroupCount { get; set; }
@@ -53,6 +65,18 @@ public sealed class WorkbookSmartTagTypeModel
     public string? NamespaceUri { get; set; }
     public string? Name { get; set; }
     public string? Url { get; set; }
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class WorkbookAdditionalViewsModel
+{
+    public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    public List<WorkbookAdditionalViewModel> Views { get; set; } = [];
+}
+
+public sealed class WorkbookAdditionalViewModel
+{
+    public string? NativeXml { get; set; }
     public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
 }
 
@@ -160,11 +184,17 @@ public sealed class Workbook
     /// <summary>Excel workbook file-version metadata.</summary>
     public WorkbookFileVersionModel? FileVersion { get; set; }
 
+    /// <summary>Excel workbook property metadata loaded from XLSX workbookPr.</summary>
+    public WorkbookPropertiesModel? Properties { get; set; }
+
     /// <summary>Excel workbook function-group metadata.</summary>
     public WorkbookFunctionGroupsModel? FunctionGroups { get; set; }
 
     /// <summary>Excel workbook smart-tag metadata.</summary>
     public WorkbookSmartTagMetadataModel? SmartTags { get; set; }
+
+    /// <summary>Additional native Excel workbook-window view metadata loaded from XLSX.</summary>
+    public WorkbookAdditionalViewsModel? AdditionalViews { get; set; }
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
@@ -174,6 +204,9 @@ public sealed class Workbook
 
     /// <summary>Password hash/text for workbook structure protection. Null means no password required.</summary>
     public string? StructureProtectionPassword { get; set; }
+
+    /// <summary>Native Excel workbook protection metadata not yet modeled as editable fields.</summary>
+    public WorkbookProtectionMetadataModel? ProtectionMetadata { get; set; }
 
     /// <summary>Define or replace a named range.</summary>
     public void DefineNamedRange(string name, GridRange range)

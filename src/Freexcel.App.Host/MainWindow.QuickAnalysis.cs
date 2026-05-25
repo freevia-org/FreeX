@@ -66,6 +66,8 @@ public partial class MainWindow
             };
             item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
             item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
+            item.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
+            item.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
             item.Click += QuickAnalysisMenuItem_Click;
             menu.Items.Add(item);
         }
@@ -254,16 +256,38 @@ public partial class MainWindow
 
     private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)
     {
+        ShowQuickAnalysisPreview(sender);
+    }
+
+    private void QuickAnalysisMenuItem_MouseLeave(object sender, MouseEventArgs e)
+    {
+        ClearQuickAnalysisPreview();
+    }
+
+    private void QuickAnalysisMenuItem_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        ShowQuickAnalysisPreview(sender);
+    }
+
+    private void QuickAnalysisMenuItem_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        ClearQuickAnalysisPreview();
+    }
+
+    private void ShowQuickAnalysisPreview(object sender)
+    {
         if (sender is not MenuItem { Tag: QuickAnalysisOption option } ||
             SheetGrid.SelectedRange is not { } range)
+        {
             return;
+        }
 
         var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
         SheetGrid.QuickAnalysisPreviewRange = preview.Range;
         StatusReadyText.Text = preview.StatusText;
     }
 
-    private void QuickAnalysisMenuItem_MouseLeave(object sender, MouseEventArgs e)
+    private void ClearQuickAnalysisPreview()
     {
         SheetGrid.QuickAnalysisPreviewRange = null;
         StatusReadyText.Text = "Ready";

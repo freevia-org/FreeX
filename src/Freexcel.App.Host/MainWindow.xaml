@@ -1871,7 +1871,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Margin="1,0">
                                     <Button Content="Fill" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
-                                            local:RibbonTooltip.Title="Object Fill"
+                                            local:RibbonTooltip.Title="Shape Fill"
                                             local:RibbonTooltip.KeyTip="OF"
                                             local:RibbonTooltip.Description="Change the fill color of the selected drawing object."/>
                                     <Button Content="Outline" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
@@ -2573,7 +2573,7 @@
                                         Click="AccessibilityCheckerBtn_Click"
                                         local:RibbonTooltip.Title="Check Accessibility"
                                         local:RibbonTooltip.KeyTip="CA"
-                                        local:RibbonTooltip.Description="Find merged cells, objects missing alternate text, and charts without titles."/>
+                                        local:RibbonTooltip.Description="Find merged cells, blank table headers, objects missing alternate text, and charts without titles."/>
                                 <Button Content="Alt Text" Width="96" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -3215,6 +3215,7 @@
                     BorderThickness="1,0,0,0"
                     Visibility="Collapsed"
                     KeyboardNavigation.TabNavigation="Cycle"
+                    KeyboardNavigation.ControlTabNavigation="Cycle"
                     AutomationProperties.Name="PivotTable Fields">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
@@ -3430,11 +3431,13 @@
                     BorderThickness="1,0,0,0"
                     Visibility="Collapsed"
                     KeyboardNavigation.TabNavigation="Cycle"
+                    KeyboardNavigation.ControlTabNavigation="Cycle"
                     AutomationProperties.Name="Slicers and Timelines">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
                         <DockPanel LastChildFill="True" Margin="0,0,0,8">
-                            <Button Content="X"
+                            <Button x:Name="SlicerTimelinePaneCloseBtn"
+                                    Content="X"
                                     Width="22"
                                     Height="22"
                                     DockPanel.Dock="Right"
@@ -4114,7 +4117,6 @@
                                                     Style="{StaticResource RibbonBtn}"
                                                     Click="SsPinItem_Click"
                                                     local:RibbonTooltip.Title="Pin File"
-                                                    local:RibbonTooltip.KeyTip="PI"
                                                     local:RibbonTooltip.Description="Pin or unpin this workbook in the recent files list."
                                                     AutomationProperties.Name="Pin file"
                                                     ToolTip="Pin to list">
@@ -4189,7 +4191,6 @@
                                                     Style="{StaticResource RibbonBtn}"
                                                     Click="SsUnpinItem_Click"
                                                     local:RibbonTooltip.Title="Unpin File"
-                                                    local:RibbonTooltip.KeyTip="UP"
                                                     local:RibbonTooltip.Description="Remove this workbook from the pinned files list."
                                                     AutomationProperties.Name="Unpin file"
                                                     ToolTip="Unpin from list">

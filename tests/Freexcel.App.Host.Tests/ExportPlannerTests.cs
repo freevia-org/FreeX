@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using FluentAssertions;
+using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -284,6 +285,23 @@ public class ExportPlannerTests
                 CreateBookmarks: true,
                 BookmarkMode: PdfBookmarkMode.SheetNames,
                 PdfLanguage: "uk-UA"));
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_CreateResult_IgnoresBookmarkModeWhenBookmarksAreUnchecked()
+    {
+        ExportOptionsDialog.CreateResult(
+                ExportContentScope.ActiveSheet,
+                includeDocumentProperties: false,
+                openAfterPublish: false,
+                createBookmarks: false,
+                bookmarkMode: PdfBookmarkMode.PrintTitles)
+            .Should()
+            .Be(new ExportOptions(
+                ExportContentScope.ActiveSheet,
+                IncludeDocumentProperties: false,
+                OpenAfterPublish: false,
+                BookmarkMode: PdfBookmarkMode.None));
     }
 
     [Theory]
@@ -784,6 +802,66 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Freexcel PDF 1");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorksheetCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable worksheet export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Worksheet Cell PDF Text"));
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Worksheet Cell PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForPrintedWorkbookCells()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable workbook export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Workbook Cell PDF Text"));
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Workbook Cell PDF Text");
             }
             finally
             {
@@ -1952,6 +2030,45 @@ public class ExportPlannerTests
         printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
         printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
         printExport.Should().Contain("refreshPreview: BuildActiveSheetPrintPreview");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesKeyboardPrintGridlineAndHeadingToggles()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("Content = \"_Print gridlines\"");
+        source.Should().Contain("Content = \"Print row and column _headings\"");
+        source.Should().Contain("gridlinesBox.Checked +=");
+        source.Should().Contain("gridlinesBox.Unchecked +=");
+        source.Should().Contain("headingsBox.Checked +=");
+        source.Should().Contain("headingsBox.Unchecked +=");
+        source.Should().Contain("new SetPrintOptionsCommand(");
+        source.Should().Contain("refreshPreview();");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_SettingsCombosHaveAccessKeyLabels()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("void AddLabel(string text, Control target)");
+        source.Should().Contain("Content = text");
+        source.Should().Contain("Target = target");
+        source.Should().Contain("AddLabel(\"_Orientation\", orientBox);");
+        source.Should().Contain("AddLabel(\"_Paper Size\", paperBox);");
+        source.Should().Contain("AddLabel(\"_Margins\", marginsBox);");
+        source.Should().Contain("AddLabel(\"_Scaling\", scaleBox);");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ToolbarZoomAccessKeyTargetsZoomCombo()
+    {
+        var source = ReadPrintPreviewDialogSources();
+
+        source.Should().Contain("var zoomBox = new ComboBox");
+        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Target = zoomBox");
     }
 
     [Fact]

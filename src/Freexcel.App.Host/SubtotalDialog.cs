@@ -152,11 +152,28 @@ public sealed class SubtotalDialog : Window
         catch (ArgumentException ex)
         {
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            FocusSubtotalColumnChoices();
+            FocusInvalidInput(ex.Message);
             return;
         }
 
         DialogResult = true;
+    }
+
+    private void FocusInvalidInput(string message)
+    {
+        if (string.Equals(message, "Unsupported SUBTOTAL function.", StringComparison.Ordinal))
+        {
+            FocusFunctionChoice();
+            return;
+        }
+
+        FocusSubtotalColumnChoices();
+    }
+
+    private void FocusFunctionChoice()
+    {
+        _functionBox.Focus();
+        Keyboard.Focus(_functionBox);
     }
 
     private void FocusSubtotalColumnChoices()

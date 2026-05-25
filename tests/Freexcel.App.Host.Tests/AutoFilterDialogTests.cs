@@ -346,6 +346,19 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ColorSwatchActivationAppliesFilterAndClosesDialog()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("button.Click += (_, _) => ApplyColorChoice(colorFilter);");
+        source.Should().Contain("private void ApplyColorChoice(AutoFilterColorFilter colorFilter)");
+        source.Should().Contain("Result = BuildResult(");
+        source.Should().Contain("colorFilter,");
+        source.Should().Contain("DialogResult = true;");
+        source.Should().NotContain("button.Click += (_, _) => _selectedColorFilter = colorFilter;");
+    }
+
+    [Fact]
     public void DataFilterCommands_RouteColorFiltersAndCompositeCriteriaToRealCommands()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));

@@ -9,8 +9,8 @@ public static class RibbonKeyTipOverlayPlacement
         var x = elementBounds.Left + (elementBounds.Width / 2) - (badgeSize.Width / 2);
         var y = elementBounds.Bottom - (badgeSize.Height / 2);
 
-        x = Clamp(x, 0, Math.Max(0, overlaySize.Width - badgeSize.Width));
-        y = Clamp(y, 0, Math.Max(0, overlaySize.Height - badgeSize.Height));
+        x = Math.Round(Clamp(x, 0, Math.Max(0, overlaySize.Width - badgeSize.Width)), MidpointRounding.AwayFromZero);
+        y = Math.Round(Clamp(y, 0, Math.Max(0, overlaySize.Height - badgeSize.Height)), MidpointRounding.AwayFromZero);
 
         return new Point(x, y);
     }

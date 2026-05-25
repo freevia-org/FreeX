@@ -135,6 +135,31 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookProperties()
+    {
+        var workbook = new Workbook("WorkbookPropertiesNativeJson")
+        {
+            Properties = new WorkbookPropertiesModel
+            {
+                NativeAttributes = new Dictionary<string, string> { ["defaultThemeVersion"] = "166925" },
+                NativeChildXmls =
+                [
+                    "<fx:workbookPrNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
+                ]
+            }
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.Properties.Should().BeEquivalentTo(workbook.Properties);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorkbookFunctionGroups()
     {
         var workbook = new Workbook("FunctionGroupsNativeJson")
@@ -197,6 +222,38 @@ public partial class FileAdapterSmokeTests
         var loaded = adapter.Load(stream);
 
         loaded.SmartTags.Should().BeEquivalentTo(workbook.SmartTags);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_AdditionalWorkbookViews()
+    {
+        var workbook = new Workbook("AdditionalWorkbookViewsNativeJson");
+        workbook.AdditionalViews = new WorkbookAdditionalViewsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["nativeBookViewsAttr"] = "kept" },
+            Views =
+            [
+                new WorkbookAdditionalViewModel
+                {
+                    NativeXml = "<workbookView xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" visibility=\"hidden\" tabRatio=\"700\" customWorkbookViewFlag=\"keep\" />",
+                    NativeAttributes = new Dictionary<string, string>
+                    {
+                        ["visibility"] = "hidden",
+                        ["tabRatio"] = "700",
+                        ["customWorkbookViewFlag"] = "keep"
+                    }
+                }
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+
+        loaded.AdditionalViews.Should().BeEquivalentTo(workbook.AdditionalViews);
     }
 
     [Fact]
@@ -1954,6 +2011,31 @@ public partial class FileAdapterSmokeTests
         sheet.FooterMargin = 0.45;
         sheet.PrintGridlines = true;
         sheet.PrintHeadings = true;
+        sheet.SheetFormatMetadata = new WorksheetSheetFormatMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["zeroHeight"] = "1",
+                ["thickTop"] = "1",
+                ["customSheetFormatAttr"] = "kept"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativeSheetFormatChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
+        sheet.PrintOptionsMetadata = new WorksheetPrintOptionsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gridLinesSet"] = "1",
+                ["customAttr"] = "print-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePrintOptionsChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.PrintTitleRows = new WorksheetRepeatRange(1, 2);
         sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.PageHeader = new WorksheetHeaderFooter("Left header", "Center header", "Right header");
@@ -1976,6 +2058,17 @@ public partial class FileAdapterSmokeTests
         sheet.PrintErrorValue = WorksheetPrintErrorValue.Blank;
         sheet.PrintComments = WorksheetPrintComments.AtEnd;
         sheet.ScaleToFit = new WorksheetScaleToFit(null, 1, 2);
+        sheet.PageSetupMetadata = new WorksheetPageSetupMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["customAttr"] = "page-setup-native"
+            },
+            NativeChildXmls =
+            [
+                "<fx:nativePageSetupChild xmlns:fx=\"urn:freexcel:test\" value=\"kept\" />"
+            ]
+        };
         sheet.RowPageBreaks.Add(20);
         sheet.ColumnPageBreaks.Add(5);
 
@@ -1997,6 +2090,8 @@ public partial class FileAdapterSmokeTests
         loadedSheet.FooterMargin.Should().Be(0.45);
         loadedSheet.PrintGridlines.Should().BeTrue();
         loadedSheet.PrintHeadings.Should().BeTrue();
+        loadedSheet.SheetFormatMetadata.Should().BeEquivalentTo(sheet.SheetFormatMetadata);
+        loadedSheet.PrintOptionsMetadata.Should().BeEquivalentTo(sheet.PrintOptionsMetadata);
         loadedSheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 2));
         loadedSheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
         loadedSheet.PageHeader.Should().Be(new WorksheetHeaderFooter("Left header", "Center header", "Right header"));
@@ -2019,6 +2114,7 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Blank);
         loadedSheet.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
         loadedSheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(null, 1, 2));
+        loadedSheet.PageSetupMetadata.Should().BeEquivalentTo(sheet.PageSetupMetadata);
         loadedSheet.RowPageBreaks.Should().Contain(20u);
         loadedSheet.ColumnPageBreaks.Should().Contain(5u);
     }
@@ -4031,6 +4127,14 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.ProtectionMetadata.Should().NotBeNull();
+        loadedSheet.ProtectionMetadata!.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("algorithmName", "SHA-512"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("hashValue", "abc123"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("saltValue", "salt123"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("spinCount", "100000"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("objects", "1"));
+        loadedSheet.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("scenarios", "1"));
+        loadedSheet.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -4206,6 +4310,13 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        loaded.ProtectionMetadata!.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("algorithmName", "SHA-512"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("hashValue", "def456"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("saltValue", "salt456"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("spinCount", "100000"));
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain(new KeyValuePair<string, string>("lockWindows", "1"));
+        loaded.ProtectionMetadata.NativeChildXmls.Should().HaveCount(2);
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -4226,6 +4337,41 @@ public partial class FileAdapterSmokeTests
             .Select(element => element.Attribute("id")?.Value)
             .Should()
             .BeEquivalentTo("first", "second");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesRevisionWorkbookProtectionPassword()
+    {
+        var workbook = new Workbook("RevisionWorkbookProtectionRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("revision locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddRevisionWorkbookProtectionMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.IsStructureProtected.Should().BeFalse();
+        loaded.ProtectionMetadata.Should().NotBeNull();
+        loaded.ProtectionMetadata!.NativeAttributes.Should().Contain("lockRevision", "1");
+        loaded.ProtectionMetadata.NativeAttributes.Should().Contain("revisionsPassword", "9AFB");
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
+        protection.Should().NotBeNull();
+        protection!.Attribute("lockStructure").Should().BeNull();
+        protection.Attribute("lockRevision")!.Value.Should().Be("1");
+        protection.Attribute("revisionsPassword")!.Value.Should().Be("9AFB");
     }
 
     [Fact]
@@ -5413,6 +5559,34 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_ThreadedCommentsWithRepliesAndResolvedState()
+    {
+        var workbook = new Workbook("ThreadedCommentNativeTest");
+        var sheet = workbook.AddSheet("S1");
+        var address = new CellAddress(sheet.Id, 2, 3);
+        sheet.ThreadedComments[address] = new ThreadedComment("Please review total", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("Looks right", "Codex"),
+                new CommentReply("Resolving", "Quinn")
+            ],
+            IsResolved = true
+        };
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedAddress = new CellAddress(loaded.GetSheetAt(0).Id, 2, 3);
+        loaded.GetSheetAt(0).ThreadedComments.Should().ContainKey(loadedAddress);
+        loaded.GetSheetAt(0).ThreadedComments[loadedAddress].Should().BeEquivalentTo(sheet.ThreadedComments[address]);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SkipsInvalidCellComments()
     {
         const string json = """
@@ -5504,12 +5678,42 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("ProtectionNativeTest");
         workbook.IsStructureProtected = true;
         workbook.StructureProtectionPassword = "workbook-secret";
+        workbook.ProtectionMetadata = new WorkbookProtectionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["algorithmName"] = "SHA-512",
+                ["hashValue"] = "def456",
+                ["saltValue"] = "salt456",
+                ["spinCount"] = "100000",
+                ["lockWindows"] = "1"
+            },
+            NativeChildXmls =
+            [
+                "<fx:workbookProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
+            ]
+        };
         var sheet = workbook.AddSheet("S1");
         sheet.IsProtected = true;
         sheet.ProtectionPassword = "sheet-secret";
         sheet.ProtectionPermissions.Clear();
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.SelectUnlockedCells);
         sheet.ProtectionPermissions.Add(SheetProtectionPermission.FormatCells);
+        sheet.ProtectionMetadata = new WorksheetProtectionMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["algorithmName"] = "SHA-512",
+                ["hashValue"] = "abc123",
+                ["saltValue"] = "salt123",
+                ["spinCount"] = "100000",
+                ["objects"] = "1"
+            },
+            NativeChildXmls =
+            [
+                "<fx:sheetProtectionNativeChild xmlns:fx=\"urn:freexcel:test\" id=\"first\" />"
+            ]
+        };
         sheet.AllowEditRanges.Add(new GridRange(
             new CellAddress(sheet.Id, 2, 2),
             new CellAddress(sheet.Id, 3, 3)));
@@ -5523,12 +5727,14 @@ public partial class FileAdapterSmokeTests
 
         loaded.IsStructureProtected.Should().BeTrue();
         loaded.StructureProtectionPassword.Should().Be("workbook-secret");
+        loaded.ProtectionMetadata.Should().BeEquivalentTo(workbook.ProtectionMetadata);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.IsProtected.Should().BeTrue();
         loadedSheet.ProtectionPassword.Should().Be("sheet-secret");
         loadedSheet.ProtectionPermissions.Should().Equal(
             SheetProtectionPermission.SelectUnlockedCells,
             SheetProtectionPermission.FormatCells);
+        loadedSheet.ProtectionMetadata.Should().BeEquivalentTo(sheet.ProtectionMetadata);
         var allowEditRange = loadedSheet.AllowEditRanges.Should().ContainSingle().Subject;
         allowEditRange.Start.ToA1().Should().Be("B2");
         allowEditRange.End.ToA1().Should().Be("C3");
@@ -5878,6 +6084,82 @@ public partial class FileAdapterSmokeTests
         themeXml.Should().Contain("Saved Minor");
         themeXml.Should().Contain("Saved Effects");
         themeXml.Should().Contain("0C2238");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_PreservesWorkbookThemeFormatSchemeDetails()
+    {
+        var workbook = new Workbook("ThemeFormatSchemeTest");
+        workbook.AddSheet("S1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnknownPackagePart(source, "xl/theme/theme1.xml", TestThemeWithFormatSchemeXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.Theme.EffectsName.Should().Be("Freexcel Effects");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var formatScheme = themeXml.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fmtScheme");
+
+        formatScheme.Should().NotBeNull();
+        formatScheme!.Attribute("name")!.Value.Should().Be("Freexcel Effects");
+        formatScheme.Element(drawingNs + "fillStyleLst")!.Elements(drawingNs + "solidFill")
+            .Should().ContainSingle();
+        formatScheme.Element(drawingNs + "lnStyleLst")!.Elements(drawingNs + "ln")
+            .Single()
+            .Attribute("w")!
+            .Value.Should().Be("9525");
+        formatScheme.Element(drawingNs + "effectStyleLst")!
+            .Elements(drawingNs + "effectStyle")
+            .Single()
+            .Element(drawingNs + "effectLst")!
+            .Element(drawingNs + "outerShdw")!
+            .Attribute("dist")!
+            .Value.Should().Be("19050");
+        formatScheme.Element(drawingNs + "bgFillStyleLst")!.Elements(drawingNs + "solidFill")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_IgnoresNativeWorkbookThemeFormatSchemeFromWrongNamespace()
+    {
+        var workbook = new Workbook("ThemeFormatSchemeNamespaceTest");
+        workbook.AddSheet("S1");
+        workbook.Theme = WorkbookTheme.Office
+            .WithEffects("Modeled Effects")
+            .WithNativeFormatSchemeXml("""
+                <fmtScheme xmlns="urn:wrong-theme-namespace" name="Wrong Effects">
+                    <fillStyleLst />
+                </fmtScheme>
+                """);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace wrongNs = "urn:wrong-theme-namespace";
+        var themeElements = themeXml.Root!.Element(drawingNs + "themeElements")!;
+
+        themeElements.Element(wrongNs + "fmtScheme").Should().BeNull();
+        var formatScheme = themeElements.Element(drawingNs + "fmtScheme");
+        formatScheme.Should().NotBeNull();
+        formatScheme!.Attribute("name")!.Value.Should().Be("Modeled Effects");
     }
 
     [Fact]
@@ -11569,6 +11851,12 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
+        loaded.AdditionalViews.Should().NotBeNull();
+        var loadedAdditionalView = loaded.AdditionalViews!.Views.Should().ContainSingle().Which;
+        loadedAdditionalView.NativeXml.Should().Contain("workbookView");
+        loadedAdditionalView.NativeAttributes.Should().Contain("visibility", "hidden");
+        loadedAdditionalView.NativeAttributes.Should().Contain("tabRatio", "700");
+        loadedAdditionalView.NativeAttributes.Should().Contain("customWorkbookViewFlag", "kept");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -11582,8 +11870,53 @@ public partial class FileAdapterSmokeTests
         views.Should().HaveCount(2);
         views.Any(view =>
             string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
-            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal))
+            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("customWorkbookViewFlag")?.Value, "kept", StringComparison.Ordinal))
             .Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_FallsBackWhenAdditionalWorkbookViewNativeXmlIsNotWorkbookView()
+    {
+        var workbook = new Workbook("AdditionalWorkbookViewFallbackTest")
+        {
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                Views =
+                [
+                    new WorkbookAdditionalViewModel
+                    {
+                        NativeXml = "<notWorkbookView xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" invalid=\"1\" />",
+                        NativeAttributes = new Dictionary<string, string>
+                        {
+                            ["visibility"] = "hidden",
+                            ["tabRatio"] = "700",
+                            ["customWorkbookViewFlag"] = "kept"
+                        }
+                    }
+                ]
+            }
+        };
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("fallback view"));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var bookViews = workbookXml.Root!.Element(workbookNs + "bookViews");
+        bookViews.Should().NotBeNull();
+        bookViews!.Element(workbookNs + "notWorkbookView").Should().BeNull();
+
+        var views = bookViews.Elements(workbookNs + "workbookView").ToList();
+        views.Should().HaveCount(2);
+        views.Last().Attribute("visibility")!.Value.Should().Be("hidden");
+        views.Last().Attribute("tabRatio")!.Value.Should().Be("700");
+        views.Last().Attribute("customWorkbookViewFlag")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -11915,6 +12248,41 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_WritesWorkbookSmartTagsBeforeExtensionList()
+    {
+        var workbook = new Workbook("WorkbookSmartTagOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("smart tags"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookSmartTagMetadata(source);
+        AddWorkbookExtensionList(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = workbookXml.Root!.Elements().ToList();
+        var smartTagPropertiesIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "smartTagPr");
+        var smartTagTypesIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "smartTagTypes");
+        var extensionListIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "extLst");
+
+        smartTagPropertiesIndex.Should().BeGreaterThanOrEqualTo(0);
+        smartTagTypesIndex.Should().BeGreaterThan(smartTagPropertiesIndex);
+        extensionListIndex.Should().BeGreaterThan(smartTagTypesIndex);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFunctionGroups()
     {
         var workbook = new Workbook("WorkbookFunctionGroupsRetentionTest");
@@ -11957,6 +12325,39 @@ public partial class FileAdapterSmokeTests
         functionGroups.ToString().Should().Contain("customFunctionGroupFlag=\"keep\"");
         functionGroups.ToString().Should().Contain("name=\"FreexcelNativeFunctions\"");
         functionGroups.ToString().Should().Contain("customGroupFlag=\"keep\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_WritesWorkbookFunctionGroupsBeforeExtensionList()
+    {
+        var workbook = new Workbook("WorkbookFunctionGroupsOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("function group"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFunctionGroups(source);
+        AddWorkbookExtensionList(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = workbookXml.Root!.Elements().ToList();
+        var functionGroupsIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "functionGroups");
+        var extensionListIndex = orderedChildren.FindIndex(element => element.Name == workbookNs + "extLst");
+
+        functionGroupsIndex.Should().BeGreaterThanOrEqualTo(0);
+        extensionListIndex.Should().BeGreaterThan(functionGroupsIndex);
     }
 
     [Fact]
@@ -12121,6 +12522,11 @@ public partial class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         loaded.Uses1904DateSystem.Should().BeTrue();
+        loaded.Properties.Should().NotBeNull();
+        loaded.Properties!.NativeAttributes.Should().Contain("defaultThemeVersion", "166925");
+        loaded.Properties.NativeChildXmls.Should().HaveCount(2);
+        loaded.Properties.NativeChildXmls[0].Should().Contain("id=\"first\"");
+        loaded.Properties.NativeChildXmls[1].Should().Contain("id=\"second\"");
         loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
@@ -12642,7 +13048,14 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SheetFormatMetadata.Should().NotBeNull();
+        loadedSheet.SheetFormatMetadata!.NativeAttributes.Should().Contain("baseColWidth", "12");
+        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("zeroHeight", "1");
+        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("thickTop", "1");
+        loadedSheet.SheetFormatMetadata.NativeAttributes.Should().Contain("outlineLevelRow", "3");
+        loadedSheet.SheetFormatMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativeSheetFormatChild", StringComparison.Ordinal));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -12798,7 +13211,11 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrintOptionsMetadata.Should().NotBeNull();
+        loadedSheet.PrintOptionsMetadata!.NativeAttributes.Should().Contain("gridLinesSet", "1");
+        loadedSheet.PrintOptionsMetadata.NativeAttributes.Should().Contain("customAttr", "print-native");
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -12830,7 +13247,11 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageSetupMetadata.Should().NotBeNull();
+        loadedSheet.PageSetupMetadata!.NativeAttributes.Should().Contain("customAttr", "page-setup-native");
+        loadedSheet.PageSetupMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativePageSetupChild", StringComparison.Ordinal));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -19018,6 +19439,24 @@ public partial class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddRevisionWorkbookProtectionMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Element(workbookNs + "workbookProtection")?.Remove();
+            workbookXml.Root.AddFirst(new XElement(
+                workbookNs + "workbookProtection",
+                new XAttribute("lockRevision", "1"),
+                new XAttribute("revisionsPassword", "9AFB")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddMinimalStructuredTablePackage(
         MemoryStream packageStream,
         bool includeTotalsRow = false,
@@ -19870,6 +20309,55 @@ public partial class FileAdapterSmokeTests
               <a:minorFont><a:latin typeface="Minor Test"/></a:minorFont>
             </a:fontScheme>
             <a:fmtScheme name="Effects Test"/>
+          </a:themeElements>
+        </a:theme>
+        """;
+
+    private const string TestThemeWithFormatSchemeXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Freexcel Format Theme">
+          <a:themeElements>
+            <a:clrScheme name="Freexcel Colors">
+              <a:dk1><a:srgbClr val="010203"/></a:dk1>
+              <a:lt1><a:srgbClr val="FAFBFC"/></a:lt1>
+              <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+              <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+              <a:accent1><a:srgbClr val="0C2238"/></a:accent1>
+              <a:accent2><a:srgbClr val="E97132"/></a:accent2>
+              <a:accent3><a:srgbClr val="196B24"/></a:accent3>
+              <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>
+              <a:accent5><a:srgbClr val="A02B93"/></a:accent5>
+              <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>
+              <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+              <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+            </a:clrScheme>
+            <a:fontScheme name="Freexcel Fonts">
+              <a:majorFont><a:latin typeface="Major Test"/></a:majorFont>
+              <a:minorFont><a:latin typeface="Minor Test"/></a:minorFont>
+            </a:fontScheme>
+            <a:fmtScheme name="Freexcel Effects">
+              <a:fillStyleLst>
+                <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+              </a:fillStyleLst>
+              <a:lnStyleLst>
+                <a:ln w="9525" cap="flat" cmpd="sng" algn="ctr">
+                  <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+                  <a:prstDash val="solid"/>
+                </a:ln>
+              </a:lnStyleLst>
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:outerShdw blurRad="40000" dist="19050" dir="5400000" rotWithShape="0">
+                      <a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr>
+                    </a:outerShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+              <a:bgFillStyleLst>
+                <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+              </a:bgFillStyleLst>
+            </a:fmtScheme>
           </a:themeElements>
         </a:theme>
         """;

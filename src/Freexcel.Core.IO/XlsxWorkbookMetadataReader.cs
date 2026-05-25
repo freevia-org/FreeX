@@ -70,6 +70,49 @@ internal static class XlsxWorkbookMetadataReader
         }
     }
 
+    public static WorkbookProtectionMetadataModel? LoadProtectionMetadata(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var protection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
+            if (protection is null)
+                return null;
+
+            var model = new WorkbookProtectionMetadataModel
+            {
+                NativeChildXmls = protection.Elements()
+                    .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                    .ToList()
+            };
+            foreach (var attribute in protection.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) ||
+                    string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+                ? null
+                : model;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static bool LoadUses1904DateSystem(Stream xlsxStream)
     {
         try
@@ -88,6 +131,48 @@ internal static class XlsxWorkbookMetadataReader
         catch
         {
             return false;
+        }
+    }
+
+    public static WorkbookPropertiesModel? LoadWorkbookProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return null;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var workbookProperties = workbookXml.Root?.Element(workbookNs + "workbookPr");
+            if (workbookProperties is null)
+                return null;
+
+            var model = new WorkbookPropertiesModel
+            {
+                NativeChildXmls = workbookProperties.Elements()
+                    .Select(element => element.ToString(SaveOptions.DisableFormatting))
+                    .ToList()
+            };
+            foreach (var attribute in workbookProperties.Attributes())
+            {
+                if (attribute.IsNamespaceDeclaration ||
+                    string.Equals(attribute.Name.LocalName, "date1904", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
+            }
+
+            return model.NativeAttributes.Count == 0 && model.NativeChildXmls.Count == 0
+                ? null
+                : model;
+        }
+        catch
+        {
+            return null;
         }
     }
 

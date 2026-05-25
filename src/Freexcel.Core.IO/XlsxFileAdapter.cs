@@ -35,6 +35,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);
         packageStream.Position = 0;
+        var workbookProperties = XlsxWorkbookMetadataReader.LoadWorkbookProperties(packageStream);
+        packageStream.Position = 0;
         var workbookViewProperties = XlsxWorkbookMetadataReader.LoadWorkbookViewProperties(packageStream);
         packageStream.Position = 0;
         var fileSharing = XlsxWorkbookMetadataReader.LoadFileSharing(packageStream);
@@ -47,7 +49,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var smartTags = XlsxWorkbookMetadataReader.LoadSmartTags(packageStream);
         packageStream.Position = 0;
+        var additionalViews = XlsxWorkbookAdditionalViewMapper.Read(packageStream);
+        packageStream.Position = 0;
         var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
+        packageStream.Position = 0;
+        var workbookProtectionMetadata = XlsxWorkbookMetadataReader.LoadProtectionMetadata(packageStream);
         packageStream.Position = 0;
         var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
         packageStream.Position = 0;
@@ -74,6 +80,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream));
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = uses1904DateSystem;
+        workbook.Properties = workbookProperties;
         workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
         workbook.SheetTabRatio = workbookViewProperties.SheetTabRatio is { } tabRatio ? Math.Clamp(tabRatio, 0, 1000) : null;
         workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
@@ -87,8 +94,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.FileVersion = fileVersion;
         workbook.FunctionGroups = functionGroups;
         workbook.SmartTags = smartTags;
+        workbook.AdditionalViews = additionalViews;
         workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
         workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
+        workbook.ProtectionMetadata = workbookProtectionMetadata;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;

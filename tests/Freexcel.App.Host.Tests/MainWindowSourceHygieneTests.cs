@@ -959,6 +959,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void KeyboardShortcuts_RegisterExcelNameManagerCommands()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NameManager, NamedRangesButton_Click);");
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateNamesFromSelection, CreateNamesFromSelectionBtn_Click);");
+    }
+
+    [Fact]
     public void FormulaBarTextChanged_SkipsFormulaHighlightWorkForSelectionDisplayUpdates()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
@@ -1439,14 +1448,35 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         keyboardFocusSource.Should().Contain("ShellFocusTarget.TaskPane");
+        keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        keyboardFocusSource.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, PivotFieldListPane)");
-        keyboardFocusSource.Should().Contain("return FocusPivotFieldListPane();");
+        keyboardFocusSource.Should().Contain("return FocusVisibleTaskPane();");
         keyboardFocusSource.Should().Contain("private bool FocusPivotFieldListPane()");
         keyboardFocusSource.Should().Contain("PivotFieldListPane?.Visibility != Visibility.Visible");
         keyboardFocusSource.Should().Contain("PivotFieldListSearchBox.Focus()");
         xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
         xaml.Should().Contain("x:Name=\"PivotFieldListSearchBox\"");
         xaml.Should().Contain("x:Name=\"PivotFieldListCloseBtn\"");
+    }
+
+    [Fact]
+    public void F6ShellFocusCycle_IncludesVisibleSlicerTimelineTaskPane()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, SlicerTimelinePane)");
+        keyboardFocusSource.Should().Contain("private bool FocusVisibleTaskPane()");
+        keyboardFocusSource.Should().Contain("FocusPivotFieldListPane() ||");
+        keyboardFocusSource.Should().Contain("FocusSlicerTimelinePane();");
+        keyboardFocusSource.Should().Contain("private bool FocusSlicerTimelinePane()");
+        keyboardFocusSource.Should().Contain("SlicerTimelinePane?.Visibility != Visibility.Visible");
+        keyboardFocusSource.Should().Contain("SlicerTimelinePaneCloseBtn.Focus()");
+        xaml.Should().Contain("x:Name=\"SlicerTimelinePane\"");
+        xaml.Should().Contain("x:Name=\"SlicerTimelinePaneCloseBtn\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
     }
 
     [Fact]
@@ -1463,6 +1493,46 @@ public sealed class MainWindowSourceHygieneTests
         keyboardFocusSource.Should().Contain("FocusNavigationDirection.Previous");
         keyboardFocusSource.Should().Contain("FocusNavigationDirection.Next");
         keyboardFocusSource.Should().Contain("focusedElement.MoveFocus(request);");
+    }
+
+    [Fact]
+    public void FocusedPivotFieldListTaskPane_TabTraversalIsNotHijackedByWorksheetMovement()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        selectionSource.Should().Contain("if (TryHandleFocusedTaskPaneKeyboardNavigation(e))");
+        keyboardFocusSource.Should().Contain("private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
+        keyboardFocusSource.Should().Contain("!IsDescendantOf(focusedElement, PivotFieldListPane)");
+        keyboardFocusSource.Should().Contain("Keyboard.Modifiers is not ModifierKeys.None and not ModifierKeys.Shift");
+        keyboardFocusSource.Should().Contain("e.Key != Key.Tab");
+        keyboardFocusSource.Should().Contain("focusedElement.MoveFocus(request);");
+        keyboardFocusSource.Should().Contain("e.Handled = true;");
+        xaml.Should().Contain("x:Name=\"PivotFieldListPane\"");
+        xaml.Should().Contain("KeyboardNavigation.TabNavigation=\"Cycle\"");
+        xaml.Should().Contain("KeyboardNavigation.ControlTabNavigation=\"Cycle\"");
+    }
+
+    [Fact]
+    public void FocusedPivotFieldListTaskPane_EscapeReturnsFocusToWorksheet()
+    {
+        var keyboardFocusSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardFocus.cs"));
+        var taskPaneNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool TryHandleFocusedTaskPaneKeyboardNavigation(System.Windows.Input.KeyEventArgs e)",
+            StringComparison.Ordinal);
+        var ribbonNavigationStart = keyboardFocusSource.IndexOf(
+            "private bool IsInsideRibbonSurface(DependencyObject element)",
+            StringComparison.Ordinal);
+
+        taskPaneNavigationStart.Should().BeGreaterThanOrEqualTo(0);
+        ribbonNavigationStart.Should().BeGreaterThan(taskPaneNavigationStart);
+        var taskPaneNavigationSource = keyboardFocusSource[taskPaneNavigationStart..ribbonNavigationStart];
+
+        taskPaneNavigationSource.Should().Contain("if (e.Key == Key.Escape)");
+        taskPaneNavigationSource.Should().Contain("FocusSheetGridIfNeeded();");
+        taskPaneNavigationSource.Should().Contain("e.Handled = true;");
+        taskPaneNavigationSource.Should().Contain("return true;");
     }
 
     [Fact]
@@ -1832,6 +1902,7 @@ public sealed class MainWindowSourceHygieneTests
 
         backstageSource.Should().Contain("private void OpenPrintBackstage()");
         backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
+        backstageSource.Should().Contain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");

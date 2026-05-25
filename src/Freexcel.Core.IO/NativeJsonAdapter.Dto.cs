@@ -19,10 +19,13 @@ public sealed partial class NativeJsonAdapter
         public WorkbookFileVersionDto? FileVersion { get; set; }
         public WorkbookFileSharingDto? FileSharing { get; set; }
         public List<WorkbookFileRecoveryPropertiesDto> FileRecoveryProperties { get; set; } = [];
+        public WorkbookPropertiesDto? Properties { get; set; }
         public WorkbookFunctionGroupsDto? FunctionGroups { get; set; }
         public WorkbookSmartTagMetadataDto? SmartTags { get; set; }
+        public WorkbookAdditionalViewsDto? AdditionalViews { get; set; }
         public bool IsStructureProtected { get; set; }
         public string? StructureProtectionPassword { get; set; }
+        public WorkbookProtectionMetadataDto? ProtectionMetadata { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
         public WorkbookCalculationMode? CalculationMode { get; set; }
         public bool FullCalculationOnLoad { get; set; }
@@ -70,6 +73,18 @@ public sealed partial class NativeJsonAdapter
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
+    private class WorkbookPropertiesDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorkbookProtectionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
     private class WorkbookFileRecoveryPropertiesDto
     {
         public bool? AutoRecover { get; set; }
@@ -106,6 +121,18 @@ public sealed partial class NativeJsonAdapter
         public string? NamespaceUri { get; set; }
         public string? Name { get; set; }
         public string? Url { get; set; }
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class WorkbookAdditionalViewsDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<WorkbookAdditionalViewDto> Views { get; set; } = [];
+    }
+
+    private class WorkbookAdditionalViewDto
+    {
+        public string? NativeXml { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
     }
 
@@ -259,6 +286,7 @@ public sealed partial class NativeJsonAdapter
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
         public List<SheetProtectionPermission> ProtectionPermissions { get; set; } = [];
+        public WorksheetProtectionMetadataDto? ProtectionMetadata { get; set; }
         public List<WorksheetCustomPropertyDto> CustomProperties { get; set; } = [];
         public List<UIntDoubleDto> RowHeights { get; set; } = [];
         public List<UIntDoubleDto> ColumnWidths { get; set; } = [];
@@ -271,6 +299,7 @@ public sealed partial class NativeJsonAdapter
         public bool? OutlineSummaryRight { get; set; }
         public bool? ShowOutlineSymbols { get; set; }
         public bool? ApplyOutlineStyles { get; set; }
+        public WorksheetSheetFormatMetadataDto? SheetFormatMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
@@ -302,6 +331,7 @@ public sealed partial class NativeJsonAdapter
         public double? FooterMargin { get; set; }
         public bool PrintGridlines { get; set; }
         public bool PrintHeadings { get; set; }
+        public WorksheetPrintOptionsMetadataDto? PrintOptionsMetadata { get; set; }
         public RepeatRangeDto? PrintTitleRows { get; set; }
         public RepeatRangeDto? PrintTitleColumns { get; set; }
         public HeaderFooterDto? PageHeader { get; set; }
@@ -332,6 +362,7 @@ public sealed partial class NativeJsonAdapter
         public int? PrintQualityVerticalDpi { get; set; }
         public WorksheetPrintErrorValue? PrintErrorValue { get; set; }
         public WorksheetPrintComments? PrintComments { get; set; }
+        public WorksheetPageSetupMetadataDto? PageSetupMetadata { get; set; }
         public ScaleToFitDto? ScaleToFit { get; set; }
         public bool? FitToPage { get; set; }
         public bool? AutoPageBreaks { get; set; }
@@ -339,6 +370,7 @@ public sealed partial class NativeJsonAdapter
         public List<uint> ColumnPageBreaks { get; set; } = [];
         public List<string> MergedRegions { get; set; } = [];
         public List<CommentDto> Comments { get; set; } = [];
+        public List<ThreadedCommentDto> ThreadedComments { get; set; } = [];
         public List<HyperlinkDto> Hyperlinks { get; set; } = [];
         public List<string> AllowEditRanges { get; set; } = [];
         public WorksheetBackgroundDto? BackgroundImage { get; set; }
@@ -351,6 +383,30 @@ public sealed partial class NativeJsonAdapter
         public List<ConditionalFormatDto> ConditionalFormats { get; set; } = [];
         public List<CellDto> Cells { get; set; } = [];
         public List<StyleOnlyCellDto> StyleOnlyCells { get; set; } = [];
+    }
+
+    private class WorksheetProtectionMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPageSetupMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetPrintOptionsMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
+    }
+
+    private class WorksheetSheetFormatMetadataDto
+    {
+        public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+        public List<string> NativeChildXmls { get; set; } = [];
     }
 
     private class WorksheetCustomPropertyDto
@@ -460,6 +516,21 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Address { get; set; }
         public string? Text { get; set; }
+    }
+
+    private class ThreadedCommentDto
+    {
+        public string? Address { get; set; }
+        public string? Text { get; set; }
+        public string? Author { get; set; }
+        public bool IsResolved { get; set; }
+        public List<CommentReplyDto> Replies { get; set; } = [];
+    }
+
+    private class CommentReplyDto
+    {
+        public string? Text { get; set; }
+        public string? Author { get; set; }
     }
 
     private class HyperlinkDto

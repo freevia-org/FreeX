@@ -15,18 +15,12 @@ public static partial class PivotTableRefreshService
         var start = GetPivotBodyStart(pivotTable);
         var rowFields = pivotTable.RowFields.ToList();
         var rowFieldOutputColumns = RowFieldOutputColumnCount(pivotTable);
-        var rowGroups = rows
-            .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .ToList();
+        var rowGroups = BuildRowGroups(workbook, pivotTable, rows, rowFields);
         rowGroups = ApplyLabelFilters(rowGroups, pivotTable, rowFields);
         rowGroups = ApplyValueFilters(rowGroups, pivotTable, headers, rowFields);
         rowGroups = ApplySorts(rowGroups, pivotTable, headers, rowFields);
         var retainedRows = rowGroups.SelectMany(group => group).ToList();
-        var columnKeys = retainedRows
-            .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .Distinct()
-            .Order(PivotKeyComparer.Instance)
-            .ToList();
+        var columnKeys = BuildColumnKeys(workbook, pivotTable, retainedRows, columnFields);
         columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
         columnKeys = ApplyValueFilters(columnKeys, retainedRows, pivotTable, headers, columnFields);
         columnKeys = ApplySorts(columnKeys, retainedRows, pivotTable, headers, columnFields);
@@ -117,7 +111,9 @@ public static partial class PivotTableRefreshService
                         dataField,
                         pivotTable,
                         headers),
-                        dataField);
+                        dataField,
+                        pivotTable,
+                        isEmptyIntersection: visibleRowGroupRows.Count == 0);
                     outputColumn++;
                 }
             }

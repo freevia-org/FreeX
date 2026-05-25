@@ -246,6 +246,15 @@ public sealed class RemainingDialogTests
         columnResult.Should().Be(new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, 5));
     }
 
+    [Theory]
+    [InlineData("row 0")]
+    [InlineData("col 0")]
+    [InlineData("column 0")]
+    public void PageBreakDialog_TryCreateResult_RejectsZeroBreakEntries(string input)
+    {
+        PageBreakDialog.TryCreateResult(input, out _).Should().BeFalse();
+    }
+
     [Fact]
     public void PageBreakDialog_ExposesExplicitExcelStyleActionsInsteadOfCommandText()
     {
@@ -285,6 +294,8 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Enter a positive row number for the page break.");
         source.Should().Contain("Enter a positive column number for the page break.");
         source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("rowBreak == 0");
+        source.Should().Contain("columnBreak == 0");
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
         source.Should().Contain("private static void FocusInvalidBreakInput(TextBox textBox)");

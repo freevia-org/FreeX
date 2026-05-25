@@ -23,11 +23,41 @@ internal static class XlsxWorkbookMetadataWriter
         var workbookProperties = root.Element(workbookNs + "workbookPr");
         if (workbookProperties is null)
         {
-            if (!workbook.Uses1904DateSystem)
+            if (!workbook.Uses1904DateSystem && workbook.Properties is null)
                 return;
 
             workbookProperties = new XElement(workbookNs + "workbookPr");
             root.AddFirst(workbookProperties);
+        }
+
+        if (workbook.Properties is not null)
+        {
+            foreach (var attribute in workbook.Properties.NativeAttributes)
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                    string.Equals(attribute.Key, "date1904", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                workbookProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            workbookProperties.Elements().Remove();
+            foreach (var childXml in workbook.Properties.NativeChildXmls)
+            {
+                if (string.IsNullOrWhiteSpace(childXml))
+                    continue;
+
+                try
+                {
+                    workbookProperties.Add(XElement.Parse(childXml));
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
+            }
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
@@ -268,6 +298,8 @@ internal static class XlsxWorkbookMetadataWriter
         var oleSize = root.Element(workbookNs + "oleSize");
         if (oleSize is not null)
             oleSize.AddBeforeSelf(functionGroups);
+        else if (root.Element(workbookNs + "extLst") is { } extensionList)
+            extensionList.AddBeforeSelf(functionGroups);
         else
             root.Add(functionGroups);
 
@@ -332,7 +364,12 @@ internal static class XlsxWorkbookMetadataWriter
             smartTagTypes.Add(element);
         }
 
-        root.Add(smartTagProperties, smartTagTypes);
+        var extensionList = root.Element(workbookNs + "extLst");
+        if (extensionList is not null)
+            extensionList.AddBeforeSelf(smartTagProperties, smartTagTypes);
+        else
+            root.Add(smartTagProperties, smartTagTypes);
+
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
 
         static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
@@ -352,8 +389,45 @@ internal static class XlsxWorkbookMetadataWriter
             return;
 
         root.Element(workbookNs + "workbookProtection")?.Remove();
-        var protection = new XElement(workbookNs + "workbookProtection",
-            new XAttribute("lockStructure", "1"));
+        if (!workbook.IsStructureProtected && workbook.ProtectionMetadata is null)
+        {
+            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+            return;
+        }
+
+        var protection = new XElement(workbookNs + "workbookProtection");
+        if (workbook.ProtectionMetadata is not null)
+        {
+            foreach (var attribute in workbook.ProtectionMetadata.NativeAttributes)
+            {
+                if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                    string.Equals(attribute.Key, "lockStructure", StringComparison.Ordinal) ||
+                    string.Equals(attribute.Key, "workbookPassword", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                protection.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            }
+
+            foreach (var childXml in workbook.ProtectionMetadata.NativeChildXmls)
+            {
+                if (string.IsNullOrWhiteSpace(childXml))
+                    continue;
+
+                try
+                {
+                    protection.Add(XElement.Parse(childXml));
+                }
+                catch
+                {
+                    // Skip malformed native payloads in authored native JSON files.
+                }
+            }
+        }
+
+        if (workbook.IsStructureProtected)
+            protection.SetAttributeValue("lockStructure", "1");
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
             protection.SetAttributeValue("workbookPassword", ToLegacyPasswordHash(workbook.StructureProtectionPassword));
 
