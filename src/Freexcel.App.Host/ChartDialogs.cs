@@ -210,7 +210,7 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = "_Object in sheet", IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = "_Object in:", IsChecked = true };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
