@@ -553,9 +553,16 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var dlg = new ManageConditionalFormatsDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
+        var dlg = new ManageConditionalFormatsDialog(
+            sheet,
+            SheetGrid.SelectedRange,
+            applyRules: ApplyManagedConditionalFormatRules) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultRules is null) return;
-        var newRules = dlg.ResultRules;
+        ApplyManagedConditionalFormatRules(dlg.ResultRules);
+    }
+
+    private void ApplyManagedConditionalFormatRules(IReadOnlyList<ConditionalFormat> newRules)
+    {
         if (!TryExecuteGroupedSheetCommand(
                 "Manage Conditional Formatting Rules",
                 sheetId =>
