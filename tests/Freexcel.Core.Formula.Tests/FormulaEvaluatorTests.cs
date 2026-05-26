@@ -1347,6 +1347,35 @@ public class ShortCircuitEvaluationTests
     }
 
     [Fact]
+    public void SWITCH_RangeExpressionSelectsResultElements()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
+
+        var result = _evaluator.Evaluate("=SWITCH(A1:A3,1,\"one\",2,\"two\",\"other\")", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(3);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new TextValue("one"));
+        result.Cells[1, 0].Should().Be(new TextValue("two"));
+        result.Cells[2, 0].Should().Be(new TextValue("other"));
+    }
+
+    [Fact]
+    public void SWITCH_ScalarExpressionKeepsImplicitIntersectionForRangeCaseValues()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+
+        _evaluator.Evaluate("=SWITCH(1,A1:A2,\"hit\",\"miss\")", sheet, wb)
+            .Should().Be(new TextValue("hit"));
+    }
+
+    [Fact]
     public void SWITCH_NoMatchNoDefault_ReturnsNA()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
