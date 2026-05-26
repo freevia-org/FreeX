@@ -45,9 +45,9 @@ public sealed class ChartDataLabelsDialog : Window
 {
     private readonly CheckBox _showBox = new() { Content = "_Show data labels" };
     private readonly CheckBox _categoryBox = new() { Content = "_Category name" };
-    private readonly CheckBox _seriesBox = new() { Content = "_Series name" };
+    private readonly CheckBox _seriesBox = new() { Content = "S_eries name" };
     private readonly CheckBox _percentageBox = new() { Content = "_Percentage" };
-    private readonly CheckBox _calloutsBox = new() { Content = "Data label _callouts" };
+    private readonly CheckBox _calloutsBox = new() { Content = "Data label callo_uts" };
     private readonly ComboBox _positionBox = new();
     private readonly ComboBox _separatorBox = new();
     private readonly ComboBox _numberFormatBox = new();
@@ -114,22 +114,22 @@ public sealed class ChartDataLabelsDialog : Window
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
-            ChartDialogHelpers.AddCombo(stack, "_Position", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
+            ChartDialogHelpers.AddCombo(stack, "P_osition", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
             ChartDialogHelpers.AddCheck(stack, _categoryBox);
             ChartDialogHelpers.AddCheck(stack, _seriesBox);
             ChartDialogHelpers.AddCheck(stack, _percentageBox);
-            ChartDialogHelpers.AddCombo(stack, "_Separator", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
-            ChartDialogHelpers.AddCombo(stack, "Number _format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, "Separato_r", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
+            ChartDialogHelpers.AddCombo(stack, "_Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
             ChartDialogHelpers.AddCheck(stack, _calloutsBox);
             root.Children.Add(CreateGroupBox("Label Options", stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "_Fill color", _fillBox);
+            ChartDialogHelpers.AddColorText(stack, "F_ill color", _fillBox);
             ChartDialogHelpers.AddColorText(stack, "_Border color", _borderBox);
             ChartDialogHelpers.AddColorText(stack, "_Text color", _textBox);
-            ChartDialogHelpers.AddNumericText(stack, "_Border thickness", _borderThicknessBox, "Enter a border width in points.");
-            ChartDialogHelpers.AddNumericText(stack, "_Font size", _fontSizeBox, "Enter a font size in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Border t_hickness", _borderThicknessBox, "Enter a border width in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Font si_ze", _fontSizeBox, "Enter a font size in points.");
             ChartDialogHelpers.AddNumericText(stack, "Text _angle", _angleBox, "Enter degrees from -90 to 90.");
             root.Children.Add(CreateGroupBox("Fill & Line", stack));
         }
