@@ -740,7 +740,12 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         var tableStyle = TableStyleGalleryPlanner.GetOption(variant);
         var tableStyleName = tableStyle.StyleName;
-        var dialog = new CreateTableDialog(_currentSheetId, FormatRangeReference(range.Start, range.End), tableStyleName) { Owner = this };
+        CreateTableDialog? dialog = null;
+        dialog = new CreateTableDialog(
+            _currentSheetId,
+            FormatRangeReference(range.Start, range.End),
+            tableStyleName,
+            request => ApplyCreateTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
 
@@ -755,6 +760,30 @@ public partial class MainWindow
                     tableStyle.Banding)))
             return;
         UpdateViewport();
+    }
+
+    private void ApplyCreateTableRangeSelection(
+        CreateTableDialog? dialog,
+        CreateTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(FormatRangeReference(selectedRange.Start, selectedRange.End));
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     private void CellStylesBtn_Click(object sender, RoutedEventArgs e)
