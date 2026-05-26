@@ -126,9 +126,9 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             case CfRuleType.ColorScale:
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "colorScale",
-                    ToCfvoXml(worksheetNs, cf.MinThresholdType, cf.MinThresholdValue),
-                    cf.UseThreeColorScale ? ToCfvoXml(worksheetNs, cf.MidThresholdType, cf.MidThresholdValue) : null,
-                    ToCfvoXml(worksheetNs, cf.MaxThresholdType, cf.MaxThresholdValue),
+                    ToCfvoXml(worksheetNs, cf.MinThresholdType, cf.MinThresholdValue, cf.MinThresholdGreaterThanOrEqual),
+                    cf.UseThreeColorScale ? ToCfvoXml(worksheetNs, cf.MidThresholdType, cf.MidThresholdValue, cf.MidThresholdGreaterThanOrEqual) : null,
+                    ToCfvoXml(worksheetNs, cf.MaxThresholdType, cf.MaxThresholdValue, cf.MaxThresholdGreaterThanOrEqual),
                     ToColorXml(worksheetNs, cf.MinColor),
                     cf.UseThreeColorScale ? ToColorXml(worksheetNs, cf.MidColor) : null,
                     ToColorXml(worksheetNs, cf.MaxColor)), cf, worksheetNs));
@@ -284,9 +284,20 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     private static XElement ToCfvoXml(XNamespace worksheetNs, CfThresholdType type, string? value)
     {
+        return ToCfvoXml(worksheetNs, type, value, greaterThanOrEqual: null);
+    }
+
+    private static XElement ToCfvoXml(
+        XNamespace worksheetNs,
+        CfThresholdType type,
+        string? value,
+        bool? greaterThanOrEqual)
+    {
         var element = new XElement(worksheetNs + "cfvo", new XAttribute("type", XlsxAdvancedConditionalFormatMetadata.ToCfvoType(type)));
         if (!string.IsNullOrWhiteSpace(value))
             element.SetAttributeValue("val", value);
+        if (greaterThanOrEqual.HasValue)
+            element.SetAttributeValue("gte", greaterThanOrEqual.Value ? "1" : "0");
         return element;
     }
 
