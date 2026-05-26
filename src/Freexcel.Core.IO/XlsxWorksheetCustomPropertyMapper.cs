@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -156,7 +157,7 @@ internal static class XlsxWorksheetCustomPropertyMapper
             if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledAttribute(attribute.Key))
                 continue;
 
-            element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+            TrySetNativeAttribute(element, attribute.Key, attribute.Value);
         }
 
         foreach (var childXml in property.Metadata?.NativeChildXmls ?? [])
@@ -179,4 +180,21 @@ internal static class XlsxWorksheetCustomPropertyMapper
 
     private static bool IsModeledAttribute(string name) =>
         name is "name" or "id";
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 }
