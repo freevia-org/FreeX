@@ -182,6 +182,15 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void FindNextButton_IsDefaultAction()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FindReplaceDialog.xaml"));
+
+        xaml.Should().Contain("<Button x:Name=\"FindNextBtn\"");
+        xaml.Should().Contain("x:Name=\"FindNextBtn\" Content=\"_Find Next\" Width=\"80\" Margin=\"0,0,8,0\" IsDefault=\"True\"");
+    }
+
+    [Fact]
     public void Dialog_ShowsReplaceActionsOnlyOnReplaceTab()
     {
         var document = LoadDialogXaml();

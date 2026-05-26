@@ -214,8 +214,7 @@ public sealed class DataTableDialog : Window
 
     private void FocusInitialKeyboardTarget()
     {
-        _rowInputBox.Focus();
-        Keyboard.Focus(_rowInputBox);
+        FocusRangeSelectionInput(_rowInputBox);
     }
 
     private void FocusInvalidInput(string? error)

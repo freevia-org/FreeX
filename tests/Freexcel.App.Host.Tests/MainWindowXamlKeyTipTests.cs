@@ -826,7 +826,7 @@ public sealed class MainWindowXamlKeyTipTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyTips.cs"));
 
         var prefixGuardIndex = source.IndexOf("HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence)", StringComparison.Ordinal);
-        var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence)", StringComparison.Ordinal);
+        var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(topLevelSequence)", StringComparison.Ordinal);
 
         prefixGuardIndex.Should().BeGreaterThanOrEqualTo(0);
         topLevelRouteIndex.Should().BeGreaterThanOrEqualTo(0);

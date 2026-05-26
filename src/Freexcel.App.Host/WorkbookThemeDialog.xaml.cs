@@ -39,7 +39,13 @@ public partial class WorkbookThemeDialog : Window
         HeadingFontBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdatePreview()));
         BodyFontBox.AddHandler(TextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdatePreview()));
         foreach (var colorBox in ThemeColorTextBoxes())
-            colorBox.TextChanged += (_, _) => UpdatePreview();
+        {
+            colorBox.TextChanged += (_, _) =>
+            {
+                UpdatePreview();
+                UpdateColorPickerSwatches();
+            };
+        }
     }
 
     private void LoadTheme(WorkbookTheme theme)
@@ -62,6 +68,7 @@ public partial class WorkbookThemeDialog : Window
         HyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Hyperlink));
         FollowedHyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.FollowedHyperlink));
         UpdatePreview();
+        UpdateColorPickerSwatches();
     }
 
     private void OfficePresetButton_Click(object sender, RoutedEventArgs e) =>
@@ -95,6 +102,7 @@ public partial class WorkbookThemeDialog : Window
         {
             colorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(dialog.SelectedColor.Value);
             UpdatePreview();
+            UpdateColorPickerSwatches();
         }
     }
 
@@ -124,6 +132,14 @@ public partial class WorkbookThemeDialog : Window
         PreviewBodyText.Foreground = new SolidColorBrush(ToMediaColor(ParsePreviewColor(HyperlinkColorBox.Text)));
     }
 
+    private void UpdateColorPickerSwatches()
+    {
+        foreach (var (textBox, button) in ThemeColorPickerPairs())
+        {
+            button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(textBox.Text)));
+        }
+    }
+
     private static CellColor ParsePreviewColor(string text)
     {
         try
@@ -140,18 +156,24 @@ public partial class WorkbookThemeDialog : Window
 
     private IEnumerable<TextBox> ThemeColorTextBoxes()
     {
-        yield return Dark1ColorBox;
-        yield return Light1ColorBox;
-        yield return Dark2ColorBox;
-        yield return Light2ColorBox;
-        yield return Accent1ColorBox;
-        yield return Accent2ColorBox;
-        yield return Accent3ColorBox;
-        yield return Accent4ColorBox;
-        yield return Accent5ColorBox;
-        yield return Accent6ColorBox;
-        yield return HyperlinkColorBox;
-        yield return FollowedHyperlinkColorBox;
+        foreach (var (textBox, _) in ThemeColorPickerPairs())
+            yield return textBox;
+    }
+
+    private IEnumerable<(TextBox TextBox, Button Button)> ThemeColorPickerPairs()
+    {
+        yield return (Dark1ColorBox, Dark1ColorPickerButton);
+        yield return (Light1ColorBox, Light1ColorPickerButton);
+        yield return (Dark2ColorBox, Dark2ColorPickerButton);
+        yield return (Light2ColorBox, Light2ColorPickerButton);
+        yield return (Accent1ColorBox, Accent1ColorPickerButton);
+        yield return (Accent2ColorBox, Accent2ColorPickerButton);
+        yield return (Accent3ColorBox, Accent3ColorPickerButton);
+        yield return (Accent4ColorBox, Accent4ColorPickerButton);
+        yield return (Accent5ColorBox, Accent5ColorPickerButton);
+        yield return (Accent6ColorBox, Accent6ColorPickerButton);
+        yield return (HyperlinkColorBox, HyperlinkColorPickerButton);
+        yield return (FollowedHyperlinkColorBox, FollowedHyperlinkColorPickerButton);
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)

@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.IO.Compression;
+using System.Xml.Linq;
 using FluentAssertions;
 using Freexcel.Core.IO;
 
@@ -6,6 +8,58 @@ namespace Freexcel.Core.IO.Tests;
 
 public sealed class XlsxLoadPackageStreamTests
 {
+    [Fact]
+    public void StyleOnlyCellStripper_NoOpPackageReturnsSourceWithoutRewritingLargeEntries()
+    {
+        using var package = CreatePackageWithWorksheet(
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" s="1"/>
+                  <c r="B1" s="2"/>
+                </row>
+              </sheetData>
+            </worksheet>
+            """,
+            includeLargePayload: true);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var beforeAllocatedBytes = GC.GetAllocatedBytesForCurrentThread();
+
+        using var stripped = CreateStyleOnlyStrippedPackage(package);
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeAllocatedBytes;
+        stripped.Should().BeSameAs(package);
+        allocatedBytes.Should().BeLessThan(1_000_000);
+    }
+
+    [Fact]
+    public void StyleOnlyCellStripper_RemovesDuplicateStyleOnlyCellsIntoNewPackage()
+    {
+        using var package = CreatePackageWithWorksheet(
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" s="1"/>
+                  <c r="B1" s="1"/>
+                  <c r="C1" s="2"/>
+                  <c r="D1" s="2"/>
+                </row>
+              </sheetData>
+            </worksheet>
+            """,
+            includeLargePayload: false);
+
+        using var stripped = CreateStyleOnlyStrippedPackage(package);
+
+        stripped.Should().NotBeSameAs(package);
+        ReadWorksheetCellReferences(stripped).Should().Equal("A1", "C1");
+    }
+
     [Fact]
     public void CreateLoadPackageStream_ReusesAccessibleMemoryStreamSliceWithoutOwningSource()
     {
@@ -67,6 +121,56 @@ public sealed class XlsxLoadPackageStreamTests
         method.Should().NotBeNull();
         var package = method!.Invoke(null, [stream]).Should().BeOfType<MemoryStream>().Subject;
         return package;
+    }
+
+    private static MemoryStream CreateStyleOnlyStrippedPackage(MemoryStream package)
+    {
+        var type = typeof(XlsxFileAdapter).Assembly.GetType("Freexcel.Core.IO.XlsxClosedXmlStyleOnlyCellStripper");
+        type.Should().NotBeNull();
+        var method = type!.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
+        method.Should().NotBeNull();
+        var stripped = method!.Invoke(null, [package]).Should().BeOfType<MemoryStream>().Subject;
+        return stripped;
+    }
+
+    private static MemoryStream CreatePackageWithWorksheet(string worksheetXml, bool includeLargePayload)
+    {
+        var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var worksheetEntry = archive.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal);
+            using (var worksheetStream = worksheetEntry.Open())
+            using (var writer = new StreamWriter(worksheetStream))
+            {
+                writer.Write(worksheetXml);
+            }
+
+            if (includeLargePayload)
+            {
+                var payload = archive.CreateEntry("xl/media/payload.bin", CompressionLevel.NoCompression);
+                using var payloadStream = payload.Open();
+                var buffer = new byte[4 * 1024 * 1024];
+                new Random(42).NextBytes(buffer);
+                payloadStream.Write(buffer);
+            }
+        }
+
+        package.Position = 0;
+        return package;
+    }
+
+    private static IReadOnlyList<string> ReadWorksheetCellReferences(MemoryStream package)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        using var worksheetStream = archive.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+        var worksheet = XDocument.Load(worksheetStream);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var references = worksheet.Descendants(worksheetNs + "c")
+            .Select(cell => cell.Attribute("r")!.Value)
+            .ToArray();
+        package.Position = 0;
+        return references;
     }
 
     private sealed class NonMemoryReadStream(byte[] buffer) : Stream

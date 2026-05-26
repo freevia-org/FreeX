@@ -40,6 +40,25 @@ public sealed class UiAutomationCatalogSnapshotTests
         snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == "Insert Sheet" && control.ControlType == "Button");
     }
 
+    [Fact]
+    [Trait("Category", "UIE2E")]
+    public void VisibleDialogEntryPointControls_ExposeInvokePattern()
+    {
+        if (!OperatingSystem.IsWindows() || !Environment.UserInteractive)
+            return;
+
+        using var run = FreexcelUiRun.Start();
+        var root = AutomationElement.FromHandle(run.WindowHandle)
+            ?? throw new InvalidOperationException("UI Automation could not attach to the Freexcel window.");
+
+        SelectTab(root, run.ProcessId, "Formulas");
+        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "FormulasInsertFunctionButton", "Insert Function");
+
+        SelectTab(root, run.ProcessId, "File");
+        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageAccountButton", "Account");
+        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageOptionsButton", "Options");
+    }
+
     private static IReadOnlyList<string> ReadCatalogTopLevelTabNames()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json")));
@@ -81,6 +100,63 @@ public sealed class UiAutomationCatalogSnapshotTests
 
         declaredNames.Should().Contain(expected);
         return expected;
+    }
+
+    private static void AssertVisibleButtonExposesInvokePattern(
+        AutomationElement root,
+        int processId,
+        string automationId,
+        string expectedName)
+    {
+        var element = root.FindFirst(
+            TreeScope.Descendants,
+            new AndCondition(
+                new PropertyCondition(AutomationElement.ProcessIdProperty, processId),
+                new PropertyCondition(AutomationElement.AutomationIdProperty, automationId),
+                new PropertyCondition(AutomationElement.IsOffscreenProperty, false)));
+
+        element.Should().NotBeNull($"visible dialog entry point {automationId} should be present in UIA");
+        element!.Current.Name.Should().Be(expectedName);
+        element.Current.ControlType.Should().Be(ControlType.Button);
+        element.TryGetCurrentPattern(InvokePattern.Pattern, out _)
+            .Should()
+            .BeTrue($"{expectedName} should expose UIA InvokePattern");
+    }
+
+    private static void SelectTab(AutomationElement root, int processId, string tabName)
+    {
+        var tab = FindVisibleElement(root, processId, AutomationElement.NameProperty, tabName)
+            ?? throw new InvalidOperationException($"Could not find visible tab '{tabName}' through UI Automation.");
+
+        tab.Current.ControlType.Should().Be(ControlType.TabItem);
+        tab.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var pattern)
+            .Should()
+            .BeTrue($"{tabName} tab should expose SelectionItemPattern");
+
+        ((SelectionItemPattern)pattern).Select();
+        WaitFor(() => tab.Current.IsKeyboardFocusable || !tab.Current.IsOffscreen, $"tab '{tabName}' to remain visible after selection");
+    }
+
+    private static AutomationElement? FindVisibleElement(AutomationElement root, int processId, AutomationProperty property, object value) =>
+        root.FindFirst(
+            TreeScope.Descendants,
+            new AndCondition(
+                new PropertyCondition(AutomationElement.ProcessIdProperty, processId),
+                new PropertyCondition(property, value),
+                new PropertyCondition(AutomationElement.IsOffscreenProperty, false)));
+
+    private static void WaitFor(Func<bool> condition, string description)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+                return;
+
+            Thread.Sleep(50);
+        }
+
+        throw new TimeoutException($"Timed out waiting for {description}.");
     }
 }
 
