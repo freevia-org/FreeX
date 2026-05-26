@@ -111,6 +111,7 @@ public partial class MainWindow
                 MessageBoxImage.Information);
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
             {
+                ["fileType"] = "pdf",
                 ["format"] = "pdf",
                 ["scope"] = options.Scope.ToString()
             });
@@ -120,6 +121,7 @@ public partial class MainWindow
         {
             RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
             {
+                ["fileType"] = "pdf",
                 ["format"] = "pdf",
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name
@@ -191,6 +193,7 @@ public partial class MainWindow
 
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
             {
+                ["fileType"] = "xps",
                 ["format"] = "xps",
                 ["scope"] = options.Scope.ToString()
             });
@@ -200,6 +203,7 @@ public partial class MainWindow
         {
             RecordDiagnosticEvent("export_failed", new Dictionary<string, string?>
             {
+                ["fileType"] = "xps",
                 ["format"] = "xps",
                 ["scope"] = options.Scope.ToString(),
                 ["reason"] = ex.GetType().Name

@@ -42,6 +42,10 @@ public sealed class FreexcelOptions
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";
 
+    // Diagnostics
+    public bool CrashAnalyticsEnabled { get; set; }
+    public bool CrashAnalyticsPrompted { get; set; }
+
     // Export
     public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;
 
