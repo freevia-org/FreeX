@@ -67,6 +67,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-function-groups-001" => true,
         "generated-workbook-views-001" => true,
         "generated-workbook-defined-names-native-001" => true,
+        "generated-workbook-theme-native-schemes-001" => true,
         "generated-stylesheet-native-metadata-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
@@ -347,6 +348,41 @@ internal static class XlsxCorpusFixtureFactory
                 <definedName name="DynamicSalesRange" hidden="1">1+1</definedName>
               </definedNames>
             </workbook>
+            """)),
+        "generated-workbook-theme-native-schemes-001" => CreatePackage(("xl/theme/theme1.xml", """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Freexcel Native Scheme Theme">
+              <a:themeElements>
+                <a:clrScheme name="Freexcel Native Colors">
+                  <a:dk1><a:srgbClr val="010203"/></a:dk1>
+                  <a:lt1><a:srgbClr val="FAFBFC"/></a:lt1>
+                  <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+                  <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+                  <a:accent1><a:srgbClr val="0C2238"><a:lumMod val="75000"/></a:srgbClr></a:accent1>
+                  <a:accent2><a:srgbClr val="E97132"/></a:accent2>
+                  <a:accent3><a:srgbClr val="196B24"/></a:accent3>
+                  <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>
+                  <a:accent5><a:srgbClr val="A02B93"/></a:accent5>
+                  <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>
+                  <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+                  <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+                </a:clrScheme>
+                <a:fontScheme name="Freexcel Native Fonts">
+                  <a:majorFont>
+                    <a:latin typeface="Major Native"/>
+                    <a:ea typeface="Major East Asia"/>
+                    <a:cs typeface="Major Complex"/>
+                    <a:font script="Jpan" typeface="Yu Gothic"/>
+                  </a:majorFont>
+                  <a:minorFont>
+                    <a:latin typeface="Minor Native"/>
+                    <a:ea typeface="Minor East Asia"/>
+                    <a:cs typeface="Minor Complex"/>
+                  </a:minorFont>
+                </a:fontScheme>
+                <a:fmtScheme name="Effects Test"/>
+              </a:themeElements>
+            </a:theme>
             """)),
         "generated-stylesheet-native-metadata-001" => CreatePackage(("xl/styles.xml", """
             <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -916,6 +952,7 @@ internal static class XlsxCorpusFixtureFactory
             "xl/dialogSheets/sheet2.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml",
             "xl/macroSheets/sheet3.xml" => "application/vnd.ms-excel.macrosheet+xml",
             "xl/charts/chart1.xml" => "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
+            "xl/theme/theme1.xml" => "application/vnd.openxmlformats-officedocument.theme+xml",
             "xl/vbaProject.bin" => "application/vnd.ms-office.vbaProject",
             "xl/pivotTables/pivotTable1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml",
             "xl/pivotCache/pivotCacheDefinition1.xml" => "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml",
