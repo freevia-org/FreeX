@@ -27,7 +27,7 @@ internal static class TextToColumnsDialogResultFactory
             delimiterKind,
             delimiter,
             Destination: destination,
-            ColumnFormats: NormalizeColumnFormats(columnFormats),
+            ColumnFormats: TextToColumnsDialogPlanner.NormalizeColumnFormats(columnFormats),
             AdvancedOptions: advancedOptions);
     }
 
@@ -54,7 +54,7 @@ internal static class TextToColumnsDialogResultFactory
             TextQualifier: textQualifier,
             TreatConsecutiveDelimitersAsOne: treatConsecutiveDelimitersAsOne,
             Destination: destination,
-            ColumnFormats: NormalizeColumnFormats(columnFormats),
+            ColumnFormats: TextToColumnsDialogPlanner.NormalizeColumnFormats(columnFormats),
             AdvancedOptions: advancedOptions);
     }
 
@@ -73,50 +73,22 @@ internal static class TextToColumnsDialogResultFactory
             TextToColumnsSplitMode.FixedWidth,
             positions,
             Destination: destination,
-            ColumnFormats: NormalizeColumnFormats(columnFormats),
+            ColumnFormats: TextToColumnsDialogPlanner.NormalizeColumnFormats(columnFormats),
             AdvancedOptions: advancedOptions);
     }
 
     public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
-    {
-        if (sheet is null)
-            return [];
-
-        var rows = new List<string>();
-        for (var row = range.Start.Row; row <= range.End.Row && rows.Count < maxRows; row++)
-        {
-            if (sheet.GetValue(row, range.Start.Col) is TextValue text && !string.IsNullOrWhiteSpace(text.Value))
-                rows.Add(text.Value);
-        }
-
-        return rows;
-    }
+        => TextToColumnsDialogPlanner.BuildPreviewRows(sheet, range, maxRows);
 
     public static bool CanConvertRange(GridRange range) =>
-        range.Start.Col == range.End.Col;
+        TextToColumnsDialogPlanner.CanConvertRange(range);
 
     public static bool TryParseDestination(string? input, CellAddress defaultDestination, out CellAddress destination)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            destination = default;
-            return false;
-        }
-
-        return CellAddress.TryParse(input.Trim(), defaultDestination.Sheet, out destination);
-    }
+        => TextToColumnsDialogPlanner.TryParseDestination(input, defaultDestination, out destination);
 
     public static IReadOnlyList<TextToColumnsColumnFormat> NormalizeColumnFormats(
         IReadOnlyList<TextToColumnsColumnFormat>? columnFormats)
-    {
-        if (columnFormats is null || columnFormats.Count == 0)
-            return [];
-
-        var normalized = columnFormats.ToList();
-        while (normalized.Count > 0 && normalized[^1] == TextToColumnsColumnFormat.General)
-            normalized.RemoveAt(normalized.Count - 1);
-        return normalized;
-    }
+        => TextToColumnsDialogPlanner.NormalizeColumnFormats(columnFormats);
 
     public static IReadOnlyList<int> AddFixedWidthBreakPosition(
         IReadOnlyList<int> breakPositions,
