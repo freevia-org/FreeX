@@ -186,6 +186,26 @@ public sealed class WorkbookThemeDialogXamlTests
     }
 
     [Fact]
+    public void ColorPickerButtons_ExposeSwatchAffordance()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+
+        xaml.Should().Contain("ToolTip=\"Pick color\"");
+        xaml.Should().NotContain("Content=\"...\"");
+    }
+
+    [Fact]
+    public void ColorPickerSwatches_UpdateWithThemeColors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
+
+        source.Should().Contain("UpdateColorPickerSwatches();");
+        source.Should().Contain("private void UpdateColorPickerSwatches()");
+        source.Should().Contain("ThemeColorPickerPairs()");
+        source.Should().Contain("button.Background = new SolidColorBrush(ToMediaColor(ParsePreviewColor(textBox.Text)));");
+    }
+
+    [Fact]
     public void Dialog_ExposesExcelLikeThemePreviewPane()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
@@ -200,7 +220,8 @@ public sealed class WorkbookThemeDialogXamlTests
         source.Should().Contain("WirePreviewRefresh");
         source.Should().Contain("HeadingFontBox.SelectionChanged += (_, _) => UpdatePreview()");
         source.Should().Contain("HeadingFontBox.AddHandler(TextBox.TextChangedEvent");
-        source.Should().Contain("colorBox.TextChanged += (_, _) => UpdatePreview()");
+        source.Should().Contain("colorBox.TextChanged += (_, _) =>");
+        source.Should().Contain("UpdateColorPickerSwatches();");
         source.Should().Contain("ThemeColorTextBoxes");
         source.Should().Contain("PreviewHeadingText.FontFamily");
         source.Should().Contain("PreviewAccentStrip");
