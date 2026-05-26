@@ -667,30 +667,8 @@ public static partial class BuiltInFunctions
     {
         if (value is NumberValue nv) return nv;
         var text = ToText(value).Trim();
-        var usCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
-        if (text.EndsWith('%') &&
-            double.TryParse(text[..^1].Trim(), System.Globalization.NumberStyles.Any,
-                usCulture, out var pct))
-            return new NumberValue(pct / 100.0);
-        if (double.TryParse(text, System.Globalization.NumberStyles.Any,
-                usCulture, out var d))
+        if (ExcelTextNumberParser.TryParse(text, out var d))
             return new NumberValue(d);
-        if (TryParseExcelFakeLeapDayValueText(text, usCulture, out var fakeLeapSerial))
-            return new NumberValue(fakeLeapSerial);
-        if (DateTime.TryParse(text, usCulture,
-                System.Globalization.DateTimeStyles.None, out var dt))
-            return new NumberValue(IsTimeOnlyText(text) ? dt.TimeOfDay.TotalDays : DateToSerial(dt));
         return ErrorValue.Value;
-    }
-
-    private static bool IsTimeOnlyText(string text)
-    {
-        var trimmed = text.Trim();
-        if (trimmed.Contains('/') || trimmed.Contains('-')) return false;
-        if (Regex.IsMatch(trimmed, @"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)", RegexOptions.IgnoreCase))
-            return false;
-
-        return trimmed.Contains(':')
-            || Regex.IsMatch(trimmed, @"\b(?:am|pm)\b", RegexOptions.IgnoreCase);
     }
 }
