@@ -15,7 +15,8 @@ public enum GridObjectDisplayMode
 public enum GridQuickAnalysisPreviewVisualKind
 {
     None,
-    DataBars
+    DataBars,
+    ColorScale
 }
 
 /// <summary>
@@ -68,6 +69,12 @@ public partial class GridView : FrameworkElement
     private static readonly Brush QuickAnalysisPreviewBrush = MakeBrushAlpha(38, 91, 155, 213);
     private static readonly Pen QuickAnalysisPreviewPen = new(MakeBrush(47, 117, 181), 2);
     private static readonly Brush QuickAnalysisDataBarPreviewBrush = MakeBrushAlpha(156, 91, 155, 213);
+    private static readonly Brush[] QuickAnalysisColorScalePreviewBrushes =
+    [
+        MakeBrushAlpha(176, 248, 105, 107),
+        MakeBrushAlpha(176, 255, 235, 132),
+        MakeBrushAlpha(176, 99, 190, 123)
+    ];
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen FreezePen = MakeFreezePen();
     private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
