@@ -2115,6 +2115,12 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("\"Row Height\",");
         source.Should().Contain("\"Column Width\",");
+        source.Should().Contain("var dialog = new RowHeightDialog(GetSelectedRowHeightDialogValue(range)) { Owner = this };");
+        source.Should().Contain("var dialog = new ColumnWidthDialog(GetSelectedColumnWidthDialogValue(range)) { Owner = this };");
+        source.Should().Contain("private double GetSelectedRowHeightDialogValue(GridRange range)");
+        source.Should().Contain("private double GetSelectedColumnWidthDialogValue(GridRange range)");
+        source.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");
+        source.Should().Contain("sheet.ColumnWidths.TryGetValue(startCol, out var width) ? width : sheet.DefaultColumnWidth");
         source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
         source.Should().Contain("var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);");
         source.Should().Contain("var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);");

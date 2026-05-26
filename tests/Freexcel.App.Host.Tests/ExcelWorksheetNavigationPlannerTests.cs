@@ -231,6 +231,10 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     [Fact]
     public void GetCtrlEndCell_UsesBottomRightUsedCellOrA1ForEmptySheets()
     {
+        ExcelWorksheetNavigationPlanner.GetCtrlEndCell(null, SheetId)
+            .Should()
+            .Be(new CellAddress(SheetId, 1, 1));
+
         var empty = new Sheet(SheetId, "Empty");
         ExcelWorksheetNavigationPlanner.GetCtrlEndCell(empty, SheetId)
             .Should()
@@ -243,5 +247,52 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
         ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId)
             .Should()
             .Be(new CellAddress(SheetId, 8, 7));
+    }
+
+    [Fact]
+    public void GetCtrlEndCell_UsesMaterializedCellsOnly()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        var anchor = new CellAddress(SheetId, 2, 2);
+        sheet.SetCell(anchor, new NumberValue(1));
+        sheet.SetSpillRange(anchor, new RangeValue(new ScalarValue[,]
+        {
+            { new NumberValue(1), new NumberValue(2) },
+            { new NumberValue(3), new TextValue("Spill") }
+        }));
+
+        ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId)
+            .Should()
+            .Be(anchor);
+    }
+
+    [Fact]
+    public void GetCtrlEndCell_RepeatedLargeSheetNavigationHasLowAllocationCost()
+    {
+        var sheet = new Sheet(SheetId, "Large");
+        for (uint row = 1; row <= 200; row++)
+        {
+            for (uint col = 1; col <= 100; col++)
+                sheet.SetCell(new CellAddress(SheetId, row, col), new NumberValue(row + col));
+        }
+
+        _ = ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 25;
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        CellAddress target = default;
+        for (var i = 0; i < repetitions; i++)
+            target = ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId);
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        target.Should().Be(new CellAddress(SheetId, 200, 100));
+        output.WriteLine(
+            $"GetCtrlEndCell large sheet repeated {repetitions}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(100_000);
     }
 }
