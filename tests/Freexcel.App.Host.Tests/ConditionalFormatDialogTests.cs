@@ -939,6 +939,111 @@ public sealed class ConditionalFormatDialogTests
         method!.Invoke(dialog, [ruleType]);
     }
 
+    [Fact]
+    public void DataBarRule_ExposesAdvancedAxisAndNegativeColorOptions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", RangeFor(SheetId.New())));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").Content.Should().Be("Show _border:");
+            FindLabel(dialog.Content, "_Axis position:").Should().NotBeNull();
+            FindLabel(dialog.Content, "_Axis color:").Should().NotBeNull();
+            FindLabel(dialog.Content, "_Negative bar color:").Should().NotBeNull();
+            FindLabel(dialog.Content, "Negative _border color:").Should().NotBeNull();
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").Should().NotBeNull();
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_AdvancedOptionsRoundTripThroughDialog()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var range = RangeFor(SheetId.New());
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", range));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").IsChecked = true;
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").SelectedItem = "Middle";
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Text = "1,2,3";
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Text = "4,5,6";
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Text = "7,8,9";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarBorder.Should().BeTrue();
+            dialog.ResultRule.DataBarAxisPosition.Should().Be("middle");
+            dialog.ResultRule.DataBarAxisColor.Should().Be(new RgbColor(1, 2, 3));
+            dialog.ResultRule.DataBarNegativeFillColor.Should().Be(new RgbColor(4, 5, 6));
+            dialog.ResultRule.DataBarNegativeBorderColor.Should().Be(new RgbColor(7, 8, 9));
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DataBarRule_AdvancedOptions_DefaultsAreEmpty()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var range = RangeFor(SheetId.New());
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", range));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").IsChecked.Should().BeFalse();
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").SelectedItem.Should().Be("Automatic");
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Text.Should().BeEmpty();
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Text.Should().BeEmpty();
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Text.Should().BeEmpty();
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.DataBarBorder.Should().BeFalse();
+            dialog.ResultRule.DataBarAxisPosition.Should().BeNull();
+            dialog.ResultRule.DataBarAxisColor.Should().BeNull();
+            dialog.ResultRule.DataBarNegativeFillColor.Should().BeNull();
+            dialog.ResultRule.DataBarNegativeBorderColor.Should().BeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingDataBarRule_PrePopulatesAdvancedDataBarFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                DataBarBorder = true,
+                DataBarAxisPosition = "middle",
+                DataBarAxisColor = new RgbColor(10, 20, 30),
+                DataBarNegativeFillColor = new RgbColor(40, 50, 60),
+                DataBarNegativeBorderColor = new RgbColor(70, 80, 90)
+            };
+
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            GetControl<CheckBox>(dialog, "_dataBarBorderBox").IsChecked.Should().BeTrue();
+            GetControl<ComboBox>(dialog, "_dataBarAxisPositionBox").SelectedItem.Should().Be("Middle");
+            GetControl<TextBox>(dialog, "_dataBarAxisColorBox").Text.Should().Be("10,20,30");
+            GetControl<TextBox>(dialog, "_dataBarNegativeFillColorBox").Text.Should().Be("40,50,60");
+            GetControl<TextBox>(dialog, "_dataBarNegativeBorderColorBox").Text.Should().Be("70,80,90");
+
+            dialog.Close();
+        });
+    }
+
     private static GridRange RangeFor(SheetId sheetId) =>
         new(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3));
 }
