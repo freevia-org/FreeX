@@ -386,6 +386,52 @@ public class SheetCloneTests
     }
 
     [Fact]
+    public void Sheet_Clone_RemapPivotTableRangesAndCopiesFieldLists()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        var pivot = new PivotTableModel
+        {
+            Name = "Pivot1",
+            CacheId = 3,
+            SourceRange = new GridRange(
+                new CellAddress(src.Id, 1, 1),
+                new CellAddress(src.Id, 10, 3)),
+            TargetRange = new GridRange(
+                new CellAddress(src.Id, 12, 1),
+                new CellAddress(src.Id, 16, 4)),
+            PackagePart = "xl/pivotTables/pivotTable1.xml",
+            StyleName = "PivotStyleMedium9",
+            ShowRowStripes = true,
+            ShowColumnGrandTotals = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["East", "West"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Revenue", "Amount*Units"));
+        pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Descending));
+        src.PivotTables.Add(pivot);
+        var newId = SheetId.New();
+
+        var copy = src.Clone(newId, "Copy");
+
+        var clonedPivot = copy.PivotTables.Should().ContainSingle().Subject;
+        clonedPivot.Should().NotBeSameAs(pivot);
+        clonedPivot.SourceRange.Should().Be(new GridRange(
+            new CellAddress(newId, 1, 1),
+            new CellAddress(newId, 10, 3)));
+        clonedPivot.TargetRange.Should().Be(new GridRange(
+            new CellAddress(newId, 12, 1),
+            new CellAddress(newId, 16, 4)));
+        clonedPivot.StyleName.Should().Be("PivotStyleMedium9");
+        clonedPivot.ShowColumnGrandTotals.Should().BeFalse();
+        clonedPivot.RowFields.Should().Equal(pivot.RowFields);
+        clonedPivot.DataFields.Should().Equal(pivot.DataFields);
+        clonedPivot.CalculatedFields.Should().Equal(pivot.CalculatedFields);
+        clonedPivot.Sorts.Should().Equal(pivot.Sorts);
+        clonedPivot.RowFields.Should().NotBeSameAs(pivot.RowFields);
+    }
+
+    [Fact]
     public void Sheet_Clone_DropsExistingConditionalFormatX14IdNativeChild()
     {
         var wb = new Workbook("T");
