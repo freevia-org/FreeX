@@ -70,6 +70,18 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void UiTestCatalog_UsesCanonicalBranchNeutralMetadata()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+
+        catalog.Should().Contain("Canonical path: `docs/UI_TEST_CATALOG.md`");
+        catalog.Should().NotContain("Last updated:");
+        catalog.Should().NotContain("Branch:");
+        catalog.Should().NotContain("Current catalog branch:");
+    }
+
+    [Fact]
     public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
