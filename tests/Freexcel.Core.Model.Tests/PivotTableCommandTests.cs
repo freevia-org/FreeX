@@ -557,6 +557,39 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void DrillDownPivotTableCommand_RejectsWhenShowDetailsDisabled()
+    {
+        var workbook = new Workbook("PivotDrillDownDisabledCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("A"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C2"),
+            TargetRange = Range(sheet, "E3", "H8"),
+            EnableDrill = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var outcome = new DrillDownPivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "G4")).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Show Details is disabled for this PivotTable.");
+        workbook.Sheets.Should().ContainSingle().Which.Name.Should().Be("Data");
+    }
+
+    [Fact]
     public void ConfigurePivotTableLayoutCommand_ReplacesFieldsRefreshesAndUndoRestores()
     {
         var workbook = new Workbook("PivotLayoutCommandTest");
@@ -817,6 +850,46 @@ public sealed class PivotTableCommandTests
         outcome.Success.Should().BeTrue();
         pivot.LabelFilters.Should().ContainSingle().Which.Value.Should().Be("B");
         sheet.GetCell(Addr(sheet, "D4"))!.Value.Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
+    public void ConfigurePivotTableOptionsCommand_UpdatesEnableDrillAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotEnableDrillOptionsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8"),
+            EnableDrill = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var command = new ConfigurePivotTableOptionsCommand(
+            sheet.Id,
+            "PivotTable1",
+            showRowGrandTotals: true,
+            showColumnGrandTotals: true,
+            showSubtotals: false,
+            subtotalPlacement: PivotSubtotalPlacement.Bottom,
+            repeatItemLabels: true,
+            blankLineAfterItems: false,
+            styleName: "PivotStyleLight16",
+            enableDrill: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.EnableDrill.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        pivot.EnableDrill.Should().BeTrue();
     }
 
     [Fact]
