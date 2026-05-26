@@ -57,6 +57,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-header-footer-legacy-drawing-001" => true,
         "generated-workbook-extension-list-001" => true,
         "generated-workbook-file-version-001" => true,
+        "generated-workbook-file-recovery-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
@@ -215,6 +216,12 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-file-version-001" => CreatePackage(("xl/workbook.xml", """
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <fileVersion appName="xl" lastEdited="7" lowestEdited="7" rupBuild="28129" customVersionFlag="keep"/>
+            </workbook>
+            """)),
+        "generated-workbook-file-recovery-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <fileRecoveryPr autoRecover="1" crashSave="1" customRecoveryFlag="keep" repairLoad="0"/>
+              <fileRecoveryPr dataExtractLoad="1" repairLoad="1"/>
             </workbook>
             """)),
         "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -442,6 +449,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
@@ -598,6 +607,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-file-version-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookFileVersionFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-file-recovery-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFileRecoveryFixup(archive);
             return;
         }
 
@@ -1043,6 +1058,31 @@ internal static class XlsxCorpusFixtureFactory
             new XAttribute("lowestEdited", "7"),
             new XAttribute("rupBuild", "28129"),
             new XAttribute("customVersionFlag", "keep")));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookFileRecoveryFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "fileRecoveryPr").Remove();
+        workbookXml.Root?.Add(
+            new XElement(
+                workbookNs + "fileRecoveryPr",
+                new XAttribute("autoRecover", "1"),
+                new XAttribute("crashSave", "1"),
+                new XAttribute("customRecoveryFlag", "keep"),
+                new XAttribute("repairLoad", "0")),
+            new XElement(
+                workbookNs + "fileRecoveryPr",
+                new XAttribute("dataExtractLoad", "1"),
+                new XAttribute("repairLoad", "1")));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 
