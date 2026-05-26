@@ -76,6 +76,9 @@ public sealed partial class NativeJsonAdapter
             {
                 Name = scenario.Name,
                 Comment = string.IsNullOrWhiteSpace(scenario.Comment) ? null : scenario.Comment,
+                Hidden = scenario.Hidden,
+                Locked = scenario.Locked,
+                User = string.IsNullOrWhiteSpace(scenario.User) ? null : scenario.User,
                 ChangingCells = scenario.ChangingCells.Select(change =>
                 {
                     var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet));

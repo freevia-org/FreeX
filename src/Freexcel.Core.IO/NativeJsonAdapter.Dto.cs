@@ -155,6 +155,9 @@ public sealed partial class NativeJsonAdapter
     {
         public string Name { get; set; } = "";
         public string? Comment { get; set; }
+        public bool Hidden { get; set; }
+        public bool Locked { get; set; }
+        public string? User { get; set; }
         public List<ScenarioCellDto> ChangingCells { get; set; } = [];
     }
 

@@ -9,6 +9,11 @@ namespace Freexcel.App.UI;
 
 public static partial class ChartRenderer
 {
+    private static double ColumnBarHalfWidth(ChartModel chart) =>
+        chart.BarGapWidth is int gapWidth
+            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.49)
+            : 0.35;
+
     private static bool ShouldSkipScatterXColumn(ChartModel chart, uint col, uint dataStartCol) =>
         chart.Type == ChartType.Scatter
             && !chart.FirstColIsCategories

@@ -1364,6 +1364,12 @@
                                     <Button Content="Slice Angle"  Width="84"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFirstSliceAngleBtn_Click"
                                             local:RibbonTooltip.Title="First Slice Angle" local:RibbonTooltip.KeyTip="FA"
                                             local:RibbonTooltip.Description="Cycle the first-slice angle for pie and doughnut charts."/>
+                                    <Button Content="Bar Format"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBarFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Format Bar/Column" local:RibbonTooltip.KeyTip="BF"
+                                            local:RibbonTooltip.Description="Set gap width and overlap percentage for bar and column charts."/>
+                                    <Button Content="Bubble Fmt"   Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleFormatBtn_Click"
+                                            local:RibbonTooltip.Title="Format Bubble Chart" local:RibbonTooltip.KeyTip="UB"
+                                            local:RibbonTooltip.Description="Set bubble scale, negative bubble visibility, and size representation."/>
                                 </StackPanel>
                                 <StackPanel>
                                     <Button Content="Explode"      Width="72"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"

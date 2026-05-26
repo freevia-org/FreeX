@@ -1,5 +1,7 @@
 using System.Xml.Linq;
 
+using Freexcel.Core.Model;
+
 namespace Freexcel.Core.IO;
 
 internal static partial class XlsxWorksheetMetadataPreserver
@@ -128,9 +130,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return $"{element.Name}\u001f{address}";
     }
 
-    private static bool MergeWorksheetSheetProtection(XElement? sourceSheetProtection, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeWorksheetSheetProtection(
+        XElement? sourceSheetProtection,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        Sheet? sheet)
     {
         if (sourceSheetProtection is null)
+            return false;
+
+        if (sheet is { IsProtected: false })
             return false;
 
         var targetSheetProtection = targetRoot.Element(workbookNs + "sheetProtection");

@@ -18,6 +18,7 @@ public sealed partial class FindReplaceDialog : Window
     private string _lastSearch = string.Empty;
     private StyleDiff? _findFormatDiff;
     private StyleDiff? _replaceFormatDiff;
+    private bool _syncingSearchText;
 
     public FindReplaceDialog(
         Func<Workbook> getWorkbook,
@@ -84,6 +85,25 @@ public sealed partial class FindReplaceDialog : Window
     private void FindBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == System.Windows.Input.Key.Enter) FindNext();
+    }
+
+    private void FindBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_syncingSearchText)
+            return;
+
+        _syncingSearchText = true;
+        try
+        {
+            if (ReferenceEquals(sender, FindBox))
+                ReplaceFindBox.Text = FindBox.Text;
+            else if (ReferenceEquals(sender, ReplaceFindBox))
+                FindBox.Text = ReplaceFindBox.Text;
+        }
+        finally
+        {
+            _syncingSearchText = false;
+        }
     }
 
     private void FindNext()

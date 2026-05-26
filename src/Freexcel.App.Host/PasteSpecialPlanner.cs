@@ -36,6 +36,9 @@ public static class PasteSpecialPlanner
         if (selection.Mode == PasteSpecialDialogMode.Picture)
             return new PasteSpecialPlan(PasteSpecialAction.Picture, PasteMode.All, options, selection.KeepColumnWidths);
 
+        if (selection.Mode is PasteSpecialDialogMode.Text or PasteSpecialDialogMode.UnicodeText)
+            return new PasteSpecialPlan(PasteSpecialAction.ExternalText, PasteMode.All, options, selection.KeepColumnWidths);
+
         if (selection.PasteLink)
             return new PasteSpecialPlan(PasteSpecialAction.Link, PasteMode.All, options, selection.KeepColumnWidths);
 
@@ -82,5 +85,6 @@ public enum PasteSpecialAction
     Validation,
     Picture,
     LinkedPicture,
+    ExternalText,
     Link
 }

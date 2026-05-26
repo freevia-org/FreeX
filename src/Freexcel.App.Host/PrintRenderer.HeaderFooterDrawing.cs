@@ -9,6 +9,7 @@ public static partial class PrintRenderer
 {
     private static void DrawHeaderFooter(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         double pageW,
         double pageH,
         double marginLeft,
@@ -32,12 +33,13 @@ public static partial class PrintRenderer
         var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
-        DrawHeaderFooterLine(dc, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
+        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName);
     }
 
     private static void DrawHeaderFooterLine(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         WorksheetHeaderFooter value,
         WorksheetHeaderFooterPictureSet pictures,
         double pageW,
@@ -68,13 +70,14 @@ public static partial class PrintRenderer
         DrawHeaderFooterPicture(dc, leftPicture, leftRect, TextAlignment.Left);
         DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
         DrawHeaderFooterPicture(dc, rightPicture, rightRect, TextAlignment.Right);
-        DrawHeaderFooterText(dc, left, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), typeface, TextAlignment.Left);
-        DrawHeaderFooterText(dc, center, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), typeface, TextAlignment.Center);
-        DrawHeaderFooterText(dc, right, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), typeface, TextAlignment.Right);
+        DrawHeaderFooterText(dc, textOverlays, left, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), typeface, TextAlignment.Left);
+        DrawHeaderFooterText(dc, textOverlays, center, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), typeface, TextAlignment.Center);
+        DrawHeaderFooterText(dc, textOverlays, right, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), typeface, TextAlignment.Right);
     }
 
     private static void DrawHeaderFooterText(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         string text,
         Rect rect,
         Typeface typeface,
@@ -83,6 +86,7 @@ public static partial class PrintRenderer
         if (string.IsNullOrEmpty(text))
             return;
 
+        var maxTextWidth = Math.Max(1, rect.Width - 4);
         var ft = new FormattedText(
             text,
             CultureInfo.CurrentCulture,
@@ -92,13 +96,37 @@ public static partial class PrintRenderer
             Brushes.Black,
             1.0)
         {
-            MaxTextWidth = Math.Max(1, rect.Width - 4),
+            MaxTextWidth = maxTextWidth,
             MaxLineCount = 1,
             Trimming = TextTrimming.CharacterEllipsis,
             TextAlignment = alignment
         };
 
-        dc.DrawText(ft, new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2));
+        var drawPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
+        dc.DrawText(ft, drawPoint);
+        textOverlays.Add(new PdfTextOverlay(
+            text,
+            ResolveAlignedTextOverlayX(drawPoint.X, maxTextWidth, ft.WidthIncludingTrailingWhitespace, alignment),
+            drawPoint.Y,
+            PrintFontSize,
+            "Segoe UI",
+            Bold: false,
+            Italic: false,
+            Colors.Black));
     }
 
+    private static double ResolveAlignedTextOverlayX(
+        double drawX,
+        double maxTextWidth,
+        double textWidth,
+        TextAlignment alignment)
+    {
+        var boundedTextWidth = Math.Min(textWidth, maxTextWidth);
+        return alignment switch
+        {
+            TextAlignment.Center => drawX + Math.Max(0, (maxTextWidth - boundedTextWidth) / 2),
+            TextAlignment.Right => drawX + Math.Max(0, maxTextWidth - boundedTextWidth),
+            _ => drawX
+        };
+    }
 }

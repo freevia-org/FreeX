@@ -167,6 +167,12 @@ public partial class MainWindow
             case WorksheetContextMenuAction.EditComment:
                 ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.ResolveComment:
+                ResolveContextThreadedComment(address, resolved: true);
+                break;
+            case WorksheetContextMenuAction.UnresolveComment:
+                ResolveContextThreadedComment(address, resolved: false);
+                break;
             case WorksheetContextMenuAction.DeleteComment:
                 ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());
                 break;
@@ -252,6 +258,18 @@ public partial class MainWindow
         OnGridContextMenuRequested(address, GetKeyboardContextMenuGridPoint(address));
     }
 
+    private void ResolveContextThreadedComment(CellAddress address, bool resolved)
+    {
+        var fallbackRange = new GridRange(address, address);
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                resolved ? "Resolve Comment" : "Unresolve Comment",
+                fallbackRange,
+                range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)))
+            return;
+
+        UpdateViewport();
+    }
+
     private System.Windows.Point GetKeyboardContextMenuGridPoint(CellAddress address)
     {
         return TryGetCellOverlayRect(address) is { } rect
@@ -298,8 +316,10 @@ public partial class MainWindow
         if (sheet is null)
             return WorksheetContextMenuState.Default;
 
+        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
         return new WorksheetContextMenuState(
-            HasThreadedComment: sheet.ThreadedComments.ContainsKey(address),
+            HasThreadedComment: threadedComment is not null,
+            IsThreadedCommentResolved: threadedComment?.IsResolved == true,
             HasNote: sheet.Comments.ContainsKey(address),
             HasHyperlink: sheet.Hyperlinks.ContainsKey(address));
     }

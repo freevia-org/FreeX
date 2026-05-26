@@ -1,5 +1,6 @@
 using Freexcel.Core.Calc;
 using Freexcel.Core.Model;
+using System.Globalization;
 
 namespace Freexcel.App.Host;
 
@@ -80,7 +81,9 @@ public partial class FormatCellsDialog
         "Custom"
     ];
 
-    private static readonly string[] NumberSymbols = ["$", "EUR", "GBP", "JPY", "€", "£", "¥", "None"];
+    private static readonly IReadOnlyDictionary<string, string> NumberSymbolLabelMap = BuildNumberSymbolLabelMap();
+
+    private static readonly string[] NumberSymbols = NumberSymbolLabelMap.Keys.ToArray();
 
     private static readonly string[] NegativeNumberOptions =
     [
@@ -134,10 +137,16 @@ public partial class FormatCellsDialog
         return Math.Clamp(decimals, 0, 30);
     }
 
-    private static string NormalizeSymbol(string? symbol) =>
-        string.IsNullOrWhiteSpace(symbol) || string.Equals(symbol, "None", StringComparison.OrdinalIgnoreCase)
-            ? string.Empty
-            : symbol.Trim();
+    private static string NormalizeSymbol(string? symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol) || string.Equals(symbol, "None", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var trimmed = symbol.Trim();
+        return NumberSymbolLabelMap.TryGetValue(trimmed, out var mappedSymbol)
+            ? mappedSymbol
+            : trimmed;
+    }
 
     private static string BuildNumberFormat(int decimals, int negativeIndex)
     {
@@ -183,6 +192,53 @@ public partial class FormatCellsDialog
         return NumberFormatOptions.FirstOrDefault(option =>
             string.Equals(option.Label, trimmedText, StringComparison.OrdinalIgnoreCase)
             || string.Equals(option.Code, trimmedText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildNumberSymbolLabelMap()
+    {
+        var labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        AddSymbolLabel(labels, "$", "$");
+        AddSymbolLabel(labels, "EUR", "EUR");
+        AddSymbolLabel(labels, "GBP", "GBP");
+        AddSymbolLabel(labels, "JPY", "JPY");
+        AddSymbolLabel(labels, "\u20ac", "\u20ac");
+        AddSymbolLabel(labels, "\u00a3", "\u00a3");
+        AddSymbolLabel(labels, "\u00a5", "\u00a5");
+
+        foreach (var cultureName in new[]
+        {
+            "en-US", "en-GB", "fr-FR", "de-DE", "ja-JP", "zh-CN",
+            "en-CA", "fr-CA", "en-AU", "de-CH", "sv-SE", "pl-PL",
+            "uk-UA", "hi-IN", "ko-KR", "pt-BR", "es-MX"
+        })
+        {
+            try
+            {
+                var region = new RegionInfo(cultureName);
+                var currencyName = string.IsNullOrWhiteSpace(region.CurrencyNativeName)
+                    ? region.CurrencyEnglishName
+                    : region.CurrencyNativeName;
+
+                if (!string.IsNullOrWhiteSpace(region.CurrencySymbol)
+                    && !string.IsNullOrWhiteSpace(currencyName))
+                {
+                    AddSymbolLabel(labels, $"{region.CurrencySymbol} {currencyName}", region.CurrencySymbol);
+                }
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        AddSymbolLabel(labels, "None", string.Empty);
+        return labels;
+    }
+
+    private static void AddSymbolLabel(Dictionary<string, string> labels, string label, string symbol)
+    {
+        if (!labels.ContainsKey(label))
+            labels.Add(label, symbol);
     }
 
     private string BuildSignedNumberFormat(string positivePattern)
@@ -370,6 +426,6 @@ public partial class FormatCellsDialog
     private string SelectedCurrencySymbol()
     {
         var value = NumberSymbolCombo.SelectedItem as string ?? NumberSymbolCombo.Text;
-        return string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) ? "" : value;
+        return NormalizeSymbol(value);
     }
 }

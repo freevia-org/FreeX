@@ -304,6 +304,48 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ChartBarFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Bar/Column",
+                "Insert or select a bar or column chart before changing gap width.",
+                out var chart))
+            return;
+
+        if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
+        {
+            MessageBox.Show(this, "Gap width and overlap only apply to bar and column charts.", "Format Bar/Column", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartBarFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Bar/Column", chart, dialog.Result.ToOptions());
+    }
+
+    private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog(
+                "Format Bubble Chart",
+                "Insert or select a bubble chart before changing bubble options.",
+                out var chart))
+            return;
+
+        if (chart.Type != ChartType.Bubble)
+        {
+            MessageBox.Show(this, "Bubble format options only apply to bubble charts.", "Format Bubble Chart", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new ChartBubbleFormatDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Bubble Chart", chart, dialog.Result.ToOptions());
+    }
+
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowChartDataLabelsDialog();
