@@ -158,6 +158,69 @@ public sealed class XlsxChartExWriterTests
         reloaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject.Title.Should().Be(chartType.ToString());
     }
 
+    [Theory]
+    [InlineData(ChartType.Treemap)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Pareto)]
+    [InlineData(ChartType.BoxAndWhisker)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Funnel)]
+    public void SaveLoad_ChartExLegendRoundTripsForRenderableModernCharts(ChartType chartType)
+    {
+        var saved = SaveWorkbookWithChart(chartType, configureChart: chart =>
+        {
+            chart.ShowLegend = true;
+            chart.LegendPosition = ChartLegendPosition.Bottom;
+            chart.LegendOverlay = true;
+        });
+
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+
+        loadedChart.ShowLegend.Should().BeTrue();
+        loadedChart.LegendPosition.Should().Be(ChartLegendPosition.Bottom);
+        loadedChart.LegendOverlay.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Save_LoadedEditedChartExModelKeepsNativePayloadAndAppliesModeledLegend()
+    {
+        var source = SaveWorkbookWithChart(ChartType.Treemap, configureChart: chart =>
+        {
+            chart.ShowLegend = true;
+            chart.LegendPosition = ChartLegendPosition.Right;
+        });
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            chartXml.Root!.Add(new XElement(ChartExNs + "sourceMarker", "original-source-chart"));
+            ReplacePackageXml(archive, "xl/charts/chart1.xml", chartXml);
+        }
+
+        source.Position = 0;
+        var workbook = new XlsxFileAdapter().Load(source);
+        var chart = workbook.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.ShowLegend = true;
+        chart.LegendPosition = ChartLegendPosition.Bottom;
+        chart.LegendOverlay = true;
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedChartXml = LoadPackageXml(savedArchive.GetEntry("xl/charts/chart1.xml")!);
+        var savedText = savedChartXml.ToString(SaveOptions.DisableFormatting);
+        savedText.Should().Contain("original-source-chart");
+        var legend = savedChartXml.Root!
+            .Element(ChartExNs + "chart")!
+            .Element(ChartExNs + "legend");
+        legend.Should().NotBeNull();
+        legend!.Element(ChartExNs + "legendPos")!.Attribute("val")!.Value.Should().Be("b");
+        legend.Element(ChartExNs + "overlay")!.Attribute("val")!.Value.Should().Be("1");
+    }
+
     [Fact]
     public void Save_LoadedEditedChartExModelKeepsNativePayloadAndAppliesModeledTitle()
     {
@@ -249,7 +312,7 @@ public sealed class XlsxChartExWriterTests
         reloadedChart.FirstColIsCategories.Should().BeTrue();
     }
 
-    private static MemoryStream SaveWorkbookWithChart(ChartType chartType, int endCol = 2)
+    private static MemoryStream SaveWorkbookWithChart(ChartType chartType, int endCol = 2, Action<ChartModel>? configureChart = null)
     {
         var workbook = new Workbook("ChartExWriterTest");
         var sheet = workbook.AddSheet("Data");
@@ -269,12 +332,14 @@ public sealed class XlsxChartExWriterTests
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
         if (endCol >= 3)
             sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(32));
-        sheet.Charts.Add(new ChartModel
+        var chart = new ChartModel
         {
             Type = chartType,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, (uint)endCol)),
             Title = chartType.ToString()
-        });
+        };
+        configureChart?.Invoke(chart);
+        sheet.Charts.Add(chart);
 
         var saved = new MemoryStream();
         new XlsxFileAdapter().Save(workbook, saved);
