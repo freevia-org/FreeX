@@ -134,6 +134,33 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LegacyLookupFunctions_RangeScalarArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (1, 2, new TextValue("apple")), (1, 3, new NumberValue(100)),
+            (2, 1, new NumberValue(20)), (2, 2, new TextValue("banana")), (2, 3, new NumberValue(200)),
+            (3, 1, new NumberValue(30)), (3, 2, new TextValue("cherry")), (3, 3, new NumberValue(300)),
+            (1, 4, new NumberValue(20)), (2, 4, new NumberValue(30)),
+            (1, 5, new NumberValue(2)), (2, 5, new NumberValue(3)),
+            (1, 6, new NumberValue(0)), (2, 6, new NumberValue(1)),
+            (1, 7, new NumberValue(10)), (1, 8, new NumberValue(20)), (1, 9, new NumberValue(30)),
+            (2, 7, new TextValue("apple")), (2, 8, new TextValue("banana")), (2, 9, new TextValue("cherry")),
+            (3, 7, new NumberValue(100)), (3, 8, new NumberValue(200)), (3, 9, new NumberValue(300)));
+
+        AssertTextColumn(_eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,2,FALSE)", sheet), "banana", "cherry");
+        AssertColumn(_eval.Evaluate("=VLOOKUP(20,A1:C3,E1:E2,FALSE)", sheet), new TextValue("banana"), new NumberValue(200));
+        _eval.Evaluate("=VLOOKUP(D1:D2,A1:C3,E1:F1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+
+        AssertTextColumn(_eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,2,FALSE)", sheet), "banana", "cherry");
+        AssertColumn(_eval.Evaluate("=HLOOKUP(20,G1:I3,E1:E2,FALSE)", sheet), new TextValue("banana"), new NumberValue(200));
+        _eval.Evaluate("=HLOOKUP(D1:D2,G1:I3,E1:F1,FALSE)", sheet).Should().Be(ErrorValue.Value);
+
+        AssertApproxColumn(_eval.Evaluate("=MATCH(D1:D2,A1:A3,0)", sheet), 2, 3);
+        AssertApproxColumn(_eval.Evaluate("=MATCH(20,A1:A3,F1:F2)", sheet), 2, 2);
+        _eval.Evaluate("=MATCH(D1:D2,A1:A3,E1:F1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Vlookup_NotFound_ReturnsNA()
     {
         var sheet = MakeSheet(
