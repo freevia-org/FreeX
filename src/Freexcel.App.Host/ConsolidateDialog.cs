@@ -61,6 +61,7 @@ public sealed partial class ConsolidateDialog : Window
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
         _referencesList.SelectionChanged += (_, _) => UpdateReferenceButtons();
+        _referencesList.KeyDown += ReferencesList_KeyDown;
 
         _destinationBox.Text = defaultDestination;
         var root = new StackPanel { Margin = new Thickness(12) };
@@ -166,6 +167,15 @@ public sealed partial class ConsolidateDialog : Window
         if (_referencesList.SelectedItem is { } selected)
             _referencesList.Items.Remove(selected);
         UpdateReferenceButtons();
+    }
+
+    private void ReferencesList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete)
+        {
+            DeleteReferenceButton_Click(sender, e);
+            e.Handled = true;
+        }
     }
 
     private void UpdateReferenceButtons() =>
