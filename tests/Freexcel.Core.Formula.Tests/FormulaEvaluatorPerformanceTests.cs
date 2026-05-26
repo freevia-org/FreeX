@@ -133,6 +133,58 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
     }
 
+    [Theory]
+    [InlineData("=XMATCH(100000,A1:A100000,0,1)", 100_000d)]
+    [InlineData("=XMATCH(1,A1:A100000,0,-1)", 1d)]
+    public void XmatchLargeDirectRangeLinearSearch_AvoidsIndexListAllocation(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_850_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+    }
+
+    [Theory]
+    [InlineData("=XLOOKUP(100000,A1:A100000,B1:B100000,,0,1)", 200_000d)]
+    [InlineData("=XLOOKUP(1,A1:A100000,B1:B100000,,0,-1)", 2d)]
+    public void XlookupLargeDirectRangeLinearSearch_AvoidsIndexListAllocation(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeLookupSheet();
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(2_650_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+    }
+
     private static Sheet MakeNumericSheet()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -171,6 +223,18 @@ public sealed class FormulaEvaluatorPerformanceTests
                     sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue("x"));
                     break;
             }
+        }
+
+        return sheet;
+    }
+
+    private static Sheet MakeLookupSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row * 2));
         }
 
         return sheet;
