@@ -179,6 +179,17 @@ public static partial class FlashFillService
         return null;
     }
 
+    private static Func<string, string?>? TryThreeTokenNameDropMiddle(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[0] + " " + tokens[2]))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[0] + " " + tokens[2] : null;
+
+        if (examples.All(e => TrySplitWhitespaceTokens(e.Source, out var tokens) && e.Expected == tokens[2] + ", " + tokens[0]))
+            return source => TrySplitWhitespaceTokens(source, out var tokens) ? tokens[2] + ", " + tokens[0] : null;
+
+        return null;
+    }
+
     private static Func<string, string?>? TryDigitMask(IReadOnlyList<(string Source, string Expected)> examples)
     {
         string? mask = null;
@@ -247,6 +258,12 @@ public static partial class FlashFillService
     {
         parts = source.Split(delimiter, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 2 && parts.All(part => part.Length > 0);
+    }
+
+    private static bool TrySplitWhitespaceTokens(string source, out string[] tokens)
+    {
+        tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length == 3 && tokens.All(token => token.Length > 0);
     }
 
     private static string ExtractDigits(string value) =>
