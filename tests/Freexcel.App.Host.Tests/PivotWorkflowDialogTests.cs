@@ -279,7 +279,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
 
@@ -294,7 +294,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceRangePicker_RefocusesSourceInputAfterRequest()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
 
@@ -309,7 +309,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesSource()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
         var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
@@ -1413,6 +1413,7 @@ public sealed class PivotWorkflowDialogTests
             new[]
             {
                 "PivotWorkflowDialogs.cs",
+                "PivotTableDataSourceDialog.cs",
                 "PivotChartOptionsDialog.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",
