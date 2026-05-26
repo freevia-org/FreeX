@@ -857,6 +857,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("Content = \"_Ignore\"");
         source.Should().Contain("Content = \"_Change\"");
+        source.Should().Contain("Content = \"_Change\", Width = 90, IsDefault = true");
         source.Should().Contain("Content = \"_Add\"");
         source.Should().Contain("CreateIgnoreAllResult");
         source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
@@ -876,6 +877,34 @@ public sealed class RemainingDialogTests
         source.Should().Contain("_replacementBox.Focus();");
         source.Should().Contain("_replacementBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_replacementBox);");
+    }
+
+    [Fact]
+    public void SpellCheckDialogSuggestionsList_DoubleClickAcceptsSelectedSuggestion()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SpellCheckDialog("mispelled", "misspelled");
+            var suggestionsBox = GetField<ListBox>(dialog, "_suggestionsBox");
+
+            dialog.Dispatcher.BeginInvoke(() =>
+            {
+                suggestionsBox.SelectedItem = "misspelled";
+                suggestionsBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                {
+                    RoutedEvent = Control.MouseDoubleClickEvent
+                });
+
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    if (dialog.DialogResult is null)
+                        dialog.Close();
+                }, DispatcherPriority.ContextIdle);
+            }, DispatcherPriority.ApplicationIdle);
+
+            dialog.ShowDialog().Should().BeTrue();
+            dialog.Result.Should().Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+        });
     }
 
     [Fact]

@@ -7544,6 +7544,34 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Subtotal_FuncNum9_ExcludesFilterHiddenRow()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        sheet.FilterHiddenRows.Add(2);
+
+        var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
+
+        result.Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum9_IncludesManualHiddenRow()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        sheet.HiddenRows.Add(2);
+
+        var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
+
+        result.Should().Be(new NumberValue(60));
+    }
+
+    [Fact]
     public void Subtotal_FuncNum3_CountaIncludesTextCells()
     {
         // COUNTA should count text cells too, not just numbers
