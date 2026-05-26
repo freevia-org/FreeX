@@ -147,7 +147,8 @@ internal static class XlsxWorksheetAutoFilterMapper
         var hasTop10 = filterColumn.Top10 is not null;
         var hasDynamicFilter = filterColumn.DynamicFilter is not null;
         var hasColorFilter = filterColumn.ColorFilter is not null;
-        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && !hasColorFilter && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
+        var hasIconFilter = filterColumn.IconFilter is not null;
+        if (!hasCustomFilters && !hasTop10 && !hasDynamicFilter && !hasColorFilter && !hasIconFilter && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
         {
             element.Add(new XElement(
                 worksheetNs + "filters",
@@ -179,10 +180,12 @@ internal static class XlsxWorksheetAutoFilterMapper
             element.Add(ToDynamicFilterXml(dynamicFilter, worksheetNs));
         else if (!hasCustomFilters && filterColumn.ColorFilter is { } colorFilter)
             element.Add(ToColorFilterXml(colorFilter, worksheetNs));
+        else if (!hasCustomFilters && filterColumn.IconFilter is { } iconFilter)
+            element.Add(ToIconFilterXml(iconFilter, worksheetNs));
 
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10", "dynamicFilter", "colorFilter") is { } nativeFilter)
+            if (TryParseNativeWorksheetChild(nativeFilterXml, worksheetNs, "filters", "customFilters", "top10", "dynamicFilter", "colorFilter", "iconFilter") is { } nativeFilter)
                 element.Add(nativeFilter);
         }
 
@@ -203,6 +206,24 @@ internal static class XlsxWorksheetAutoFilterMapper
             element.SetAttributeValue("cellColor", "0");
 
         foreach (var (name, value) in colorFilter.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            TrySetNativeAttributeIfMissing(element, name, value);
+        }
+
+        return element;
+    }
+
+    private static XElement ToIconFilterXml(WorksheetAutoFilterIconFilterModel iconFilter, XNamespace worksheetNs)
+    {
+        var element = new XElement(worksheetNs + "iconFilter");
+        if (!string.IsNullOrWhiteSpace(iconFilter.IconSet))
+            element.SetAttributeValue("iconSet", iconFilter.IconSet);
+        if (iconFilter.IconIdRaw is not null)
+            element.SetAttributeValue("iconId", iconFilter.IconIdRaw);
+        else if (iconFilter.IconId is not null)
+            element.SetAttributeValue("iconId", iconFilter.IconId.Value.ToString(CultureInfo.InvariantCulture));
+
+        foreach (var (name, value) in iconFilter.NativeAttributes ?? new Dictionary<string, string>())
         {
             TrySetNativeAttributeIfMissing(element, name, value);
         }
@@ -334,8 +355,9 @@ internal static class XlsxWorksheetAutoFilterMapper
             var top10 = column.Element(worksheetNs + "top10");
             var dynamicFilter = column.Element(worksheetNs + "dynamicFilter");
             var colorFilter = column.Element(worksheetNs + "colorFilter");
+            var iconFilter = column.Element(worksheetNs + "iconFilter");
             var nativeFilters = column.Elements()
-                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10" && element.Name != worksheetNs + "dynamicFilter" && element.Name != worksheetNs + "colorFilter")
+                .Where(element => element.Name != worksheetNs + "filters" && element.Name != worksheetNs + "customFilters" && element.Name != worksheetNs + "top10" && element.Name != worksheetNs + "dynamicFilter" && element.Name != worksheetNs + "colorFilter" && element.Name != worksheetNs + "iconFilter")
                 .Select(element => element.ToString(SaveOptions.DisableFormatting))
                 .ToArray();
             var nativeAttributes = column.Attributes()
@@ -368,6 +390,7 @@ internal static class XlsxWorksheetAutoFilterMapper
                 ReadTop10(top10),
                 ReadDynamicFilter(dynamicFilter),
                 ReadColorFilter(colorFilter),
+                ReadIconFilter(iconFilter),
                 nativeFilters,
                 nativeAttributes.Count == 0 ? null : nativeAttributes);
             if (filterColumn.ColumnId >= 0 &&
@@ -379,6 +402,7 @@ internal static class XlsxWorksheetAutoFilterMapper
                  filterColumn.Top10 is not null ||
                  filterColumn.DynamicFilter is not null ||
                  filterColumn.ColorFilter is not null ||
+                 filterColumn.IconFilter is not null ||
                  filterColumn.NativeFilterXmls.Count > 0 ||
                  filterColumn.NativeAttributes?.Count > 0))
             {
@@ -402,6 +426,23 @@ internal static class XlsxWorksheetAutoFilterMapper
             CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
             DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
             CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
+    }
+
+    private static WorksheetAutoFilterIconFilterModel? ReadIconFilter(XElement? iconFilter)
+    {
+        if (iconFilter is null)
+            return null;
+
+        var nativeAttributes = iconFilter.Attributes()
+            .Where(attribute =>
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "iconSet") &&
+                !IsWorksheetAutoFilterModeledAttribute(attribute, "iconId"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return new WorksheetAutoFilterIconFilterModel(
+            IconSet: iconFilter.Attribute("iconSet")?.Value,
+            IconId: XlsxXmlAttributeReader.ReadIntAttribute(iconFilter, "iconId"),
+            IconIdRaw: iconFilter.Attribute("iconId")?.Value,
             NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
@@ -472,6 +513,7 @@ internal static class XlsxWorksheetAutoFilterMapper
                 filterColumn.CustomFiltersAndRaw is not null ||
                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
                 filterColumn.ColorFilter is not null ||
+                filterColumn.IconFilter is not null ||
                 filterColumn.NativeFilterXmls.Count > 0)
             {
                 continue;
