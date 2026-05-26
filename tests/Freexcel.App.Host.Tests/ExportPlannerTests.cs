@@ -1101,6 +1101,36 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForNestedInlineUiContainerText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateNestedInlineUiContainerTextDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfText.Should().Contain("Nested Inline UI PDF Text");
+                pdfText.Should().Contain(@"Inline Header\nInline Body");
+                pdfText.Should().Contain(@"First Item\nSecond Item");
+                pdfText.Should().NotContain("Hidden Inline UI Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesSelectableTextOverlayForAccessText()
     {
         StaTestRunner.Run(() =>
@@ -1760,6 +1790,46 @@ public class ExportPlannerTests
         text.Inlines.Add(new Run("Inline "));
         text.Inlines.Add(new InlineUIContainer(new TextBlock { Text = "UI " }));
         text.Inlines.Add(new Run("PDF Text"));
+        page.Children.Add(text);
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateNestedInlineUiContainerTextDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(230, 120);
+        var page = new FixedPage
+        {
+            Width = 230,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = "Nested " });
+        panel.Children.Add(new Border { Child = new TextBlock { Text = "Inline UI PDF Text" } });
+        panel.Children.Add(new HeaderedContentControl
+        {
+            Header = "Inline Header",
+            Content = new TextBlock { Text = "Inline Body" }
+        });
+        panel.Children.Add(new ListBox
+        {
+            Items =
+            {
+                new TextBlock { Text = "First Item" },
+                new TextBlock { Text = "Second Item" }
+            }
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Hidden Inline UI Text",
+            Visibility = System.Windows.Visibility.Collapsed
+        });
+        var text = new TextBlock { Margin = new System.Windows.Thickness(12) };
+        text.Inlines.Add(new InlineUIContainer(new Border { Child = panel }));
         page.Children.Add(text);
         var content = new PageContent();
         ((IAddChild)content).AddChild(page);
