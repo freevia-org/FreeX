@@ -73,6 +73,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-page-breaks-001" => true,
         "generated-worksheet-print-options-001" => true,
         "generated-worksheet-page-setup-native-001" => true,
+        "generated-worksheet-header-footer-native-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -376,6 +377,14 @@ internal static class XlsxCorpusFixtureFactory
               </pageSetup>
             </worksheet>
             """)),
+        "generated-worksheet-header-footer-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <headerFooter nativeHeaderFooterAttr="kept">
+                <oddHeader>&amp;LLeft&amp;CCenter&amp;RRight</oddHeader>
+                <nativeHeaderFooterChild value="kept"/>
+              </headerFooter>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -619,6 +628,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-print-options-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -869,6 +880,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-page-setup-native-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetPageSetupNativeFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-header-footer-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetHeaderFooterNativeFixup(archive);
             return;
         }
 
@@ -1711,6 +1728,27 @@ internal static class XlsxCorpusFixtureFactory
             new XAttribute("customAttr", "page-setup-native"),
             new XElement(
                 worksheetNs + "nativePageSetupChild",
+                new XAttribute("value", "kept"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetHeaderFooterNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "headerFooter").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "headerFooter",
+            new XAttribute("nativeHeaderFooterAttr", "kept"),
+            new XElement(worksheetNs + "oddHeader", "&LLeft&CCenter&RRight"),
+            new XElement(
+                worksheetNs + "nativeHeaderFooterChild",
                 new XAttribute("value", "kept"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
