@@ -34,6 +34,11 @@ public sealed class NativeJsonSchemaTests
         mapperSource.Should().Contain("private static WorksheetPageSetupMetadataModel? ToWorksheetPageSetupMetadata");
         mapperSource.Should().Contain("private static WorksheetPageSetupMetadataDto? FromWorksheetPageSetupMetadata");
         mapperSource.Should().NotContain("private static WorkbookSmartTagMetadataModel? ToWorkbookSmartTags");
+        mapperSource.Should().NotContain("private static WorkbookFunctionGroupsModel? ToWorkbookFunctionGroups");
+
+        var workbookViewSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "NativeJsonAdapter.WorkbookViewMetadata.cs"));
+        workbookViewSource.Should().Contain("private static WorkbookFunctionGroupsModel? ToWorkbookFunctionGroups");
+        workbookViewSource.Should().Contain("private static WorkbookAdditionalViewsDto? FromWorkbookAdditionalViews");
 
         var smartTagSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.IO", "NativeJsonAdapter.WorkbookSmartTags.cs"));
         smartTagSource.Should().Contain("private static WorkbookSmartTagMetadataModel? ToWorkbookSmartTags");
