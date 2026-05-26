@@ -426,6 +426,16 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void CriteriaPartial_DelegatesPureCriteriaBehaviorToPlanner()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs"));
+
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildResult");
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildCriteriaText");
+        source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildCompositeCriteriaText");
+    }
+
+    [Fact]
     public void DialogControls_BetweenAndTopBottomCriteriaLabelsTargetInputs()
     {
         var source = ReadAutoFilterDialogSources();
@@ -550,6 +560,7 @@ public sealed class AutoFilterDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Controls.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.Criteria.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogCriteriaPlanner.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.State.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialogModel.cs")));
     }
