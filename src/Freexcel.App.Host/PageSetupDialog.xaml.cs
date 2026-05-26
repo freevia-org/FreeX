@@ -15,7 +15,8 @@ public enum PageSetupRangeSelectionTarget
 public enum PageSetupInitialFocusTarget
 {
     PageOrientation,
-    RepeatRows
+    RepeatRows,
+    ScaleToFit
 }
 
 public sealed record PageSetupRangeSelectionRequest(

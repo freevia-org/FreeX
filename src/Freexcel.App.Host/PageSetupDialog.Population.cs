@@ -87,6 +87,18 @@ public partial class PageSetupDialog
             return;
         }
 
+        if (_initialFocusTarget == PageSetupInitialFocusTarget.ScaleToFit)
+        {
+            PageSetupTabs.SelectedItem = PageTab;
+            var target = AdjustToRadioButton.IsChecked == true
+                ? ScalePercentBox
+                : FitPagesWideBox;
+            target.Focus();
+            target.SelectAll();
+            Keyboard.Focus(target);
+            return;
+        }
+
         OrientationBox.Focus();
         Keyboard.Focus(OrientationBox);
     }
