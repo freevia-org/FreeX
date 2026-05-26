@@ -1,0 +1,88 @@
+using Freexcel.Core.Model;
+using System.Windows;
+
+namespace Freexcel.App.UI;
+
+public static class GridAutofillPlanner
+{
+    public static CellAddress ConstrainTarget(GridRange source, CellAddress target)
+    {
+        var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
+        var horizontalDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
+
+        return verticalDistance >= horizontalDistance
+            ? new CellAddress(target.Sheet, target.Row, source.End.Col)
+            : new CellAddress(target.Sheet, source.End.Row, target.Col);
+    }
+
+    public static GridAutoScrollRequest CalculateEdgeScrollIntent(
+        double pointerX,
+        double pointerY,
+        double width,
+        double height,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double edgeThreshold = 24)
+    {
+        if (width <= 0 || height <= 0)
+            return new GridAutoScrollRequest(0, 0);
+
+        var horizontal = pointerX >= width - edgeThreshold
+            ? 1
+            : pointerX <= rowHeaderWidth + edgeThreshold
+                ? -1
+                : 0;
+        var vertical = pointerY >= height - edgeThreshold
+            ? 1
+            : pointerY <= columnHeaderHeight + edgeThreshold
+                ? -1
+                : 0;
+
+        return new GridAutoScrollRequest(horizontal, vertical);
+    }
+
+    public static CellAddress? CalculateDragTarget(
+        ViewportModel viewport,
+        GridRange source,
+        Point pointer,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var srcTopRow = viewport.RowMetrics.FirstOrDefault(r => r.Row == source.Start.Row);
+        var srcBottomRow = viewport.RowMetrics.FirstOrDefault(r => r.Row == source.End.Row);
+        var srcLeftCol = viewport.ColMetrics.FirstOrDefault(c => c.Col == source.Start.Col);
+        var srcRightCol = viewport.ColMetrics.FirstOrDefault(c => c.Col == source.End.Col);
+
+        if (srcTopRow is null || srcBottomRow is null || srcLeftCol is null || srcRightCol is null)
+            return null;
+
+        var srcTop = srcTopRow.TopOffset + columnHeaderHeight;
+        var srcBottom = srcBottomRow.TopOffset + columnHeaderHeight + srcBottomRow.Height;
+        var srcLeft = srcLeftCol.LeftOffset + rowHeaderWidth;
+        var srcRight = srcRightCol.LeftOffset + rowHeaderWidth + srcRightCol.Width;
+
+        var boundTop = Math.Min(srcTop, pointer.Y);
+        var boundBottom = Math.Max(srcBottom, pointer.Y);
+        var boundLeft = Math.Min(srcLeft, pointer.X);
+        var boundRight = Math.Max(srcRight, pointer.X);
+
+        CellAddress? target = null;
+        foreach (var row in viewport.RowMetrics)
+        {
+            var midY = row.TopOffset + columnHeaderHeight + row.Height / 2;
+            if (midY < boundTop || midY > boundBottom)
+                continue;
+
+            foreach (var column in viewport.ColMetrics)
+            {
+                var midX = column.LeftOffset + rowHeaderWidth + column.Width / 2;
+                if (midX < boundLeft || midX > boundRight)
+                    continue;
+
+                target = new CellAddress(default, row.Row, column.Col);
+            }
+        }
+
+        return target;
+    }
+}

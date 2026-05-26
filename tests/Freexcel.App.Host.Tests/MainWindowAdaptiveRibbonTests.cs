@@ -161,20 +161,36 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
-    [Theory]
-    [InlineData("Data", "Sort & Filter")]
-    [InlineData("View", "Show")]
-    public void RibbonTabs_KeepSecondaryExcelGroupsExpandedAtMediumWidths(string tab, string secondaryGroup)
+    [Fact]
+    public void DataRibbon_KeepsSortFilterExpandedAtMediumWidths()
     {
         StaTestRunner.Run(() =>
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab(tab, 1120);
+            harness.SelectRibbonTab("Data", 1120);
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                secondaryGroup,
-                $"{tab} should keep the second Excel-style group available at medium widths and collapse later utility groups first");
+                "Sort & Filter",
+                "Data should keep the second Excel-style group available at medium widths and collapse later utility groups first");
+        });
+    }
+
+    [Fact]
+    public void ViewRibbon_CollapsesShowBeforeZoomAndWindowAtMediumWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 1465);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Show", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Zoom", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Window", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuHeaders("Show").Should().Contain(
+                ["Gridlines", "Headings", "Ruler", "Formula Bar"],
+                "the collapsed Show group should preserve the checkbox commands in its overflow menu");
         });
     }
 
@@ -343,7 +359,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("View", 1465);
+            harness.SelectRibbonTab("View", 2200);
 
             harness.ViewShowCheckBoxLabelOffsets
                 .Select(offset => Math.Round(offset.Offset, 1))

@@ -26,7 +26,8 @@ public enum GridQuickAnalysisPreviewVisualKind
     ColumnSparkline,
     WinLossSparkline,
     ColumnChart,
-    LineChart
+    LineChart,
+    BarChart
 }
 
 /// <summary>
@@ -150,14 +151,7 @@ public partial class GridView : FrameworkElement
     }
 
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
-    {
-        var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
-        var horizontalDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
-
-        return verticalDistance >= horizontalDistance
-            ? new CellAddress(target.Sheet, target.Row, source.End.Col)
-            : new CellAddress(target.Sheet, source.End.Row, target.Col);
-    }
+        => GridAutofillPlanner.ConstrainTarget(source, target);
 
     private static Pen MakeResizeLinePen()
     {

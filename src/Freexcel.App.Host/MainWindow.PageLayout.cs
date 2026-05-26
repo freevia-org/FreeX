@@ -347,50 +347,7 @@ public partial class MainWindow
 
         if (!TryExecuteGroupedSheetCommand(
                 "Page Setup",
-                sheetId => new CompositeWorkbookCommand(
-                    "Page Setup",
-                    [
-                        CreatePageSetupPrintAreaCommand(sheetId, dialog.PrintArea),
-                        new SetPageSetupCommand(
-                            sheetId,
-                            dialog.Orientation,
-                            dialog.PaperSize,
-                            dialog.Margins,
-                            dialog.PrintGridlines,
-                            dialog.PrintHeadings,
-                            dialog.ScaleToFit,
-                            dialog.PrintTitleRows,
-                            dialog.PrintTitleColumns,
-                            dialog.CenterHorizontally,
-                            dialog.CenterVertically,
-                            dialog.PageOrder,
-                            dialog.FirstPageNumber,
-                            dialog.HeaderMargin,
-                            dialog.FooterMargin,
-                            dialog.PrintBlackAndWhite,
-                            dialog.PrintDraftQuality,
-                            dialog.PrintQualityDpi,
-                            dialog.PrintErrorValue,
-                            dialog.PrintComments),
-                        new SetHeaderFooterCommand(
-                            sheetId,
-                            dialog.Header,
-                            dialog.Footer,
-                            dialog.FirstPageHeader,
-                            dialog.FirstPageFooter,
-                            dialog.EvenPageHeader,
-                            dialog.EvenPageFooter,
-                            dialog.DifferentFirstPage,
-                            dialog.DifferentOddEvenPages,
-                            dialog.ScaleHeaderFooterWithDocument,
-                            dialog.AlignHeaderFooterWithMargins,
-                            dialog.HeaderPictures,
-                            dialog.FooterPictures,
-                            dialog.FirstPageHeaderPictures,
-                            dialog.FirstPageFooterPictures,
-                            dialog.EvenPageHeaderPictures,
-                            dialog.EvenPageFooterPictures)
-                    ])))
+                sheetId => PageSetupCommandBuilder.Build(sheetId, dialog)))
             return;
 
         UpdateViewport();
@@ -405,17 +362,15 @@ public partial class MainWindow
             PrintButton_Click(this, new RoutedEventArgs());
     }
 
-    private static IWorkbookCommand CreatePageSetupPrintAreaCommand(SheetId sheetId, GridRange? printArea) =>
-        printArea is { } range
-            ? new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))
-            : new ClearPrintAreaCommand(sheetId);
-
     private void ApplyPageSetupRangeSelection(PageSetupDialog? dialog, PageSetupRangeSelectionRequest request)
     {
         if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
             return;
 
-        var rangeText = FormatPageSetupRangeSelection(request.Target, selectedRange);
+        var rangeText = PageSetupRangeSelectionFormatter.Format(
+            request.Target,
+            selectedRange,
+            _options.UseR1C1ReferenceStyle);
         if (request.CollapseDialog)
             dialog.Hide();
 
@@ -432,14 +387,6 @@ public partial class MainWindow
             }
         }
     }
-
-    private string FormatPageSetupRangeSelection(PageSetupRangeSelectionTarget target, GridRange selectedRange) =>
-        target switch
-        {
-            PageSetupRangeSelectionTarget.RepeatRows => $"{selectedRange.Start.Row}:{selectedRange.End.Row}",
-            PageSetupRangeSelectionTarget.RepeatColumns => $"{FormatColumnReference(selectedRange.Start.Col)}:{FormatColumnReference(selectedRange.End.Col)}",
-            _ => FormatRangeReference(selectedRange.Start, selectedRange.End)
-        };
 
     private void ShowPageSetupPrinterOptions()
     {
