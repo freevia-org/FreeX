@@ -59,6 +59,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-workbook-file-version-001" => true,
         "generated-workbook-file-recovery-001" => true,
         "generated-workbook-smart-tags-001" => true,
+        "generated-workbook-function-groups-001" => true,
         "generated-worksheet-ignored-errors-001" => true,
         "generated-worksheet-cell-watches-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
@@ -231,6 +232,13 @@ internal static class XlsxCorpusFixtureFactory
               <smartTagTypes customSmartTagTypesFlag="keep">
                 <smartTagType namespaceUri="urn:schemas-microsoft-com:office:smarttags" name="place" customSmartTagTypeFlag="keep"/>
               </smartTagTypes>
+            </workbook>
+            """)),
+        "generated-workbook-function-groups-001" => CreatePackage(("xl/workbook.xml", """
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <functionGroups builtInGroupCount="16" customFunctionGroupFlag="keep">
+                <functionGroup name="FreexcelNativeFunctions" customGroupFlag="keep"/>
+              </functionGroups>
             </workbook>
             """)),
         "generated-worksheet-ignored-errors-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
@@ -462,6 +470,8 @@ internal static class XlsxCorpusFixtureFactory
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-ignored-errors-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-cell-watches-001", StringComparison.OrdinalIgnoreCase) &&
@@ -630,6 +640,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-workbook-smart-tags-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorkbookSmartTagsFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-workbook-function-groups-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorkbookFunctionGroupsFixup(archive);
             return;
         }
 
@@ -1129,6 +1145,28 @@ internal static class XlsxCorpusFixtureFactory
                     new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
                     new XAttribute("name", "place"),
                     new XAttribute("customSmartTagTypeFlag", "keep"))));
+        ReplacePackageXml(archive, workbookPath, workbookXml);
+    }
+
+    private static void ApplyWorkbookFunctionGroupsFixup(ZipArchive archive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var workbookPath = "xl/workbook.xml";
+        var workbookEntry = archive.GetEntry(workbookPath);
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadPackageXml(workbookEntry);
+        workbookXml.Root?.Elements(workbookNs + "functionGroups").Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "functionGroups",
+            new XAttribute("builtInGroupCount", "16"),
+            new XAttribute("customFunctionGroupFlag", "keep"),
+            new XElement(
+                workbookNs + "functionGroup",
+                new XAttribute("name", "FreexcelNativeFunctions"),
+                new XAttribute("customGroupFlag", "keep"))));
         ReplacePackageXml(archive, workbookPath, workbookXml);
     }
 

@@ -121,8 +121,8 @@ public sealed class DependencyGraph
     /// <summary>Get all cells that directly depend on the given cell.</summary>
     public IReadOnlySet<CellAddress> GetDirectDependents(CellAddress cell)
     {
-        var rangeDeps = GetRangeDependents(cell);
-        if (rangeDeps.Count == 0)
+        var rangeDeps = CollectRangeDependents(cell);
+        if (rangeDeps is null)
             return _dependents.TryGetValue(cell, out var deps) ? deps : EmptySet;
 
         var allDeps = _dependents.TryGetValue(cell, out var exactDeps)
@@ -158,11 +158,7 @@ public sealed class DependencyGraph
         while (queue.Count > 0)
         {
             var cell = queue.Dequeue();
-            foreach (var dep in GetDirectDependentSet(cell))
-            {
-                if (toRecalc.Add(dep))
-                    queue.Enqueue(dep);
-            }
+            EnqueueUnvisitedDependents(cell, toRecalc, queue);
         }
 
         // Topological sort via Kahn's algorithm
@@ -189,15 +185,7 @@ public sealed class DependencyGraph
             var cell = ready.Dequeue();
             sorted.Add(cell);
 
-            foreach (var dep in GetDirectDependentSet(cell))
-            {
-                if (inDegree.ContainsKey(dep))
-                {
-                    inDegree[dep]--;
-                    if (inDegree[dep] == 0)
-                        ready.Enqueue(dep);
-                }
-            }
+            DecrementDependentInDegrees(cell, inDegree, ready);
         }
 
         // Any remaining cells with in-degree > 0 are part of cycles
@@ -210,30 +198,132 @@ public sealed class DependencyGraph
         return new RecalcPlan(sorted, cycles);
     }
 
-    private HashSet<CellAddress> GetDirectDependentSet(CellAddress cell)
+    private void EnqueueUnvisitedDependents(
+        CellAddress cell,
+        HashSet<CellAddress> toRecalc,
+        Queue<CellAddress> queue)
     {
-        var rangeDeps = GetRangeDependents(cell);
-        if (_dependents.TryGetValue(cell, out var exactDeps))
+        var exactDeps = _dependents.GetValueOrDefault(cell);
+        if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
         {
-            if (rangeDeps.Count == 0)
-                return new HashSet<CellAddress>(exactDeps);
-
-            rangeDeps.UnionWith(exactDeps);
+            EnqueueExactDependents(exactDeps, toRecalc, queue);
+            return;
         }
 
-        return rangeDeps;
+        HashSet<CellAddress>? rangeSeen = null;
+        foreach (var dep in rangeDeps)
+        {
+            if (!dep.Range.Contains(cell))
+                continue;
+
+            rangeSeen ??= [];
+            if (rangeSeen.Add(dep.Dependent) && toRecalc.Add(dep.Dependent))
+                queue.Enqueue(dep.Dependent);
+        }
+
+        if (exactDeps is null)
+            return;
+
+        foreach (var dep in exactDeps)
+        {
+            if (rangeSeen?.Contains(dep) == true)
+                continue;
+
+            if (toRecalc.Add(dep))
+                queue.Enqueue(dep);
+        }
     }
 
-    private HashSet<CellAddress> GetRangeDependents(CellAddress cell)
+    private static void EnqueueExactDependents(
+        HashSet<CellAddress>? exactDeps,
+        HashSet<CellAddress> toRecalc,
+        Queue<CellAddress> queue)
     {
-        var result = new HashSet<CellAddress>();
-        if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
-            return result;
+        if (exactDeps is null)
+            return;
 
+        foreach (var dep in exactDeps)
+        {
+            if (toRecalc.Add(dep))
+                queue.Enqueue(dep);
+        }
+    }
+
+    private void DecrementDependentInDegrees(
+        CellAddress cell,
+        Dictionary<CellAddress, int> inDegree,
+        Queue<CellAddress> ready)
+    {
+        var exactDeps = _dependents.GetValueOrDefault(cell);
+        if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
+        {
+            DecrementExactDependentInDegrees(exactDeps, inDegree, ready);
+            return;
+        }
+
+        HashSet<CellAddress>? rangeSeen = null;
+        foreach (var dep in rangeDeps)
+        {
+            if (!dep.Range.Contains(cell))
+                continue;
+
+            rangeSeen ??= [];
+            if (!rangeSeen.Add(dep.Dependent))
+                continue;
+
+            DecrementInDegree(dep.Dependent, inDegree, ready);
+        }
+
+        if (exactDeps is null)
+            return;
+
+        foreach (var dep in exactDeps)
+        {
+            if (rangeSeen?.Contains(dep) == true)
+                continue;
+
+            DecrementInDegree(dep, inDegree, ready);
+        }
+    }
+
+    private static void DecrementExactDependentInDegrees(
+        HashSet<CellAddress>? exactDeps,
+        Dictionary<CellAddress, int> inDegree,
+        Queue<CellAddress> ready)
+    {
+        if (exactDeps is null)
+            return;
+
+        foreach (var dep in exactDeps)
+            DecrementInDegree(dep, inDegree, ready);
+    }
+
+    private static void DecrementInDegree(
+        CellAddress dep,
+        Dictionary<CellAddress, int> inDegree,
+        Queue<CellAddress> ready)
+    {
+        if (!inDegree.ContainsKey(dep))
+            return;
+
+        inDegree[dep]--;
+        if (inDegree[dep] == 0)
+            ready.Enqueue(dep);
+    }
+
+    private HashSet<CellAddress>? CollectRangeDependents(CellAddress cell)
+    {
+        if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
+            return null;
+
+        HashSet<CellAddress>? result = null;
         foreach (var dep in rangeDeps)
         {
             if (dep.Range.Contains(cell))
+            {
+                result ??= [];
                 result.Add(dep.Dependent);
+            }
         }
 
         return result;
