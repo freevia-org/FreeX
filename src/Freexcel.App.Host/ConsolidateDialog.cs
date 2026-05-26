@@ -35,7 +35,7 @@ public sealed partial class ConsolidateDialog : Window
     private readonly Button _deleteReferenceButton = new() { Content = "_Delete", Width = 76, IsEnabled = false };
     private readonly TextBox _destinationBox = new();
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
-    private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
+    private readonly CheckBox _leftColumnBox = new() { Content = "Left _column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
     private readonly Action<ConsolidateRangeSelectionRequest>? _requestRangeSelection;
 
