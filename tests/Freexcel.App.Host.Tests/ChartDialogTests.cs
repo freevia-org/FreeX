@@ -331,12 +331,26 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void MoveChartDialog_LabelsTargetNameEditorWithAccessKeyAndAutomationName()
+    {
+        var source = ReadChartDialogSource();
+        var dialogSource = source[
+            source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
+            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("new Label { Content = \"_Target name:\", Target = _targetBox");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_targetBox, \"Target chart sheet or object sheet name\");");
+        dialogSource.Should().Contain("AutomationProperties.SetHelpText(_targetBox, \"Enter the worksheet or chart sheet name that will contain the chart.\");");
+    }
+
+    [Fact]
     public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
     {
         var source = ReadChartDialogSource();
 
         source.Should().Contain("Content = \"_Object in sheet\"");
         source.Should().Contain("Content = \"_New chart sheet\"");
+        source.Should().Contain("Content = \"_Target name:\"");
         source.Should().Contain("Content = \"_Chart data range:\"");
         source.Should().Contain("Content = \"_Switch Row/Column\"");
         source.Should().Contain("Content = \"First column contains _category labels\"");

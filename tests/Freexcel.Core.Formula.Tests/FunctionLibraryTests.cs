@@ -1352,6 +1352,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Substitute_OneCellInstanceRange_BroadcastsAcrossTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new NumberValue(2)));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"x\",B1:B1)", sheet), "axbabc", "banxna");
+    }
+
+    [Fact]
     public void Substitute_MismatchedTextOrInstanceArgument_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -2550,6 +2561,16 @@ public class FunctionLibraryTests
         AssertColumn(_eval.Evaluate("=CEILING(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(12));
         AssertColumn(_eval.Evaluate("=FLOOR(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
         AssertColumn(_eval.Evaluate("=MROUND(A1:A2,B1:B2)", sheet), new NumberValue(4), new NumberValue(8));
+    }
+
+    [Fact]
+    public void BinaryMath_OneCellRangeArgument_BroadcastsAcrossOtherRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(4)), (2, 1, new NumberValue(9)),
+            (1, 2, new NumberValue(2)));
+
+        AssertColumn(_eval.Evaluate("=MOD(A1:A2,B1:B1)", sheet), new NumberValue(0), new NumberValue(1));
     }
 
     [Fact]
