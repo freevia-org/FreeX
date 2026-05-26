@@ -43,9 +43,9 @@ public sealed class RibbonTabParityTests
             "Sparklines",
             "Filters",
             "Links",
+            "Comments",
             "Text",
-            "Symbols",
-            "Comments");
+            "Symbols");
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
         ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Pictures\"");
@@ -54,6 +54,7 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Timeline\"");
         ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonTooltip.Title=\"Insert Link\"");
+        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
         ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Insert Symbol\"");
@@ -95,7 +96,10 @@ public sealed class RibbonTabParityTests
             "Orientation",
             "Paper Size",
             "Print Area",
-            "Breaks");
+            "Breaks",
+            "Background",
+            "Print Titles");
+        pageSetupGroup.Should().NotContain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Bring Forward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
         ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
@@ -144,6 +148,7 @@ public sealed class RibbonTabParityTests
         ExtractGroupLabels(dataTab).Should().Equal(
             "Get & Transform Data",
             "Queries & Connections",
+            "Data Types",
             "Sort & Filter",
             "Data Tools",
             "Forecast",
@@ -189,6 +194,7 @@ public sealed class RibbonTabParityTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var viewTab = ExtractTabXaml(xaml, "View", "PivotTable Analyze");
+        var zoomGroup = ExtractGroupXaml(viewTab, "Zoom");
         var windowGroup = ExtractGroupXaml(viewTab, "Window");
 
         ExtractGroupLabels(viewTab).Should().Equal(
@@ -198,6 +204,11 @@ public sealed class RibbonTabParityTests
             "Window",
             "Macros");
 
+        ExtractTooltipTitles(zoomGroup).Should().ContainInOrder(
+            "Zoom",
+            "100%",
+            "Zoom to Selection");
+        ExtractTooltipTitles(zoomGroup).Should().NotContain(["Zoom Out", "Zoom In"]);
         windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Freeze Panes\"");
         windowGroup.Should().Contain("local:RibbonTooltip.Title=\"Split\"");
         ExtractTooltipTitles(windowGroup).Should().ContainInOrder(
