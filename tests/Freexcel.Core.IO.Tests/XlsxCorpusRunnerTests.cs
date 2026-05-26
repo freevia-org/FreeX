@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(36, "the generated metadata-pass manifest currently declares thirty-six deterministic package-retention rows");
+        rows.Should().HaveCount(37, "the generated metadata-pass manifest currently declares thirty-seven deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -805,6 +805,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetProtectionNativeRow_RetainsProtectionAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-protection-native-001");
+        AssertWorksheetProtectionNative(source, "generated-worksheet-protection-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-protection-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-protection-native-001");
+        AssertWorksheetProtectionNative(saved, "generated-worksheet-protection-native-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1283,6 +1301,28 @@ public class XlsxCorpusRunnerTests
         pageSetUpPr!.Attribute("fitToPage")!.Value.Should().Be("1", because);
         pageSetUpPr.Attribute("autoPageBreaks")!.Value.Should().Be("0", because);
         sheetPr.Elements(freexcelNs + "sheetPrNativeChild")
+            .Select(element => element.Attribute("id")?.Value)
+            .Should()
+            .BeEquivalentTo(["first", "second"], because);
+    }
+
+    private static void AssertWorksheetProtectionNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var protection = worksheetXml.Root!.Element(worksheetNs + "sheetProtection");
+        protection.Should().NotBeNull(because);
+        protection!.Attribute("sheet")!.Value.Should().Be("1", because);
+        protection.Attribute("algorithmName")!.Value.Should().Be("SHA-512", because);
+        protection.Attribute("hashValue")!.Value.Should().Be("abc123", because);
+        protection.Attribute("saltValue")!.Value.Should().Be("salt123", because);
+        protection.Attribute("spinCount")!.Value.Should().Be("100000", because);
+        protection.Attribute("objects")!.Value.Should().Be("1", because);
+        protection.Attribute("scenarios")!.Value.Should().Be("1", because);
+        protection.Elements(freexcelNs + "sheetProtectionNativeChild")
             .Select(element => element.Attribute("id")?.Value)
             .Should()
             .BeEquivalentTo(["first", "second"], because);

@@ -76,6 +76,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-worksheet-header-footer-native-001" => true,
         "generated-worksheet-dimension-native-001" => true,
         "generated-worksheet-sheet-properties-001" => true,
+        "generated-worksheet-protection-native-001" => true,
         "generated-worksheet-phonetic-properties-001" => true,
         "generated-worksheet-sort-state-001" => true,
         "generated-worksheet-data-consolidation-001" => true,
@@ -402,6 +403,21 @@ internal static class XlsxCorpusFixtureFactory
               </sheetPr>
             </worksheet>
             """)),
+        "generated-worksheet-protection-native-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:fx="urn:freexcel:test">
+              <sheetProtection sheet="1"
+                               algorithmName="SHA-512"
+                               hashValue="abc123"
+                               saltValue="salt123"
+                               spinCount="100000"
+                               objects="1"
+                               scenarios="1">
+                <fx:sheetProtectionNativeChild id="first"/>
+                <fx:sheetProtectionNativeChild id="second"/>
+              </sheetProtection>
+            </worksheet>
+            """)),
         "generated-worksheet-phonetic-properties-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <phoneticPr fontId="1" type="fullwidthKatakana" alignment="center" nativeOnly="kept"/>
@@ -651,6 +667,8 @@ internal static class XlsxCorpusFixtureFactory
         (string.Equals(id, "generated-worksheet-dimension-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase) &&
+         string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
+        (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
         (string.Equals(id, "generated-worksheet-phonetic-properties-001", StringComparison.OrdinalIgnoreCase) &&
          string.Equals(packagePart, "xl/worksheets/sheet1.xml", StringComparison.OrdinalIgnoreCase)) ||
@@ -919,6 +937,12 @@ internal static class XlsxCorpusFixtureFactory
         if (string.Equals(id, "generated-worksheet-sheet-properties-001", StringComparison.OrdinalIgnoreCase))
         {
             ApplyWorksheetSheetPropertiesFixup(archive);
+            return;
+        }
+
+        if (string.Equals(id, "generated-worksheet-protection-native-001", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyWorksheetProtectionNativeFixup(archive);
             return;
         }
 
@@ -1825,6 +1849,32 @@ internal static class XlsxCorpusFixtureFactory
                 new XAttribute("autoPageBreaks", "0")),
             new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "first")),
             new XElement(freexcelNs + "sheetPrNativeChild", new XAttribute("id", "second"))));
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void ApplyWorksheetProtectionNativeFixup(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+
+        var worksheetPath = "xl/worksheets/sheet1.xml";
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadPackageXml(worksheetEntry);
+        worksheetXml.Root?.Elements(worksheetNs + "sheetProtection").Remove();
+        worksheetXml.Root?.Add(new XElement(
+            worksheetNs + "sheetProtection",
+            new XAttribute("sheet", "1"),
+            new XAttribute("algorithmName", "SHA-512"),
+            new XAttribute("hashValue", "abc123"),
+            new XAttribute("saltValue", "salt123"),
+            new XAttribute("spinCount", "100000"),
+            new XAttribute("objects", "1"),
+            new XAttribute("scenarios", "1"),
+            new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "first")),
+            new XElement(freexcelNs + "sheetProtectionNativeChild", new XAttribute("id", "second"))));
         ReplacePackageXml(archive, worksheetPath, worksheetXml);
     }
 
