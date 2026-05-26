@@ -262,10 +262,21 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_backButton.IsEnabled = _wizardStep > 1");
         source.Should().Contain("_nextButton.IsEnabled = _wizardStep < 3");
         source.Should().Contain("Choose the file type that best describes your data.");
-        source.Should().Contain("IsDefault = true");
+        source.Should().Contain("IsDefault = _wizardStep");
         source.Should().Contain("Accept()");
         source.Should().NotContain("Additional wizard steps are not supported yet.");
         source.Should().NotContain("This dialog opens on the split-options step.");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_UsesExcelWizardDefaultButtonsPerStep()
+    {
+        var source = ReadTextToColumnsDialogSources();
+
+        source.Should().Contain("private Button? _finishButton;");
+        source.Should().Contain("_finishButton = new Button");
+        source.Should().Contain("_nextButton.IsDefault = _wizardStep < 3");
+        source.Should().Contain("_finishButton.IsDefault = _wizardStep == 3");
     }
 
     [Fact]

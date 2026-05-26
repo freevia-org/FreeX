@@ -94,15 +94,14 @@ public sealed partial class TextToColumnsDialog
                 Accept();
         };
         panel.Children.Add(_nextButton);
-        var finishButton = new Button
+        _finishButton = new Button
         {
             Content = "_Finish",
             Width = 72,
-            Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
+            Margin = new Thickness(0, 0, 8, 0)
         };
-        finishButton.Click += (_, _) => Accept();
-        panel.Children.Add(finishButton);
+        _finishButton.Click += (_, _) => Accept();
+        panel.Children.Add(_finishButton);
         panel.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
         return panel;
     }
@@ -134,7 +133,12 @@ public sealed partial class TextToColumnsDialog
         if (_backButton is not null)
             _backButton.IsEnabled = _wizardStep > 1;
         if (_nextButton is not null)
+        {
             _nextButton.IsEnabled = _wizardStep < 3;
+            _nextButton.IsDefault = _wizardStep < 3;
+        }
+        if (_finishButton is not null)
+            _finishButton.IsDefault = _wizardStep == 3;
     }
 
     private static void SetVisible(FrameworkElement? element, bool visible)

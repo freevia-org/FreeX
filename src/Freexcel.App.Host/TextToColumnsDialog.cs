@@ -50,6 +50,7 @@ public sealed partial class TextToColumnsDialog : Window
     private readonly TextBlock _wizardInstruction = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
     private Button? _backButton;
     private Button? _nextButton;
+    private Button? _finishButton;
     private FrameworkElement? _originalDataTypePanel;
     private FrameworkElement? _delimiterPanel;
     private FrameworkElement? _fixedWidthPanel;
