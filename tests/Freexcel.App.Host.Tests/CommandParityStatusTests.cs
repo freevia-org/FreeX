@@ -17,7 +17,7 @@ public sealed class CommandParityStatusTests
             ("Cut (Ctrl+X)", "Implemented"),
             ("Copy (Ctrl+C)", "Implemented"),
             ("Paste (Ctrl+V)", "Implemented"),
-            ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture)", "Implemented"),
+            ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture/text)", "Implemented"),
             ("Format Painter", "Implemented"),
             ("Distributed/Justify alignment", "Implemented"),
             ("Shrink to Fit", "Implemented"),

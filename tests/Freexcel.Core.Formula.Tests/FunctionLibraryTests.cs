@@ -612,6 +612,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sumif_ShorterSumRange_ExpandsFromTopLeftCell()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("A")), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("B")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=SUMIF(A1:A3,\"A\",B1)", sheet).Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
     public void Sumif_TextCriteria()
     {
         var sheet = MakeSheet(
@@ -778,6 +789,17 @@ public class FunctionLibraryTests
             (2, 1, new NumberValue(2)), (2, 2, new NumberValue(20)),
             (3, 1, new NumberValue(3)), (3, 2, new NumberValue(30)));
         _eval.Evaluate("=AVERAGEIF(A1:A3,\">1\",B1:B3)", sheet).Should().Be(new NumberValue(25));
+    }
+
+    [Fact]
+    public void Averageif_ShorterAverageRange_ExpandsFromTopLeftCell()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("A")), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("B")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=AVERAGEIF(A1:A3,\"A\",B1)", sheet).Should().Be(new NumberValue(15));
     }
 
     [Fact]
@@ -2917,6 +2939,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Large_DuplicateValues_CountEachOccurrence()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(8)),
+            (2, 1, new NumberValue(8)),
+            (3, 1, new NumberValue(5)));
+
+        _eval.Evaluate("=LARGE(A1:A3,2)", sheet).Should().Be(new NumberValue(8));
+    }
+
+    [Fact]
     public void Large_KRangeArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
@@ -2983,6 +3016,17 @@ public class FunctionLibraryTests
             (3, 1, new NumberValue(8)),
             (4, 1, new NumberValue(1)));
         _eval.Evaluate("=SMALL(A1:A4,1)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Small_DuplicateValues_CountEachOccurrence()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(1)),
+            (3, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=SMALL(A1:A3,2)", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]
@@ -5267,6 +5311,14 @@ public class FunctionLibraryTests
     public void Countblank_Range_CountsEmptyTextCells()
     {
         var sheet = MakeSheet((1, 1, new TextValue("")), (2, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=COUNTBLANK(A1:A2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Countblank_Range_IgnoresErrors()
+    {
+        var sheet = MakeSheet((1, 1, ErrorValue.NA), (2, 1, new TextValue("")));
 
         _eval.Evaluate("=COUNTBLANK(A1:A2)", sheet).Should().Be(new NumberValue(1));
     }

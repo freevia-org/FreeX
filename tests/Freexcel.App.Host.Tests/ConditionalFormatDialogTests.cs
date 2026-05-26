@@ -857,6 +857,15 @@ public sealed class ConditionalFormatDialogTests
         });
     }
 
+    [Fact]
+    public void IconSetRule_ThresholdRows_IncludeIconOverrideDropdown()
+    {
+        var source = ReadConditionalFormatDialogSource();
+        source.Should().Contain("OverrideBox", "each threshold row should have an icon-override selector");
+        source.Should().Contain("CfIconOverride", "icon overrides use the model type");
+        source.Should().Contain("IconOverrides", "result should write back to IconOverrides");
+    }
+
     private static ConditionalFormatDialog ShowDialogForTest(ConditionalFormatDialog dialog)
     {
         dialog.Show();

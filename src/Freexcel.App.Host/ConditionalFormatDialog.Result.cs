@@ -82,13 +82,23 @@ public partial class ConditionalFormatDialog
                 cf.IconSetShowValue = _iconSetShowValueBox.IsChecked == true;
                 cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
                 cf.IconSetThresholds.Clear();
+                cf.IconOverrides.Clear();
                 if (_iconSetThresholdRows.Count > 0)
                 {
-                    foreach (var (typeBox, valueBox) in _iconSetThresholdRows)
+                    var hasAnyOverride = false;
+                    foreach (var (typeBox, valueBox, overrideBox) in _iconSetThresholdRows)
                     {
                         var type = typeBox.SelectedItem is CfThresholdType t ? t : CfThresholdType.Percent;
                         cf.IconSetThresholds.Add(new CfThresholdModel(type, BlankToNull(valueBox.Text)));
+                        var ovr = ChoiceToIconOverride(overrideBox?.SelectedItem as string);
+                        if (ovr is not null) hasAnyOverride = true;
+                        cf.IconOverrides.Add(ovr ?? new CfIconOverride(
+                            string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle!,
+                            cf.IconOverrides.Count));
                     }
+
+                    if (!hasAnyOverride)
+                        cf.IconOverrides.Clear();
                 }
                 else
                 {
