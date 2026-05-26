@@ -124,9 +124,18 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DATEVALUE(\"1900-02-29\")", 60)]
     [InlineData("=DATEVALUE(\"3/1/1900\")", 61)]
     [InlineData("=DATEVALUE(\"2024-01-15\")", 45306)]
+    [InlineData("=DATEVALUE(\"1/2/2024 6:00 AM\")", 45293)]
     public void DateValue_ReturnsExcelSerialNumbers(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=DATEVALUE(\"12:00 PM\")")]
+    [InlineData("=DATEVALUE(\"23:59:59\")")]
+    public void DateValue_TimeOnlyText_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
     [Theory]
@@ -135,11 +144,20 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=TIMEVALUE(\"23:59:59\")", 0.999988425925926)]
     [InlineData("=TIMEVALUE(\"12:00 AM\")", 0)]
     [InlineData("=TIMEVALUE(\"12:00 PM\")", 0.5)]
+    [InlineData("=TIMEVALUE(\"1/2/2024 6:00 AM\")", 0.25)]
     public void TimeValue_ReturnsExcelDayFraction(string formula, double expected)
     {
         var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
 
         result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
+    [Theory]
+    [InlineData("=TIMEVALUE(\"1/2/2024\")")]
+    [InlineData("=TIMEVALUE(\"2024-01-02\")")]
+    public void TimeValue_DateOnlyText_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
     [Theory]
