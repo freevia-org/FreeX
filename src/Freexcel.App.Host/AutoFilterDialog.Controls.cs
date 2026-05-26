@@ -20,6 +20,46 @@ public sealed partial class AutoFilterDialog
         Keyboard.Focus(_sortAscending);
     }
 
+    private void AutoFilterDialog_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F || Keyboard.Modifiers != ModifierKeys.None)
+            return;
+
+        if (!TryOpenVisibleFilterFamilySubmenu())
+            return;
+
+        e.Handled = true;
+    }
+
+    private bool TryOpenVisibleFilterFamilySubmenu()
+    {
+        var filterButton = new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton }
+            .FirstOrDefault(button => button.Visibility == Visibility.Visible);
+        return filterButton is not null && TryOpenFilterFamilySubmenu(filterButton);
+    }
+
+    private bool TryOpenFilterFamilySubmenu(Button filterButton)
+    {
+        if (filterButton.ContextMenu is { } submenu)
+        {
+            submenu.PlacementTarget = filterButton;
+            submenu.IsOpen = true;
+            var firstItem = submenu.Items.OfType<MenuItem>().FirstOrDefault();
+            if (firstItem is not null)
+            {
+                firstItem.Focus();
+                Keyboard.Focus(firstItem);
+            }
+
+            return true;
+        }
+
+        _criteriaOperatorBox.Focus();
+        Keyboard.Focus(_criteriaOperatorBox);
+        UpdateCriteriaTextFromTypedControls();
+        return true;
+    }
+
     private void ShowFilterFamilyButton(AutoFilterMenuFilterKind filterKind)
     {
         _textFiltersButton.Visibility = filterKind == AutoFilterMenuFilterKind.Text

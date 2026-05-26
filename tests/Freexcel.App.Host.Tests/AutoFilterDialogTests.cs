@@ -440,6 +440,24 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_FilterFamilyContinuationKeyOpensVisibleSubmenu()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;");
+        source.Should().Contain("private void AutoFilterDialog_PreviewKeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("e.Key != Key.F");
+        source.Should().Contain("TryOpenVisibleFilterFamilySubmenu()");
+        source.Should().Contain("private bool TryOpenVisibleFilterFamilySubmenu()");
+        source.Should().Contain("_textFiltersButton, _numberFiltersButton, _dateFiltersButton");
+        source.Should().Contain("FirstOrDefault(button => button.Visibility == Visibility.Visible)");
+        source.Should().Contain("private bool TryOpenFilterFamilySubmenu(Button filterButton)");
+        source.Should().Contain("submenu.IsOpen = true;");
+        source.Should().Contain("Keyboard.Focus(firstItem);");
+        source.Should().Contain("filterButton.Click += (_, _) => TryOpenFilterFamilySubmenu(filterButton);");
+    }
+
+    [Fact]
     public void DialogControls_InvalidTypedCriteriaWarnsAndRefocusesRequiredField()
     {
         var source = ReadAutoFilterDialogSources();
