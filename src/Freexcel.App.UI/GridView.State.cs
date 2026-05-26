@@ -10,8 +10,6 @@ public partial class GridView
 {
     private enum ResizeTarget { None, Row, Column }
 
-    private enum ObjectDragKind { None, Move, ResizeSE, ResizeE, ResizeS }
-
     private Guid _selectedObjectId;
     private ObjectKind _selectedObjectKind;
     private ObjectDragKind _objectDragKind;
