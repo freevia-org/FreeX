@@ -16,10 +16,10 @@ public static partial class BuiltInFunctions
     {
         if (args.Count < 3) return ErrorValue.Value;
         if (args[0] is ErrorValue e0) return e0;
-        if (args[1] is ErrorValue e1) return e1;
+        if (!TryGetScalarControlArgument(args[1], out var ignoreEmptyArg, out var ignoreEmptyError)) return ignoreEmptyError;
         var delimiters = FlattenTextjoinArgument(args[0]);
         if (delimiters.Error is not null) return delimiters.Error;
-        bool ignoreEmpty = ToBool(args[1]);
+        bool ignoreEmpty = ToBool(ignoreEmptyArg);
         var parts = new List<string>();
         for (int i = 2; i < args.Count; i++)
         {

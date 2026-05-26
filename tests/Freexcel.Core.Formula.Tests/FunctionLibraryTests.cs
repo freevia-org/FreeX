@@ -5711,6 +5711,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Textjoin_IgnoreEmptyOneCellRange_CoercesToScalarBoolean()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (3, 1, new TextValue("b")),
+            (1, 2, new BoolValue(true)));
+
+        _eval.Evaluate("=TEXTJOIN(\"|\",B1:B1,A1:A3)", sheet).Should().Be(new TextValue("a|b"));
+    }
+
+    [Fact]
     public void Textjoin_DelimiterRange_CyclesDelimitersBetweenTextItems()
     {
         var sheet = MakeSheet(
