@@ -134,4 +134,44 @@ public partial class ConditionalFormatDialog
         _colorScaleMidColorBox.IsEnabled = enabled;
         _colorScaleMidColorButton.IsEnabled = enabled;
     }
+
+    private static Button CreateDataBarOptionalColorButton(TextBox colorBox, string tooltip)
+    {
+        var button = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(6, 4, 0, 8),
+            ToolTip = tooltip,
+            Tag = colorBox
+        };
+        button.Click += DataBarOptionalColorButton_Click;
+        return button;
+    }
+
+    private static DockPanel CreateDataBarOptionalColorEditor(TextBox colorBox, Button pickerButton)
+    {
+        var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(pickerButton, Dock.Right);
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(colorBox);
+        return panel;
+    }
+
+    private static void DataBarOptionalColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox colorBox })
+            return;
+
+        CellColor? initialColor = ColorInputParser.TryParseRgbColorText(colorBox.Text, out var parsed)
+            ? parsed
+            : null;
+        var dialog = new ColorPickerDialog(initialColor, allowNoColor: true) { Owner = Window.GetWindow(colorBox) };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        colorBox.Text = dialog.SelectedColor is { } selected
+            ? FormatRgb(new RgbColor(selected.R, selected.G, selected.B))
+            : string.Empty;
+    }
 }
