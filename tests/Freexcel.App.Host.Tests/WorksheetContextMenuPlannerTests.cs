@@ -1,9 +1,21 @@
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
 public sealed class WorksheetContextMenuPlannerTests
 {
+    [Fact]
+    public void UiTestCatalog_WorksheetContextMenuCommandCountMatchesPlanner()
+    {
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var commandCount = WorksheetContextMenuPlanner.BuildCommands()
+            .Count(command => !command.IsSeparator);
+
+        catalog.Should().Contain(
+            $"| Worksheet context menu commands | {commandCount} | From `WorksheetContextMenuPlanner.BuildCommands()`. |");
+    }
+
     [Fact]
     public void BuildCommands_IncludesCommonExcelWorksheetContextActions()
     {

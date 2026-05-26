@@ -70,6 +70,18 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void UiTestCatalog_XamlClickWiredControlCountMatchesMainWindow()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var catalog = File.ReadAllText(Path.Combine(docsDirectory, "UI_TEST_CATALOG.md"));
+        var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var clickWiredCount = XamlClickHandler().Matches(mainWindow).Count;
+        var declaredCount = int.Parse(UiCatalogXamlClickWiredCount().Match(catalog).Groups["count"].Value);
+
+        declaredCount.Should().Be(clickWiredCount);
+    }
+
+    [Fact]
     public void UiTestCatalog_UsesCanonicalBranchNeutralMetadata()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
@@ -140,4 +152,10 @@ public sealed partial class DocumentationIndexTests
 
     [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
     private static partial Regex UiEvidenceScreenshotCount();
+
+    [GeneratedRegex(@"\| XAML click-wired controls \| (?<count>\d+) \|")]
+    private static partial Regex UiCatalogXamlClickWiredCount();
+
+    [GeneratedRegex(@"Click=""[^""]+""")]
+    private static partial Regex XamlClickHandler();
 }
