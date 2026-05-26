@@ -11738,16 +11738,26 @@ public partial class FileAdapterSmokeTests
             cell.Id == 1 &&
             cell.Reference == "A1" &&
             cell.XmlCellPropertyId == 1);
+        loadedSheet.SingleXmlCells.NativeAttributes["nativeSingleXmlCellsAttr"] = "kept";
+        loadedSheet.SingleXmlCells.NativeAttributes["invalid singleXmlCells attr"] = "skip";
+        loadedSheet.SingleXmlCells.Cells[0].NativeAttributes["nativeSingleXmlCellAttr"] = "cell-kept";
+        loadedSheet.SingleXmlCells.Cells[0].NativeAttributes["invalid singleXmlCell attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("singleXmlCells");
-        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("xmlCellPrId=\"1\"");
+        var worksheetText = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetText.Should().Contain("singleXmlCells");
+        worksheetText.Should().Contain("xmlCellPrId=\"1\"");
+        worksheetText.Should().Contain("nativeSingleXmlCellsAttr=\"kept\"");
+        worksheetText.Should().Contain("nativeSingleXmlCellAttr=\"cell-kept\"");
+        worksheetText.Should().NotContain("invalid ");
     }
 
     [Fact]
