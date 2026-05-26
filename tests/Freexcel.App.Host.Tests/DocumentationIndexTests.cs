@@ -17,6 +17,7 @@ public sealed partial class DocumentationIndexTests
             .Last();
 
         readme.Should().Contain($"[{newestStatusReport}]({newestStatusReport})");
+        readme.Should().Contain("[PROJECT_BUILD_HISTORY_METRICS_2026-05-25.md](PROJECT_BUILD_HISTORY_METRICS_2026-05-25.md)");
         readme.Should().Contain("[OUTSTANDING_BUILD.md](OUTSTANDING_BUILD.md)");
         readme.Should().Contain("[NEXT_PHASES_PLAN.md](NEXT_PHASES_PLAN.md)");
         readme.Should().Contain("[COMMAND_SURFACE_PARITY.md](COMMAND_SURFACE_PARITY.md)");
