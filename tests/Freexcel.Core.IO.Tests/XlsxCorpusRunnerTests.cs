@@ -2690,6 +2690,15 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("merged-cells"))
             summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
 
+        if (row.SourceType == "public" && tags.Contains("sheet-names") && tags.Contains("boundary"))
+            summary.Sheets.Should().Contain(sheet => sheet.Name.Length == 31, row.Id);
+
+        if (row.SourceType == "public" && tags.Contains("inline-strings"))
+            summary.Sheets
+                .SelectMany(sheet => sheet.Cells)
+                .Should()
+                .Contain(cell => cell.Value.Kind == "Text" && !string.IsNullOrEmpty(cell.Value.Value), row.Id);
+
         if (tags.Contains("formulas"))
             summary.Sheets.Sum(sheet => sheet.FormulaCount).Should().BeGreaterThan(0, row.Id);
 

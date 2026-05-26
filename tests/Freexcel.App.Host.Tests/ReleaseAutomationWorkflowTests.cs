@@ -107,6 +107,19 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
+    public void TesterReleaseWorkflow_RefreshesReleaseNotesWhenReleaseAlreadyExists()
+    {
+        var workflowPath = WorkspaceFileLocator.Find(".github", "workflows", "tester-release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+        var existingReleaseBlock = Regex.Match(workflow, @"(?ms)if \(\$releaseExists\) \{.*?\} else \{");
+
+        existingReleaseBlock.Success.Should().BeTrue("the rerun path should be explicit and guarded separately from first release creation");
+        existingReleaseBlock.Value.Should().Contain("gh release upload $tag @assetPaths --clobber");
+        existingReleaseBlock.Value.Should().Contain("gh release edit $tag --title $title --notes $notes @prereleaseArgs @latestArgs");
+        existingReleaseBlock.Value.Should().NotContain("gh release edit $tag --title $title @prereleaseArgs @latestArgs");
+    }
+
+    [Fact]
     public void ReleaseProgressJson_DefinesAutomaticTesterVersionBand()
     {
         var progressPath = WorkspaceFileLocator.Find("release", "progress.json");

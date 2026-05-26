@@ -118,6 +118,24 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void RegressionFormulaCachedWorkbooks_AreAllRepresentedInCorpusManifest()
+    {
+        var manifestRows = ReadManifestRows();
+        var regressionWorkbookPaths = Directory
+            .EnumerateFiles(FindWorkspaceDirectory("test-corpus", "regressions", "formula-cached"), "*.xlsx", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.GetRelativePath(FindWorkspaceDirectory("test-corpus"), path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var manifestRegressionPaths = manifestRows
+            .Where(row => row.SourceType == "regression")
+            .Select(row => row.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        manifestRegressionPaths.Should().Equal(regressionWorkbookPaths);
+    }
+
+    [Fact]
     public void NewestStatusReport_StatesCurrentCorpusManifestCount()
     {
         var manifestRows = ReadManifestRows();
@@ -146,7 +164,7 @@ public class XlsxCorpusScaffoldTests
     {
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
-        return new ManifestRow(columns[2], columns[8]);
+        return new ManifestRow(columns[1], columns[2], columns[8]);
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -164,5 +182,20 @@ public class XlsxCorpusScaffoldTests
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 
-    private sealed record ManifestRow(string SourceType, string ExpectedStatus);
+    private static string FindWorkspaceDirectory(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
+            if (Directory.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException($"Could not locate workspace directory: {Path.Combine(relativeParts)}");
+    }
+
+    private sealed record ManifestRow(string Path, string SourceType, string ExpectedStatus);
 }
