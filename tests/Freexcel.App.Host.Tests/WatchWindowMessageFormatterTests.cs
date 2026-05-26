@@ -68,8 +68,10 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialog_ExposesSelectedRangePreview()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var watchWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
 
+        watchWindowSource.Should().NotContain("public sealed class AddWatchDialog");
         source.Should().Contain("public sealed class AddWatchDialog");
         source.Should().Contain("Title = \"Add Watch\"");
         source.Should().Contain("Content = \"Selected _range:\"");
@@ -80,7 +82,7 @@ public sealed class WatchWindowMessageFormatterTests
     [Fact]
     public void AddWatchDialogOpenedFromKeyboard_FocusesSelectedRangePreview()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AddWatchDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");

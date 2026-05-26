@@ -17496,6 +17496,58 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetAutoFilterDateGroupItemsWithoutMaterializing()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterDateGroupRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Date"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(45000));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(45031));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetAutoFilterDateGroupMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFilterColumn = loadedSheet.AutoFilter!.FilterColumns.Should().ContainSingle().Subject;
+        loadedFilterColumn.IncludeBlank.Should().BeTrue();
+        loadedFilterColumn.NativeFiltersAttributes.Should().Contain("{urn:freexcel:test}filtersFlag", "keep");
+        loadedFilterColumn.DateGroups.Should().ContainSingle();
+        var dateGroup = loadedFilterColumn.DateGroups[0];
+        dateGroup.Year.Should().Be(2023);
+        dateGroup.Month.Should().Be(3);
+        dateGroup.DateTimeGrouping.Should().Be("month");
+        dateGroup.NativeAttributes.Should().Contain("{urn:freexcel:test}dateGroupFlag", "keep");
+        loadedFilterColumn.NativeFilterXmls.Should().BeEmpty();
+        loadedSheet.FilterHiddenRows.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var filters = worksheetXml.Root!
+            .Element(worksheetNs + "autoFilter")!
+            .Element(worksheetNs + "filterColumn")!
+            .Element(worksheetNs + "filters");
+        filters.Should().NotBeNull();
+        filters!.Attribute("blank")!.Value.Should().Be("1");
+        filters.Attribute(XName.Get("filtersFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+        var savedDateGroup = filters.Element(worksheetNs + "dateGroupItem");
+        savedDateGroup.Should().NotBeNull();
+        savedDateGroup!.Attribute("year")!.Value.Should().Be("2023");
+        savedDateGroup.Attribute("month")!.Value.Should().Be("3");
+        savedDateGroup.Attribute("dateTimeGrouping")!.Value.Should().Be("month");
+        savedDateGroup.Attribute(XName.Get("dateGroupFlag", "urn:freexcel:test"))!.Value.Should().Be("keep");
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_WritesModeledWorksheetAutoFilterValues()
     {
         var workbook = new Workbook("WorksheetAutoFilterValuesTest");
@@ -22131,6 +22183,36 @@ public partial class FileAdapterSmokeTests
                         new XAttribute("iconSet", "3TrafficLights1"),
                         new XAttribute("iconId", "2"),
                         new XAttribute(freexcelNs + "iconFilterFlag", "keep")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetAutoFilterDateGroupMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "autoFilter",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "filterColumn",
+                    new XAttribute("colId", "0"),
+                    new XElement(
+                        worksheetNs + "filters",
+                        new XAttribute("blank", "1"),
+                        new XAttribute(freexcelNs + "filtersFlag", "keep"),
+                        new XElement(
+                            worksheetNs + "dateGroupItem",
+                            new XAttribute("year", "2023"),
+                            new XAttribute("month", "3"),
+                            new XAttribute("dateTimeGrouping", "month"),
+                            new XAttribute(freexcelNs + "dateGroupFlag", "keep"))))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
