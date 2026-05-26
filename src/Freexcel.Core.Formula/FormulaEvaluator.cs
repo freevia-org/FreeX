@@ -1316,7 +1316,7 @@ public sealed class FormulaEvaluator
         NumberValue => v,
         BlankValue => new NumberValue(0),
         BoolValue b => new NumberValue(b.Value ? 1 : 0),
-        TextValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) =>
+        TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) =>
             new NumberValue(d),
         TextValue => ErrorValue.Value,
         DateTimeValue dt => new NumberValue(dt.Value),

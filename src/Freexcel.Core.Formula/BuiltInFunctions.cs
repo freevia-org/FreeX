@@ -497,8 +497,8 @@ public static partial class BuiltInFunctions
         DateTimeValue d => d.Value,
         BoolValue b => b.Value ? 1.0 : 0.0,
         BlankValue => 0.0,
-        DirectTextLiteralValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) => d,
-        TextValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) => d,
+        DirectTextLiteralValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) => d,
+        TextValue t when ExcelTextNumberParser.TryParse(t.Value, out var d) => d,
         _ => throw new FormulaEvalException("#VALUE!", $"Cannot convert {v} to number")
     };
 
@@ -524,7 +524,7 @@ public static partial class BuiltInFunctions
     };
 
     private static bool TryDirectTextNumber(DirectTextLiteralValue value, out double number) =>
-        double.TryParse(value.Value, System.Globalization.CultureInfo.InvariantCulture, out number);
+        ExcelTextNumberParser.TryParse(value.Value, out number);
 
     private static bool TryCellNumber(ScalarValue value, out double number)
     {

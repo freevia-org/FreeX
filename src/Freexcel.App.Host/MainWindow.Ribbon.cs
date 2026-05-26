@@ -75,10 +75,28 @@ public partial class MainWindow
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
+        PrepareSelectedRibbonTabForImmediateCompaction();
         NormalizeRibbonSurface(forceCompact: true);
         Dispatcher.BeginInvoke(
-            (Action)(() => NormalizeRibbonSurface(forceCompact: true)),
-            DispatcherPriority.Loaded);
+            (Action)(() =>
+            {
+                PrepareSelectedRibbonTabForImmediateCompaction();
+                NormalizeRibbonSurface(forceCompact: true);
+            }),
+            DispatcherPriority.Send);
+    }
+
+    private void PrepareSelectedRibbonTabForImmediateCompaction()
+    {
+        if (RibbonTabs?.SelectedItem is not TabItem tabItem)
+            return;
+
+        tabItem.ApplyTemplate();
+        if (tabItem.Content is FrameworkElement content)
+        {
+            content.ApplyTemplate();
+            content.UpdateLayout();
+        }
     }
 
     private void ConfigureInsertRibbonSurface()
