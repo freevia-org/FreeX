@@ -1404,16 +1404,22 @@ public static partial class BuiltInFunctions
     {
         // Odd first period: settlement, maturity, issue, first_coupon, rate, yld, redemption, frequency, [basis]
         if (FirstError(args) is { } e) return e;
-        double settlement  = ToNumber(args[0]);
-        double maturity    = ToNumber(args[1]);
-        double issue       = ToNumber(args[2]);
-        double firstCoupon = ToNumber(args[3]);
-        double rate        = ToNumber(args[4]);
-        double redemption  = ToNumber(args[6]);
-        int frequency      = (int)Math.Truncate(ToNumber(args[7]));
-        int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
-        if (args[5] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, value, redemption, frequency, basis));
-        return OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, args[5], redemption, frequency, basis);
+        var basisArg = args.Count > 8 ? args[8] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], basisArg],
+            values => OddfpriceScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[8]));
+    }
+
+    private static ScalarValue OddfpriceScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue issueValue, ScalarValue firstCouponValue, ScalarValue rateValue, ScalarValue yieldValue, ScalarValue redemptionValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double issue = ToNumber(issueValue);
+        double firstCoupon = ToNumber(firstCouponValue);
+        double rate = ToNumber(rateValue);
+        double redemption = ToNumber(redemptionValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        return OddfpriceScalar(settlement, maturity, issue, firstCoupon, rate, yieldValue, redemption, frequency, basis);
     }
 
     private static ScalarValue OddfpriceScalar(double settlement, double maturity, double issue, double firstCoupon, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
@@ -1439,16 +1445,22 @@ public static partial class BuiltInFunctions
     {
         // settlement, maturity, issue, first_coupon, rate, pr, redemption, frequency, [basis]
         if (FirstError(args) is { } e) return e;
-        double settlement  = ToNumber(args[0]);
-        double maturity    = ToNumber(args[1]);
-        double issue       = ToNumber(args[2]);
-        double firstCoupon = ToNumber(args[3]);
-        double rate        = ToNumber(args[4]);
-        double redemption  = ToNumber(args[6]);
-        int frequency      = (int)Math.Truncate(ToNumber(args[7]));
-        int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
-        if (args[5] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, value, redemption, frequency, basis));
-        return OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, args[5], redemption, frequency, basis);
+        var basisArg = args.Count > 8 ? args[8] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], basisArg],
+            values => OddfyieldScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[8]));
+    }
+
+    private static ScalarValue OddfyieldScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue issueValue, ScalarValue firstCouponValue, ScalarValue rateValue, ScalarValue priceValue, ScalarValue redemptionValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double issue = ToNumber(issueValue);
+        double firstCoupon = ToNumber(firstCouponValue);
+        double rate = ToNumber(rateValue);
+        double redemption = ToNumber(redemptionValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        return OddfyieldScalar(settlement, maturity, issue, firstCoupon, rate, priceValue, redemption, frequency, basis);
     }
 
     private static ScalarValue OddfyieldScalar(double settlement, double maturity, double issue, double firstCoupon, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
@@ -1486,15 +1498,21 @@ public static partial class BuiltInFunctions
     {
         // settlement, maturity, last_interest, rate, yld, redemption, frequency, [basis]
         if (FirstError(args) is { } e) return e;
-        double settlement  = ToNumber(args[0]);
-        double maturity    = ToNumber(args[1]);
-        double lastInterest = ToNumber(args[2]);
-        double rate        = ToNumber(args[3]);
-        double redemption  = ToNumber(args[5]);
-        int frequency      = (int)Math.Truncate(ToNumber(args[6]));
-        int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
-        if (args[4] is RangeValue yieldRange) return MapUnaryTextRange(yieldRange, value => OddlpriceScalar(settlement, maturity, lastInterest, rate, value, redemption, frequency, basis));
-        return OddlpriceScalar(settlement, maturity, lastInterest, rate, args[4], redemption, frequency, basis);
+        var basisArg = args.Count > 7 ? args[7] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], args[6], basisArg],
+            values => OddlpriceScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7]));
+    }
+
+    private static ScalarValue OddlpriceScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue lastInterestValue, ScalarValue rateValue, ScalarValue yieldValue, ScalarValue redemptionValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double lastInterest = ToNumber(lastInterestValue);
+        double rate = ToNumber(rateValue);
+        double redemption = ToNumber(redemptionValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        return OddlpriceScalar(settlement, maturity, lastInterest, rate, yieldValue, redemption, frequency, basis);
     }
 
     private static ScalarValue OddlpriceScalar(double settlement, double maturity, double lastInterest, double rate, ScalarValue yieldValue, double redemption, int frequency, int basis)
@@ -1517,15 +1535,21 @@ public static partial class BuiltInFunctions
     {
         // settlement, maturity, last_interest, rate, pr, redemption, frequency, [basis]
         if (FirstError(args) is { } e) return e;
-        double settlement  = ToNumber(args[0]);
-        double maturity    = ToNumber(args[1]);
-        double lastInterest = ToNumber(args[2]);
-        double rate        = ToNumber(args[3]);
-        double redemption  = ToNumber(args[5]);
-        int frequency      = (int)Math.Truncate(ToNumber(args[6]));
-        int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
-        if (args[4] is RangeValue priceRange) return MapUnaryTextRange(priceRange, value => OddlyieldScalar(settlement, maturity, lastInterest, rate, value, redemption, frequency, basis));
-        return OddlyieldScalar(settlement, maturity, lastInterest, rate, args[4], redemption, frequency, basis);
+        var basisArg = args.Count > 7 ? args[7] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], args[6], basisArg],
+            values => OddlyieldScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7]));
+    }
+
+    private static ScalarValue OddlyieldScalar(ScalarValue settlementValue, ScalarValue maturityValue, ScalarValue lastInterestValue, ScalarValue rateValue, ScalarValue priceValue, ScalarValue redemptionValue, ScalarValue frequencyValue, ScalarValue basisValue)
+    {
+        double settlement = ToNumber(settlementValue);
+        double maturity = ToNumber(maturityValue);
+        double lastInterest = ToNumber(lastInterestValue);
+        double rate = ToNumber(rateValue);
+        double redemption = ToNumber(redemptionValue);
+        int frequency = (int)Math.Truncate(ToNumber(frequencyValue));
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        return OddlyieldScalar(settlement, maturity, lastInterest, rate, priceValue, redemption, frequency, basis);
     }
 
     private static ScalarValue OddlyieldScalar(double settlement, double maturity, double lastInterest, double rate, ScalarValue priceValue, double redemption, int frequency, int basis)
