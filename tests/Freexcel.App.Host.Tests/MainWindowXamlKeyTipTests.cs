@@ -1959,13 +1959,14 @@ public sealed class MainWindowXamlKeyTipTests
 
         mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialogPlanner.cs"));
         var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
-        dialogSource.Should().Contain("% of Grand Total");
-        dialogSource.Should().Contain("% of Row Total");
-        dialogSource.Should().Contain("% of Column Total");
-        dialogSource.Should().Contain("Running Total In");
-        dialogSource.Should().Contain("Difference From");
-        dialogSource.Should().Contain("Rank Smallest to Largest");
+        plannerSource.Should().Contain("% of Grand Total");
+        plannerSource.Should().Contain("% of Row Total");
+        plannerSource.Should().Contain("% of Column Total");
+        plannerSource.Should().Contain("Running Total In");
+        plannerSource.Should().Contain("Difference From");
+        plannerSource.Should().Contain("Rank Smallest to Largest");
         dialogSource.Should().Contain("BaseFieldBox");
         dialogSource.Should().Contain("BaseItemBox");
         dialogSource.Should().Contain("NumberFormatPresetBox");

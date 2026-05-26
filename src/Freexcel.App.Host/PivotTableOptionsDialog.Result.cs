@@ -41,7 +41,8 @@ public sealed partial class PivotTableOptionsDialog
             showItemsWithNoDataOnColumns: pivotTable.ShowItemsWithNoDataOnColumns,
             pageOverThenDown: pivotTable.PageOverThenDown,
             pageWrap: pivotTable.PageWrap,
-            errorValueText: pivotTable.ErrorCaption);
+            errorValueText: pivotTable.ErrorCaption,
+            enableDrill: pivotTable.EnableDrill);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -79,7 +80,8 @@ public sealed partial class PivotTableOptionsDialog
         bool showItemsWithNoDataOnColumns = false,
         bool pageOverThenDown = false,
         int pageWrap = 0,
-        string? errorValueText = null) =>
+        string? errorValueText = null,
+        bool enableDrill = true) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -87,7 +89,7 @@ public sealed partial class PivotTableOptionsDialog
             subtotalPlacement,
             repeatItemLabels,
             blankLineAfterItems,
-            string.IsNullOrWhiteSpace(styleName) ? "PivotStyleLight16" : styleName.Trim(),
+            PivotStyleCatalog.NormalizeStyleName(styleName),
             showRowHeaders,
             showColumnHeaders,
             showRowStripes,
@@ -116,7 +118,8 @@ public sealed partial class PivotTableOptionsDialog
             showItemsWithNoDataOnColumns,
             pageOverThenDown,
             NormalizePageWrap(pageWrap),
-            NormalizeErrorValueText(errorValueText));
+            NormalizeErrorValueText(errorValueText),
+            enableDrill);
 
     private static string? NormalizeEmptyValueText(string? text) => NormalizeOptionalText(text);
 

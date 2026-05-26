@@ -100,10 +100,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogOpenedFromKeyboard_FocusesViewsList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
-        var dialogSource = source[
-            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
-            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+        var dialogSource = ReadCustomViewsDialogSource();
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -114,10 +111,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogCommandFailure_FocusesViewsList()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
-        var dialogSource = source[
-            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
-            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+        var dialogSource = ReadCustomViewsDialogSource();
 
         dialogSource.Should().Contain("FocusViewsList();");
         dialogSource.Should().Contain("private void FocusViewsList()");
@@ -129,10 +123,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogCommandFailure_UsesOwnedMessageBoxes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
-        var dialogSource = source[
-            source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal)..
-            source.IndexOf("internal sealed class CustomViewViewModel", StringComparison.Ordinal)];
+        var dialogSource = ReadCustomViewsDialogSource();
 
         dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
         dialogSource.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
@@ -150,7 +141,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
 
         source.Should().Contain("new Label { Content = \"_Name:\"");
         source.Should().Contain("Target = _nameBox");
@@ -171,7 +162,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialogOpenedFromKeyboard_FocusesNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -184,7 +175,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewNameDialogBlankName_WarnsAndFocusesNameBox()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("MessageBox.Show(this, \"Enter a view name.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
@@ -198,13 +189,24 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void CustomViewsDialog_ThreadsAddViewIncludeOptionsIntoCommandAndIndicators()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.Planning.cs")));
 
         source.Should().Contain("dialog.Result.IncludePrintSettings");
         source.Should().Contain("dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings");
         source.Should().Contain("new SaveCustomViewCommand(");
-        source.Should().Contain("view.IncludePrintSettings ? \"Included\" : \"Not included\"");
-        source.Should().Contain("view.IncludeHiddenRowsColumnsAndFilterSettings ? \"Included\" : \"Not included\"");
+        source.Should().Contain("GetIncludedIndicator(view.IncludePrintSettings)");
+        source.Should().Contain("GetIncludedIndicator(view.IncludeHiddenRowsColumnsAndFilterSettings)");
+    }
+
+    private static string ReadCustomViewsDialogSource()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
+        var start = source.IndexOf("public sealed partial class CustomViewsDialog", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        return source[start..];
     }
 }
 

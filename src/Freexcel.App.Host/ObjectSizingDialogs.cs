@@ -169,8 +169,8 @@ public sealed class ObjectSizeDialog : Window
     private StackPanel CreateSizeContent(Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        AddLabeledTextBox(stack, "Height:", _heightBox);
-        AddLabeledTextBox(stack, "Width:", _widthBox);
+        AddLabeledTextBox(stack, "_Height:", _heightBox);
+        AddLabeledTextBox(stack, "_Width:", _widthBox);
         stack.Children.Add(_lockAspectRatioBox);
         stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
@@ -342,10 +342,10 @@ public sealed class PictureCropDialog : Window
     private StackPanel CreateCropContent(Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        AddCropBox(stack, "Left:", _cropLeftBox);
-        AddCropBox(stack, "Top:", _cropTopBox);
-        AddCropBox(stack, "Right:", _cropRightBox);
-        AddCropBox(stack, "Bottom:", _cropBottomBox);
+        AddCropBox(stack, "_Left:", _cropLeftBox);
+        AddCropBox(stack, "_Top:", _cropTopBox);
+        AddCropBox(stack, "_Right:", _cropRightBox);
+        AddCropBox(stack, "_Bottom:", _cropBottomBox);
         stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
     }

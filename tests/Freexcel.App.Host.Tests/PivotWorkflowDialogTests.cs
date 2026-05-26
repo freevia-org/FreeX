@@ -636,7 +636,8 @@ public sealed class PivotWorkflowDialogTests
             mergeAndCenterLabels: true,
             pageOverThenDown: true,
             pageWrap: 4,
-            compactRowLabelIndent: 3);
+            compactRowLabelIndent: 3,
+            enableDrill: false);
 
         result.Should().BeEquivalentTo(new
         {
@@ -669,7 +670,8 @@ public sealed class PivotWorkflowDialogTests
             MergeAndCenterLabels = true,
             PageOverThenDown = true,
             PageWrap = 4,
-            CompactRowLabelIndent = 3
+            CompactRowLabelIndent = 3,
+            EnableDrill = false
         });
     }
 
@@ -713,6 +715,51 @@ public sealed class PivotWorkflowDialogTests
 
         blankResult.EmptyValueText.Should().BeNull();
         blankResult.ErrorValueText.Should().BeNull();
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_KeepsExistingPositionalOptionalOrder()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            true,
+            true,
+            true,
+            PivotSubtotalPlacement.Bottom,
+            false,
+            false,
+            "PivotStyleLight16",
+            true,
+            true,
+            false,
+            false,
+            PivotReportLayout.Tabular,
+            "empty",
+            true,
+            false,
+            false,
+            false,
+            0,
+            true,
+            true,
+            "title",
+            "description",
+            2,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+            true,
+            7,
+            "error");
+
+        result.ErrorValueText.Should().Be("error");
+        result.EnableDrill.Should().BeTrue();
     }
 
     [Fact]
@@ -779,7 +826,8 @@ public sealed class PivotWorkflowDialogTests
             MergeAndCenterLabels = true,
             PageOverThenDown = true,
             PageWrap = 2,
-            CompactRowLabelIndent = 5
+            CompactRowLabelIndent = 5,
+            EnableDrill = false
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
@@ -811,7 +859,8 @@ public sealed class PivotWorkflowDialogTests
                 MergeAndCenterLabels = true,
                 PageOverThenDown = true,
                 PageWrap = 2,
-                CompactRowLabelIndent = 5
+                CompactRowLabelIndent = 5,
+                EnableDrill = false
             });
     }
 
@@ -845,6 +894,74 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotStyleCatalog_ListsBuiltInLightMediumAndDarkStylesAndPreservesCustomCurrentStyle()
+    {
+        var styleNames = PivotStyleCatalog.GetStyleNames("  MyWorkbookPivotStyle  ");
+
+        styleNames.Should().HaveCount(85);
+        styleNames.Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"));
+        styleNames.Skip(28).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"));
+        styleNames.Skip(56).Take(28).Should().Equal(Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}"));
+        styleNames[^1].Should().Be("MyWorkbookPivotStyle");
+    }
+
+    [Fact]
+    public void PivotStyleCatalog_DoesNotDuplicateBuiltInCurrentStyle()
+    {
+        PivotStyleCatalog.GetStyleNames("pivotstylemedium10")
+            .Should()
+            .HaveCount(84)
+            .And
+            .ContainSingle(styleName => string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_UsesCurrentStyleAsInitialSelectionAndPreservesCustomStyle()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotStyleGalleryDialog("CustomPivotStyle");
+            var styleGallery = (ListBox)typeof(PivotStyleGalleryDialog)
+                .GetField("_styleGallery", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleGallery.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().HaveCount(85);
+            styleNames.Should().Contain("CustomPivotStyle");
+            styleGallery.SelectedItem.Should().Be("CustomPivotStyle");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void PivotStyleGalleryDialog_CreateResult_NormalizesBlankStyleToDefault()
+    {
+        PivotStyleGalleryDialog.CreateResult("  PivotStyleDark28  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleDark28"));
+
+        PivotStyleGalleryDialog.CreateResult("  ")
+            .Should()
+            .Be(new PivotStyleGalleryDialogResult("PivotStyleLight16"));
+    }
+
+    [Fact]
+    public void MainWindow_PivotStyleGalleryButton_OpensLightweightGalleryInsteadOfOptionsDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotDesignCommands.cs"));
+        var handlerSource = source[
+            source.IndexOf("private void PivotStyleGalleryBtn_Click", StringComparison.Ordinal)..
+            source.IndexOf("private void PivotRowHeadersBtn_Click", StringComparison.Ordinal)];
+
+        handlerSource.Should().Contain("ShowPivotStyleGalleryDialog();");
+        handlerSource.Should().NotContain("ShowPivotTableOptionsDialog();");
+        source.Should().Contain("private void ShowPivotStyleGalleryDialog()");
+        source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
+        source.Should().Contain("styleName: dialog.Result.StyleName");
+    }
+
+    [Fact]
     public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableOptionsDialog.cs"));
@@ -864,6 +981,7 @@ public sealed class PivotWorkflowDialogTests
             "_refreshOnOpenBox",
             "_enableRefreshBox",
             "_preserveSourceSortFilterBox",
+            "_enableShowDetailsBox",
             "_missingItemsLimitBox",
             "_fieldHeadersBox",
             "_showExpandCollapseBox",
@@ -993,11 +1111,32 @@ public sealed class PivotWorkflowDialogTests
             "Content = \"_Preserve cell formatting on update\"",
             "Content = \"_Refresh data when opening the file\"",
             "Content = \"_Enable refresh\"",
+            "Content = \"Enable Show De_tails\"",
             "Content = \"Show expand/collapse _buttons\"",
             "Content = \"Set print _titles\"",
             "Content = \"Print expand/collapse _buttons when displayed on PivotTable\""
         })
             source.Should().Contain(content);
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_DataTabAccessKeysAreUnique()
+    {
+        string[] dataTabLabels =
+        [
+            "_Refresh data when opening the file",
+            "_Save source data with file",
+            "_Enable refresh",
+            "Enable Show De_tails",
+            "Preserve source sort and _filter settings",
+            "Retain items _deleted from the data source"
+        ];
+
+        var accessKeys = dataTabLabels
+            .Select(label => char.ToUpperInvariant(label[label.IndexOf('_') + 1]))
+            .ToList();
+
+        accessKeys.Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
@@ -1469,6 +1608,8 @@ public sealed class PivotWorkflowDialogTests
                 "PivotChartOptionsDialog.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",
+                "PivotStyleCatalog.cs",
+                "PivotStyleGalleryDialog.cs",
                 "PivotTableOptionsDialog.cs",
                 "PivotTableOptionsDialog.Result.cs"
             }.Select(fileName => File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", fileName))));
