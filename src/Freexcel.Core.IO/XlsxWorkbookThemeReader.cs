@@ -60,6 +60,7 @@ public static class XlsxWorkbookThemeReader
             theme = theme.WithFonts(
                 ReadThemeTypeface(fontScheme.Element(drawingNs + "majorFont"), drawingNs) ?? theme.MajorFontName,
                 ReadThemeTypeface(fontScheme.Element(drawingNs + "minorFont"), drawingNs) ?? theme.MinorFontName);
+            theme = theme.WithNativeFontSchemeXml(fontScheme.ToString(SaveOptions.DisableFormatting));
         }
 
         var formatScheme = themeElements.Element(drawingNs + "fmtScheme");
@@ -79,7 +80,7 @@ public static class XlsxWorkbookThemeReader
                 theme = theme.WithColor(slot, color);
         }
 
-        return theme;
+        return theme.WithNativeColorSchemeXml(colorScheme.ToString(SaveOptions.DisableFormatting));
     }
 
     private static string? ReadThemeTypeface(XElement? fontElement, XNamespace drawingNs) =>

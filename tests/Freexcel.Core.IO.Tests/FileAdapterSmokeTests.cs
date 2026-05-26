@@ -6408,6 +6408,55 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_PreservesWorkbookThemeColorAndFontSchemeDetails()
+    {
+        var workbook = new Workbook("ThemeColorFontSchemeTest");
+        workbook.AddSheet("S1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnknownPackagePart(source, "xl/theme/theme1.xml", TestThemeWithNativeColorAndFontSchemeXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.Theme.Name.Should().Be("Freexcel Native Scheme Theme");
+        loaded.Theme.MajorFontName.Should().Be("Major Native");
+        loaded.Theme.MinorFontName.Should().Be("Minor Native");
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
+        loaded.Theme.NativeColorSchemeXml.Should().Contain("lumMod");
+        loaded.Theme.NativeFontSchemeXml.Should().Contain("typeface=\"Major East Asia\"");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var themeXml = LoadPackageXml(archive.GetEntry("xl/theme/theme1.xml")!);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var colorScheme = themeXml.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "clrScheme")!;
+        colorScheme.Element(drawingNs + "accent1")!
+            .Element(drawingNs + "srgbClr")!
+            .Element(drawingNs + "lumMod")!
+            .Attribute("val")!
+            .Value.Should().Be("75000");
+        var majorFont = themeXml.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fontScheme")!
+            .Element(drawingNs + "majorFont")!;
+        majorFont.Element(drawingNs + "ea")!
+            .Attribute("typeface")!
+            .Value.Should().Be("Major East Asia");
+        majorFont.Element(drawingNs + "font")!
+            .Attribute("script")!
+            .Value.Should().Be("Jpan");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_IgnoresNativeWorkbookThemeFormatSchemeFromWrongNamespace()
     {
         var workbook = new Workbook("ThemeFormatSchemeNamespaceTest");
@@ -22386,6 +22435,42 @@ public partial class FileAdapterSmokeTests
                 <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
               </a:bgFillStyleLst>
             </a:fmtScheme>
+          </a:themeElements>
+        </a:theme>
+        """;
+
+    private const string TestThemeWithNativeColorAndFontSchemeXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Freexcel Native Scheme Theme">
+          <a:themeElements>
+            <a:clrScheme name="Freexcel Native Colors">
+              <a:dk1><a:srgbClr val="010203"/></a:dk1>
+              <a:lt1><a:srgbClr val="FAFBFC"/></a:lt1>
+              <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+              <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+              <a:accent1><a:srgbClr val="0C2238"><a:lumMod val="75000"/></a:srgbClr></a:accent1>
+              <a:accent2><a:srgbClr val="E97132"/></a:accent2>
+              <a:accent3><a:srgbClr val="196B24"/></a:accent3>
+              <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>
+              <a:accent5><a:srgbClr val="A02B93"/></a:accent5>
+              <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>
+              <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+              <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+            </a:clrScheme>
+            <a:fontScheme name="Freexcel Native Fonts">
+              <a:majorFont>
+                <a:latin typeface="Major Native"/>
+                <a:ea typeface="Major East Asia"/>
+                <a:cs typeface="Major Complex"/>
+                <a:font script="Jpan" typeface="Yu Gothic"/>
+              </a:majorFont>
+              <a:minorFont>
+                <a:latin typeface="Minor Native"/>
+                <a:ea typeface="Minor East Asia"/>
+                <a:cs typeface="Minor Complex"/>
+              </a:minorFont>
+            </a:fontScheme>
+            <a:fmtScheme name="Effects Test"/>
           </a:themeElements>
         </a:theme>
         """;

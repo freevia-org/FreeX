@@ -47,6 +47,9 @@ public sealed partial class NativeJsonAdapter
         public string? MajorFontName { get; set; }
         public string? MinorFontName { get; set; }
         public string? EffectsName { get; set; }
+        public string? NativeColorSchemeXml { get; set; }
+        public string? NativeFontSchemeXml { get; set; }
+        public string? NativeFormatSchemeXml { get; set; }
         public List<WorkbookThemeColorDto> Colors { get; set; } = [];
     }
 
