@@ -346,26 +346,21 @@ public sealed class MainWindowRibbonKeyTipTests
 
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
-            harness.HandleKeyTip(Key.P);
+            harness.HandleKeyTip(Key.I);
 
             harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
             harness.KeyTipScope.Should().Be("None");
 
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
-            harness.HandleKeyTip(Key.L);
+            harness.HandleKeyTip(Key.P);
 
             harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
             harness.KeyTipScope.Should().Be("None");
 
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
-            harness.HandleKeyTip(Key.N);
-
-            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout, "N is the prefix for the Normal keytip NM");
-            harness.KeyTipScope.Should().Be("Commands");
-
-            harness.HandleKeyTip(Key.M);
+            harness.HandleKeyTip(Key.L);
 
             harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.Normal);
             harness.KeyTipScope.Should().Be("None");
