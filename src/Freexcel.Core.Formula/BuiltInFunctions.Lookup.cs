@@ -481,8 +481,19 @@ public static partial class BuiltInFunctions
             ? $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}"
             : $"{(rowAbs ? $"R{rowNum}" : $"R[{rowNum}]")}{(colAbs ? $"C{colNum}" : $"C[{colNum}]")}";
         if (!string.IsNullOrEmpty(sheetText))
-            addr = $"'{sheetText.Replace("'", "''")}'!{addr}";
+            addr = $"{FormatAddressSheetText(sheetText)}!{addr}";
         return new TextValue(addr);
+    }
+
+    private static string FormatAddressSheetText(string sheetText)
+    {
+        static bool IsSimpleSheetNameChar(char ch) =>
+            char.IsLetterOrDigit(ch) || ch is '_' or '.';
+
+        bool needsQuotes = sheetText.Length == 0 || !sheetText.All(IsSimpleSheetNameChar);
+        return needsQuotes
+            ? $"'{sheetText.Replace("'", "''")}'"
+            : sheetText;
     }
 
     private static ScalarValue Lookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
