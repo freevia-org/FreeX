@@ -98,6 +98,9 @@ public sealed class XlsxFileAdapterFormatTests
     [Fact]
     public void SavePostProcessing_UsesSourcePackageReplayOnlyForLoadedWorkbooks()
     {
+        var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"))
+            .ReplaceLineEndings("\n");
         var adapter = new XlsxFileAdapter();
         var freshWorkbook = CreateSimpleWorkbook("fresh");
 
@@ -114,6 +117,22 @@ public sealed class XlsxFileAdapterFormatTests
         adapter.Save(loadedWorkbook, loadedSave);
 
         HasSourcePackage(loadedWorkbook).Should().BeTrue();
+
+        var sourcePackageCheck = savePostProcessingSource.IndexOf(
+            "var hasSourcePackage = SourcePackages.TryGetValue(workbook, out _);",
+            StringComparison.Ordinal);
+        var freshSaveReturn = savePostProcessingSource.IndexOf(
+            "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            return;\n        }",
+            StringComparison.Ordinal);
+        var sourceReplay = savePostProcessingSource.IndexOf(
+            "PreserveSourcePackageParts(workbook, packageStream);",
+            StringComparison.Ordinal);
+
+        sourcePackageCheck.Should().BeGreaterThanOrEqualTo(0);
+        freshSaveReturn.Should().BeGreaterThan(sourcePackageCheck);
+        sourceReplay.Should().BeGreaterThan(
+            freshSaveReturn,
+            "fresh saves should return before source-package replay work runs");
     }
 
     private static string FindWorkspaceFile(params string[] parts)
