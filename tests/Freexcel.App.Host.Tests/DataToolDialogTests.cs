@@ -1204,7 +1204,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Reference:");
         source.Should().Contain("_All references:");
         source.Should().Contain("_Destination cell:");
-        source.Should().Contain("Use _labels in:");
+        source.Should().Contain("Text = \"Use labels in:\"");
+        source.Should().NotContain("Use _labels in:");
         source.Should().Contain("Content = \"_Add\"");
         source.Should().Contain("Content = \"_Delete\"");
         source.Should().Contain("_deleteReferenceButton");
