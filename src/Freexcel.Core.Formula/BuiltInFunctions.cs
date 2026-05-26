@@ -1117,7 +1117,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args.Count == 0) return ErrorValue.Value; // no cell reference available without context
+        if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
+            ? new NumberValue(cell.Row)
+            : ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.StartRow);
         return ErrorValue.Value;
@@ -1125,7 +1127,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Column(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args.Count == 0) return ErrorValue.Value;
+        if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
+            ? new NumberValue(cell.Col)
+            : ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.StartCol);
         return ErrorValue.Value;
