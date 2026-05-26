@@ -409,5 +409,12 @@ public sealed partial class XlsxFileAdapter
             packageStream.Position = 0;
             XlsxNumberFormatCatalogWriter.RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
         }
+
+        using var refreshedPackageStream = new MemoryStream();
+        packageStream.Position = 0;
+        packageStream.CopyTo(refreshedPackageStream);
+        refreshedPackageStream.Position = 0;
+        SourcePackages.Remove(workbook);
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(refreshedPackageStream));
     }
 }

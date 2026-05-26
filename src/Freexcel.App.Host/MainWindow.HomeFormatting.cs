@@ -147,10 +147,13 @@ public partial class MainWindow
     private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        var text = FontSizeBox.Text;
+        var text = GetSelectedFontSizeText();
         if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
-            ApplyStyleDiff(new StyleDiff(FontSize: size));
+            ApplyFontSizeAndFitRows(size);
     }
+
+    private string GetSelectedFontSizeText() =>
+        FontSizeBox.SelectedItem as string ?? FontSizeBox.Text;
 
     private void FontColorBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -238,6 +241,7 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        RefreshToolbar();
     }
 
     // ── Border picker ────────────────────────────────────────────────────────
