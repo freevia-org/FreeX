@@ -45,7 +45,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key))
                     continue;
 
-                ignoredErrors.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(ignoredErrors, attribute.Key, attribute.Value);
             }
 
             foreach (var pair in ignoredCells)
@@ -68,7 +68,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                             continue;
                         }
 
-                        ignoredError.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                        TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
                     }
                 }
 
@@ -125,7 +125,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 if (string.IsNullOrWhiteSpace(attribute.Key))
                     continue;
 
-                cellWatches.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(cellWatches, attribute.Key, attribute.Value);
             }
 
             foreach (var address in watchedCells)
@@ -142,7 +142,7 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                             continue;
                         }
 
-                        cellWatch.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                        TrySetNativeAttribute(cellWatch, attribute.Key, attribute.Value);
                     }
                 }
 

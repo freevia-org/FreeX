@@ -71,25 +71,25 @@ public static partial class NumberFormatter
         return [.. sections];
     }
 
-    private static (ParsedSection Section, double DisplayValue) SelectPositionalSection(
+    private static (ParsedSection Section, double DisplayValue, int SectionIndex) SelectPositionalSection(
         double value,
         ParsedSection[] sections)
     {
         if (value > 0 || sections.Length == 1)
-            return (sections[0], value);
+            return (sections[0], value, 0);
 
         if (value < 0)
         {
             if (sections.Length >= 2)
-                return (sections[1], Math.Abs(value));
+                return (sections[1], Math.Abs(value), 1);
 
-            return (sections[0], value);
+            return (sections[0], value, 0);
         }
 
         if (sections.Length >= 3)
-            return (sections[2], value);
+            return (sections[2], value, 2);
 
-        return (sections[0], value);
+        return (sections[0], value, 0);
     }
 
     private static ParsedSection ParseSection(string section)

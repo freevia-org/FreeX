@@ -9,6 +9,7 @@ public static partial class PrintRenderer
 {
     private static void DrawPrintHeadings(
         DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
         double marginLeft,
         double marginTop,
         PrintGridMeasurement measurement,
@@ -30,7 +31,7 @@ public static partial class PrintRenderer
                 measurement.ColumnWidth,
                 measurement.HeaderHeight);
             dc.DrawRectangle(headerBrush, headerPen, rect);
-            DrawCenteredText(dc, CellAddress.NumberToColumnName(pageColumns[colIndex]), rect, typeface);
+            DrawCenteredText(dc, textOverlays, CellAddress.NumberToColumnName(pageColumns[colIndex]), rect, typeface);
         }
 
         for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
@@ -41,11 +42,16 @@ public static partial class PrintRenderer
                 measurement.HeaderWidth,
                 measurement.RowHeight);
             dc.DrawRectangle(headerBrush, headerPen, rect);
-            DrawCenteredText(dc, pageRows[rowIndex].ToString(CultureInfo.InvariantCulture), rect, typeface);
+            DrawCenteredText(dc, textOverlays, pageRows[rowIndex].ToString(CultureInfo.InvariantCulture), rect, typeface);
         }
     }
 
-    private static void DrawCenteredText(DrawingContext dc, string text, Rect rect, Typeface typeface)
+    private static void DrawCenteredText(
+        DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
+        string text,
+        Rect rect,
+        Typeface typeface)
     {
         var ft = new FormattedText(
             text,
@@ -62,6 +68,18 @@ public static partial class PrintRenderer
             TextAlignment = TextAlignment.Center
         };
 
-        dc.DrawText(ft, new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2));
+        var drawPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
+        var textWidth = Math.Min(ft.WidthIncludingTrailingWhitespace, Math.Max(1, rect.Width - 4));
+        var overlayX = rect.Left + Math.Max(2, (rect.Width - textWidth) / 2);
+        dc.DrawText(ft, drawPoint);
+        textOverlays.Add(new PdfTextOverlay(
+            text,
+            overlayX,
+            drawPoint.Y,
+            PrintFontSize,
+            "Segoe UI",
+            Bold: false,
+            Italic: false,
+            Colors.Black));
     }
 }

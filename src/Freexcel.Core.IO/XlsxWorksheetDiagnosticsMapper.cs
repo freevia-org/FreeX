@@ -1,3 +1,4 @@
+using System.Xml;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -259,6 +260,23 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
         }
 
         return changed;
+    }
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 
     private static bool IsTruthy(string? value) =>
