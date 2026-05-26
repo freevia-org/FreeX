@@ -1194,6 +1194,45 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Keyboard.Focus(target);");
     }
 
+    [Fact]
+    public void MainWindow_WiresConsolidateReferencePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new ConsolidateDialog(");
+        source.Should().Contain("request => ApplyConsolidateRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyConsolidateRangeSelection(");
+        source.Should().Contain("ConsolidateRangeSelectionRequest request");
+        source.Should().Contain("request.Target == ConsolidateRangeSelectionTarget.DestinationCell");
+        source.Should().Contain("FormatWorkbookRange(selectedRange)");
+        source.Should().Contain("FormatCellReference(selectedRange.Start)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+    }
+
+    [Fact]
+    public void ConsolidateApplyRangeSelection_UpdatesRequestedReferenceBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConsolidateDialog(SheetId.New(), "A1:B3", "G10");
+            dialog.Show();
+            try
+            {
+                var textBoxes = FindVisualChildren<TextBox>(dialog).ToList();
+
+                dialog.ApplyRangeSelection(ConsolidateRangeSelectionTarget.Reference, "Sheet2!A1:D20");
+                dialog.ApplyRangeSelection(ConsolidateRangeSelectionTarget.DestinationCell, "K5");
+
+                textBoxes[0].Text.Should().Be("Sheet2!A1:D20");
+                textBoxes[1].Text.Should().Be("K5");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData("Select reference range", ConsolidateRangeSelectionTarget.Reference, "A1:B3")]
     [InlineData("Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell, "G10")]

@@ -48,6 +48,22 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
+    public void NewestStatusReport_KeyOpenItemsMatchOutstandingBuildHighestPriorityItems()
+    {
+        var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
+        var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Order(StringComparer.Ordinal)
+            .Last();
+        var outstandingBuild = File.ReadAllLines(Path.Combine(docsDirectory, "OUTSTANDING_BUILD.md"));
+        var report = File.ReadAllLines(newestStatusReport);
+
+        ReadNumberedBoldItems(outstandingBuild, "## Highest Priority Outstanding Work")
+            .Take(5)
+            .Should()
+            .Equal(ReadNumberedBoldItems(report, "## Remaining Outstanding Work"));
+    }
+
+    [Fact]
     public void DocsReadme_LinksReleaseFacingUserDocs()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
@@ -145,11 +161,28 @@ public sealed partial class DocumentationIndexTests
         }
     }
 
+    private static IReadOnlyList<string> ReadNumberedBoldItems(IReadOnlyList<string> lines, string sectionHeading)
+    {
+        var sectionStart = Array.IndexOf(lines.ToArray(), sectionHeading);
+        sectionStart.Should().BeGreaterThanOrEqualTo(0);
+
+        return lines
+            .Skip(sectionStart + 1)
+            .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
+            .Select(line => NumberedBoldItem().Match(line))
+            .Where(match => match.Success)
+            .Select(match => match.Groups["title"].Value)
+            .ToArray();
+    }
+
     [GeneratedRegex(@"\[PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\]\(PROJECT_STATUS_REPORT_\d{4}-\d{2}-\d{2}\.md\)")]
     private static partial Regex ProjectStatusReportLink();
 
     [GeneratedRegex(@"(?<!!)\[[^\]]+\]\((?<target>[^)]+)\)")]
     private static partial Regex MarkdownLink();
+
+    [GeneratedRegex(@"^\d+\. \*\*(?<title>[^*]+)\*\*")]
+    private static partial Regex NumberedBoldItem();
 
     [GeneratedRegex(@"\| Existing UI evidence screenshots \| (?<count>\d+) \|")]
     private static partial Regex UiEvidenceScreenshotCount();
