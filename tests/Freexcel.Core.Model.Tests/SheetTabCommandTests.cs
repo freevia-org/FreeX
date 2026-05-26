@@ -191,6 +191,45 @@ public class SheetTabCommandTests
     }
 
     [Fact]
+    public void DuplicateSheetCommand_CopiesChartDataTableFormatting()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var sourceDataTable = new ChartDataTableModel
+        {
+            ShowHorizontalBorder = false,
+            ShowVerticalBorder = true,
+            ShowOutline = false,
+            ShowLegendKeys = true,
+            FillColor = new CellColor(10, 20, 30),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            BorderColor = new CellColor(40, 50, 60),
+            BorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            BorderThickness = 2.5,
+            TextColor = new CellColor(70, 80, 90),
+            TextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            FontSize = 13.5
+        };
+        sheet.Charts.Add(new ChartModel
+        {
+            Name = "Sales Trend",
+            Type = ChartType.Line,
+            DataRange = new GridRange(a1, a1),
+            DataTable = sourceDataTable
+        });
+
+        var command = new DuplicateSheetCommand(sheet.Id);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var copiedChart = wb.Sheets[1].Charts.Should().ContainSingle().Subject;
+        copiedChart.DataTable.Should().NotBeSameAs(sourceDataTable);
+        copiedChart.DataTable.Should().BeEquivalentTo(sourceDataTable);
+    }
+
+    [Fact]
     public void SetSheetHiddenCommand_HidesSheetAndUndoRestores()
     {
         var wb = new Workbook("test");
