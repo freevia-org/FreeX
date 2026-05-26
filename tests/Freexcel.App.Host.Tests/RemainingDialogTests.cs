@@ -361,7 +361,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_ExposesKeyboardAccessKeysForButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
 
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
@@ -370,7 +370,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialogOpenedFromKeyboard_FocusesDefaultButton()
     {
-        var source = ReadClassSource("StatusDialogs.cs", "public sealed class GoalSeekStatusDialog", "public sealed class WorkbookStatisticsDialog");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -388,7 +388,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("Target value:");
         source.Should().Contain("Current formula result:");
@@ -417,7 +417,10 @@ public sealed class RemainingDialogTests
     [Fact]
     public void WorkbookStatisticsDialogOpenedFromKeyboard_FocusesOkButton()
     {
-        var source = ReadClassSource("StatusDialogs.cs", "public sealed class WorkbookStatisticsDialog", "public sealed class AccessibilityCheckerDialog");
+        var source = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogKeyboardFocus.cs")));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -447,7 +450,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void AccessibilityCheckerDialogOpenedFromKeyboard_FocusesIssueText()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs"));
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -458,7 +461,7 @@ public sealed class RemainingDialogTests
     [Fact]
     public void StatusDialogs_UseSharedExcelStyleButtonRows()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+        var source = ReadStatusDialogSources();
 
         source.Should().Contain("DialogButtonRowFactory.Create");
         source.Should().NotContain("InsertChartDialog.CreateButtonRow");
@@ -960,6 +963,14 @@ public sealed class RemainingDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SparklineDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SpellCheckDialog.cs")));
     }
+
+    private static string ReadStatusDialogSources() =>
+        string.Join(
+            Environment.NewLine,
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoalSeekStatusDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookStatisticsDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AccessibilityCheckerDialog.cs")),
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogKeyboardFocus.cs")));
 
     private static string ReadPrintPreviewDialogSources() =>
         string.Join(
