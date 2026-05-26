@@ -1352,6 +1352,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Substitute_OneCellInstanceRange_BroadcastsAcrossTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("aababc")),
+            (2, 1, new TextValue("banana")),
+            (1, 2, new NumberValue(2)));
+
+        AssertTextColumn(_eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"x\",B1:B1)", sheet), "axbabc", "banxna");
+    }
+
+    [Fact]
     public void Substitute_MismatchedTextOrInstanceArgument_ReturnsValueError()
     {
         var sheet = MakeSheet(
