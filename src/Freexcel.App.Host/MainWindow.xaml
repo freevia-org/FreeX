@@ -1841,7 +1841,7 @@
                                         local:RibbonTooltip.Description="Draw with a pen. Ink authoring is deferred in Freexcel."/>
                                 <Button Content="Pencil" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Pencil"
-                                        local:RibbonTooltip.KeyTip="PC"
+                                        local:RibbonTooltip.KeyTip="N"
                                         local:RibbonTooltip.Description="Draw with a pencil. Ink authoring is deferred in Freexcel."/>
                                 <Button Content="Highlighter" Width="82" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Highlighter"
@@ -2428,7 +2428,7 @@
                                         local:RibbonTooltip.Description="Linked stock data types are deferred in Freexcel."/>
                                 <Button Content="Geography" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Geography"
-                                        local:RibbonTooltip.KeyTip="G"
+                                        local:RibbonTooltip.KeyTip="Y"
                                         local:RibbonTooltip.Description="Linked geography data types are deferred in Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Types" Style="{StaticResource GroupLbl}"/></Border>
