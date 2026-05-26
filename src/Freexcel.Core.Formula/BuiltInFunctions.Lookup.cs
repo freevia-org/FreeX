@@ -120,19 +120,25 @@ public static partial class BuiltInFunctions
         var table = args[0] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
-        if (args[1] is ErrorValue e1) return e1;
-        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var columnArg = args.Count > 2 ? args[2] : BlankValue.Instance;
+        return MapScalarArgs([args[1], columnArg],
+            values => IndexScalar(table, values[0], values[1], args.Count == 2));
+    }
 
-        double rawRowNum = ToNumber(args[1]);
+    private static ScalarValue IndexScalar(RangeValue table, ScalarValue rowValue, ScalarValue columnValue, bool singleIndexArgument)
+    {
+        if (rowValue is ErrorValue e1) return e1;
+        if (columnValue is ErrorValue e2) return e2;
+        double rawRowNum = ToNumber(rowValue);
         if (!double.IsFinite(rawRowNum) || rawRowNum > int.MaxValue) return ErrorValue.Value;
         int rowNum = (int)rawRowNum;
-        double rawColNum = args.Count > 2 ? ToNumber(args[2]) : 1.0;
+        double rawColNum = columnValue is BlankValue ? 1.0 : ToNumber(columnValue);
         if (!double.IsFinite(rawColNum) || rawColNum > int.MaxValue) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 
         // For a 1-D range with a single index argument, the index selects along the
         // only dimension (column for a 1-row range, row for a 1-column range).
-        if (args.Count == 2)
+        if (singleIndexArgument)
         {
             if (table.RowCount == 1) { colNum = rowNum; rowNum = 1; }
             else if (table.ColCount == 1) { /* rowNum already correct, colNum = 1 */ }

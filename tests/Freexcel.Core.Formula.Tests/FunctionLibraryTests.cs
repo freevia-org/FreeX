@@ -453,6 +453,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Index_RowAndColumnNumberRanges_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)),
+            (1, 4, new NumberValue(1)), (2, 4, new NumberValue(2)),
+            (1, 5, new NumberValue(3)), (2, 5, new NumberValue(2)));
+
+        AssertApproxColumn(_eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:E2)", sheet), 3, 5);
+        AssertApproxColumn(_eval.Evaluate("=INDEX(A1:C2,D1:D2,2)", sheet), 2, 5);
+        _eval.Evaluate("=INDEX(A1:C2,D1:D2,E1:F1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Index_ColumnError_PropagatesError()
     {
         var sheet = MakeSheet(
