@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -73,6 +74,22 @@ public sealed partial class SelectionPaneDialog
 
         DragReorder(dragged!, target!);
         e.Handled = true;
+    }
+
+    private void List_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F2)
+        {
+            FocusRenameBox();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Space)
+        {
+            ToggleSelectedVisibility();
+            e.Handled = true;
+        }
     }
 
     private void DragReorder(SelectionPaneDialogItem dragged, SelectionPaneDialogItem target)
@@ -208,6 +225,13 @@ public sealed partial class SelectionPaneDialog
     {
         if (_list.SelectedItem is SelectionPaneDialogItem selected)
             _renameBox.Text = selected.Name;
+    }
+
+    private void FocusRenameBox()
+    {
+        _renameBox.Focus();
+        _renameBox.SelectAll();
+        Keyboard.Focus(_renameBox);
     }
 
     private void UpdateMoveButtons()

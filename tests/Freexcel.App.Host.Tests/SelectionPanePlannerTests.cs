@@ -218,6 +218,23 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_ListKeyboardShortcutsRenameAndToggleVisibility()
+    {
+        var source = ReadSelectionPaneDialogSources();
+
+        source.Should().Contain("_list.KeyDown += List_KeyDown;");
+        source.Should().Contain("private void List_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("if (e.Key == Key.F2)");
+        source.Should().Contain("FocusRenameBox();");
+        source.Should().Contain("if (e.Key == Key.Space)");
+        source.Should().Contain("ToggleSelectedVisibility();");
+        source.Should().Contain("private void FocusRenameBox()");
+        source.Should().Contain("_renameBox.Focus();");
+        source.Should().Contain("_renameBox.SelectAll();");
+        source.Should().Contain("Keyboard.Focus(_renameBox);");
+    }
+
+    [Fact]
     public void SelectionPaneDialog_AccumulatesMoveChangesInsteadOfClosingOnMove()
     {
         var source = ReadSelectionPaneDialogSources();
