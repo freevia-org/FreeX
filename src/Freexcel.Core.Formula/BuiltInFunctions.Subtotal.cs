@@ -9,8 +9,8 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Subtotal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        if (args[0] is ErrorValue e0) return e0;
-        var funcNumD = ToNumber(args[0]);
+        if (!TryGetScalarControlArgument(args[0], out var funcNumArg, out var funcNumError)) return funcNumError;
+        var funcNumD = ToNumber(funcNumArg);
         if (!double.IsFinite(funcNumD)) return ErrorValue.Value;
         int funcNum = (int)funcNumD;
         bool skipHidden = funcNum >= 101;
