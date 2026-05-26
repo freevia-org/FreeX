@@ -7571,6 +7571,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Expand_PadWithOneCellRange_UsesScalarValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (1, 2, new NumberValue(9)));
+
+        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,B1:B1)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[0, 1].Should().Be(new NumberValue(9));
+        rv.Cells[1, 0].Should().Be(new NumberValue(9));
+        rv.Cells[1, 1].Should().Be(new NumberValue(9));
+    }
+
+    [Fact]
     public void Expand_OmittedPadWith_DefaultsToNA()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
