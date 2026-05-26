@@ -7,7 +7,7 @@ public static partial class BuiltInFunctions
     // Phase A2 information and aggregate functions.
 
     // Defensive fallback if EvaluateAstAware routing is bypassed; the
-    // FormulaEvaluator dispatches ISREF/ISFORMULA/FORMULATEXT/OFFSET to
+    // FormulaEvaluator dispatches ISREF/ISFORMULA/FORMULATEXT/OFFSET/CELL to
     // AST-aware code paths before invoking this delegate.
     private static ScalarValue AstAwareStub(IReadOnlyList<ScalarValue> args, IEvalContext ctx) => ErrorValue.Value;
 
@@ -15,7 +15,7 @@ public static partial class BuiltInFunctions
     // Phase A2 – CELL(info_type, [reference])
     // ════════════════════════════════════════════════════════════════════════
 
-    private static ScalarValue CellInfo(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    internal static ScalarValue CellInfo(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         var infoType = ToText(args[0]).Trim().ToLowerInvariant();
