@@ -29,7 +29,7 @@ internal sealed class ExportOptionsDialog : Window
 
     public ExportOptions Result { get; private set; } = ExportOptions.ExcelLikeDefault;
 
-    public ExportOptionsDialog(bool hasSelection)
+    public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null)
     {
         Title = "Export Options";
         Width = 430;
@@ -37,6 +37,8 @@ internal sealed class ExportOptionsDialog : Window
         MaxHeight = 560;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+        _pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);
 
         _selectionButton.IsEnabled = hasSelection;
         if (!hasSelection)

@@ -105,10 +105,13 @@ public sealed class ConditionalFormat
     public bool UseThreeColorScale { get; set; } = false;
     public CfThresholdType MinThresholdType { get; set; } = CfThresholdType.Min;
     public string? MinThresholdValue { get; set; }
+    public bool? MinThresholdGreaterThanOrEqual { get; set; }
     public CfThresholdType MidThresholdType { get; set; } = CfThresholdType.Percentile;
     public string? MidThresholdValue { get; set; } = "50";
+    public bool? MidThresholdGreaterThanOrEqual { get; set; }
     public CfThresholdType MaxThresholdType { get; set; } = CfThresholdType.Max;
     public string? MaxThresholdValue { get; set; }
+    public bool? MaxThresholdGreaterThanOrEqual { get; set; }
 
     // ── DataBar rule ────────────────────────────────────────────────────────
 

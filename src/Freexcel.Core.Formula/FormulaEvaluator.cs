@@ -1385,8 +1385,9 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateSwitch(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count < 3) return ErrorValue.Value;
-        var expr = EvaluateNode(node.Arguments[0], context);
+        var expr = EvaluateArrayOperand(node.Arguments[0], context);
         if (expr is ErrorValue e) return e;
+        if (expr is RangeValue exprRange) return EvaluateSwitchExpressionRange(node, context, exprRange);
         bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
         int pairCount = (node.Arguments.Count - 1) / 2;
         for (int i = 0; i < pairCount; i++)
@@ -1397,6 +1398,75 @@ public sealed class FormulaEvaluator
                 return EvaluateArrayOperand(node.Arguments[1 + i * 2 + 1], context);
         }
         return hasDefault ? EvaluateArrayOperand(node.Arguments[^1], context) : ErrorValue.NA;
+    }
+
+    private ScalarValue EvaluateSwitchExpressionRange(FunctionCallNode node, IEvalContext context, RangeValue exprRange)
+    {
+        var valueCache = new Dictionary<int, ScalarValue>();
+        var resultCache = new Dictionary<int, ScalarValue>();
+        var cells = new ScalarValue[exprRange.RowCount, exprRange.ColCount];
+
+        for (int r = 0; r < exprRange.RowCount; r++)
+            for (int c = 0; c < exprRange.ColCount; c++)
+                cells[r, c] = EvaluateSwitchElement(node, context, valueCache, resultCache, exprRange, r, c);
+
+        return new RangeValue(cells, exprRange.StartRow, exprRange.StartCol) { SheetName = exprRange.SheetName };
+    }
+
+    private ScalarValue EvaluateSwitchElement(
+        FunctionCallNode node,
+        IEvalContext context,
+        Dictionary<int, ScalarValue> valueCache,
+        Dictionary<int, ScalarValue> resultCache,
+        RangeValue exprRange,
+        int row,
+        int col)
+    {
+        var expr = exprRange.Cells[row, col];
+        if (expr is ErrorValue error) return error;
+
+        bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
+        int pairCount = (node.Arguments.Count - 1) / 2;
+        for (int i = 0; i < pairCount; i++)
+        {
+            int valueIndex = 1 + i * 2;
+            if (!valueCache.TryGetValue(valueIndex, out var value))
+            {
+                value = EvaluateArrayOperand(node.Arguments[valueIndex], context);
+                valueCache[valueIndex] = value;
+            }
+
+            var valueElement = value is RangeValue valueRange
+                ? PickRangeElementForArrayResult(valueRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                : value;
+
+            if (valueElement is ErrorValue valueError) return valueError;
+            if (!BuiltInFunctions.ScalarEquals(expr, valueElement)) continue;
+
+            int resultIndex = valueIndex + 1;
+            if (!resultCache.TryGetValue(resultIndex, out var result))
+            {
+                result = EvaluateArrayOperand(node.Arguments[resultIndex], context);
+                resultCache[resultIndex] = result;
+            }
+
+            return result is RangeValue resultRange
+                ? PickRangeElementForArrayResult(resultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                : result;
+        }
+
+        if (!hasDefault) return ErrorValue.NA;
+
+        int defaultIndex = node.Arguments.Count - 1;
+        if (!resultCache.TryGetValue(defaultIndex, out var defaultResult))
+        {
+            defaultResult = EvaluateArrayOperand(node.Arguments[defaultIndex], context);
+            resultCache[defaultIndex] = defaultResult;
+        }
+
+        return defaultResult is RangeValue defaultRange
+            ? PickRangeElementForArrayResult(defaultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+            : defaultResult;
     }
 
     private static bool IsAggregateFunction(string name) =>
@@ -1679,6 +1749,8 @@ public sealed class FormulaEvaluator
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
 
+        public bool IsRowFilterHidden(uint row) => _sheet.FilterHiddenRows.Contains(row);
+
         public Freexcel.Core.Model.Sheet? CurrentSheet => _sheet;
 
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _workbook;
@@ -1726,6 +1798,7 @@ public sealed class FormulaEvaluator
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId id) => _inner.TryGetSheetName(id);
         public bool SheetExists(string sn) => _inner.SheetExists(sn);
         public bool IsRowHidden(uint row) => _inner.IsRowHidden(row);
+        public bool IsRowFilterHidden(uint row) => _inner.IsRowFilterHidden(row);
         public Freexcel.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
         public Freexcel.Core.Model.CellAddress? CurrentCellAddress => _inner.CurrentCellAddress;
