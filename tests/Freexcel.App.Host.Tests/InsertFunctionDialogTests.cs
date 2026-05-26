@@ -124,6 +124,18 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void FunctionArgumentsDialog_ExposesExcelLikeHelpAction()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FunctionArgumentsDialog.cs"));
+
+        source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("ShowFunctionHelp");
+        source.Should().Contain("btnRow.Children.Add(help)");
+        source.Should().Contain("btnRow.Children.Add(ok)");
+        source.Should().Contain("btnRow.Children.Add(cancel)");
+    }
+
+    [Fact]
     public void InsertFunctionDialogOpenedFromKeyboard_FocusesSearchBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));

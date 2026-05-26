@@ -28,9 +28,9 @@ public sealed partial class FunctionArgumentsDialog : Window
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 12, 0, 0));
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        root.Children.Add(buttons);
+        var btnRow = CreateButtonRow();
+        DockPanel.SetDock(btnRow, Dock.Bottom);
+        root.Children.Add(btnRow);
 
         var body = new StackPanel();
         root.Children.Add(body);
@@ -156,6 +156,31 @@ public sealed partial class FunctionArgumentsDialog : Window
     {
         ResultFormula = CreateFormula(_functionName, _argumentBoxes.Select(box => box.Text));
         DialogResult = true;
+    }
+
+    private StackPanel CreateButtonRow()
+    {
+        var btnRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
+        help.Click += (_, _) => ShowFunctionHelp();
+        var ok = new Button { Content = "_OK", Width = 76, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        ok.Click += (_, _) => Accept();
+        var cancel = new Button { Content = "_Cancel", Width = 76, IsCancel = true };
+        btnRow.Children.Add(help);
+        btnRow.Children.Add(ok);
+        btnRow.Children.Add(cancel);
+        return btnRow;
+    }
+
+    private void ShowFunctionHelp()
+    {
+        MessageBox.Show(this, $"{_functionName}()\n\n{string.Join(Environment.NewLine, _arguments.Select(argument => $"{argument.Name}: {argument.Description}"))}",
+            "Function Help", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void FocusInitialKeyboardTarget()
