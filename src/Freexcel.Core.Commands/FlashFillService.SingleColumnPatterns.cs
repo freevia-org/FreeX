@@ -173,6 +173,9 @@ public static partial class FlashFillService
             return commaFirstPattern;
         }
 
+        if (TryDelimitedPartReorder(examples, ',', s => s[1] + " " + s[0], out var firstLastPattern))
+            return firstLastPattern;
+
         return null;
     }
 
