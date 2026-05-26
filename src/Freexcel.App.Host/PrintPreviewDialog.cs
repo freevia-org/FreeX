@@ -417,7 +417,7 @@ public sealed partial class PrintPreviewDialog : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Background = System.Windows.Media.Brushes.WhiteSmoke
         };
-        settingsScroll.Content = BuildPrintSettingsPanel(
+        settingsScroll.Content = PrintPreviewSettingsPanelFactory.Build(
             sheetId,
             sheet,
             executeCommand,
