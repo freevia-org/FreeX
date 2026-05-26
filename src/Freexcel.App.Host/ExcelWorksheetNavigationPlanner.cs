@@ -98,20 +98,8 @@ public static class ExcelWorksheetNavigationPlanner
 
     public static CellAddress GetCtrlEndCell(Sheet? sheet, SheetId sheetId)
     {
-        var maxRow = 1u;
-        var maxCol = 1u;
-        if (sheet is not null)
-        {
-            foreach (var (address, _) in sheet.GetUsedCells())
-            {
-                if (address.Row > maxRow)
-                    maxRow = address.Row;
-                if (address.Col > maxCol)
-                    maxCol = address.Col;
-            }
-        }
-
-        return new CellAddress(sheetId, maxRow, maxCol);
+        var usedRangeEnd = sheet?.GetUsedRange()?.End;
+        return usedRangeEnd ?? new CellAddress(sheetId, 1, 1);
     }
 
     private static bool CellHasData(Sheet? sheet, uint row, uint col)
