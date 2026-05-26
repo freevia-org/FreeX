@@ -333,7 +333,11 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var dialog = new PageSetupDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
+        PageSetupDialog? dialog = null;
+        dialog = new PageSetupDialog(
+            sheet,
+            SheetGrid.SelectedRange,
+            request => ApplyPageSetupRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -401,6 +405,37 @@ public partial class MainWindow
         printArea is { } range
             ? new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))
             : new ClearPrintAreaCommand(sheetId);
+
+    private void ApplyPageSetupRangeSelection(PageSetupDialog? dialog, PageSetupRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = FormatPageSetupRangeSelection(request.Target, selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
+    private string FormatPageSetupRangeSelection(PageSetupRangeSelectionTarget target, GridRange selectedRange) =>
+        target switch
+        {
+            PageSetupRangeSelectionTarget.RepeatRows => $"{selectedRange.Start.Row}:{selectedRange.End.Row}",
+            PageSetupRangeSelectionTarget.RepeatColumns => $"{FormatColumnReference(selectedRange.Start.Col)}:{FormatColumnReference(selectedRange.End.Col)}",
+            _ => FormatRangeReference(selectedRange.Start, selectedRange.End)
+        };
 
     private void ShowPageSetupPrinterOptions()
     {

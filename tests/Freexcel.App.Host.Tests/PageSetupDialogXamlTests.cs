@@ -1,6 +1,8 @@
 using System.IO;
+using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -198,6 +200,46 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageSetupDialogApplyRangeSelection_UpdatesRequestedSheetTabBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book1").AddSheet("Sheet1");
+            var dialog = new PageSetupDialog(sheet);
+            try
+            {
+                dialog.ApplyRangeSelection(PageSetupRangeSelectionTarget.PrintArea, "B2:D8");
+                dialog.ApplyRangeSelection(PageSetupRangeSelectionTarget.RepeatRows, "2:4");
+                dialog.ApplyRangeSelection(PageSetupRangeSelectionTarget.RepeatColumns, "B:D");
+
+                ((TextBox)dialog.FindName("PrintAreaBox")).Text.Should().Be("B2:D8");
+                ((TextBox)dialog.FindName("RowsRepeatBox")).Text.Should().Be("2:4");
+                ((TextBox)dialog.FindName("ColumnsRepeatBox")).Text.Should().Be("B:D");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void PageSetupHandler_WiresRangePickersToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("new PageSetupDialog(");
+        source.Should().Contain("request => ApplyPageSetupRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyPageSetupRangeSelection(");
+        source.Should().Contain("PageSetupRangeSelectionRequest request");
+        source.Should().Contain("FormatPageSetupRangeSelection(request.Target, selectedRange)");
+        source.Should().Contain("dialog.ApplyRangeSelection(request.Target, rangeText);");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
     public void PageSetupDialogInvalidPrintArea_SelectsSheetTabPrintAreaBox()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
@@ -302,7 +344,8 @@ public sealed class PageSetupDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
 
         source.Should().Contain("new CompositeWorkbookCommand(");
-        source.Should().Contain("new PageSetupDialog(sheet, SheetGrid.SelectedRange)");
+        source.Should().Contain("new PageSetupDialog(");
+        source.Should().Contain("SheetGrid.SelectedRange");
         source.Should().Contain("new SetHeaderFooterCommand(");
         source.Should().Contain("dialog.FirstPageHeader");
         source.Should().Contain("dialog.EvenPageFooter");

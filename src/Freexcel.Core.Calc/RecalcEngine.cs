@@ -288,6 +288,32 @@ public sealed class RecalcEngine
                 break;
             }
 
+            case FullColumnRangeRefNode range when range.SheetName is not null:
+            {
+                var targetSheet = workbook?.GetSheet(range.SheetName);
+                if (targetSheet is not null)
+                    refs.AddRange(CreateGridRange(targetSheet.Id, range));
+                break;
+            }
+            case FullColumnRangeRefNode range:
+            {
+                refs.AddRange(CreateGridRange(defaultSheetId, range));
+                break;
+            }
+
+            case FullRowRangeRefNode range when range.SheetName is not null:
+            {
+                var targetSheet = workbook?.GetSheet(range.SheetName);
+                if (targetSheet is not null)
+                    refs.AddRange(CreateGridRange(targetSheet.Id, range));
+                break;
+            }
+            case FullRowRangeRefNode range:
+            {
+                refs.AddRange(CreateGridRange(defaultSheetId, range));
+                break;
+            }
+
             case NamedRangeNode named:
             {
                 if (workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
@@ -348,6 +374,20 @@ public sealed class RecalcEngine
     {
         var start = new CellAddress(sheetId, range.Start.Row, range.Start.ColumnNumber);
         var end = new CellAddress(sheetId, range.End.Row, range.End.ColumnNumber);
+        return new GridRange(start, end);
+    }
+
+    private static GridRange CreateGridRange(SheetId sheetId, FullColumnRangeRefNode range)
+    {
+        var start = new CellAddress(sheetId, 1, range.StartColumnNumber);
+        var end = new CellAddress(sheetId, CellAddress.MaxRow, range.EndColumnNumber);
+        return new GridRange(start, end);
+    }
+
+    private static GridRange CreateGridRange(SheetId sheetId, FullRowRangeRefNode range)
+    {
+        var start = new CellAddress(sheetId, range.StartRow, 1);
+        var end = new CellAddress(sheetId, range.EndRow, CellAddress.MaxCol);
         return new GridRange(start, end);
     }
 
