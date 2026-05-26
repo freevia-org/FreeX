@@ -10,10 +10,18 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public enum PrintPreviewPageRangeMode
+internal enum PrintPreviewPageRangeMode
 {
     AllPages,
-    CurrentPage
+    CurrentPage,
+    Pages
+}
+
+public enum PrintPreviewSidesMode
+{
+    OneSided,
+    TwoSidedLongEdge,
+    TwoSidedShortEdge
 }
 
 public sealed partial class PrintPreviewDialog
@@ -61,15 +69,60 @@ public sealed partial class PrintPreviewDialog
         Keyboard.Focus(pageNumberBox);
     }
 
-    public static DocumentPaginator ResolvePrintPaginator(
+    internal static DocumentPaginator ResolvePrintPaginator(
         FixedDocument document,
         PrintPreviewPageRangeMode pageRangeMode,
-        int currentPage) =>
-        pageRangeMode == PrintPreviewPageRangeMode.CurrentPage
-            ? new PageRangeDocumentPaginator(document.DocumentPaginator, new ExportPageRange(currentPage, currentPage))
-            : document.DocumentPaginator;
+        int currentPage,
+        ExportPageRange? pageRange = null) =>
+        pageRangeMode switch
+        {
+            PrintPreviewPageRangeMode.CurrentPage => new PageRangeDocumentPaginator(
+                document.DocumentPaginator,
+                new ExportPageRange(currentPage, currentPage)),
+            PrintPreviewPageRangeMode.Pages when pageRange is not null => new PageRangeDocumentPaginator(
+                document.DocumentPaginator,
+                pageRange),
+            _ => document.DocumentPaginator
+        };
 
-    private static void ShowNativePrintDialog(DocumentPaginator paginator, PrintQueue? printQueue, int copies, bool collated)
+    internal static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
+        mode switch
+        {
+            PrintPreviewSidesMode.TwoSidedLongEdge => Duplexing.TwoSidedLongEdge,
+            PrintPreviewSidesMode.TwoSidedShortEdge => Duplexing.TwoSidedShortEdge,
+            _ => Duplexing.OneSided
+        };
+
+    private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
+        sidesBox.SelectedIndex switch
+        {
+            1 => PrintPreviewSidesMode.TwoSidedLongEdge,
+            2 => PrintPreviewSidesMode.TwoSidedShortEdge,
+            _ => PrintPreviewSidesMode.OneSided
+        };
+
+    private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
+    {
+        MessageBox.Show(
+            this,
+            error ?? "Enter a valid page range.",
+            Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        var target = string.Equals(error, "From page must be less than or equal to To page.", StringComparison.OrdinalIgnoreCase)
+            ? toPageBox
+            : fromPageBox;
+        target.Focus();
+        target.SelectAll();
+        Keyboard.Focus(target);
+    }
+
+    private static void ShowNativePrintDialog(
+        DocumentPaginator paginator,
+        PrintQueue? printQueue,
+        int copies,
+        bool collated,
+        PrintPreviewSidesMode sidesMode)
     {
         var dialog = new PrintDialog();
         if (printQueue is not null)
@@ -79,6 +132,7 @@ public sealed partial class PrintPreviewDialog
         {
             dialog.PrintTicket.CopyCount = copies;
             dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated;
+            dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode);
         }
 
         if (dialog.ShowDialog() == true)

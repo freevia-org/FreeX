@@ -90,4 +90,24 @@ public sealed class ClipboardPastePlannerTests
             .Should()
             .Be(expected);
     }
+
+    [Theory]
+    [InlineData(PasteMode.All, "A\tB\r\n1\t2", true, false)]
+    [InlineData(PasteMode.All, "Single cell", true, false)]
+    [InlineData(PasteMode.All, "", true, true)]
+    [InlineData(PasteMode.All, "   ", true, true)]
+    [InlineData(PasteMode.All, null, true, true)]
+    [InlineData(PasteMode.Values, null, true, false)]
+    [InlineData(PasteMode.Formats, null, true, false)]
+    [InlineData(PasteMode.Formulas, null, true, false)]
+    public void ShouldPasteClipboardImageForNormalPaste_PrefersTabularTextOverImage(
+        PasteMode mode,
+        string? clipboardText,
+        bool hasImage,
+        bool expected)
+    {
+        ClipboardPastePlanner.ShouldPasteClipboardImageForNormalPaste(mode, clipboardText, hasImage)
+            .Should()
+            .Be(expected);
+    }
 }

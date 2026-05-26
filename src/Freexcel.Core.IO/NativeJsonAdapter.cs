@@ -71,7 +71,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 if (string.IsNullOrWhiteSpace(property?.Name) || property.Id <= 0)
                     continue;
 
-                sheet.CustomProperties.Add(new WorksheetCustomProperty(property.Name, property.Id));
+                sheet.CustomProperties.Add(new WorksheetCustomProperty(
+                    property.Name,
+                    property.Id,
+                    ToWorksheetCustomPropertyMetadata(property.Metadata)));
             }
             foreach (var entry in sDto.RowHeights ?? [])
                 if (NativeJsonValueSanitizer.IsValidRowIndex(entry.Index) && NativeJsonValueSanitizer.IsPositiveFinite(entry.Value))
@@ -132,6 +135,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);
             sheet.SingleXmlCells = ToWorksheetSingleXmlCells(sDto.SingleXmlCells);
+            sheet.CellWatchesMetadata = ToWorksheetCellWatchesMetadata(sDto.CellWatchesMetadata);
+            sheet.IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadata(sDto.IgnoredErrorsMetadata);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
             sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
             if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
@@ -399,7 +404,13 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
 
             if (changes.Count > 0)
-                workbook.Scenarios.Add(new WorkbookScenario(scenarioDto.Name, changes));
+                workbook.Scenarios.Add(new WorkbookScenario(
+                    scenarioDto.Name,
+                    changes,
+                    string.IsNullOrWhiteSpace(scenarioDto.Comment) ? null : scenarioDto.Comment,
+                    scenarioDto.Hidden,
+                    scenarioDto.Locked,
+                    string.IsNullOrWhiteSpace(scenarioDto.User) ? null : scenarioDto.User));
         }
 
         return workbook;

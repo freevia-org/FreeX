@@ -13,6 +13,35 @@ namespace Freexcel.App.UI.Tests;
 public sealed class ChartRendererTests
 {
     [Fact]
+    public void ColumnRenderer_UsesChartDataCellsWhenSourceRangeIsOutsideVisibleViewport()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 20, 5), new CellAddress(sheetId, 22, 6))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [Cell(1, 1, "Visible")],
+            [],
+            [],
+            ChartDataCells:
+            [
+                ChartCell(sheetId, 20, 5, "Category"),
+                ChartCell(sheetId, 20, 6, "Sales"),
+                ChartCell(sheetId, 21, 5, "A"),
+                ChartCell(sheetId, 21, 6, "10"),
+                ChartCell(sheetId, 22, 5, "B"),
+                ChartCell(sheetId, 22, 6, "20")
+            ]));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.Items.Should().HaveCount(2);
+        model.Axes.Single(axis => axis.Position == AxisPosition.Bottom).FormatValue(1).Should().Be("B");
+    }
+
+    [Fact]
     public void ChartRenderer_DoesNotRenderMapChart()
     {
         var sheetId = SheetId.New();
@@ -2451,4 +2480,7 @@ public sealed class ChartRendererTests
 
     private static DisplayCell Cell(uint row, uint col, string text) =>
         new(row, col, null, text, null, StyleId.Default, null);
+
+    private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text) =>
+        new(sheetId, row, col, text);
 }

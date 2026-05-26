@@ -2,7 +2,9 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Globalization;
 using Freexcel.App.Host;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using FluentAssertions;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
@@ -44,6 +46,7 @@ public sealed class FormatCellsDialogXamlTests
         {
             "_Wrap text",
             "S_hrink to fit",
+            "_Merge cells",
             "_Normal font",
             "_Double underline",
             "_Strikethrough",
@@ -88,7 +91,7 @@ public sealed class FormatCellsDialogXamlTests
         foreach (var controlName in new[]
         {
             "NumberFormatCombo",
-            "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck",
+            "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck", "DlgMergeCellsCheck",
             "DlgIndentLevelBox", "DlgTextRotationBox",
             "DlgFontNameBox", "DlgFontSizeBox", "DlgFontStyleList",
             "DlgUnderlineStyleBox", "DlgNormalFontCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
@@ -149,6 +152,8 @@ public sealed class FormatCellsDialogXamlTests
 
         xaml.Should().Contain("x:Name=\"DlgShrinkToFitCheck\"");
         xaml.Should().Contain("Content=\"S_hrink to fit\"");
+        xaml.Should().Contain("x:Name=\"DlgMergeCellsCheck\"");
+        xaml.Should().Contain("Content=\"_Merge cells\"");
     }
 
     [Fact]
@@ -728,6 +733,16 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_UsesEditableFontNameCombo()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("x:Name=\"DlgFontNameBox\"");
+        xaml.Should().Contain("IsEditable=\"True\"");
+        xaml.Should().Contain("TextBoxBase.TextChanged=\"FontPreviewInput_Changed\"");
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_PopulatesInstalledFontsAndKeepsCustomCurrentFont()
     {
         StaTestRunner.Run(() =>
@@ -743,6 +758,31 @@ public sealed class FormatCellsDialogXamlTests
                 fontBox.SelectedItem.Should().Be(customFont);
                 availableFonts.Should().Contain(Fonts.SystemFontFamilies.Select(f => f.Source));
                 availableFonts.Should().HaveCountGreaterThan(6);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_AppliesTypedFontName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const string typedFont = "Freexcel Typed Font";
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var fontBox = GetControl<ComboBox>(dialog, "DlgFontNameBox");
+                fontBox.SelectedItem = null;
+                fontBox.Text = $"  {typedFont}  ";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontName.Should().Be(typedFont);
             }
             finally
             {
@@ -872,6 +912,86 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_AcceptsHexColorTextForFontFillPatternAndBorders()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<TextBox>(dialog, "DlgFontColorBox").Text = "#C00000";
+                GetControl<TextBox>(dialog, "DlgFillColorBox").Text = "#00B050";
+                GetControl<TextBox>(dialog, "DlgFillPatternColorBox").Text = "#5B9BD5";
+                GetControl<ComboBox>(dialog, "DlgFillPatternStyleBox").SelectedItem = "Diagonal Crosshatch";
+                GetControl<TextBox>(dialog, "DlgBorderLineColorBox").Text = "#7030A0";
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.Thin);
+                GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "#FFC000";
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.Medium);
+                GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "#4472C4";
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.Dashed);
+                GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "#70AD47";
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.Double);
+                GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "#ED7D31";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontColor.Should().Be(new CellColor(192, 0, 0));
+                dialog.ResultDiff.FillColor.Should().Be(new CellColor(0, 176, 80));
+                dialog.ResultDiff.FillPatternColor.Should().Be(new CellColor(91, 155, 213));
+                dialog.ResultDiff.FillPatternStyle.Should().Be(CellFillPatternStyle.DarkGrid);
+                dialog.ResultDiff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(255, 192, 0)));
+                dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.Medium, new CellColor(68, 114, 196)));
+                dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(112, 173, 71)));
+                dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Double, new CellColor(237, 125, 49)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_AllowsBlankSideColorsWhenBorderSidesAreNone()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle
+            {
+                BorderTop = new CellBorder(BorderStyle.Thin, new CellColor(1, 2, 3)),
+                BorderRight = new CellBorder(BorderStyle.Thin, new CellColor(4, 5, 6)),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(7, 8, 9)),
+                BorderLeft = new CellBorder(BorderStyle.Thin, new CellColor(10, 11, 12))
+            };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgBorderTopStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderTopColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderRightStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderRightColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderBottomStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderBottomColorBox").Text = "";
+                GetControl<ComboBox>(dialog, "DlgBorderLeftStyleBox").SelectedItem = nameof(BorderStyle.None);
+                GetControl<TextBox>(dialog, "DlgBorderLeftColorBox").Text = "";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.BorderTop.Should().Be(new CellBorder(BorderStyle.None, new CellColor(1, 2, 3)));
+                dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.None, new CellColor(4, 5, 6)));
+                dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.None, new CellColor(7, 8, 9)));
+                dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.None, new CellColor(10, 11, 12)));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
@@ -989,6 +1109,83 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_MapsMergeCellsOnlyWhenChanged()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new FormatCellsDialog(new CellStyle(), FormatCellsDialogTab.Alignment, mergeCells: false);
+            dialog.Show();
+            try
+            {
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked.Should().BeFalse();
+
+                ClickOkForTest(dialog);
+                dialog.ResultMergeCells.Should().BeNull();
+
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked = true;
+                ClickOkForTest(dialog);
+                dialog.ResultMergeCells.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_MapsUnmergeWhenExistingMergeIsUnchecked()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new FormatCellsDialog(new CellStyle(), FormatCellsDialogTab.Alignment, mergeCells: true);
+            dialog.Show();
+            try
+            {
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked.Should().BeTrue();
+                GetControl<CheckBox>(dialog, "DlgMergeCellsCheck").IsChecked = false;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultMergeCells.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsMergePlanner_CreatesMergeAndUnmergeCommandsForSelection()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+
+        var mergeCommands = FormatCellsMergePlanner.CreateMergeCommands(sheet, sheet.Id, range, mergeCells: true);
+
+        mergeCommands.Should().ContainSingle().Which.Should().BeOfType<MergeCellsCommand>();
+
+        sheet.AddMergedRegion(range);
+        FormatCellsMergePlanner.IsSelectionMerged(sheet, new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 1)))
+            .Should()
+            .BeTrue();
+
+        var unmergeCommands = FormatCellsMergePlanner.CreateMergeCommands(
+            sheet,
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            mergeCells: false);
+
+        unmergeCommands.Should().ContainSingle().Which.Should().BeOfType<UnmergeCellsCommand>();
+    }
+
+    [Fact]
     public void FormatCellsDialog_NumberTab_AppliesDecimalSymbolAndNegativeControlsToNumberFormats()
     {
         StaTestRunner.Run(() =>
@@ -1034,6 +1231,38 @@ public sealed class FormatCellsDialogXamlTests
                 decimals.Text = "1";
                 ClickOkForTest(dialog);
                 dialog.ResultDiff!.NumberFormat.Should().Be("0.0E+00");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_ListsLocalizedAccountingCurrencyLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var decimals = GetControl<TextBox>(dialog, "NumberDecimalPlacesBox");
+                var symbols = GetControl<ComboBox>(dialog, "NumberSymbolCombo");
+                var usRegion = new RegionInfo("en-US");
+                var usDollarLabel = $"{usRegion.CurrencySymbol} {usRegion.CurrencyNativeName}";
+
+                symbols.Items.Cast<string>().Should().Contain(usDollarLabel);
+
+                categories.SelectedItem = "Accounting";
+                decimals.Text = "2";
+                symbols.SelectedItem = usDollarLabel;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.NumberFormat.Should().Be($"_({usRegion.CurrencySymbol}* #,##0.00_);_({usRegion.CurrencySymbol}* (#,##0.00);_({usRegion.CurrencySymbol}* \"-\"??_);_(@_)");
             }
             finally
             {

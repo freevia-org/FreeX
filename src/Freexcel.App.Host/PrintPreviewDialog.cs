@@ -80,6 +80,19 @@ public sealed partial class PrintPreviewDialog : Window
         };
         AutomationProperties.SetName(collatedBox, "Collated");
         AutomationProperties.SetHelpText(collatedBox, "When checked, multiple copies print as collated sets.");
+        var sidesBox = new ComboBox
+        {
+            Width = 178,
+            SelectedIndex = 0,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Choose one-sided or duplex printing when the printer supports it."
+        };
+        sidesBox.Items.Add("Print One Sided");
+        sidesBox.Items.Add("Flip pages on long edge");
+        sidesBox.Items.Add("Flip pages on short edge");
+        AutomationProperties.SetName(sidesBox, "Sides");
+        AutomationProperties.SetHelpText(sidesBox, "Selects one-sided or two-sided duplex printing for the Windows print dialog.");
         var statusText = new TextBlock
         {
             Margin = new Thickness(4, 0, 8, 0),
@@ -91,6 +104,8 @@ public sealed partial class PrintPreviewDialog : Window
         AutomationProperties.SetHelpText(statusText, "Shows the selected printer, copy count, and preview page count.");
         var selectedPageRangeMode = PrintPreviewPageRangeMode.AllPages;
         TextBox pageNumberBox = null!;
+        TextBox fromPageBox = null!;
+        TextBox toPageBox = null!;
         var firstButton = new Button
         {
             Content = "_First Page",
@@ -143,18 +158,32 @@ public sealed partial class PrintPreviewDialog : Window
 
             copiesBox.Text = copies.ToString(CultureInfo.InvariantCulture);
             var currentPrintPage = 1;
+            ExportPageRange? selectedPageRange = null;
             if (selectedPageRangeMode == PrintPreviewPageRangeMode.CurrentPage &&
                 !TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage))
             {
                 ShowInvalidPageNumberWarning(pageNumberBox, totalPages);
                 return;
             }
+            if (selectedPageRangeMode == PrintPreviewPageRangeMode.Pages &&
+                !ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError))
+            {
+                ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError);
+                return;
+            }
+            if (selectedPageRangeMode == PrintPreviewPageRangeMode.Pages &&
+                !ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError))
+            {
+                ShowInvalidPageRangeWarning(fromPageBox, toPageBox, validatedPageRangeError);
+                return;
+            }
 
             ShowNativePrintDialog(
-                ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage),
+                ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange),
                 printerBox.SelectedItem as PrintQueue,
                 copies,
-                collatedBox.IsChecked == true);
+                collatedBox.IsChecked == true,
+                ResolveSelectedSidesMode(sidesBox));
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
         };
         closeButton.Click += (_, _) => Close();
@@ -177,6 +206,13 @@ public sealed partial class PrintPreviewDialog : Window
         });
         toolbar.Items.Add(copiesBox);
         toolbar.Items.Add(collatedBox);
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Sides:",
+            Target = sidesBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        toolbar.Items.Add(sidesBox);
         toolbar.Items.Add(statusText);
         toolbar.Items.Add(new Separator());
         var allPagesButton = new RadioButton
@@ -196,12 +232,57 @@ public sealed partial class PrintPreviewDialog : Window
             VerticalAlignment = VerticalAlignment.Center,
             ToolTip = "Print only the page number shown in the Page box."
         };
+        var pagesButton = new RadioButton
+        {
+            Content = "Pa_ges",
+            GroupName = "PrintPageRange",
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Print only the entered page range."
+        };
+        fromPageBox = new TextBox
+        {
+            Width = 34,
+            Text = "1",
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            IsEnabled = false
+        };
+        toPageBox = new TextBox
+        {
+            Width = 34,
+            Text = totalPages.ToString(CultureInfo.InvariantCulture),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            IsEnabled = false
+        };
+        void SetPageRangeBoxesEnabled(bool enabled)
+        {
+            fromPageBox.IsEnabled = enabled;
+            toPageBox.IsEnabled = enabled;
+        }
+
         allPagesButton.Checked += (_, _) => selectedPageRangeMode = PrintPreviewPageRangeMode.AllPages;
         currentPageButton.Checked += (_, _) => selectedPageRangeMode = PrintPreviewPageRangeMode.CurrentPage;
+        pagesButton.Checked += (_, _) =>
+        {
+            selectedPageRangeMode = PrintPreviewPageRangeMode.Pages;
+            SetPageRangeBoxesEnabled(true);
+        };
+        allPagesButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(pagesButton.IsChecked == true);
+        currentPageButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(pagesButton.IsChecked == true);
+        pagesButton.Unchecked += (_, _) => SetPageRangeBoxesEnabled(false);
         AutomationProperties.SetName(allPagesButton, "All pages");
         AutomationProperties.SetName(currentPageButton, "Current page");
+        AutomationProperties.SetName(pagesButton, "Pages");
+        AutomationProperties.SetName(fromPageBox, "From page");
+        AutomationProperties.SetName(toPageBox, "To page");
         toolbar.Items.Add(allPagesButton);
         toolbar.Items.Add(currentPageButton);
+        toolbar.Items.Add(pagesButton);
+        toolbar.Items.Add(fromPageBox);
+        toolbar.Items.Add(new TextBlock { Text = "to", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+        toolbar.Items.Add(toPageBox);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(firstButton);
         toolbar.Items.Add(previousButton);
@@ -285,6 +366,7 @@ public sealed partial class PrintPreviewDialog : Window
             viewer.Document = previewDocument;
             totalPages = Math.Max(1, previewDocument.Pages.Count);
             pageNumberBox.Text = "1";
+            toPageBox.Text = totalPages.ToString(CultureInfo.InvariantCulture);
             pageStatusText.Text = $"Page 1 of {totalPages}";
             RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
             if (settingsSummaryText is not null)

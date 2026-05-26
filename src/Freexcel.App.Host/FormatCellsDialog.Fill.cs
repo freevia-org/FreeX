@@ -103,13 +103,13 @@ public partial class FormatCellsDialog
     private static CellColor? TryParseColor(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
-        return ColorInputParser.TryParseRgbColorText(text, out var color)
+        return ColorInputParser.TryParseColorText(text, out var color)
             ? color
             : null;
     }
 
     private static bool TryParseRequiredColor(string text, out CellColor color) =>
-        ColorInputParser.TryParseRgbColorText(text, out color);
+        ColorInputParser.TryParseColorText(text, out color);
 
     private static bool TryParseOptionalColor(string text, out CellColor? color)
     {
@@ -117,7 +117,7 @@ public partial class FormatCellsDialog
         if (string.IsNullOrWhiteSpace(text))
             return true;
 
-        if (!ColorInputParser.TryParseRgbColorText(text, out var parsed))
+        if (!ColorInputParser.TryParseColorText(text, out var parsed))
             return false;
 
         color = parsed;

@@ -342,6 +342,7 @@ public partial class MainWindow
                 sheetId => new CompositeWorkbookCommand(
                     "Page Setup",
                     [
+                        CreatePageSetupPrintAreaCommand(sheetId, dialog.PrintArea),
                         new SetPageSetupCommand(
                             sheetId,
                             dialog.Orientation,
@@ -395,6 +396,11 @@ public partial class MainWindow
         if (dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
             PrintButton_Click(this, new RoutedEventArgs());
     }
+
+    private static IWorkbookCommand CreatePageSetupPrintAreaCommand(SheetId sheetId, GridRange? printArea) =>
+        printArea is { } range
+            ? new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))
+            : new ClearPrintAreaCommand(sheetId);
 
     private void ShowPageSetupPrinterOptions()
     {

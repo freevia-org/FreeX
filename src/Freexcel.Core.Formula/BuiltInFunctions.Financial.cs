@@ -158,11 +158,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ipmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nper  = ToNumber(args[2]);
-        double pv    = ToNumber(args[3]);
-        double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
-        return MapBinaryMathArgs(args[0], args[1], (rateValue, periodValue) => IpmtScalar(ToNumber(rateValue), periodValue, nper, pv, fv, type));
+        var fvArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var typeArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], args[3], fvArg, typeArg], values => IpmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue IpmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return IpmtScalar(ToNumber(rateValue), periodValue, ToNumber(nperValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue IpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
@@ -182,11 +191,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ppmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nper  = ToNumber(args[2]);
-        double pv    = ToNumber(args[3]);
-        double fv    = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double type  = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0;
-        return MapBinaryMathArgs(args[0], args[1], (rateValue, periodValue) => PpmtScalar(ToNumber(rateValue), periodValue, nper, pv, fv, type));
+        var fvArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var typeArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], args[3], fvArg, typeArg], values => PpmtScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue PpmtScalar(ScalarValue rateValue, ScalarValue periodValue, ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (periodValue is ErrorValue periodError) return periodError;
+        if (nperValue is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PpmtScalar(ToNumber(rateValue), periodValue, ToNumber(nperValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue PpmtScalar(double rate, ScalarValue periodValue, double nper, double pv, double fv, double type)
@@ -267,13 +285,12 @@ public static partial class BuiltInFunctions
     private static ScalarValue Effect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double npery   = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => EffectScalar(value, npery));
-        return EffectScalar(args[0], npery);
+        return MapBinaryMathArgs(args[0], args[1], EffectScalar);
     }
 
-    private static ScalarValue EffectScalar(ScalarValue rateValue, double npery)
+    private static ScalarValue EffectScalar(ScalarValue rateValue, ScalarValue nperyValue)
     {
+        double npery = Math.Truncate(ToNumber(nperyValue));
         double nomRate = ToNumber(rateValue);
         if (!double.IsFinite(nomRate) || !double.IsFinite(npery)) return ErrorValue.Num;
         if (nomRate <= 0 || npery < 1) return ErrorValue.Num;
@@ -283,13 +300,12 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nominal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double npery      = Math.Truncate(ToNumber(args[1]));
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => NominalScalar(value, npery));
-        return NominalScalar(args[0], npery);
+        return MapBinaryMathArgs(args[0], args[1], NominalScalar);
     }
 
-    private static ScalarValue NominalScalar(ScalarValue rateValue, double npery)
+    private static ScalarValue NominalScalar(ScalarValue rateValue, ScalarValue nperyValue)
     {
+        double npery = Math.Truncate(ToNumber(nperyValue));
         double effectRate = ToNumber(rateValue);
         if (!double.IsFinite(effectRate) || !double.IsFinite(npery)) return ErrorValue.Num;
         if (effectRate <= 0 || npery < 1) return ErrorValue.Num;
@@ -396,10 +412,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rri(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pv   = ToNumber(args[1]);
-        double fv   = ToNumber(args[2]);
-        if (args[0] is RangeValue nperRange) return MapUnaryTextRange(nperRange, value => RriScalar(value, pv, fv));
-        return RriScalar(args[0], pv, fv);
+        return MapTernaryTextArgs(args[0], args[1], args[2], RriScalar);
+    }
+
+    private static ScalarValue RriScalar(ScalarValue nperValue, ScalarValue pvValue, ScalarValue fvValue)
+    {
+        double pv = ToNumber(pvValue);
+        double fv = ToNumber(fvValue);
+        return RriScalar(nperValue, pv, fv);
     }
 
     private static ScalarValue RriScalar(ScalarValue nperValue, double pv, double fv)
@@ -415,10 +435,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pduration(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pv   = ToNumber(args[1]);
-        double fv   = ToNumber(args[2]);
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PdurationScalar(value, pv, fv));
-        return PdurationScalar(args[0], pv, fv);
+        return MapTernaryTextArgs(args[0], args[1], args[2], PdurationScalar);
+    }
+
+    private static ScalarValue PdurationScalar(ScalarValue rateValue, ScalarValue pvValue, ScalarValue fvValue)
+    {
+        double pv = ToNumber(pvValue);
+        double fv = ToNumber(fvValue);
+        return PdurationScalar(rateValue, pv, fv);
     }
 
     private static ScalarValue PdurationScalar(ScalarValue rateValue, double pv, double fv)
@@ -453,12 +477,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Db(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double month   = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 12;
-        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => DbScalar(cost, salvage, life, value, month));
-        return DbScalar(cost, salvage, life, args[3], month);
+        var monthArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], monthArg], values => DbScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue, ScalarValue monthValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double month = monthValue is BlankValue ? 12 : ToNumber(monthValue);
+        return DbScalar(cost, salvage, life, periodValue, month);
     }
 
     private static ScalarValue DbScalar(double cost, double salvage, double life, ScalarValue periodValue, double month)
@@ -492,12 +521,17 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ddb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        double factor  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 2.0;
-        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => DdbScalar(cost, salvage, life, value, factor));
-        return DdbScalar(cost, salvage, life, args[3], factor);
+        var factorArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], factorArg], values => DdbScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue DdbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue, ScalarValue factorValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        return DdbScalar(cost, salvage, life, periodValue, factor);
     }
 
     private static ScalarValue DdbScalar(double cost, double salvage, double life, ScalarValue periodValue, double factor)
@@ -523,14 +557,20 @@ public static partial class BuiltInFunctions
     private static ScalarValue Vdb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost        = ToNumber(args[0]);
-        double salvage     = ToNumber(args[1]);
-        double life        = ToNumber(args[2]);
-        double startPeriod = ToNumber(args[3]);
-        double factor      = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 2.0;
-        bool noSwitch      = args.Count > 6 && args[6] is not BlankValue && ToBool(args[6]);
-        if (args[4] is RangeValue endPeriodRange) return MapUnaryTextRange(endPeriodRange, value => VdbScalar(cost, salvage, life, startPeriod, value, factor, noSwitch));
-        return VdbScalar(cost, salvage, life, startPeriod, args[4], factor, noSwitch);
+        var factorArg = args.Count > 5 ? args[5] : BlankValue.Instance;
+        var noSwitchArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], factorArg, noSwitchArg], values => VdbScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue VdbScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue startPeriodValue, ScalarValue endPeriodValue, ScalarValue factorValue, ScalarValue noSwitchValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        double startPeriod = ToNumber(startPeriodValue);
+        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        bool noSwitch = noSwitchValue is not BlankValue && ToBool(noSwitchValue);
+        return VdbScalar(cost, salvage, life, startPeriod, endPeriodValue, factor, noSwitch);
     }
 
     private static ScalarValue VdbScalar(double cost, double salvage, double life, double startPeriod, ScalarValue endPeriodValue, double factor, bool noSwitch)
@@ -572,11 +612,15 @@ public static partial class BuiltInFunctions
     private static ScalarValue Syd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        double life    = ToNumber(args[2]);
-        if (args[3] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => SydScalar(cost, salvage, life, value));
-        return SydScalar(cost, salvage, life, args[3]);
+        return MapScalarArgs([args[0], args[1], args[2], args[3]], values => SydScalar(values[0], values[1], values[2], values[3]));
+    }
+
+    private static ScalarValue SydScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue, ScalarValue periodValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        double life = ToNumber(lifeValue);
+        return SydScalar(cost, salvage, life, periodValue);
     }
 
     private static ScalarValue SydScalar(double cost, double salvage, double life, ScalarValue periodValue)
@@ -1520,12 +1564,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[1]);
-        double pv   = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PmtScalar(value, nperValue, pv, fv, type));
-        return PmtScalar(args[0], nperValue, pv, fv, type);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => PmtScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue PmtScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PmtScalar(rateValue, ToNumber(nperValueArg), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue PmtScalar(ScalarValue rateValue, double nperValue, double pv, double fv, double type)
@@ -1546,12 +1597,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[1]);
-        double pmt  = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => PvScalar(value, nperValue, pmt, fv, type));
-        return PvScalar(args[0], nperValue, pmt, fv, type);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => PvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue PvScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return PvScalar(rateValue, ToNumber(nperValueArg), ToNumber(pmtValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue PvScalar(ScalarValue rateValue, double nperValue, double pmt, double fv, double type)
@@ -1572,12 +1630,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double nperValue = ToNumber(args[1]);
-        double pmt  = ToNumber(args[2]);
-        double pv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => FvScalar(value, nperValue, pmt, pv, type));
-        return FvScalar(args[0], nperValue, pmt, pv, type);
+        var pvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], pvArg, typeArg], values => FvScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue FvScalar(ScalarValue rateValue, ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return FvScalar(rateValue, ToNumber(nperValueArg), ToNumber(pmtValue), ToNumber(pvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue FvScalar(ScalarValue rateValue, double nperValue, double pmt, double pv, double type)
@@ -1596,12 +1661,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pmt  = ToNumber(args[1]);
-        double pv   = ToNumber(args[2]);
-        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        if (args[0] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => NperScalar(value, pmt, pv, fv, type));
-        return NperScalar(args[0], pmt, pv, fv, type);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg], values => NperScalar(values[0], values[1], values[2], values[3], values[4]));
+    }
+
+    private static ScalarValue NperScalar(ScalarValue rateValue, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue)
+    {
+        if (rateValue is ErrorValue rateError) return rateError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        return NperScalar(rateValue, ToNumber(pmtValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue));
     }
 
     private static ScalarValue NperScalar(ScalarValue rateValue, double pmt, double pv, double fv, double type)
@@ -1624,13 +1696,21 @@ public static partial class BuiltInFunctions
     private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double pmt   = ToNumber(args[1]);
-        double pv    = ToNumber(args[2]);
-        double fv    = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
-        double type  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
-        double guess = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0.1;
-        if (args[0] is RangeValue nperRange) return MapUnaryTextRange(nperRange, value => RateScalar(value, pmt, pv, fv, type, guess));
-        return RateScalar(args[0], pmt, pv, fv, type, guess);
+        var fvArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : new NumberValue(0);
+        var typeArg = args.Count > 4 && args[4] is not BlankValue ? args[4] : new NumberValue(0);
+        var guessArg = args.Count > 5 && args[5] is not BlankValue ? args[5] : new NumberValue(0.1);
+        return MapScalarArgs([args[0], args[1], args[2], fvArg, typeArg, guessArg], values => RateScalar(values[0], values[1], values[2], values[3], values[4], values[5]));
+    }
+
+    private static ScalarValue RateScalar(ScalarValue nperValueArg, ScalarValue pmtValue, ScalarValue pvValue, ScalarValue fvValue, ScalarValue typeValue, ScalarValue guessValue)
+    {
+        if (nperValueArg is ErrorValue nperError) return nperError;
+        if (pmtValue is ErrorValue pmtError) return pmtError;
+        if (pvValue is ErrorValue pvError) return pvError;
+        if (fvValue is ErrorValue fvError) return fvError;
+        if (typeValue is ErrorValue typeError) return typeError;
+        if (guessValue is ErrorValue guessError) return guessError;
+        return RateScalar(nperValueArg, ToNumber(pmtValue), ToNumber(pvValue), ToNumber(fvValue), ToNumber(typeValue), ToNumber(guessValue));
     }
 
     private static ScalarValue RateScalar(ScalarValue nperValueArg, double pmt, double pv, double fv, double type, double guess)
@@ -1725,10 +1805,14 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double cost    = ToNumber(args[0]);
-        double salvage = ToNumber(args[1]);
-        if (args[2] is RangeValue lifeRange) return MapUnaryTextRange(lifeRange, value => SlnScalar(cost, salvage, value));
-        return SlnScalar(cost, salvage, args[2]);
+        return MapScalarArgs([args[0], args[1], args[2]], values => SlnScalar(values[0], values[1], values[2]));
+    }
+
+    private static ScalarValue SlnScalar(ScalarValue costValue, ScalarValue salvageValue, ScalarValue lifeValue)
+    {
+        double cost = ToNumber(costValue);
+        double salvage = ToNumber(salvageValue);
+        return SlnScalar(cost, salvage, lifeValue);
     }
 
     private static ScalarValue SlnScalar(double cost, double salvage, ScalarValue lifeValue)

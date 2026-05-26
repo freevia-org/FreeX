@@ -3423,6 +3423,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_ModeRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(3)),
+            (3, 1, new NumberValue(5)), (4, 1, new NumberValue(7)),
+            (1, 2, new TextValue("one")), (2, 2, new TextValue("three")),
+            (3, 2, new TextValue("five")), (4, 2, new TextValue("seven")),
+            (1, 4, new NumberValue(4)), (2, 4, new NumberValue(4)),
+            (1, 5, new NumberValue(-1)), (2, 5, new NumberValue(1)),
+            (1, 6, new NumberValue(1)), (2, 6, new NumberValue(1)), (3, 6, new NumberValue(1)));
+
+        AssertColumn(_eval.Evaluate("=XLOOKUP(D1:D2,A1:A4,B1:B4,,E1:E2)", sheet), new TextValue("three"), new TextValue("five"));
+        _eval.Evaluate("=XLOOKUP(D1:D2,A1:A4,B1:B4,,E1:E2,F1:F3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Xlookup_InvalidMatchMode_ReturnsValueError()
     {
         var sheet = MakeSheet(

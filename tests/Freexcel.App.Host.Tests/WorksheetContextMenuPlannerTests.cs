@@ -42,6 +42,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "AutoFit Column Width",
             "New Comment",
             "Edit Comment...",
+            "Resolve Comment",
             "Delete Comment",
             "New Note",
             "Edit Note...",
@@ -95,6 +96,8 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.NewComment);
         commands.Single(command => command.Header == "Edit Comment...")
             .Action.Should().Be(WorksheetContextMenuAction.EditComment);
+        commands.Single(command => command.Header == "Resolve Comment")
+            .Action.Should().Be(WorksheetContextMenuAction.ResolveComment);
         commands.Single(command => command.Header == "Delete Comment")
             .Action.Should().Be(WorksheetContextMenuAction.DeleteComment);
         commands.Single(command => command.Header == "Edit Note...")
@@ -111,6 +114,7 @@ public sealed class WorksheetContextMenuPlannerTests
     [InlineData("Insert Copied Cells...", "Insert Copied _Cells...")]
     [InlineData("Quick Analysis", "_Quick Analysis")]
     [InlineData("Edit Comment...", "_Edit Comment...")]
+    [InlineData("Resolve Comment", "Resol_ve Comment")]
     [InlineData("Delete Comment", "Delete _Comment")]
     [InlineData("Format Cells...", "_Format Cells...")]
     [InlineData("Clear Contents", "Clear C_ontents")]
@@ -133,6 +137,7 @@ public sealed class WorksheetContextMenuPlannerTests
         var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
 
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ResolveComment).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
@@ -151,11 +156,33 @@ public sealed class WorksheetContextMenuPlannerTests
         var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
 
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditComment).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ResolveComment).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Header == "Clear Hyperlinks").IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildCommands_ShowsUnresolveCommentForResolvedThreadedComment()
+    {
+        var state = new WorksheetContextMenuState(
+            HasThreadedComment: true,
+            IsThreadedCommentResolved: true);
+
+        var commands = WorksheetContextMenuPlanner.BuildCommands(state: state);
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Edit Comment...",
+            "Unresolve Comment",
+            "Delete Comment");
+        commands.Single(command => command.Header == "Unresolve Comment").Should().BeEquivalentTo(
+            new WorksheetContextMenuCommand(
+                "Unresolve Comment",
+                WorksheetContextMenuAction.UnresolveComment,
+                AccessHeader: "Un_resolve Comment"));
+        commands.Select(command => command.Header).Should().NotContain("Resolve Comment");
     }
 
     [Fact]

@@ -93,6 +93,64 @@ public class PhaseCFinancialTests
     }
 
     [Fact]
+    public void CorePaymentFunctions_TrailingRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("PMT(0.05/12,A1:A2,10000)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("PMT(0.05/12,60,10000)"),
+            Calc("PMT(0.05/12,72,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PV(0.05/12,A1:A2,188.71)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("PV(0.05/12,60,188.71)"),
+            Calc("PV(0.05/12,72,188.71)"));
+        AssertApproxColumn(
+            EvalWithData("FV(0.05/12,A1:A2,-100)", (1, 1, 60.0), (2, 1, 72.0)),
+            Calc("FV(0.05/12,60,-100)"),
+            Calc("FV(0.05/12,72,-100)"));
+        AssertApproxColumn(
+            EvalWithData("NPER(0.05/12,A1:A2,10000)", (1, 1, -188.71), (2, 1, -200.0)),
+            Calc("NPER(0.05/12,-188.71,10000)"),
+            Calc("NPER(0.05/12,-200,10000)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(A1:A2,B1:B2,10000)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, -188.71), (2, 2, -200.0)),
+            Calc("RATE(60,-188.71,10000)"),
+            Calc("RATE(72,-200,10000)"));
+        AssertApproxColumn(
+            EvalWithData("PMT(0.05/12,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("PMT(0.05/12,60,10000,0,0)"),
+            Calc("PMT(0.05/12,60,10000,500,1)"));
+        AssertApproxColumn(
+            EvalWithData("RATE(60,-188.71,10000,0,0,A1:A2)", (1, 1, 0.01), (2, 1, 0.05)),
+            Calc("RATE(60,-188.71,10000,0,0,0.01)"),
+            Calc("RATE(60,-188.71,10000,0,0,0.05)"));
+
+        EvalWithData("PMT(0.05/12,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void IpmtAndPpmt_TrailingRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.05/12,1,A1:A2,B1:B2)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (2, 2, 12000.0)),
+            Calc("IPMT(0.05/12,1,60,10000)"),
+            Calc("IPMT(0.05/12,1,72,12000)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.05/12,1,A1:A2,B1:B2)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (2, 2, 12000.0)),
+            Calc("PPMT(0.05/12,1,60,10000)"),
+            Calc("PPMT(0.05/12,1,72,12000)"));
+        AssertApproxColumn(
+            EvalWithData("IPMT(0.05/12,1,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("IPMT(0.05/12,1,60,10000,0,0)"),
+            Calc("IPMT(0.05/12,1,60,10000,500,1)"));
+        AssertApproxColumn(
+            EvalWithData("PPMT(0.05/12,1,60,10000,A1:A2,B1:B2)", (1, 1, 0.0), (2, 1, 500.0), (1, 2, 0.0), (2, 2, 1.0)),
+            Calc("PPMT(0.05/12,1,60,10000,0,0)"),
+            Calc("PPMT(0.05/12,1,60,10000,500,1)"));
+
+        EvalWithData("IPMT(0.05/12,1,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Ipmt_PmtEqualsIpmtPlusPpmt_AllPeriods()
     {
         // For a standard loan, PMT = IPMT + PPMT for every period
@@ -206,13 +264,40 @@ public class PhaseCFinancialTests
             Calc("NOMINAL(0.1,4)"),
             Calc("NOMINAL(0.2,4)"));
         AssertApproxColumn(
+            EvalWithData("EFFECT(A1:A2,B1:B2)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 12.0), (2, 2, 4.0)),
+            Calc("EFFECT(0.1,12)"),
+            Calc("EFFECT(0.2,4)"));
+        AssertApproxColumn(
+            EvalWithData("NOMINAL(A1:A2,B1:B2)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 4.0), (2, 2, 12.0)),
+            Calc("NOMINAL(0.1,4)"),
+            Calc("NOMINAL(0.2,12)"));
+        AssertApproxColumn(
             EvalWithData("RRI(A1:A2,100,200)", (1, 1, 10.0), (2, 1, 20.0)),
             Calc("RRI(10,100,200)"),
             Calc("RRI(20,100,200)"));
         AssertApproxColumn(
+            EvalWithData("RRI(10,A1:A2,200)", (1, 1, 100.0), (2, 1, 125.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(10,125,200)"));
+        AssertApproxColumn(
+            EvalWithData("RRI(10,100,A1:A2)", (1, 1, 200.0), (2, 1, 250.0)),
+            Calc("RRI(10,100,200)"),
+            Calc("RRI(10,100,250)"));
+        AssertApproxColumn(
             EvalWithData("PDURATION(A1:A2,100,200)", (1, 1, 0.1), (2, 1, 0.2)),
             Calc("PDURATION(0.1,100,200)"),
             Calc("PDURATION(0.2,100,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(0.1,A1:A2,200)", (1, 1, 100.0), (2, 1, 125.0)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.1,125,200)"));
+        AssertApproxColumn(
+            EvalWithData("PDURATION(0.1,100,A1:A2)", (1, 1, 200.0), (2, 1, 250.0)),
+            Calc("PDURATION(0.1,100,200)"),
+            Calc("PDURATION(0.1,100,250)"));
+
+        EvalWithData("RRI(A1:A2,B1:C1,200)", (1, 1, 10.0), (2, 1, 20.0), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("PDURATION(A1:A2,B1:C1,200)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -418,6 +503,31 @@ public class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("VDB(2400,300,10,0,A1:A2)", periods), Calc("VDB(2400,300,10,0,1)"), Calc("VDB(2400,300,10,0,2)"));
         AssertApproxColumn(EvalWithData("AMORDEGRC(2400,43831,44197,300,A1:A2,0.2,0)", periods), Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORDEGRC(2400,43831,44197,300,2,0.2,0)"));
         AssertApproxColumn(EvalWithData("AMORLINC(2400,43831,44197,300,A1:A2,0.3,0)", periods), Calc("AMORLINC(2400,43831,44197,300,1,0.3,0)"), Calc("AMORLINC(2400,43831,44197,300,2,0.3,0)"));
+    }
+
+    [Fact]
+    public void DepreciationFunctions_ParameterRangeArguments_SpillElementwiseOrReturnValueForShapeMismatch()
+    {
+        var cells = new[]
+        {
+            (1, 1, 2400.0), (2, 1, 3000.0),
+            (1, 2, 300.0), (2, 2, 500.0),
+            (1, 3, 10.0), (2, 3, 12.0),
+            (1, 4, 1.0), (2, 4, 2.0),
+            (1, 5, 2.0), (2, 5, 1.5),
+            (1, 6, 7.0), (2, 6, 12.0),
+            (1, 7, 0.0), (2, 7, 1.0),
+            (1, 8, 1.0), (2, 8, 2.0),
+            (1, 9, 0.0), (2, 9, 1.0)
+        };
+
+        AssertApproxColumn(EvalWithData("SLN(A1:A2,B1:B2,C1:C2)", cells), Calc("SLN(2400,300,10)"), Calc("SLN(3000,500,12)"));
+        AssertApproxColumn(EvalWithData("SYD(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("SYD(2400,300,10,1)"), Calc("SYD(3000,500,12,2)"));
+        AssertApproxColumn(EvalWithData("DDB(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DDB(2400,300,10,1,2)"), Calc("DDB(3000,500,12,2,1.5)"));
+        AssertApproxColumn(EvalWithData("DB(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2)", cells), Calc("DB(2400,300,10,1,7)"), Calc("DB(3000,500,12,2,12)"));
+        AssertApproxColumn(EvalWithData("VDB(A1:A2,B1:B2,C1:C2,G1:G2,H1:H2,E1:E2,I1:I2)", cells), Calc("VDB(2400,300,10,0,1,2,0)"), Calc("VDB(3000,500,12,1,2,1.5,1)"));
+
+        EvalWithData("DDB(A1:A2,B1:C1,10,1)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

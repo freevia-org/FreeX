@@ -68,7 +68,9 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
         IReadOnlyList<DataValidationNativeMetadata> DataValidationNativeMetadata,
         IgnoredErrorLayout IgnoredErrors,
+        WorksheetIgnoredErrorsMetadataModel? IgnoredErrorsMetadata,
         IReadOnlyList<CellAddress> CellWatches,
+        WorksheetCellWatchesMetadataModel? CellWatchesMetadata,
         IReadOnlyList<WorkbookScenario> Scenarios,
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
@@ -299,7 +301,9 @@ public sealed partial class XlsxFileAdapter
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
         var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
+        var ignoredErrorsMetadata = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrorsMetadata(worksheetXml, worksheetNs);
         var cellWatches = XlsxWorksheetDiagnosticsMapper.ReadCellWatches(worksheetXml, worksheetNs);
+        var cellWatchesMetadata = XlsxWorksheetDiagnosticsMapper.ReadCellWatchesMetadata(worksheetXml, worksheetNs);
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
         var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
@@ -374,7 +378,9 @@ public sealed partial class XlsxFileAdapter
             advancedConditionalFormats,
             dataValidationNativeMetadata,
             ignoredErrors,
+            ignoredErrorsMetadata,
             cellWatches,
+            cellWatchesMetadata,
             scenarios,
             customViews,
             customProperties,

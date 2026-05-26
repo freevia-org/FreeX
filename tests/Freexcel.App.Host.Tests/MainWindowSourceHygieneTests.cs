@@ -509,6 +509,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PasteSpecialExternalText_RoutesToLiteralTextPaste()
+    {
+        var clipboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ClipboardCommands.cs"));
+
+        clipboardSource.Should().Contain("case PasteSpecialAction.ExternalText:");
+        clipboardSource.Should().Contain("externalTextAsText: true");
+        clipboardSource.Should().Contain("preserveText: externalTextAsText");
+    }
+
+    [Fact]
     public void HomeFormattingCommands_LiveOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -1657,6 +1667,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenuResolveComment_UsesThreadedCommentResolveCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.ResolveComment:");
+        source.Should().Contain("case WorksheetContextMenuAction.UnresolveComment:");
+        source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        source.Should().Contain("range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)");
+        source.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
+        source.Should().Contain("IsThreadedCommentResolved: threadedComment?.IsResolved == true");
+    }
+
+    [Fact]
     public void ReviewCommentNavigation_IncludesThreadedComments()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
@@ -1664,6 +1687,29 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0");
+    }
+
+    [Fact]
+    public void Selection_UpdatesVisibleCommentPreviewForSelectionAndHover()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        source.Should().Contain("UpdateCommentPreview(addr)");
+        source.Should().Contain("UpdateCommentPreview(hitAddr.Value)");
+        source.Should().Contain("ClearCommentPreview()");
+        source.Should().Contain("CommentNavigationPlanner.FormatCellCommentPreview(");
+        source.Should().Contain("SheetGrid.ToolTip = preview");
+    }
+
+    [Fact]
+    public void FontSizeDropdown_UsesSharedFontSizeApplyPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("GetSelectedFontSizeText()");
+        source.Should().Contain("ApplyFontSizeAndFitRows(size)");
+        source.Should().NotContain("FontSizeBox.Text;\r\n        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))\r\n            ApplyStyleDiff(new StyleDiff(FontSize: size));");
+        source.Should().Contain("RefreshToolbar();");
     }
 
     [Fact]

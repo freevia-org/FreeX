@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Printing;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -183,6 +184,72 @@ public class ExportPlannerTests
 
         ExportPlanner.DescribeOptions(options)
             .Should().Be("Active sheet only; standard quality; document properties are not included; PDF language uk-UA.");
+    }
+
+    [Fact]
+    public void ExportOptions_DescribeUnsupportedPdfPublishOptions()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is not supported; tagged PDF structure is not supported.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_RejectsUnsupportedPdfA()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("PDF/A compliance is not supported by the current PDF exporter.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_RejectsUnsupportedTaggedPdf()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Tagged PDF structure is not supported by the current PDF exporter.");
+    }
+
+    [Fact]
+    public void TryValidatePublishOptions_AllowsPdfOnlyChoicesForXpsSummary()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false,
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Xps, out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().BeNull();
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should()
+            .Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is PDF-only and not supported; tagged PDF structure is PDF-only and not supported.");
     }
 
     [Fact]
@@ -394,6 +461,8 @@ public class ExportPlannerTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_activeSheetButton.Focus();");
         source.Should().Contain("Keyboard.Focus(_activeSheetButton);");
+        source.Should().Contain("SizeToContent = SizeToContent.Height;");
+        source.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
     }
 
     [Fact]
@@ -2018,7 +2087,7 @@ public class ExportPlannerTests
 
         source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
-        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage)");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
         source.Should().Contain("PrintDocument(paginator");
     }
 
@@ -2066,6 +2135,17 @@ public class ExportPlannerTests
         pageNumber.Should().Be(expectedPage);
     }
 
+    [Theory]
+    [InlineData(PrintPreviewSidesMode.OneSided, Duplexing.OneSided)]
+    [InlineData(PrintPreviewSidesMode.TwoSidedLongEdge, Duplexing.TwoSidedLongEdge)]
+    [InlineData(PrintPreviewSidesMode.TwoSidedShortEdge, Duplexing.TwoSidedShortEdge)]
+    public void PrintPreviewDialog_MapsExcelSidesChoicesToPrintTicketDuplexing(
+        PrintPreviewSidesMode mode,
+        Duplexing expected)
+    {
+        PrintPreviewDialog.ResolvePrintTicketDuplexing(mode).Should().Be(expected);
+    }
+
     [Fact]
     public void PrintPreviewDialog_ResolvesCurrentPagePaginatorForPrintRange()
     {
@@ -2078,10 +2158,17 @@ public class ExportPlannerTests
 
             var allPages = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.AllPages, currentPage: 2);
             var currentPage = PrintPreviewDialog.ResolvePrintPaginator(document, PrintPreviewPageRangeMode.CurrentPage, currentPage: 2);
+            var pageRange = PrintPreviewDialog.ResolvePrintPaginator(
+                document,
+                PrintPreviewPageRangeMode.Pages,
+                currentPage: 1,
+                new ExportPageRange(2, 3));
 
             allPages.PageCount.Should().Be(3);
             currentPage.PageCount.Should().Be(1);
+            pageRange.PageCount.Should().Be(2);
             currentPage.GetPage(1).Should().Be(DocumentPage.Missing);
+            pageRange.GetPage(2).Should().Be(DocumentPage.Missing);
         });
     }
 
@@ -2234,14 +2321,21 @@ public class ExportPlannerTests
         source.Should().Contain("Content = \"Pr_inter:\"");
         source.Should().Contain("Content = \"_Copies:\"");
         source.Should().Contain("Content = \"C_ollated\"");
+        source.Should().Contain("Content = \"_Sides:\"");
+        source.Should().Contain("Print One Sided");
+        source.Should().Contain("Flip pages on long edge");
+        source.Should().Contain("Flip pages on short edge");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("collatedBox");
+        source.Should().Contain("sidesBox");
         source.Should().Contain("statusText");
         source.Should().Contain("TryParseCopyCount(copiesBox.Text, out var copies)");
         source.Should().Contain("ShowInvalidCopiesWarning(copiesBox)");
         source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
         source.Should().Contain("dialog.PrintTicket.Collation = collated ? Collation.Collated : Collation.Uncollated");
+        source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
+        source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
         source.Should().Contain("MessageBox.Show(this, \"Enter a copy count from 1 to 999.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
         source.Should().Contain("copiesBox.SelectAll();");
@@ -2257,10 +2351,17 @@ public class ExportPlannerTests
 
         source.Should().Contain("Content = \"_All pages\"");
         source.Should().Contain("Content = \"Current pa_ge\"");
+        source.Should().Contain("Content = \"Pa_ges\"");
+        source.Should().Contain("fromPageBox");
+        source.Should().Contain("toPageBox");
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
-        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage)");
+        source.Should().Contain("PrintPreviewPageRangeMode.Pages");
+        source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
+        source.Should().Contain("ExportPlanner.TryCreatePageRange(fromPageBox.Text, toPageBox.Text, out selectedPageRange, out var pageRangeError)");
+        source.Should().Contain("ExportPlanner.TryValidatePageRange(selectedPageRange, totalPages, out var validatedPageRangeError)");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out currentPrintPage)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
+        source.Should().Contain("ShowInvalidPageRangeWarning(fromPageBox, toPageBox, pageRangeError)");
     }
 
     [Fact]

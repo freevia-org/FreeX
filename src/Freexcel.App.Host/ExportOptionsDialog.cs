@@ -33,7 +33,8 @@ internal sealed class ExportOptionsDialog : Window
     {
         Title = "Export Options";
         Width = 430;
-        Height = 404;
+        SizeToContent = SizeToContent.Height;
+        MaxHeight = 560;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -154,7 +155,11 @@ internal sealed class ExportOptionsDialog : Window
         buttons.Children.Add(cancel);
         stack.Children.Add(buttons);
 
-        Content = stack;
+        Content = new ScrollViewer
+        {
+            Content = stack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 

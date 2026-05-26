@@ -11,16 +11,22 @@ public partial class FormatCellsDialog : Window
 {
     public StyleDiff? ResultDiff { get; private set; }
     public FormatCellsBorderSelection ResultBorderSelection { get; private set; } = FormatCellsBorderSelection.None;
+    public bool? ResultMergeCells { get; private set; }
 
     private readonly CellStyle _current;
+    private readonly bool _initialMergeCells;
     private bool _syncingNumberControls;
     private bool _borderPresetClearRequested;
     private CellBorder? _borderPresetOutline;
     private CellBorder? _borderPresetInside;
 
-    public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
+    public FormatCellsDialog(
+        CellStyle current,
+        FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number,
+        bool mergeCells = false)
     {
         _current = current.Clone();
+        _initialMergeCells = mergeCells;
         InitializeComponent();
         Loaded += (_, _) =>
         {
@@ -98,6 +104,7 @@ public partial class FormatCellsDialog : Window
         DlgVAlignBox.SelectedItem = s.VerticalAlignment.ToString();
         DlgWrapTextCheck.IsChecked = s.WrapText;
         DlgShrinkToFitCheck.IsChecked = s.ShrinkToFit;
+        DlgMergeCellsCheck.IsChecked = _initialMergeCells;
         DlgIndentLevelBox.Text = s.IndentLevel.ToString();
         DlgTextRotationBox.Text = s.TextRotation.ToString();
 
@@ -274,7 +281,7 @@ public partial class FormatCellsDialog : Window
             Strikethrough:   DlgStrikeCheck.IsChecked,
             Superscript:     DlgSuperscriptCheck.IsChecked,
             Subscript:       DlgSubscriptCheck.IsChecked,
-            FontName:        DlgFontNameBox.SelectedItem as string,
+            FontName:        ResolveSelectedFontName(),
             FontSize:        fontSize,
             FontColor:       fontColor,
             FillColor:       clearFill ? null : fillColor,
@@ -300,6 +307,9 @@ public partial class FormatCellsDialog : Window
             _borderPresetClearRequested,
             _borderPresetOutline,
             _borderPresetInside);
+        ResultMergeCells = DlgMergeCellsCheck.IsChecked == _initialMergeCells
+            ? null
+            : DlgMergeCellsCheck.IsChecked == true;
 
         DialogResult = true;
     }

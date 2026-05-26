@@ -166,9 +166,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
+            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
-            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
+            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
             if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
                 changed = true;
@@ -260,11 +260,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
-                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(sourceBlock, targetRoot, workbookNs))
+                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        XlsxWorksheetDiagnosticsMapper.GetModeledIgnoredErrorCells(workbook, sheetName)))
                 {
                     changed = true;
-                    continue;
                 }
+                if (sourceBlock.Name == workbookNs + "ignoredErrors")
+                    continue;
                 if (sourceBlock.Name == workbookNs + "cellWatches" &&
                     XlsxWorksheetDiagnosticsMapper.MergeCellWatches(
                         sourceBlock,
@@ -286,6 +291,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     changed = true;
                 }
                 if (sourceBlock.Name == workbookNs + "scenarios")
+                    continue;
+
+                if (ShouldSkipClearedModeledWorksheetBlock(sourceBlock.Name, workbookNs, workbook, sheetName))
                     continue;
 
                 if (targetRoot.Element(sourceBlock.Name) is not null)
@@ -473,9 +481,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
+            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
-            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
+            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
                 changed = true;
             if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
                 changed = true;
@@ -567,11 +575,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
-                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(sourceBlock, targetRoot, workbookNs))
+                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        XlsxWorksheetDiagnosticsMapper.GetModeledIgnoredErrorCells(workbook, sheetName)))
                 {
                     changed = true;
-                    continue;
                 }
+                if (sourceBlock.Name == workbookNs + "ignoredErrors")
+                    continue;
                 if (sourceBlock.Name == workbookNs + "cellWatches" &&
                     XlsxWorksheetDiagnosticsMapper.MergeCellWatches(
                         sourceBlock,
@@ -595,6 +608,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (sourceBlock.Name == workbookNs + "scenarios")
                     continue;
 
+                if (ShouldSkipClearedModeledWorksheetBlock(sourceBlock.Name, workbookNs, workbook, sheetName))
+                    continue;
+
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
 
@@ -608,6 +624,25 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool ShouldSkipClearedModeledWorksheetBlock(
+        XName sourceBlockName,
+        XNamespace workbookNs,
+        Workbook workbook,
+        string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return false;
+
+        if (sourceBlockName == workbookNs + "sortState")
+            return sheet.SortState is null;
+
+        if (sourceBlockName == workbookNs + "dataConsolidate")
+            return sheet.DataConsolidation is null;
+
+        return false;
     }
 }
 

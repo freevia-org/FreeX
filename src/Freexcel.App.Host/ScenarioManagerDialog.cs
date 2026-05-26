@@ -5,7 +5,11 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed record ScenarioManagerItem(string Name);
+public sealed record ScenarioManagerItem(
+    string Name,
+    IReadOnlyList<ScenarioCellValue> ChangingCells,
+    string? Comment,
+    string ChangingCellsText);
 
 public sealed class ScenarioManagerDialog : Window
 {
@@ -110,7 +114,11 @@ public sealed class ScenarioManagerDialog : Window
     }
 
     public static IReadOnlyList<ScenarioManagerItem> BuildScenarioItems(Workbook workbook) =>
-        workbook.Scenarios.Select(scenario => new ScenarioManagerItem(scenario.Name)).ToList();
+        workbook.Scenarios.Select(scenario => new ScenarioManagerItem(
+            scenario.Name,
+            scenario.ChangingCells,
+            scenario.Comment,
+            FormatScenarioChangingCells(workbook, scenario))).ToList();
 
     public static bool TryParseAction(string text, out ScenarioManagerAction action)
     {
@@ -163,6 +171,21 @@ public sealed class ScenarioManagerDialog : Window
         return false;
     }
 
+    public static string FormatScenarioChangingCells(Workbook workbook, WorkbookScenario scenario)
+    {
+        if (scenario.ChangingCells.Count == 0)
+            return "";
+
+        var sheetId = scenario.ChangingCells[0].Address.Sheet;
+        if (scenario.ChangingCells.Any(cell => cell.Address.Sheet != sheetId))
+            return "";
+
+        var range = new GridRange(
+            scenario.ChangingCells.Min(cell => cell.Address),
+            scenario.ChangingCells.Max(cell => cell.Address));
+        return WorkbookRangeTextCodec.Format(range, sheetId, id => workbook.GetSheet(id)?.Name);
+    }
+
     private static void AddField(Grid grid, int row, string label, Control field)
     {
         var text = new Label
@@ -204,10 +227,14 @@ public sealed class ScenarioManagerDialog : Window
         if (selected is not null)
         {
             _newNameBox.Text = selected.Name;
+            _changingCellsBox.Text = selected.ChangingCellsText;
+            _commentBox.Text = selected.Comment ?? "";
         }
         else if (string.IsNullOrWhiteSpace(_newNameBox.Text))
         {
             _newNameBox.Text = _defaultScenarioName;
+            _changingCellsBox.Text = "";
+            _commentBox.Text = "";
         }
 
         var hasSelection = selected is not null;

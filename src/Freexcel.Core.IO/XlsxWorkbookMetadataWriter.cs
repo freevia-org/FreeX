@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using System.Xml;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
@@ -40,7 +41,7 @@ internal static class XlsxWorkbookMetadataWriter
                     continue;
                 }
 
-                workbookProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(workbookProperties, attribute.Key, attribute.Value);
             }
 
             workbookProperties.Elements().Remove();
@@ -189,7 +190,7 @@ internal static class XlsxWorkbookMetadataWriter
                 if (!string.IsNullOrWhiteSpace(attribute.Key) &&
                     attribute.Key is not "autoRecover" and not "crashSave" and not "dataExtractLoad" and not "repairLoad")
                 {
-                    element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                    TrySetNativeAttribute(element, attribute.Key, attribute.Value);
                 }
             }
 
@@ -240,7 +241,7 @@ internal static class XlsxWorkbookMetadataWriter
             if (!string.IsNullOrWhiteSpace(attribute.Key) &&
                 attribute.Key is not "appName" and not "lastEdited" and not "lowestEdited" and not "rupBuild" and not "codeName")
             {
-                fileVersion.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(fileVersion, attribute.Key, attribute.Value);
             }
         }
 
@@ -280,7 +281,7 @@ internal static class XlsxWorkbookMetadataWriter
         foreach (var attribute in workbook.FunctionGroups.NativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "builtInGroupCount")
-                functionGroups.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(functionGroups, attribute.Key, attribute.Value);
         }
 
         functionGroups.SetAttributeValue("builtInGroupCount", NullIfWhiteSpace(workbook.FunctionGroups.BuiltInGroupCount));
@@ -290,7 +291,7 @@ internal static class XlsxWorkbookMetadataWriter
             foreach (var attribute in group.NativeAttributes)
             {
                 if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "name")
-                    element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                    TrySetNativeAttribute(element, attribute.Key, attribute.Value);
             }
 
             element.SetAttributeValue("name", NullIfWhiteSpace(group.Name));
@@ -335,7 +336,7 @@ internal static class XlsxWorkbookMetadataWriter
         foreach (var attribute in workbook.SmartTags.PropertiesNativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key is not "embed" and not "show")
-                smartTagProperties.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(smartTagProperties, attribute.Key, attribute.Value);
         }
 
         smartTagProperties.SetAttributeValue("embed", workbook.SmartTags.Embed is { } embed ? embed ? "1" : "0" : null);
@@ -345,7 +346,7 @@ internal static class XlsxWorkbookMetadataWriter
         foreach (var attribute in workbook.SmartTags.TypesNativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key))
-                smartTagTypes.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(smartTagTypes, attribute.Key, attribute.Value);
         }
 
         foreach (var type in workbook.SmartTags.Types)
@@ -356,7 +357,7 @@ internal static class XlsxWorkbookMetadataWriter
                 if (!string.IsNullOrWhiteSpace(attribute.Key) &&
                     attribute.Key is not "namespaceUri" and not "name" and not "url")
                 {
-                    element.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                    TrySetNativeAttribute(element, attribute.Key, attribute.Value);
                 }
             }
 
@@ -409,7 +410,7 @@ internal static class XlsxWorkbookMetadataWriter
                     continue;
                 }
 
-                protection.SetAttributeValue(XName.Get(attribute.Key), attribute.Value);
+                TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
             }
 
             foreach (var childXml in workbook.ProtectionMetadata.NativeChildXmls)
@@ -507,4 +508,21 @@ internal static class XlsxWorkbookMetadataWriter
 
     private static int? ClampWorkbookViewInteger(int? value, int min, int max) =>
         value is { } intValue ? Math.Clamp(intValue, min, max) : null;
+
+    private static bool TrySetNativeAttribute(XElement element, string name, string value)
+    {
+        try
+        {
+            element.SetAttributeValue(XName.Get(name), value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
 }

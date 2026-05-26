@@ -30,7 +30,10 @@ public partial class ColorPickerDialog : Window
         SetPreview(CurrentForegroundPreview, CurrentBackgroundPreview, CurrentBackgroundText, _currentColor);
         SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, initialColor);
         if (initialColor is { } color)
+        {
+            _customSpectrumBaseColor = color;
             SetCustomColorText(color);
+        }
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
