@@ -14418,10 +14418,13 @@ public partial class FileAdapterSmokeTests
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.HeaderFooterMetadata.Should().NotBeNull();
         loadedSheet.HeaderFooterMetadata!.NativeAttributes.Should().Contain("nativeHeaderFooterAttr", "kept");
+        loadedSheet.HeaderFooterMetadata.NativeAttributes["invalid headerFooter attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14432,6 +14435,7 @@ public partial class FileAdapterSmokeTests
         headerFooter.Should().NotBeNull();
         headerFooter!.Attribute("nativeHeaderFooterAttr").Should().NotBeNull();
         headerFooter.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
+        headerFooter.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center");
     }
 
