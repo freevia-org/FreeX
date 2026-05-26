@@ -1140,10 +1140,14 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
-        bool cum = ToBool(args[3]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => WeibullDistScalar(value, alpha, beta, cum));
-        return WeibullDistScalar(args[0], alpha, beta, cum);
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], WeibullDistScalar);
+    }
+
+    private static ScalarValue WeibullDistScalar(ScalarValue xValue, ScalarValue alphaValue, ScalarValue betaValue, ScalarValue cumulativeValue)
+    {
+        double alpha = ToNumber(alphaValue), beta = ToNumber(betaValue);
+        bool cum = ToBool(cumulativeValue);
+        return WeibullDistScalar(xValue, alpha, beta, cum);
     }
 
     private static ScalarValue WeibullDistScalar(ScalarValue xValue, double alpha, double beta, bool cum)
@@ -1160,10 +1164,14 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
-        bool cum = ToBool(args[3]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => GammaDistScalar(value, alpha, beta, cum));
-        return GammaDistScalar(args[0], alpha, beta, cum);
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], GammaDistScalar);
+    }
+
+    private static ScalarValue GammaDistScalar(ScalarValue xValue, ScalarValue alphaValue, ScalarValue betaValue, ScalarValue cumulativeValue)
+    {
+        double alpha = ToNumber(alphaValue), beta = ToNumber(betaValue);
+        bool cum = ToBool(cumulativeValue);
+        return GammaDistScalar(xValue, alpha, beta, cum);
     }
 
     private static ScalarValue GammaDistScalar(ScalarValue xValue, double alpha, double beta, bool cum)
@@ -1181,9 +1189,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double alpha = ToNumber(args[1]), beta = ToNumber(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => GammaInvScalar(value, alpha, beta));
-        return GammaInvScalar(args[0], alpha, beta);
+        return MapTernaryTextArgs(args[0], args[1], args[2], GammaInvScalar);
+    }
+
+    private static ScalarValue GammaInvScalar(ScalarValue probabilityValue, ScalarValue alphaValue, ScalarValue betaValue)
+    {
+        double alpha = ToNumber(alphaValue), beta = ToNumber(betaValue);
+        return GammaInvScalar(probabilityValue, alpha, beta);
     }
 
     private static ScalarValue GammaInvScalar(ScalarValue probabilityValue, double alpha, double beta)
@@ -1273,10 +1285,14 @@ public static partial class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
         if (args[3] is ErrorValue e3) return e3;
-        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
-        bool cum = ToBool(args[3]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => LognormDistScalar(value, mean, stdev, cum));
-        return LognormDistScalar(args[0], mean, stdev, cum);
+        return MapQuaternaryTextArgs(args[0], args[1], args[2], args[3], LognormDistScalar);
+    }
+
+    private static ScalarValue LognormDistScalar(ScalarValue xValue, ScalarValue meanValue, ScalarValue stdevValue, ScalarValue cumulativeValue)
+    {
+        double mean = ToNumber(meanValue), stdev = ToNumber(stdevValue);
+        bool cum = ToBool(cumulativeValue);
+        return LognormDistScalar(xValue, mean, stdev, cum);
     }
 
     private static ScalarValue LognormDistScalar(ScalarValue xValue, double mean, double stdev, bool cum)
@@ -1293,9 +1309,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double mean = ToNumber(args[1]), stdev = ToNumber(args[2]);
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, value => LognormInvScalar(value, mean, stdev));
-        return LognormInvScalar(args[0], mean, stdev);
+        return MapTernaryTextArgs(args[0], args[1], args[2], LognormInvScalar);
+    }
+
+    private static ScalarValue LognormInvScalar(ScalarValue probabilityValue, ScalarValue meanValue, ScalarValue stdevValue)
+    {
+        double mean = ToNumber(meanValue), stdev = ToNumber(stdevValue);
+        return LognormInvScalar(probabilityValue, mean, stdev);
     }
 
     private static ScalarValue LognormInvScalar(ScalarValue probabilityValue, double mean, double stdev)
