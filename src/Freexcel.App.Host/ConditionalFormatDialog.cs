@@ -58,7 +58,7 @@ public partial class ConditionalFormatDialog : Window
     private CellStyle? _customFormatStyle;
     private ConditionalFormat? _existingRule;
     private StackPanel _iconSetThresholdPanel = new();
-    private List<(ComboBox TypeBox, TextBox ValueBox)> _iconSetThresholdRows = [];
+    private List<(ComboBox TypeBox, TextBox ValueBox, ComboBox? OverrideBox)> _iconSetThresholdRows = [];
     private ComboBox? _formatStyleBox;
     private bool _ignoreFormatStyleChange;
 
@@ -387,7 +387,8 @@ public partial class ConditionalFormatDialog : Window
                 _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
                 _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
                 var thresholds = existingRule.IconSetThresholds.Count > 0 ? existingRule.IconSetThresholds : null;
-                BuildIconSetThresholdPanel(style, thresholds);
+                var overrides = existingRule.IconOverrides.Count > 0 ? existingRule.IconOverrides : null;
+                BuildIconSetThresholdPanel(style, thresholds, overrides);
             }
             else if (existingRule.RuleType == CfRuleType.DataBar)
             {
