@@ -19,6 +19,9 @@ public sealed partial class UiTestCatalogInventoryTests
         var contextualTabs = ReadContextualRibbonTabs();
         var dialogTypeNames = ReadDialogTypeNames();
         var xamlClickWiredControls = ReadMainWindowXamlClickHandlerCount();
+        var xamlAutomationIds = ReadMainWindowXamlAutomationIdCount();
+        var ribbonKeyTipMetadata = ReadMainWindowXamlRibbonKeyTipCount();
+        var keyboardShortcutUsages = ReadKeyboardShortcutUsageCounts();
         var screenshotToolScripts = ReadDocumentedScreenshotToolScripts();
         var uiEvidenceScreenshotCount = ReadUiEvidenceScreenshotCount();
         var worksheetContextMenuCommandCount = WorksheetContextMenuPlanner.BuildCommands()
@@ -54,6 +57,21 @@ public sealed partial class UiTestCatalogInventoryTests
             "XAML click-wired controls",
             xamlClickWiredControls,
             "`Click=\"...\"` occurrences in `MainWindow.xaml` on latest synced `origin/main`.");
+        AssertSnapshotRow(
+            snapshot,
+            "Explicit UIA automation ids",
+            xamlAutomationIds,
+            "`AutomationProperties.AutomationId=\"...\"` declarations in `MainWindow.xaml`.");
+        AssertSnapshotRow(
+            snapshot,
+            "Ribbon keytip metadata declarations",
+            ribbonKeyTipMetadata,
+            "`RibbonTooltip.KeyTip=\"...\"` declarations in `MainWindow.xaml`.");
+        AssertSnapshotRow(
+            snapshot,
+            "Keyboard command shortcut usages",
+            keyboardShortcutUsages.MatcherRules,
+            $"{keyboardShortcutUsages.MatcherRules} matcher rules / {keyboardShortcutUsages.DispatcherTargets} dispatcher targets");
         AssertSnapshotRow(
             snapshot,
             "Documented shortcut rows",
@@ -251,6 +269,28 @@ public sealed partial class UiTestCatalogInventoryTests
         return XamlClickHandler().Matches(xaml).Count;
     }
 
+    private static int ReadMainWindowXamlAutomationIdCount()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        return XamlAutomationId().Matches(xaml).Count;
+    }
+
+    private static int ReadMainWindowXamlRibbonKeyTipCount()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        return RibbonTooltipKeyTip().Matches(xaml).Count;
+    }
+
+    private static KeyboardShortcutUsageCounts ReadKeyboardShortcutUsageCounts()
+    {
+        var matcher = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "KeyboardShortcutMatcher.CommandRules.cs"));
+        var dispatcher = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        return new KeyboardShortcutUsageCounts(
+            CommandShortcutRuleDeclaration().Matches(matcher).Count,
+            KeyboardCommandDispatcherRegistration().Matches(dispatcher).Count);
+    }
+
     private static IReadOnlyList<string> ReadDocumentedScreenshotToolScripts()
     {
         var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
@@ -312,6 +352,18 @@ public sealed partial class UiTestCatalogInventoryTests
     [GeneratedRegex(@"Click=""[^""]+""")]
     private static partial Regex XamlClickHandler();
 
+    [GeneratedRegex(@"AutomationProperties\.AutomationId=""[^""]+""")]
+    private static partial Regex XamlAutomationId();
+
+    [GeneratedRegex(@"RibbonTooltip\.KeyTip=""[^""]+""")]
+    private static partial Regex RibbonTooltipKeyTip();
+
+    [GeneratedRegex(@"\bnew\(KeyboardCommandShortcut\.")]
+    private static partial Regex CommandShortcutRuleDeclaration();
+
+    [GeneratedRegex(@"_keyboardCommandDispatcher\.Register\(KeyboardCommandShortcut\.")]
+    private static partial Regex KeyboardCommandDispatcherRegistration();
+
     [GeneratedRegex(@"\bclass\s+(?<name>[A-Za-z0-9_]*Dialog)\b")]
     private static partial Regex DialogClassDeclaration();
 
@@ -355,4 +407,6 @@ public sealed partial class UiTestCatalogInventoryTests
         int TotalInScope);
 
     private sealed record ShortcutRow(string Area, string Shortcut, string Status);
+
+    private sealed record KeyboardShortcutUsageCounts(int MatcherRules, int DispatcherTargets);
 }

@@ -189,16 +189,9 @@ internal sealed class ExportOptionsDialog : Window
 
     private TextBox ResolveInvalidPageRangeInput(string? error)
     {
-        if (string.Equals(error, "From page must be less than or equal to To page.", StringComparison.Ordinal))
-            return _toPageBox;
-
-        if (int.TryParse(_fromPageBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var fromPage)
-            && fromPage >= 1)
-        {
-            return _toPageBox;
-        }
-
-        return _fromPageBox;
+        return ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text) == ExportOptionsFocusTarget.ToPage
+            ? _toPageBox
+            : _fromPageBox;
     }
 
     private void FocusInvalidPdfLanguageInput()
@@ -223,48 +216,28 @@ internal sealed class ExportOptionsDialog : Window
         string? pdfLanguage = ExportPlanner.DefaultPdfLanguage,
         PdfConformance pdfConformance = PdfConformance.Standard,
         bool includeDocumentStructureTags = false) =>
-        new(
-            Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
+        ExportOptionsDialogPlanner.CreateResult(
+            scope,
             includeDocumentProperties,
             openAfterPublish,
             ignorePrintAreas,
             pageRange,
-            Enum.IsDefined(quality) ? quality : ExportQuality.Standard,
+            quality,
             createBookmarks,
-            createBookmarks && Enum.IsDefined(bookmarkMode) && bookmarkMode != PdfBookmarkMode.None
-                ? bookmarkMode
-                : createBookmarks
-                    ? PdfBookmarkMode.SheetNames
-                    : PdfBookmarkMode.None,
-            Enum.IsDefined(initialView) ? initialView : PdfInitialView.SinglePage,
-            Enum.IsDefined(openMode) ? openMode : PdfOpenMode.Normal,
+            bookmarkMode,
+            initialView,
+            openMode,
             bitmapTextWhenFontsMayNotBeEmbedded,
-            ExportPlanner.NormalizePdfLanguage(pdfLanguage),
-            Enum.IsDefined(pdfConformance) ? pdfConformance : PdfConformance.Standard,
+            pdfLanguage,
+            pdfConformance,
             includeDocumentStructureTags);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
-        _bookmarkModeBox.SelectedIndex switch
-        {
-            1 => PdfBookmarkMode.PrintTitles,
-            2 => PdfBookmarkMode.PageNumbers,
-            _ => PdfBookmarkMode.SheetNames
-        };
+        ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex);
 
     private PdfInitialView GetSelectedInitialView() =>
-        _initialViewBox.SelectedIndex switch
-        {
-            1 => PdfInitialView.OneColumn,
-            2 => PdfInitialView.TwoColumnLeft,
-            3 => PdfInitialView.TwoColumnRight,
-            _ => PdfInitialView.SinglePage
-        };
+        ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex);
 
     private PdfOpenMode GetSelectedOpenMode() =>
-        _openModeBox.SelectedIndex switch
-        {
-            1 => PdfOpenMode.Outlines,
-            2 => PdfOpenMode.FullScreen,
-            _ => PdfOpenMode.Normal
-        };
+        ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex);
 }
