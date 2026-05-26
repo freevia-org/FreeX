@@ -89,6 +89,30 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
+    public void ZoomSliderAndButtons_ShareACommonVisualCenter()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var window = harness.Window;
+
+            var zoomOut = (FrameworkElement)window.FindName("StatusZoomOutButton");
+            var slider = (FrameworkElement)window.FindName("ZoomSlider");
+            var zoomIn = (FrameworkElement)window.FindName("StatusZoomInButton");
+            var zoomText = (FrameworkElement)window.FindName("StatusZoomText");
+
+            window.UpdateLayout();
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            var sliderCenter = CenterY(slider, window);
+            CenterY(zoomOut, window).Should().BeApproximately(sliderCenter, 0.75);
+            CenterY(zoomIn, window).Should().BeApproximately(sliderCenter, 0.75);
+            CenterY(zoomText, window).Should().BeApproximately(sliderCenter, 0.75);
+        });
+    }
+
+    [Fact]
     public void F6ShellFocusCycle_TraversesVisibleExcelRegionsInHost()
     {
         StaTestRunner.Run(() =>
@@ -170,6 +194,8 @@ public sealed class StatusBarLayoutTests
                 ? sheetTab.Name
                 : null;
 
+        public MainWindow Window => _window;
+
         public void CycleShellFocus(bool reverse)
         {
             _cycleShellFocus.Invoke(_window, [reverse]);
@@ -224,5 +250,11 @@ public sealed class StatusBarLayoutTests
             MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
             PumpDispatcher();
         }
+    }
+
+    private static double CenterY(FrameworkElement element, Window window)
+    {
+        var bounds = BoundsRelativeToWindow(element, window);
+        return bounds.Top + bounds.Height / 2;
     }
 }

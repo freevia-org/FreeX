@@ -325,10 +325,13 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        PageSetupDialogBtn_Click(sender, e);
+        ShowPageSetupDialog(PageSetupInitialFocusTarget.RepeatRows);
     }
 
-    private void PageSetupDialogBtn_Click(object sender, RoutedEventArgs e)
+    private void PageSetupDialogBtn_Click(object sender, RoutedEventArgs e) =>
+        ShowPageSetupDialog(PageSetupInitialFocusTarget.PageOrientation);
+
+    private void ShowPageSetupDialog(PageSetupInitialFocusTarget initialFocusTarget)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
@@ -337,7 +340,8 @@ public partial class MainWindow
         dialog = new PageSetupDialog(
             sheet,
             SheetGrid.SelectedRange,
-            request => ApplyPageSetupRangeSelection(dialog, request)) { Owner = this };
+            request => ApplyPageSetupRangeSelection(dialog, request),
+            initialFocusTarget) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 

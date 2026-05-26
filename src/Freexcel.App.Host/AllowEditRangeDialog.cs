@@ -62,13 +62,16 @@ public sealed class AllowEditRangeDialog : Window
             Margin = new Thickness(0, 0, 0, 10)
         });
 
-        var existingGroup = new GroupBox { Header = "Ranges unlocked by password", Margin = new Thickness(0, 0, 0, 10) };
+        var existingGroup = new GroupBox { Margin = new Thickness(0, 0, 0, 10) };
         var existingPanel = new DockPanel { Margin = new Thickness(8) };
-        _existingRangesBox.ItemsSource = existingRanges?.Select(range => range.ToString()).ToList() ?? [];
+        _existingRangesBox.ItemsSource = AllowEditRangeDialogPlanner.BuildExistingRangeItems(existingRanges);
         _existingRangesBox.MinHeight = 80;
         _existingRangesBox.SelectionMode = SelectionMode.Single;
         _existingRangesBox.SelectionChanged += (_, _) => UpdateRangeButtons();
         _existingRangesBox.MouseDoubleClick += DeleteSelectedRange_Click;
+        var existingRangesLabel = new Label { Content = "_Ranges unlocked by password:", Target = _existingRangesBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(existingRangesLabel, Dock.Top);
+        existingPanel.Children.Add(existingRangesLabel);
         existingPanel.Children.Add(_existingRangesBox);
         var rangeButtons = new StackPanel
         {
@@ -129,7 +132,7 @@ public sealed class AllowEditRangeDialog : Window
     }
 
     public static AllowEditRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
-        new(currentText.Trim(), CollapseDialog: true);
+        AllowEditRangeDialogPlanner.CreateRangeSelectionRequest(currentText);
 
     public void ApplyRangeSelection(string rangeText)
     {
@@ -140,13 +143,13 @@ public sealed class AllowEditRangeDialog : Window
     }
 
     public static AllowEditRangeDialogResult CreateAddResult(GridRange range) =>
-        new(AllowEditRangeDialogAction.Add, range);
+        AllowEditRangeDialogPlanner.CreateAddResult(range);
 
     public static AllowEditRangeDialogResult CreateRemoveResult(GridRange range) =>
-        new(AllowEditRangeDialogAction.Remove, range);
+        AllowEditRangeDialogPlanner.CreateRemoveResult(range);
 
     public static AllowEditRangeDialogResult CreateClearResult() =>
-        new(AllowEditRangeDialogAction.Clear, null);
+        AllowEditRangeDialogPlanner.CreateClearResult();
 
     private void Accept()
     {
@@ -181,9 +184,11 @@ public sealed class AllowEditRangeDialog : Window
 
     private void UpdateRangeButtons()
     {
-        var hasRanges = _existingRangesBox.Items.Count > 0;
-        _deleteRangeButton.IsEnabled = hasRanges && _existingRangesBox.SelectedItem is not null;
-        _clearRangesButton.IsEnabled = hasRanges;
+        var state = AllowEditRangeDialogPlanner.BuildButtonState(
+            _existingRangesBox.Items.Count,
+            _existingRangesBox.SelectedItem is not null);
+        _deleteRangeButton.IsEnabled = state.CanDeleteSelectedRange;
+        _clearRangesButton.IsEnabled = state.CanClearRanges;
     }
 
     private void FocusInitialKeyboardTarget()

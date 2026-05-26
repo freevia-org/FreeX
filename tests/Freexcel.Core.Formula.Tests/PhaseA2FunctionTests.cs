@@ -106,6 +106,24 @@ public class PhaseA2FunctionTests
         _eval.Evaluate("=ISFORMULA(1)", sheet, wb).Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void IsFormula_OffsetReference_InspectsTargetCell()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "1+2");
+
+        _eval.Evaluate("=ISFORMULA(OFFSET(A1,1,1))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void IsFormula_IndirectReference_InspectsTargetCell()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "1+2");
+
+        _eval.Evaluate("=ISFORMULA(INDIRECT(\"B2\"))", sheet, wb).Should().Be(new BoolValue(true));
+    }
+
     // ── FORMULATEXT ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -128,6 +146,26 @@ public class PhaseA2FunctionTests
     {
         var (wb, sheet) = MakeWb();
         _eval.Evaluate("=FORMULATEXT(1)", sheet, wb).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void FormulaText_OffsetReference_ReturnsTargetFormulaWithEquals()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "SUM(C1:C3)");
+
+        _eval.Evaluate("=FORMULATEXT(OFFSET(A1,1,1))", sheet, wb)
+            .Should().Be(new TextValue("=SUM(C1:C3)"));
+    }
+
+    [Fact]
+    public void FormulaText_IndirectReference_ReturnsTargetFormulaWithEquals()
+    {
+        var (wb, sheet) = MakeWb();
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "SUM(C1:C3)");
+
+        _eval.Evaluate("=FORMULATEXT(INDIRECT(\"B2\"))", sheet, wb)
+            .Should().Be(new TextValue("=SUM(C1:C3)"));
     }
 
     // ── OFFSET ───────────────────────────────────────────────────────────────
@@ -210,6 +248,24 @@ public class PhaseA2FunctionTests
     {
         var (wb, sheet) = MakeWb();
         _eval.Evaluate("=CELL(\"address\",B3)", sheet, wb).Should().Be(new TextValue("$B$3"));
+    }
+
+    [Fact]
+    public void Cell_Address_OffsetReference_ReturnsTargetAddress()
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate("=CELL(\"address\",OFFSET(A1,1,1))", sheet, wb)
+            .Should().Be(new TextValue("$B$2"));
+    }
+
+    [Fact]
+    public void Cell_Address_IndirectReference_ReturnsTargetAddress()
+    {
+        var (wb, sheet) = MakeWb();
+
+        _eval.Evaluate("=CELL(\"address\",INDIRECT(\"B2\"))", sheet, wb)
+            .Should().Be(new TextValue("$B$2"));
     }
 
     [Fact]

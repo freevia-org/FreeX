@@ -35,7 +35,7 @@ public sealed partial class ConsolidateDialog : Window
     private readonly Button _deleteReferenceButton = new() { Content = "_Delete", Width = 76, IsEnabled = false };
     private readonly TextBox _destinationBox = new();
     private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
-    private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
+    private readonly CheckBox _leftColumnBox = new() { Content = "Left _column" };
     private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
     private readonly Action<ConsolidateRangeSelectionRequest>? _requestRangeSelection;
 
@@ -89,7 +89,7 @@ public sealed partial class ConsolidateDialog : Window
         root.Children.Add(_referencesList);
         root.Children.Add(new Label { Content = "_Destination cell:", Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell", ConsolidateRangeSelectionTarget.DestinationCell));
-        root.Children.Add(new Label { Content = "Use _labels in:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+        root.Children.Add(new TextBlock { Text = "Use labels in:", Margin = new Thickness(0, 8, 0, 2) });
         var labelOptions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         _topRowBox.Margin = new Thickness(0, 0, 16, 0);
         labelOptions.Children.Add(_topRowBox);

@@ -279,7 +279,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceDialogOpenedFromKeyboard_FocusesSourceRange()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
 
@@ -294,7 +294,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceRangePicker_RefocusesSourceInputAfterRequest()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
 
@@ -309,7 +309,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotTableDataSourceDialogInvalidRange_ShowsOwnedWarningAndRefocusesSource()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotTableDataSourceDialog.cs",
             "public sealed class PivotTableDataSourceDialog",
             "internal static class PivotDialogLayout");
         var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
@@ -563,8 +563,8 @@ public sealed class PivotWorkflowDialogTests
     {
         var source = ReadPivotWorkflowSource();
 
-        source.Should().Contain("Recommended PivotCharts");
-        source.Should().Contain("All Charts");
+        source.Should().Contain("Header = \"_Recommended PivotCharts\"");
+        source.Should().Contain("Header = \"_All Charts\"");
         source.Should().Contain("private readonly ListBox _recommendedGallery");
         source.Should().Contain("CreateRecommendedChartsPanel(_recommendedGallery)");
         source.Should().Contain("SelectedGalleryChoice()");
@@ -579,9 +579,9 @@ public sealed class PivotWorkflowDialogTests
     public void PivotChartTypeDialogOpenedFromKeyboard_FocusesRecommendedGallery()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotChartTypeDialog.cs",
             "public sealed class PivotChartTypeDialog",
-            "public sealed class PivotChartOptionsDialogResult");
+            "");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -802,12 +802,12 @@ public sealed class PivotWorkflowDialogTests
 
         foreach (var content in new[]
         {
-            "Layout & Format",
-            "Totals & Filters",
-            "Display",
-            "Data",
-            "Printing",
-            "Alt Text",
+            "_Layout & Format",
+            "_Totals & Filters",
+            "_Display",
+            "_Data",
+            "_Printing",
+            "_Alt Text",
             "_emptyCellsBox",
             "_compactIndentBox",
             "_autofitColumnsBox",
@@ -836,7 +836,7 @@ public sealed class PivotWorkflowDialogTests
     {
         var source = ReadPivotWorkflowSource();
 
-        source.Should().Contain("Header = \"Printing\"");
+        source.Should().Contain("Header = \"_Printing\"");
         source.Should().Contain("Show expand/collapse _buttons");
         source.Should().Contain("Set print _titles");
         source.Should().Contain("Print expand/collapse _buttons when displayed on PivotTable");
@@ -1102,7 +1102,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotFieldGroupingDialogOpenedFromKeyboard_FocusesFieldBox()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotFieldGroupingDialog.cs",
             "public sealed class PivotFieldGroupingDialog",
             "");
 
@@ -1116,7 +1116,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotFieldGroupingDialogInvalidNumberRangeIntervals_ShowOwnedWarningAndRefocusByBox()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotFieldGroupingDialog.cs",
             "public sealed class PivotFieldGroupingDialog",
             "");
 
@@ -1135,7 +1135,7 @@ public sealed class PivotWorkflowDialogTests
     public void PivotFieldGroupingDialogInvalidBounds_ShowOwnedWarningAndRefocusBadInput()
     {
         var source = ReadClassSource(
-            "PivotWorkflowDialogs.cs",
+            "PivotFieldGroupingDialog.cs",
             "public sealed class PivotFieldGroupingDialog",
             "");
 
@@ -1412,7 +1412,10 @@ public sealed class PivotWorkflowDialogTests
             "\n",
             new[]
             {
-                "PivotWorkflowDialogs.cs",
+                "PivotFieldGroupingDialog.cs",
+                "PivotTableDataSourceDialog.cs",
+                "PivotChartTypeDialog.cs",
+                "PivotDialogLayout.cs",
                 "PivotChartOptionsDialog.cs",
                 "PivotSlicerTimelineDialogs.cs",
                 "PivotCalculatedDialogs.cs",

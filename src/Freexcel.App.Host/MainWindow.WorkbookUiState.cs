@@ -200,6 +200,9 @@ public partial class MainWindow
         ProtectSheetButton.Content = uiText.ButtonContent;
         RibbonTooltip.SetTitle(ProtectSheetButton, uiText.TooltipTitle);
         RibbonTooltip.SetDescription(ProtectSheetButton, uiText.TooltipDescription);
+
+        if (AllowEditRangesButton is not null)
+            AllowEditRangesButton.IsEnabled = !sheet.IsProtected;
     }
 
     private void RefreshWorkbookProtectionUi()

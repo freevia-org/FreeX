@@ -34,7 +34,7 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
 
         var view = new WorkbookCustomView(
             _name,
-            workbook.Sheets.Select(CaptureSheetState).ToList(),
+            CustomViewStatePlanner.CaptureWorkbookState(workbook),
             IncludePrintSettings: _includePrintSettings,
             IncludeHiddenRowsColumnsAndFilterSettings: _includeHiddenRowsColumnsAndFilterSettings);
 
@@ -64,38 +64,13 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
     }
 
     internal static int FindViewIndex(Workbook workbook, string name)
-    {
-        for (var i = 0; i < workbook.CustomViews.Count; i++)
-            if (string.Equals(workbook.CustomViews[i].Name, name, StringComparison.OrdinalIgnoreCase))
-                return i;
-        return -1;
-    }
+        => CustomViewStatePlanner.FindViewIndex(workbook, name);
 
     internal static WorksheetCustomViewState CaptureSheetState(Sheet sheet) =>
-        SanitizePaneState(new WorksheetCustomViewState(
-            sheet.Name,
-            sheet.ViewMode,
-            sheet.FrozenRows,
-            sheet.FrozenCols,
-            sheet.SplitRow,
-            sheet.SplitColumn,
-            sheet.ShowGridlines,
-            sheet.ShowHeadings,
-            sheet.ShowRulers,
-            sheet.ZoomPercent,
-            sheet.ShowFormulas));
+        CustomViewStatePlanner.CaptureSheetState(sheet);
 
     internal static WorksheetCustomViewState SanitizePaneState(WorksheetCustomViewState state)
-    {
-        if (state.FrozenRows == 0 && state.FrozenCols == 0)
-            return state;
-
-        return state with
-        {
-            SplitRow = null,
-            SplitColumn = null
-        };
-    }
+        => CustomViewStatePlanner.SanitizePaneState(state);
 }
 
 public sealed class ApplyCustomViewCommand : IWorkbookCommand
@@ -139,22 +114,10 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
     }
 
     private static List<WorksheetCustomViewState> Capture(Workbook workbook) =>
-        workbook.Sheets.Select(SaveCustomViewCommand.CaptureSheetState).ToList();
+        CustomViewStatePlanner.CaptureWorkbookState(workbook);
 
     private static void ApplyState(Sheet sheet, WorksheetCustomViewState state)
-    {
-        state = SaveCustomViewCommand.SanitizePaneState(state);
-        sheet.ViewMode = state.ViewMode;
-        sheet.FrozenRows = state.FrozenRows;
-        sheet.FrozenCols = state.FrozenCols;
-        sheet.SplitRow = state.SplitRow;
-        sheet.SplitColumn = state.SplitColumn;
-        sheet.ShowGridlines = state.ShowGridlines;
-        sheet.ShowHeadings = state.ShowHeadings;
-        sheet.ShowRulers = state.ShowRulers;
-        sheet.ZoomPercent = state.ZoomPercent;
-        sheet.ShowFormulas = state.ShowFormulas;
-    }
+        => CustomViewStatePlanner.ApplyState(sheet, state);
 }
 
 public sealed class DeleteCustomViewCommand : IWorkbookCommand

@@ -30,6 +30,39 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.OpenMenuHeaders.Should().ContainInOrder(["Formatting", "Data Bars", "Color Scale", "Icon Set"]);
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.DataBars);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Color Scale");
+
+            harness.FocusedMenuHeader.Should().Be("Color Scale");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColorScale);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("Icon Set");
+
+            harness.FocusedMenuHeader.Should().Be("Icon Set");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.IconSet);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+        });
+    }
+
+    [Fact]
+    public void KeyboardQuickAnalysisMenu_WithNoSelectionReportsUnsupportedState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(1, 1, 3, 2);
+            harness.OpenQuickAnalysisMenu();
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.DataBars);
+
+            harness.ClearSelection();
+            harness.OpenQuickAnalysisMenu();
+
+            harness.FocusedMenuHeader.Should().BeNull();
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.None);
+            harness.QuickAnalysisPreviewRange.Should().BeNull();
+            harness.StatusText.Should().Be("Select a range to use Quick Analysis.");
         });
     }
 
@@ -73,6 +106,9 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             }
         }
 
+        public string StatusText =>
+            ((TextBlock)_window.FindName("StatusReadyText")).Text;
+
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var sheet = _workbook.Sheets[0];
@@ -82,9 +118,25 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             PumpDispatcher();
         }
 
+        public void ClearSelection()
+        {
+            SheetGrid.SelectedRange = null;
+            PumpDispatcher();
+        }
+
         public void OpenQuickAnalysisMenu()
         {
             _showQuickAnalysisMenu.Invoke(_window, null);
+            PumpDispatcher();
+        }
+
+        public void FocusMenuItem(string header)
+        {
+            var item = ActiveContextMenu?.Items.OfType<MenuItem>()
+                .FirstOrDefault(item => item.Header?.ToString() == header)
+                ?? throw new InvalidOperationException($"Menu item '{header}' was not found.");
+            item.Focus();
+            Keyboard.Focus(item);
             PumpDispatcher();
         }
 

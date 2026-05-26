@@ -1530,6 +1530,16 @@ public sealed class FormulaEvaluator
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
             return new BoolValue(cell?.HasFormula == true);
         }
+        if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var reference = EvaluateReferenceReturningFunction(fn, context);
+            if (reference is ErrorValue error) return error;
+            var range = (RangeValue)reference;
+            var cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
+                : context.TryGetCell(range.StartRow, range.StartCol);
+            return new BoolValue(cell?.HasFormula == true);
+        }
         return ErrorValue.Value;
     }
 
@@ -1563,6 +1573,15 @@ public sealed class FormulaEvaluator
             cell = sheetName is not null
                 ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
                 : context.TryGetCell(r.Start.Row, r.Start.Col);
+        }
+        else if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
+        {
+            var reference = EvaluateReferenceReturningFunction(fn, context);
+            if (reference is ErrorValue error) return error == ErrorValue.Value ? ErrorValue.NA : error;
+            var range = (RangeValue)reference;
+            cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
+                : context.TryGetCell(range.StartRow, range.StartCol);
         }
         else
         {
@@ -1612,14 +1631,49 @@ public sealed class FormulaEvaluator
 
         if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
         {
-            var value = EvaluateNode(fn, context);
+            var value = EvaluateReferenceReturningFunction(fn, context);
             return value is ErrorValue or RangeValue ? value : ErrorValue.Value;
         }
 
         return ErrorValue.Value;
     }
 
+    private ScalarValue EvaluateReferenceReturningFunction(FunctionCallNode node, IEvalContext context)
+    {
+        return node.FunctionName switch
+        {
+            "OFFSET"   => EvaluateOffsetReference(node, context),
+            "INDIRECT" => EvaluateIndirectReference(node, context),
+            _          => ErrorValue.Value
+        };
+    }
+
+    private ScalarValue EvaluateIndirectReference(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 1 or > 2) return ErrorValue.Value;
+
+        var args = new List<ScalarValue>(node.Arguments.Count);
+        foreach (var argument in node.Arguments)
+        {
+            var value = EvaluateNode(argument, context);
+            if (value is ErrorValue error) return error;
+            args.Add(value);
+        }
+
+        return BuiltInFunctions.IndirectReference(args, context);
+    }
+
     private ScalarValue EvaluateOffset(FunctionCallNode node, IEvalContext context)
+    {
+        var reference = EvaluateOffsetReference(node, context);
+        if (reference is ErrorValue error) return error;
+        var range = (RangeValue)reference;
+        if (range.RowCount == 1 && range.ColCount == 1)
+            return range.Cells[0, 0];
+        return range;
+    }
+
+    private ScalarValue EvaluateOffsetReference(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 3 or > 5) return ErrorValue.Value;
         var baseArg = node.Arguments[0];
@@ -1725,12 +1779,6 @@ public sealed class FormulaEvaluator
         int colSpan = (int)(c1Final - c0Final + 1);
         if ((long)rowSpan * colSpan > 1_000_000L) return ErrorValue.Ref;
 
-        if (rowSpan == 1 && colSpan == 1)
-        {
-            return baseSheet is not null
-                ? context.GetCellValue(baseSheet, (uint)r0Final, (uint)c0Final)
-                : context.GetCellValue((uint)r0Final, (uint)c0Final);
-        }
         var cells = new ScalarValue[rowSpan, colSpan];
         for (int ri = 0; ri < rowSpan; ri++)
             for (int ci = 0; ci < colSpan; ci++)
@@ -1739,7 +1787,7 @@ public sealed class FormulaEvaluator
                     ? context.GetCellValue(baseSheet, (uint)(r0Final + ri), (uint)(c0Final + ci))
                     : context.GetCellValue((uint)(r0Final + ri), (uint)(c0Final + ci));
             }
-        return new RangeValue(cells, (uint)r0Final, (uint)c0Final);
+        return new RangeValue(cells, (uint)r0Final, (uint)c0Final) { SheetName = baseSheet };
     }
 
     private ScalarValue EvaluateSwitch(FunctionCallNode node, IEvalContext context)

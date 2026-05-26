@@ -75,6 +75,7 @@ public sealed partial class AutoFilterDialog : Window
     private readonly Button _clearFilterButton = new() { Content = "_Clear Filter From", Margin = new Thickness(0, 8, 0, 0) };
     private readonly GroupBox _filterByColorGroup = new() { Header = "Filter by Color", Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
+    private readonly List<Button> _colorChoiceButtons = [];
     private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
     private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
     private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };
@@ -153,7 +154,12 @@ public sealed partial class AutoFilterDialog : Window
 
         var root = new DockPanel { Margin = new Thickness(16) };
         var stack = new StackPanel();
-        root.Children.Add(stack);
+        var scrollViewer = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        scrollViewer.Content = stack;
+        root.Children.Add(scrollViewer);
 
         stack.Children.Add(_sortNone);
         stack.Children.Add(_sortAscending);
@@ -266,8 +272,10 @@ public sealed partial class AutoFilterDialog : Window
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0)
         };
+        DockPanel.SetDock(buttons, Dock.Bottom);
         var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
@@ -286,7 +294,7 @@ public sealed partial class AutoFilterDialog : Window
         var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
-        stack.Children.Add(buttons);
+        root.Children.Add(buttons);
 
         Content = root;
         PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;

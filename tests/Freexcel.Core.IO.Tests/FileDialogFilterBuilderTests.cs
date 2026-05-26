@@ -70,6 +70,22 @@ public sealed class FileDialogFilterBuilderTests
     }
 
     [Fact]
+    public void BuildFilters_NormalizeIndividualFormatExtensions()
+    {
+        var adapters = new IFileAdapter[]
+        {
+            new FakeAdapter([
+                new FileFormatDescriptor("csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
+            ])
+        };
+
+        FileDialogFilterBuilder.BuildOpenFilter(adapters)
+            .Should().Contain("CSV (Comma-separated values) (*.csv)|*.csv");
+        FileDialogFilterBuilder.BuildSaveFilter(adapters)
+            .Should().Be("CSV (Comma-separated values) (*.csv)|*.csv");
+    }
+
+    [Fact]
     public void BuildOpenFilter_RealAdaptersExposeExcelOpenAliases()
     {
         var filter = FileDialogFilterBuilder.BuildOpenFilter(
@@ -110,6 +126,23 @@ public sealed class FileDialogFilterBuilderTests
         result.Should().BeSameAs(adapter);
         format.Should().NotBeNull();
         format!.Extension.Should().Be(".xlsm");
+    }
+
+    [Theory]
+    [InlineData("xlsx", ".xlsx")]
+    [InlineData(" .CSV ", ".CSV")]
+    [InlineData(".fxl", ".fxl")]
+    public void FileFormatResolver_NormalizesExtensionsForFilterAndAdapterMatching(string extension, string expected)
+    {
+        FileFormatResolver.NormalizeExtension(extension).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(".XLSX", "xlsx")]
+    [InlineData("", "unknown")]
+    public void FileFormatResolver_CreatesSafeFileTypeTokens(string extension, string expected)
+    {
+        FileFormatResolver.SafeFileTypeFromExtension(extension).Should().Be(expected);
     }
 
     [Theory]

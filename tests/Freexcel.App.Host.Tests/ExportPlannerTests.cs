@@ -391,6 +391,62 @@ public class ExportPlannerTests
     }
 
     [Theory]
+    [InlineData(0, 1)]
+    [InlineData(1, 2)]
+    [InlineData(2, 3)]
+    [InlineData(99, 1)]
+    public void ExportOptionsDialogPlanner_MapsBookmarkModeIndexes(int index, int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.BookmarkModeFromIndex(index)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]
+    [InlineData(99, 0)]
+    public void ExportOptionsDialogPlanner_MapsInitialViewIndexes(int index, int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.InitialViewFromIndex(index)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(99, 0)]
+    public void ExportOptionsDialogPlanner_MapsOpenModeIndexes(int index, int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.OpenModeFromIndex(index)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("From page must be less than or equal to To page.", "4", 1)]
+    [InlineData("Enter a valid page range.", "2", 1)]
+    [InlineData("Enter a valid page range.", "0", 0)]
+    [InlineData("Enter a valid page range.", "x", 0)]
+    public void ExportOptionsDialogPlanner_SelectsInvalidPageRangeFocusTarget(
+        string error,
+        string fromPageText,
+        int expected)
+    {
+        ((int)ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, fromPageText)).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ExportOptionsDialogPlanningFacade_ForwardsPureWorkToPlanner()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("ExportOptionsDialogPlanner.CreateResult(");
+        source.Should().Contain("ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex)");
+        source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
+    }
+
+    [Theory]
     [InlineData(" uk_ua ", "uk-UA")]
     [InlineData("EN-us", "en-US")]
     [InlineData("not a culture", "en-US")]
@@ -476,8 +532,9 @@ public class ExportPlannerTests
         source.Should().Contain("_pagesRangeButton.IsChecked = true;");
         source.Should().Contain("var target = ResolveInvalidPageRangeInput(error);");
         source.Should().Contain("private TextBox ResolveInvalidPageRangeInput(string? error)");
-        source.Should().Contain("return _toPageBox;");
-        source.Should().Contain("return _fromPageBox;");
+        source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
+        source.Should().Contain("? _toPageBox");
+        source.Should().Contain(": _fromPageBox");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -1030,6 +1087,39 @@ public class ExportPlannerTests
 
                 var bytes = File.ReadAllBytes(path);
                 Encoding.ASCII.GetString(bytes).Should().Contain("Workbook Cell PDF Text");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesSelectableTextOverlayForDisplayedComments()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var workbook = new Workbook("Selectable displayed comments export");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Anchor"));
+            sheet.Comments[a1] = "Displayed Comment PDF Text";
+            sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes).Should().Contain("Displayed Comment PDF Text");
             }
             finally
             {

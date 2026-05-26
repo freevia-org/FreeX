@@ -123,6 +123,7 @@ public static partial class PrintRenderer
         {
             DrawDisplayedComments(
                 dc,
+                textOverlays,
                 comments,
                 threadedComments,
                 pageRows,

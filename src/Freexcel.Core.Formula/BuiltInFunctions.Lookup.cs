@@ -353,6 +353,12 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue Indirect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => IndirectCore(args, ctx, unwrapSingleCell: true);
+
+    internal static ScalarValue IndirectReference(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => IndirectCore(args, ctx, unwrapSingleCell: false);
+
+    private static ScalarValue IndirectCore(IReadOnlyList<ScalarValue> args, IEvalContext ctx, bool unwrapSingleCell)
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
@@ -366,11 +372,16 @@ public static partial class BuiltInFunctions
             if (sheetPart.StartsWith('\'') && sheetPart.EndsWith('\'') && sheetPart.Length >= 2)
                 sheetName = sheetPart[1..^1].Replace("''", "'");   // strip outer quotes and unescape ''→'
             else
+            {
+                if (!IsSimpleSheetQualifier(sheetPart)) return ErrorValue.Ref;
                 sheetName = sheetPart;
+            }
             refText = refText[(bangIdx + 1)..];
         }
         if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
+        if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
+            return BuildIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol);
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
 
@@ -392,9 +403,12 @@ public static partial class BuiltInFunctions
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
                 : !TryParseR1C1Ref(refText, ctx.CurrentCellAddress, out row, out col))
             return ErrorValue.Ref;
-        return sheetName is not null
-            ? ctx.GetCellValue(sheetName, row, col)
-            : ctx.GetCellValue(row, col);
+
+        return unwrapSingleCell
+            ? sheetName is not null
+                ? ctx.GetCellValue(sheetName, row, col)
+                : ctx.GetCellValue(row, col)
+            : BuildIndirectRange(ctx, sheetName, row, col, row, col);
     }
 
     private static ScalarValue BuildIndirectRange(
@@ -421,6 +435,12 @@ public static partial class BuiltInFunctions
         return new RangeValue(cells, r0, c0) { SheetName = sheetName };
     }
 
+    private static bool IsSimpleSheetQualifier(string sheetName) =>
+        sheetName.Length > 0 && sheetName.All(IsSimpleSheetNameChar);
+
+    private static bool IsSimpleSheetNameChar(char ch) =>
+        char.IsLetterOrDigit(ch) || ch is '_' or '.';
+
     private static bool TryParseA1RangeRef(string refText, out uint startRow, out uint startCol, out uint endRow, out uint endCol)
     {
         startRow = startCol = endRow = endCol = 0;
@@ -429,6 +449,26 @@ public static partial class BuiltInFunctions
 
         return TryParseA1Ref(refText[..colon], out startRow, out startCol)
             && TryParseA1Ref(refText[(colon + 1)..], out endRow, out endCol);
+    }
+
+    private static bool TryParseA1FullRowRangeRef(string refText, out uint startRow, out uint endRow)
+    {
+        startRow = endRow = 0;
+        int colon = refText.IndexOf(':');
+        if (colon < 0 || colon != refText.LastIndexOf(':')) return false;
+
+        return TryParseA1RowNumber(refText[..colon], out startRow)
+            && TryParseA1RowNumber(refText[(colon + 1)..], out endRow);
+    }
+
+    private static bool TryParseA1RowNumber(string text, out uint row)
+    {
+        row = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        text = text.Trim();
+        if (text.StartsWith('$')) text = text[1..];
+        if (text.Length == 0 || text.Any(ch => !char.IsDigit(ch))) return false;
+        return uint.TryParse(text, out row) && row is >= 1 and <= CellAddress.MaxRow;
     }
 
     private static bool TryParseR1C1RangeRef(
@@ -472,8 +512,16 @@ public static partial class BuiltInFunctions
             ? $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}"
             : $"{(rowAbs ? $"R{rowNum}" : $"R[{rowNum}]")}{(colAbs ? $"C{colNum}" : $"C[{colNum}]")}";
         if (!string.IsNullOrEmpty(sheetText))
-            addr = $"'{sheetText.Replace("'", "''")}'!{addr}";
+            addr = $"{FormatAddressSheetText(sheetText)}!{addr}";
         return new TextValue(addr);
+    }
+
+    private static string FormatAddressSheetText(string sheetText)
+    {
+        bool needsQuotes = !IsSimpleSheetQualifier(sheetText);
+        return needsQuotes
+            ? $"'{sheetText.Replace("'", "''")}'"
+            : sheetText;
     }
 
     private static ScalarValue Lookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -498,7 +546,7 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
         {
-            if (lookupFlat[i] is ErrorValue lErr) return lErr;
+            if (lookupFlat[i] is ErrorValue) continue;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
         }
@@ -515,7 +563,7 @@ public static partial class BuiltInFunctions
         int matchIdx = -1;
         for (int i = 0; i < lookupVector.Count; i++)
         {
-            if (lookupVector[i] is ErrorValue lErr) return lErr;
+            if (lookupVector[i] is ErrorValue) continue;
             if (CompareScalar(lookupVector[i], lookupVal) <= 0)
                 matchIdx = i;
         }

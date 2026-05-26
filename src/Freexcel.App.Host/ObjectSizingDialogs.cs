@@ -58,13 +58,13 @@ public sealed class ObjectSizeDialog : Window
     internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
         originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
 
-    internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept)
+    internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept, string acceptContent = "_OK")
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(box);
-        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
+        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent));
         return stack;
     }
 
@@ -202,7 +202,7 @@ public sealed class RotationDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _rotationBox.Text = degrees.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Degrees:", _rotationBox, Accept);
+        Content = ObjectSizeDialog.CreateSingleInputContent("_Degrees:", _rotationBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 

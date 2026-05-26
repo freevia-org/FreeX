@@ -142,7 +142,8 @@ public partial class MainWindow
                 continue;
             }
 
-            if (!ShouldShowKeyTipElement(element, scope))
+            if (!ShouldShowKeyTipElement(element, scope) ||
+                !IsEnabledKeyTipTarget(element))
                 continue;
 
             var keyTip = RibbonTooltip.GetKeyTip(element);
@@ -187,6 +188,15 @@ public partial class MainWindow
 
         return element is not TabItem && !isQuickAccessButton;
     }
+
+    private static bool IsEnabledKeyTipTarget(FrameworkElement element) =>
+        element switch
+        {
+            ButtonBase button => button.IsEnabled,
+            MenuItem menuItem => menuItem.IsEnabled,
+            ComboBox comboBox => comboBox.IsEnabled,
+            _ => element.IsEnabled
+        };
 
     private void ClearKeyTipOverlay()
     {
@@ -250,6 +260,9 @@ public partial class MainWindow
 
         if (match is ButtonBase button)
         {
+            if (!button.IsEnabled)
+                return false;
+
             if (TryEnterMenuKeyTipScope(button))
                 return false;
 
@@ -268,6 +281,9 @@ public partial class MainWindow
 
         if (match is ComboBox comboBox)
         {
+            if (!comboBox.IsEnabled)
+                return false;
+
             comboBox.Focus();
             Keyboard.Focus(comboBox);
             comboBox.IsDropDownOpen = true;
@@ -328,8 +344,11 @@ public partial class MainWindow
         if (_activeRibbonKeyTipItemsControl is null)
             return false;
 
-        var match = RibbonKeyTipRouting.ResolveMenuItem(GetMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
+        var match = RibbonKeyTipRouting.ResolveMenuItem(GetEnabledMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
         if (match is null)
+            return false;
+
+        if (!match.IsEnabled)
             return false;
 
         match.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, match));
@@ -338,7 +357,10 @@ public partial class MainWindow
 
     private bool HasActiveMenuItemKeyTipPrefix(string keyTipPrefix) =>
         _activeRibbonKeyTipItemsControl is not null &&
-        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetEnabledMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+
+    private static IEnumerable<MenuItem> GetEnabledMenuItems(ItemsControl itemsControl) =>
+        GetMenuItems(itemsControl).Where(item => item.IsEnabled);
 
     private static IEnumerable<MenuItem> GetMenuItems(ItemsControl itemsControl)
     {
@@ -362,6 +384,9 @@ public partial class MainWindow
                 string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase));
 
         if (match is null)
+            return false;
+
+        if (!match.IsEnabled)
             return false;
 
         match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));
@@ -417,7 +442,8 @@ public partial class MainWindow
         element.ActualHeight > 0 &&
         (scope != RibbonKeyTipScope.Commands || !IsInsideUnselectedTabItem(element)) &&
         ShouldShowKeyTipElement(element, scope) &&
-        !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
+            !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)) &&
+            IsEnabledKeyTipTarget(element);
 
     private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
     {
@@ -433,6 +459,7 @@ public partial class MainWindow
                 (scope == RibbonKeyTipScope.Commands && IsStartScreenVisible() && !IsInsideStartScreenOverlay(element)) ||
                 (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)) ||
                 !ShouldShowKeyTipElement(element, scope) ||
+                !IsEnabledKeyTipTarget(element) ||
                 string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)))
             {
                 continue;
