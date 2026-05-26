@@ -132,6 +132,29 @@ jobs:
           Copy-Item -LiteralPath $versionedExe.FullName -Destination (Join-Path $uploadRoot $versionedExe.Name) -Force
           Copy-Item -LiteralPath $versionedExe.FullName -Destination (Join-Path $uploadRoot "Freexcel-latest-win-x64.exe") -Force
 
+      - name: Publish unsigned local MSIX
+        shell: pwsh
+        run: |
+          $outputRoot = Join-Path $env:RUNNER_TEMP "freexcel-release"
+          tools/Publish-UserTestBuild.ps1 `
+            -Configuration Release `
+            -RuntimeIdentifier win-x64 `
+            -OutputRoot $outputRoot `
+            -Version "${{ steps.meta.outputs.version }}" `
+            -PublishMode Msix
+
+          $versionedMsix = Get-ChildItem -LiteralPath $outputRoot -Filter "freexcel-*-win-x64-msix.msix" |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+          if ($null -eq $versionedMsix) {
+            throw "Publish script did not create a versioned unsigned MSIX."
+          }
+
+          $uploadRoot = Join-Path $env:GITHUB_WORKSPACE "artifacts\upload"
+          New-Item -ItemType Directory -Force -Path $uploadRoot | Out-Null
+          Copy-Item -LiteralPath $versionedMsix.FullName -Destination (Join-Path $uploadRoot $versionedMsix.Name) -Force
+          Copy-Item -LiteralPath $versionedMsix.FullName -Destination (Join-Path $uploadRoot "Freexcel-latest-win-x64.msix") -Force
+
       - name: Upload versioned artifact
         uses: actions/upload-artifact@v7
         with:
@@ -146,6 +169,20 @@ jobs:
           path: artifacts/upload/Freexcel-latest-win-x64.exe
           if-no-files-found: error
 
+      - name: Upload versioned MSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: freexcel-${{ steps.meta.outputs.release_id }}-${{ steps.meta.outputs.short_sha }}-win-x64-msix
+          path: artifacts/upload/freexcel-*-win-x64-msix.msix
+          if-no-files-found: error
+
+      - name: Upload latest MSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Freexcel-latest-win-x64.msix
+          path: artifacts/upload/Freexcel-latest-win-x64.msix
+          if-no-files-found: error
+
       - name: Create or update GitHub release
         shell: pwsh
         env:
@@ -158,8 +195,10 @@ jobs:
 
           Commit: ${{ github.sha }}
           Download the stable latest asset: Freexcel-latest-win-x64.exe
+          Unsigned local MSIX package: Freexcel-latest-win-x64.msix
 
           This is a framework-dependent single-file Windows x64 build. It requires the Microsoft .NET Desktop Runtime if Windows prompts for it.
+          The MSIX package is unsigned for local packaging validation; signing and Store submission remain release-gate tasks.
           "@
 
           $releaseExists = $false
@@ -179,4 +218,4 @@ jobs:
             gh release create $tag --target $env:GITHUB_SHA --title $title --notes $notes @prereleaseArgs
           }
 
-          gh release upload $tag artifacts/upload/*.exe --clobber
+          gh release upload $tag artifacts/upload/*.exe artifacts/upload/*.msix --clobber

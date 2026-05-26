@@ -1185,7 +1185,7 @@ public sealed class FormulaEvaluator
         };
     }
 
-    private static ScalarValue EvaluateIsRef(FunctionCallNode node, IEvalContext context)
+    private ScalarValue EvaluateIsRef(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count != 1) return ErrorValue.Value;
         var arg = node.Arguments[0];
@@ -1194,8 +1194,19 @@ public sealed class FormulaEvaluator
             CellRefNode cell  => new BoolValue(cell.SheetName is null || context.SheetExists(cell.SheetName)),
             RangeRefNode rng  => new BoolValue(rng.SheetName is null || context.SheetExists(rng.SheetName)),
             NamedRangeNode nm => new BoolValue(context.TryResolveNamedRange(nm.Name) is not null),
+            FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
+                => EvaluateReferenceReturningIsRef(fn, context),
             _                 => new BoolValue(false)
         };
+    }
+
+    private ScalarValue EvaluateReferenceReturningIsRef(FunctionCallNode node, IEvalContext context)
+    {
+        var value = EvaluateNode(node, context);
+
+        return value is ErrorValue error
+            ? error == ErrorValue.Ref ? new BoolValue(false) : error
+            : new BoolValue(true);
     }
 
     private ScalarValue EvaluateIsFormula(FunctionCallNode node, IEvalContext context)
