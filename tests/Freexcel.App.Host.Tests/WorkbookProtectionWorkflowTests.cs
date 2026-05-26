@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -59,5 +60,13 @@ public sealed class WorkbookProtectionWorkflowTests
         uiText.ButtonContent.Should().Be("Unprotect Workbook");
         uiText.TooltipTitle.Should().Be("Unprotect Workbook");
         uiText.TooltipDescription.Should().Contain("Allow");
+    }
+
+    [Fact]
+    public void ProtectWorkbookDialogPrompt_UsesPasswordAccessKey()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("new PasswordProtectionDialog(\"Protect Workbook\", \"_Password (optional):\")");
     }
 }

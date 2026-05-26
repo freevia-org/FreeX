@@ -3168,6 +3168,7 @@
                          VerticalContentAlignment="Center"
                          BorderBrush="#C0C0C0" Padding="5,3"
                          AutomationProperties.Name="Name Box"
+                         AutomationProperties.AutomationId="CellAddressBox"
                          AutomationProperties.HelpText="Go to a cell or named range"/>
 
                 <!-- fx button opens Insert Function dialog -->
@@ -3201,6 +3202,7 @@
                              CaretBrush="Black"
                              VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="6,3"
                              AutomationProperties.Name="Formula Bar"
+                             AutomationProperties.AutomationId="FormulaBar"
                              AutomationProperties.HelpText="Edit the active cell value or formula"
                              PreviewKeyDown="FormulaBar_KeyDown"/>
                 </Grid>
@@ -3762,8 +3764,7 @@
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
-                            local:RibbonTooltip.Title="Zoom Out"
-                            local:RibbonTooltip.KeyTip="SZ"/>
+                            local:RibbonTooltip.Title="Zoom Out"/>
                     <Slider x:Name="ZoomSlider" Width="120" Minimum="0" Maximum="200" Value="100"
                             VerticalAlignment="Center" Margin="0,0,2,0"
                             AutomationProperties.Name="Zoom Slider"
@@ -3776,8 +3777,7 @@
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
-                            local:RibbonTooltip.Title="Zoom In"
-                            local:RibbonTooltip.KeyTip="SX"/>
+                            local:RibbonTooltip.Title="Zoom In"/>
                     <TextBlock x:Name="StatusZoomText" Text="100%" Foreground="White" FontSize="12"
                                VerticalAlignment="Center" Width="38"/>
                 </StackPanel>

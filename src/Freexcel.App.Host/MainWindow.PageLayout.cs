@@ -159,7 +159,7 @@ public partial class MainWindow
     private void PageMarginsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void MarginNormalMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -184,7 +184,7 @@ public partial class MainWindow
     private void PageOrientBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void OrientPortraitMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -203,7 +203,7 @@ public partial class MainWindow
     private void PageSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void SizeLetter_Click(object sender, RoutedEventArgs e)
     {
@@ -223,7 +223,7 @@ public partial class MainWindow
     private void PrintAreaBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
