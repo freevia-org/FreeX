@@ -30,6 +30,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly int? _pageWrap;
     private readonly string? _emptyValueText;
     private readonly bool _updateEmptyValueText;
+    private readonly string? _errorCaption;
+    private readonly bool _updateErrorCaption;
     private readonly bool? _refreshOnOpen;
     private readonly bool? _saveSourceData;
     private readonly bool? _enableRefresh;
@@ -87,7 +89,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool? showItemsWithNoDataOnRows = null,
         bool? showItemsWithNoDataOnColumns = null,
         bool? pageOverThenDown = null,
-        int? pageWrap = null)
+        int? pageWrap = null,
+        string? errorCaption = null,
+        bool updateErrorCaption = false)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -117,6 +121,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _pageWrap = pageWrap is { } wrap ? NormalizePageWrap(wrap) : null;
         _emptyValueText = NormalizeEmptyValueText(emptyValueText);
         _updateEmptyValueText = updateEmptyValueText;
+        _errorCaption = NormalizeOptionalText(errorCaption);
+        _updateErrorCaption = updateErrorCaption;
         _refreshOnOpen = refreshOnOpen;
         _saveSourceData = saveSourceData;
         _enableRefresh = enableRefresh;
@@ -184,6 +190,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.PageWrap = pageWrap;
         if (_updateEmptyValueText)
             pivotTable.EmptyValueText = _emptyValueText;
+        if (_updateErrorCaption)
+            pivotTable.ErrorCaption = _errorCaption;
         if (_printTitles is { } printTitles)
             pivotTable.PrintTitles = printTitles;
         if (_printExpandCollapseButtons is { } printExpandCollapseButtons)
@@ -256,6 +264,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool PageOverThenDown,
         int PageWrap,
         string? EmptyValueText,
+        string? ErrorCaption,
         bool? RefreshOnLoad,
         bool? SaveData,
         bool? EnableRefresh,
@@ -294,6 +303,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.PageOverThenDown,
                 pivotTable.PageWrap,
                 pivotTable.EmptyValueText,
+                pivotTable.ErrorCaption,
                 cache?.RefreshOnLoad,
                 cache?.SaveData,
                 cache?.EnableRefresh,
@@ -332,6 +342,7 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.PageOverThenDown = PageOverThenDown;
             pivotTable.PageWrap = PageWrap;
             pivotTable.EmptyValueText = EmptyValueText;
+            pivotTable.ErrorCaption = ErrorCaption;
             pivotTable.PrintTitles = PrintTitles;
             pivotTable.PrintExpandCollapseButtons = PrintExpandCollapseButtons;
             pivotTable.ShowExpandCollapseButtons = ShowExpandCollapseButtons;
@@ -355,6 +366,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     }
 
     private static string? NormalizeEmptyValueText(string? text)
+    {
+        return NormalizeOptionalText(text);
+    }
+
+    private static string? NormalizeOptionalText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return null;
