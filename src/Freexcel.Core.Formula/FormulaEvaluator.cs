@@ -1749,6 +1749,8 @@ public sealed class FormulaEvaluator
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
 
+        public bool IsRowFilterHidden(uint row) => _sheet.FilterHiddenRows.Contains(row);
+
         public Freexcel.Core.Model.Sheet? CurrentSheet => _sheet;
 
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _workbook;
@@ -1796,6 +1798,7 @@ public sealed class FormulaEvaluator
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId id) => _inner.TryGetSheetName(id);
         public bool SheetExists(string sn) => _inner.SheetExists(sn);
         public bool IsRowHidden(uint row) => _inner.IsRowHidden(row);
+        public bool IsRowFilterHidden(uint row) => _inner.IsRowFilterHidden(row);
         public Freexcel.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
         public Freexcel.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
         public Freexcel.Core.Model.CellAddress? CurrentCellAddress => _inner.CurrentCellAddress;
