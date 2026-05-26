@@ -174,4 +174,47 @@ public sealed class PrintRendererPageSetupTests
             document.Pages.Should().HaveCount(2);
         });
     }
+
+    [Fact]
+    public void RenderWorksheet_PrintsCommentsAtEndAcrossMultipleSummaryPages()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Comment overflow print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Total"));
+            for (uint row = 1; row <= 90; row++)
+            {
+                var address = new CellAddress(sheet.Id, row, 1);
+                sheet.Comments[address] = $"Comment {row}";
+            }
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            document.Pages.Count.Should().BeGreaterThan(2);
+        });
+    }
+
+    [Fact]
+    public void BuildCommentSummaryPages_IncludesOverflowComments()
+    {
+        var sheetId = SheetId.New();
+        var comments = Enumerable.Range(1, 90)
+            .ToDictionary(
+                row => new CellAddress(sheetId, (uint)row, 1),
+                row => $"Comment {row}");
+
+        var pages = PrintRenderer.BuildCommentSummaryPages(
+            comments,
+            new Dictionary<CellAddress, ThreadedComment>(),
+            pageH: 11 * 96,
+            marginTop: 0.75 * 96);
+
+        pages.SelectMany(page => page)
+            .Select(pair => pair.Key.Row)
+            .Should()
+            .Equal(Enumerable.Range(1, 90).Select(row => (uint)row));
+        pages.Count.Should().BeGreaterThan(1);
+    }
 }
