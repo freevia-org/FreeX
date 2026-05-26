@@ -66,6 +66,20 @@ public sealed class ManageConditionalFormatsDialogTests
             .Should().Be("Icon Set: 3TrafficLights1 (reverse, icons only)");
     }
 
+    [Fact]
+    public void DescribeRule_IconSetIncludesCustomIconOverrides()
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows"
+        };
+        rule.IconOverrides.Add(new CfIconOverride("3TrafficLights1", 0));
+
+        ManageConditionalFormatsDialog.DescribeRule(rule)
+            .Should().Be("Icon Set: 5Arrows (custom icons)");
+    }
+
     [Theory]
     [InlineData(CfRuleType.ContainsText, "Text contains \"urgent\"")]
     [InlineData(CfRuleType.DateOccurring, "Date occurring: Last 7 Days")]
