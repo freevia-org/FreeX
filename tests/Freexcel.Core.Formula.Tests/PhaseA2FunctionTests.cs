@@ -758,6 +758,36 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Aggregate_Sum_Option0IgnoresNestedSubtotalFormulaCell()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(10)),
+            (3, 1, new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            FormulaText = "SUBTOTAL(9,A1:A1)",
+            Value = new NumberValue(10)
+        });
+
+        _eval.Evaluate("=AGGREGATE(9,0,A1:A3)", sheet, wb).Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Aggregate_Sum_Option4IncludesNestedSubtotalFormulaCell()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(10)),
+            (3, 1, new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            FormulaText = "SUBTOTAL(9,A1:A1)",
+            Value = new NumberValue(10)
+        });
+
+        _eval.Evaluate("=AGGREGATE(9,4,A1:A3)", sheet, wb).Should().Be(new NumberValue(50));
+    }
+
+    [Fact]
     public void Aggregate_Sum_IgnoresErrorsWhenOption6()
     {
         var (wb, sheet) = MakeWb(
