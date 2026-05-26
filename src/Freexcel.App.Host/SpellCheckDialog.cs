@@ -96,7 +96,7 @@ public sealed class SpellCheckDialog : Window
     {
         var root = new Grid { Margin = new Thickness(16) };
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(124) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var fields = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
@@ -109,12 +109,12 @@ public sealed class SpellCheckDialog : Window
         root.Children.Add(fields);
 
         var actionButtons = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Ignore", Width = 90 }, (_, _) => Accept(CreateIgnoreResult())));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Ignore _Once", Width = 118 }, (_, _) => Accept(CreateIgnoreResult())));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Ignore _All", Width = 90 }, (_, _) => Accept(CreateIgnoreAllResult())));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Change", Width = 90, IsDefault = true }, (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Change A_ll", Width = 90 }, (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
-        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Add", Width = 90 }, (_, _) => Accept(CreateAddResult(word))));
-        actionButtons.Children.Add(new Button { Content = "_Cancel", Width = 90, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) });
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Add to _Dictionary", Width = 118 }, (_, _) => Accept(CreateAddResult(word))));
+        actionButtons.Children.Add(new Button { Content = "Ca_ncel", Width = 90, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) });
         Grid.SetColumn(actionButtons, 1);
         root.Children.Add(actionButtons);
         return root;
