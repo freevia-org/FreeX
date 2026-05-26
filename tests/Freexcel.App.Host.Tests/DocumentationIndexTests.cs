@@ -24,6 +24,7 @@ public sealed partial class DocumentationIndexTests
         readme.Should().Contain("[SHORTCUT_PARITY_MATRIX.md](SHORTCUT_PARITY_MATRIX.md)");
         readme.Should().Contain("[FIDELITY_CONTRACT.md](FIDELITY_CONTRACT.md)");
         readme.Should().Contain("[XLSX_CORPUS_REPORT.md](XLSX_CORPUS_REPORT.md)");
+        readme.Should().Contain("[XLSX_TEST_CORPUS_PLAN.md](XLSX_TEST_CORPUS_PLAN.md)");
         File.Exists(Path.Combine(docsDirectory, "COMMAND_INVENTORY.json")).Should().BeTrue();
         ProjectStatusReportLink().Matches(readme).Should().NotBeEmpty();
     }
@@ -87,7 +88,8 @@ public sealed partial class DocumentationIndexTests
             "COMMAND_SURFACE_PARITY.md",
             "MENU_TOOLBAR_PARITY.md",
             "FIDELITY_CONTRACT.md",
-            "XLSX_CORPUS_REPORT.md"
+            "XLSX_CORPUS_REPORT.md",
+            "XLSX_TEST_CORPUS_PLAN.md"
         };
 
         foreach (var doc in currentDocs)
