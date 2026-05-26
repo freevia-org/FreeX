@@ -16,7 +16,7 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
     {
         _sheetId = sheetId;
         _pictureId = pictureId;
-        _altText = Normalize(altText);
+        _altText = AltTextCommandText.Normalize(altText);
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -44,8 +44,6 @@ public sealed class SetPictureAltTextCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
@@ -62,7 +60,7 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
     {
         _sheetId = sheetId;
         _shapeId = shapeId;
-        _altText = Normalize(altText);
+        _altText = AltTextCommandText.Normalize(altText);
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -90,8 +88,6 @@ public sealed class SetDrawingShapeAltTextCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
@@ -108,7 +104,7 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
     {
         _sheetId = sheetId;
         _textBoxId = textBoxId;
-        _altText = Normalize(altText);
+        _altText = AltTextCommandText.Normalize(altText);
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -136,6 +132,10 @@ public sealed class SetTextBoxAltTextCommand : IWorkbookCommand
         _applied = false;
     }
 
-    private static string? Normalize(string? value) =>
+}
+
+file static class AltTextCommandText
+{
+    public static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
