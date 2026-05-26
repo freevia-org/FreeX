@@ -180,6 +180,63 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithOffsets()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T09:30:00Z\t2026-05-17T11:30:00+02:00\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var expectedUtc = new DateTime(2026, 5, 17, 9, 30, 0, DateTimeKind.Unspecified);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+    }
+
+    [Fact]
+    public void Load_DoesNotCoerceNonIsoSingleDigitHourDateTimesWithOffsets()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T9:30Z\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("2026-05-17T9:30Z"));
+    }
+
+    [Fact]
+    public void Load_UsesExcelLikeTextCoercionForIsoDateTimesWithFractionalSecondOffsets()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T09:30:15.250Z\t2026-05-17T11:30:15.25+02:00\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        var expectedUtc = new DateTime(2026, 5, 17, 9, 30, 15, 250);
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(DateTimeValue.FromDateTime(expectedUtc));
+    }
+
+    [Fact]
+    public void Load_DoesNotCoerceIsoOffsetDateTimesWithBareFractionalSecondDecimal()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("2026-05-17T09:30:00.Z\t2026-05-17T09:30:00.+02:00\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("2026-05-17T09:30:00.Z"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("2026-05-17T09:30:00.+02:00"));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForUsSlashDatesWithFourDigitYears()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');

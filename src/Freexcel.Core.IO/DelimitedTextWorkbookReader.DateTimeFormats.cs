@@ -186,6 +186,19 @@ internal static partial class DelimitedTextWorkbookReader
         "d-MMM-yy h:mm:ss.FFFFFFF tt"
     ];
 
+    private static readonly string[] DateTimeOffsetFormats =
+    [
+        "yyyy-MM-ddTHH:mmK",
+        "yyyy-MM-ddTHH:mm:ssK",
+        "yyyy-MM-ddTHH:mm:ss.fK",
+        "yyyy-MM-ddTHH:mm:ss.ffK",
+        "yyyy-MM-ddTHH:mm:ss.fffK",
+        "yyyy-MM-ddTHH:mm:ss.ffffK",
+        "yyyy-MM-ddTHH:mm:ss.fffffK",
+        "yyyy-MM-ddTHH:mm:ss.ffffffK",
+        "yyyy-MM-ddTHH:mm:ss.fffffffK"
+    ];
+
     private static readonly string[] TimeSpanFormats =
     [
         "h\\:mm",
