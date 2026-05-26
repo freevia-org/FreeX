@@ -645,6 +645,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (sourceBlockName == workbookNs + "singleXmlCells")
             return sheet.SingleXmlCells is null;
 
+        if (sourceBlockName == workbookNs + "smartTags")
+            return sheet.SmartTags is null;
+
         return false;
     }
 }
