@@ -860,8 +860,4 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         };
     }
 
-    private static Dictionary<string, string> CleanNativeAttributes(Dictionary<string, string>? attributes) =>
-        (attributes ?? new Dictionary<string, string>())
-        .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
-        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 }

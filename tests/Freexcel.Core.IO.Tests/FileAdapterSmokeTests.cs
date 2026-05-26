@@ -15245,10 +15245,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.SheetPropertiesMetadata.Should().NotBeNull();
         loadedSheet.SheetPropertiesMetadata!.NativeAttributes.Should().Contain("filterMode", "1");
         loadedSheet.SheetPropertiesMetadata.NativeChildXmls.Should().HaveCount(2);
+        loadedSheet.SheetPropertiesMetadata.NativeAttributes["invalid sheetPr attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -15258,6 +15261,7 @@ public partial class FileAdapterSmokeTests
         sheetPr.Should().NotBeNull();
         sheetPr!.Attribute("filterMode").Should().NotBeNull();
         sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
+        sheetPr.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
         sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("fitToPage")!.Value.Should().Be("1");
