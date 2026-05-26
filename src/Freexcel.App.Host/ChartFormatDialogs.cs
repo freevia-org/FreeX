@@ -116,22 +116,22 @@ public sealed class ChartAreaLegendDialog : Window
         {
             var stack = new StackPanel();
             stack.Children.Add(CreateInlineHelp("Set the chart and plot area fills, borders, and line weights."));
-            ChartDialogHelpers.AddColorText(stack, "Chart area fill color", _chartAreaFillBox);
-            ChartDialogHelpers.AddColorText(stack, "Plot area fill color", _plotAreaFillBox);
-            ChartDialogHelpers.AddColorText(stack, "Plot area border color", _plotAreaBorderBox);
-            ChartDialogHelpers.AddNumericText(stack, "Plot area border width", _plotAreaBorderThicknessBox, "Enter a line width from 0 to 10 points.");
+            ChartDialogHelpers.AddColorText(stack, "_Chart area fill color", _chartAreaFillBox);
+            ChartDialogHelpers.AddColorText(stack, "_Plot area fill color", _plotAreaFillBox);
+            ChartDialogHelpers.AddColorText(stack, "Plot area _border color", _plotAreaBorderBox);
+            ChartDialogHelpers.AddNumericText(stack, "Plot area border _width", _plotAreaBorderThicknessBox, "Enter a line width from 0 to 10 points.");
             root.Children.Add(CreateGroupBox("Fill & Line", stack));
         }
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showLegendBox);
-            ChartDialogHelpers.AddCombo(stack, "Legend position", _legendPositionBox, Enum.GetValues<ChartLegendPosition>());
+            ChartDialogHelpers.AddCombo(stack, "Legend _position", _legendPositionBox, Enum.GetValues<ChartLegendPosition>());
             ChartDialogHelpers.AddCheck(stack, _legendOverlayBox);
-            ChartDialogHelpers.AddColorText(stack, "Legend text color", _legendTextBox);
-            ChartDialogHelpers.AddColorText(stack, "Legend fill color", _legendFillBox);
-            ChartDialogHelpers.AddColorText(stack, "Legend border color", _legendBorderBox);
-            ChartDialogHelpers.AddNumericText(stack, "Legend border width", _legendBorderThicknessBox, "Enter a line width from 0 to 10 points.");
-            ChartDialogHelpers.AddNumericText(stack, "Legend font size", _legendFontSizeBox, "Enter a font size from 6 to 72 points.");
+            ChartDialogHelpers.AddColorText(stack, "Legend _text color", _legendTextBox);
+            ChartDialogHelpers.AddColorText(stack, "Legend _fill color", _legendFillBox);
+            ChartDialogHelpers.AddColorText(stack, "Legend _border color", _legendBorderBox);
+            ChartDialogHelpers.AddNumericText(stack, "Legend border _width", _legendBorderThicknessBox, "Enter a line width from 0 to 10 points.");
+            ChartDialogHelpers.AddNumericText(stack, "Legend _font size", _legendFontSizeBox, "Enter a font size from 6 to 72 points.");
             root.Children.Add(CreateGroupBox("Legend", stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));

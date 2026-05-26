@@ -72,9 +72,9 @@ public sealed class ChartErrorBarsDialog : Window
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
         ChartDialogHelpers.AddCheck(stack, _showBox);
-        ChartDialogHelpers.AddCombo(stack, "Type", _kindBox, Enum.GetValues<ChartErrorBarKind>());
-        ChartDialogHelpers.AddCombo(stack, "Direction", _directionBox, Enum.GetValues<ChartErrorBarDirection>());
-        ChartDialogHelpers.AddNumericText(stack, "Value", _valueBox, "Enter the error amount or percentage.");
+        ChartDialogHelpers.AddCombo(stack, "_Type", _kindBox, Enum.GetValues<ChartErrorBarKind>());
+        ChartDialogHelpers.AddCombo(stack, "_Direction", _directionBox, Enum.GetValues<ChartErrorBarDirection>());
+        ChartDialogHelpers.AddNumericText(stack, "_Value", _valueBox, "Enter the error amount or percentage.");
         ChartDialogHelpers.AddCheck(stack, _endCapsBox);
         root.Children.Add(CreateGroupBox("Error Amount", stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
