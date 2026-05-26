@@ -49,6 +49,18 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.ColumnChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
+            harness.FocusMenuItem("Stacked Column");
+
+            harness.FocusedMenuHeader.Should().Be("Stacked Column");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.StackedColumnChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
+            harness.FocusMenuItem("100% Stacked Column");
+
+            harness.FocusedMenuHeader.Should().Be("100% Stacked Column");
+            harness.QuickAnalysisPreviewVisual.Should().Be(GridQuickAnalysisPreviewVisualKind.StackedColumnChart);
+            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
+
             harness.FocusMenuItem("Line");
 
             harness.FocusedMenuHeader.Should().Be("Line");

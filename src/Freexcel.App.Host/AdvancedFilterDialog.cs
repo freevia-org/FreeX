@@ -34,6 +34,7 @@ public sealed partial class AdvancedFilterDialog : Window
     private readonly TextBox _criteriaRangeBox = new();
     private readonly TextBox _copyToBox = new();
     private readonly DockPanel _copyToEditor;
+    private readonly Label _copyToLabel;
     private readonly RadioButton _filterInPlaceButton = new() { Content = "_Filter the list, in-place", IsChecked = true };
     private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "_Copy to another location" };
     private readonly CheckBox _uniqueBox = new() { Content = "_Unique records only" };
@@ -88,7 +89,7 @@ public sealed partial class AdvancedFilterDialog : Window
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range", AdvancedFilterRangeSelectionTarget.ListRange);
         AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
-        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, _copyToEditor);
+        _copyToLabel = AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, _copyToEditor);
         content.Children.Add(rangesGrid);
         content.Children.Add(_copyToHint);
 
@@ -116,7 +117,7 @@ public sealed partial class AdvancedFilterDialog : Window
             automationName,
             requestSelection: request => RequestRangeSelection(target, request));
 
-    private void AddReferenceRow(
+    private Label AddReferenceRow(
         Grid grid,
         int row,
         string label,
@@ -143,6 +144,7 @@ public sealed partial class AdvancedFilterDialog : Window
         Grid.SetRow(rowEditor, row);
         Grid.SetColumn(rowEditor, 1);
         grid.Children.Add(rowEditor);
+        return labelBlock;
     }
 
     private void RequestRangeSelection(AdvancedFilterRangeSelectionTarget target, DialogReferencePickerRequest request)
@@ -187,6 +189,7 @@ public sealed partial class AdvancedFilterDialog : Window
     private void UpdateCopyToState()
     {
         var isCopyToEnabled = _copyToAnotherLocationButton.IsChecked == true;
+        _copyToLabel.IsEnabled = isCopyToEnabled;
         _copyToEditor.IsEnabled = isCopyToEnabled;
         _copyToBox.IsEnabled = isCopyToEnabled;
         _copyToHint.Visibility = _copyToAnotherLocationButton.IsChecked == true

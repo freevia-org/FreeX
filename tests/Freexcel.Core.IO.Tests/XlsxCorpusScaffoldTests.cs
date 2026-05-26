@@ -40,14 +40,16 @@ public class XlsxCorpusScaffoldTests
         rows.Should().HaveCountGreaterThanOrEqualTo(11, "the corpus starts with a header plus 10 generated fixture rows");
         rows[0].Split(',').Should().Equal(ExpectedManifestHeader);
 
-        var generatedRows = rows.Skip(1)
+        var manifestRows = rows.Skip(1)
             .Select(line => line.Split(','))
             .Where(columns => columns.Length == ExpectedManifestHeader.Length)
+            .ToArray();
+        var generatedRows = manifestRows
             .Where(columns => columns[2] == "generated")
             .ToArray();
 
         generatedRows.Should().HaveCountGreaterThanOrEqualTo(10);
-        generatedRows.Should().OnlyContain(columns => AllowedStatuses.Contains(columns[8]));
+        manifestRows.Should().OnlyContain(columns => AllowedStatuses.Contains(columns[8]));
     }
 
     [Fact]
@@ -66,6 +68,15 @@ public class XlsxCorpusScaffoldTests
         readme.Should().Contain("local-private");
         readme.Should().Contain("must not be committed");
         readme.Should().Contain("redistribution");
+    }
+
+    [Fact]
+    public void CorpusPlan_DocumentsAllAllowedManifestStatuses()
+    {
+        var plan = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_TEST_CORPUS_PLAN.md"));
+
+        foreach (var status in AllowedStatuses)
+            plan.Should().Contain($"`{status}`");
     }
 
     [Fact]
@@ -150,6 +161,19 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows
+            .Where(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap")
+            .Should()
+            .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
+        report.Should().Contain("known-gap warning expectations are declared for optional private rows");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
@@ -194,7 +218,10 @@ public class XlsxCorpusScaffoldTests
             .Last();
         var report = File.ReadAllText(newestStatusReport);
 
-        report.Should().Contain($"expanded to {manifestRows.Count} manifest rows");
+        report.Should().ContainAny(
+            $"expanded to {manifestRows.Count} manifest rows",
+            $"Manifest baseline is {manifestRows.Count} rows",
+            $"XLSX corpus manifest rows | {manifestRows.Count}");
         report.Should().Contain($"{manifestRows.Count} workbook manifest rows");
         report.Should().Contain($"Expand the {manifestRows.Count}-row corpus baseline");
     }

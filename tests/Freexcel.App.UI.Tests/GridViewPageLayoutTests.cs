@@ -116,4 +116,58 @@ public sealed class GridViewPageLayoutTests
         GridView.HitTestPageMarginRulerHandles(handles, new Point(130, 10), showRulers: false)
             .Should().BeNull();
     }
+
+    [Fact]
+    public void PageMarginGuideLayoutPlanner_HitTestsGuidesAndRulerHandles()
+    {
+        var guide = new PageMarginGuideLayout(
+            Top: 18,
+            Left: 30,
+            Bottom: 1118,
+            Right: 880,
+            MarginLeft: 130,
+            MarginRight: 780,
+            MarginTop: 118,
+            MarginBottom: 1018);
+        var handles = new PageMarginRulerHandles(
+            new Rect(126, 4, 8, 12),
+            new Rect(776, 4, 8, 12),
+            new Rect(16, 114, 12, 8),
+            new Rect(16, 1014, 12, 8));
+
+        PageMarginGuideLayoutPlanner.HitTestGuide(guide, new Point(130, 10), handles, showRulers: true, guideHitZone: 5)
+            .Should().Be(WorksheetPageMarginEdge.Left);
+        PageMarginGuideLayoutPlanner.HitTestGuide(guide, new Point(782, 400), handles, showRulers: true, guideHitZone: 5)
+            .Should().Be(WorksheetPageMarginEdge.Right);
+        PageMarginGuideLayoutPlanner.HitTestGuide(guide, new Point(400, 118), handles, showRulers: true, guideHitZone: 5)
+            .Should().Be(WorksheetPageMarginEdge.Top);
+        PageMarginGuideLayoutPlanner.HitTestGuide(guide, new Point(400, 1018), handles, showRulers: true, guideHitZone: 5)
+            .Should().Be(WorksheetPageMarginEdge.Bottom);
+        PageMarginGuideLayoutPlanner.HitTestGuide(guide, new Point(10, 10), handles, showRulers: true, guideHitZone: 5)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void PageMarginGuideLayoutPlanner_CalculatesDraggedMarginsFromGuideFraction()
+    {
+        var guide = new PageMarginGuideLayout(
+            Top: 18,
+            Left: 30,
+            Bottom: 1118,
+            Right: 880,
+            MarginLeft: 130,
+            MarginRight: 780,
+            MarginTop: 118,
+            MarginBottom: 1018);
+
+        var margins = PageMarginGuideLayoutPlanner.CalculateDraggedMargins(
+            WorksheetPaperSize.Letter,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Normal,
+            WorksheetPageMarginEdge.Left,
+            guide,
+            new Point(115, 300));
+
+        margins.Left.Should().BeApproximately(0.85, 0.001);
+    }
 }

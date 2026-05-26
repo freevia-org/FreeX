@@ -92,22 +92,12 @@ public partial class GridView
         => GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad);
 
     // Returns the cell address closest to the given screen coordinates (for anchor snapping)
-    private CellAddress? HitTestAnchorCell(Point pos)
-    {
-        if (Viewport is null) return null;
-        foreach (var row in Viewport.RowMetrics)
-        {
-            double top = row.TopOffset + EffectiveColHeaderHeight;
-            if (pos.Y < top || pos.Y >= top + row.Height) continue;
-            foreach (var col in Viewport.ColMetrics)
-            {
-                double left = col.LeftOffset + ActualRowHeaderWidth;
-                if (pos.X >= left && pos.X < left + col.Width)
-                    return new CellAddress(default, row.Row, col.Col);
-            }
-        }
-        return null;
-    }
+    private CellAddress? HitTestAnchorCell(Point pos) =>
+        GridObjectDragPlanner.HitTestAnchorCell(
+            Viewport,
+            pos,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
 
     private static readonly Brush DragPreviewFill;
     private static readonly Pen DragPreviewPen;

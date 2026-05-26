@@ -8230,6 +8230,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Exact_LeadingOneCellRange_BroadcastsAcrossLaterTextArray()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("x")),
+            (1, 2, new TextValue("x")),
+            (2, 2, new TextValue("y")));
+
+        AssertColumn(_eval.Evaluate("=EXACT(A1:A1,B1:B2)", sheet), new BoolValue(true), new BoolValue(false));
+    }
+
+    [Fact]
     public void Today_ReturnsCurrentDateSerialWithoutTime()
     {
         _eval.Evaluate("=TODAY()", MakeSheet())

@@ -43,7 +43,7 @@ public partial class MainWindow
 
     private void PivotStyleGalleryBtn_Click(object sender, RoutedEventArgs e)
     {
-        ShowPivotTableOptionsDialog();
+        ShowPivotStyleGalleryDialog();
     }
 
     private void PivotRowHeadersBtn_Click(object sender, RoutedEventArgs e)
@@ -273,5 +273,30 @@ public partial class MainWindow
             return;
 
         ApplyPivotOptions(pivotTable, dialog.Result);
+    }
+
+    private void ShowPivotStyleGalleryDialog()
+    {
+        if (!TryGetActivePivotTable(out _, out var pivotTable))
+            return;
+
+        var dialog = new PivotStyleGalleryDialog(pivotTable.StyleName) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyPivotOptions(
+            pivotTable: pivotTable,
+            showRowGrandTotals: pivotTable.ShowRowGrandTotals,
+            showColumnGrandTotals: pivotTable.ShowColumnGrandTotals,
+            showSubtotals: pivotTable.ShowSubtotals,
+            subtotalPlacement: pivotTable.SubtotalPlacement,
+            repeatItemLabels: pivotTable.RepeatItemLabels,
+            blankLineAfterItems: pivotTable.BlankLineAfterItems,
+            styleName: dialog.Result.StyleName,
+            showRowHeaders: pivotTable.ShowRowHeaders,
+            showColumnHeaders: pivotTable.ShowColumnHeaders,
+            showRowStripes: pivotTable.ShowRowStripes,
+            showColumnStripes: pivotTable.ShowColumnStripes,
+            reportLayout: pivotTable.ReportLayout);
     }
 }

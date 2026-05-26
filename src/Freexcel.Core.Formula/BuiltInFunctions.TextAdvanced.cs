@@ -84,8 +84,9 @@ public static partial class BuiltInFunctions
     {
         var leftRange = left as RangeValue;
         var rightRange = right as RangeValue;
-        int rows = leftRange?.RowCount ?? rightRange?.RowCount ?? 1;
-        int cols = leftRange?.ColCount ?? rightRange?.ColCount ?? 1;
+        var shape = ChooseBroadcastShape(leftRange, rightRange);
+        int rows = shape?.RowCount ?? 1;
+        int cols = shape?.ColCount ?? 1;
         if (leftRange is not null && !CanBroadcastExactRange(leftRange, rows, cols)) return ErrorValue.Value;
         if (rightRange is not null && !CanBroadcastExactRange(rightRange, rows, cols)) return ErrorValue.Value;
 

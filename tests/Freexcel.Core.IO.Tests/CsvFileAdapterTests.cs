@@ -325,6 +325,16 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesExcelLikeTextCoercionForGettingDataErrorLiteral()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#GETTING_DATA\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new ErrorValue("#GETTING_DATA"));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForCurrencyValues()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"$1,234.50\",($42.25)\r\n"));

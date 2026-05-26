@@ -17,7 +17,8 @@ internal static partial class DelimitedTextWorkbookReader
         ["#NUM!"] = ErrorValue.Num,
         ["#CIRCULAR!"] = ErrorValue.Circular,
         ["#SPILL!"] = ErrorValue.Spill,
-        ["#CALC!"] = ErrorValue.Calc
+        ["#CALC!"] = ErrorValue.Calc,
+        ["#GETTING_DATA"] = new ErrorValue("#GETTING_DATA")
     };
 
     public static Workbook Load(Stream stream, char delimiter, bool allowSeparatorDirective = false)
