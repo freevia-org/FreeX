@@ -637,6 +637,38 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void ReviewNoteNavigationKeyTips_MoveAcrossNotesAndThreadedComments()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.AddNote(2, 2, "Plain note");
+            harness.AddThreadedComment(4, 4, "Threaded note");
+            harness.SelectRange(1, 1, 1, 1);
+
+            harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
+            harness.HandleKeyTip(Key.N);
+
+            harness.SelectedCellAddress.Should().Be((2u, 2u));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
+            harness.HandleKeyTip(Key.N);
+
+            harness.SelectedCellAddress.Should().Be((4u, 4u));
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
+            harness.HandleKeyTip(Key.P);
+            harness.KeyTipScope.Should().Be("Commands", "P is a shared Review prefix before Previous Note resolves");
+            harness.HandleKeyTip(Key.N);
+
+            harness.SelectedCellAddress.Should().Be((2u, 2u));
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
     public void InsertShapesKeyTip_OpensShapeMenuAndInsertsRectangle()
     {
         RunSta(() =>
@@ -1076,6 +1108,17 @@ public sealed class MainWindowRibbonKeyTipTests
             }
         }
 
+        public (uint Row, uint Col)? SelectedCellAddress
+        {
+            get
+            {
+                if (_window.FindName("SheetGrid") is not SheetGridView { SelectedRange: { } range })
+                    return null;
+
+                return (range.Start.Row, range.Start.Col);
+            }
+        }
+
         public bool ActiveCellBold
         {
             get
@@ -1122,6 +1165,20 @@ public sealed class MainWindowRibbonKeyTipTests
                     new CellAddress(sheet.Id, endRow, endCol));
             }
 
+            PumpDispatcher();
+        }
+
+        public void AddNote(uint row, uint col, string text)
+        {
+            var sheet = _workbook.Sheets[0];
+            sheet.Comments[new CellAddress(sheet.Id, row, col)] = text;
+            PumpDispatcher();
+        }
+
+        public void AddThreadedComment(uint row, uint col, string text)
+        {
+            var sheet = _workbook.Sheets[0];
+            sheet.ThreadedComments[new CellAddress(sheet.Id, row, col)] = new ThreadedComment(text);
             PumpDispatcher();
         }
 
