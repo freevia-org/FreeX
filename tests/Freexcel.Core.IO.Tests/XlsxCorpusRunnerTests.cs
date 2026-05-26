@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(13, "the generated metadata-pass manifest currently declares thirteen deterministic package-retention rows");
+        rows.Should().HaveCount(14, "the generated metadata-pass manifest currently declares fourteen deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -514,6 +514,49 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sort-state-001");
         AssertWorksheetSortState(saved, "generated-worksheet-sort-state-001 saved");
+    }
+
+    [Fact]
+    public void GeneratedWorksheetDataConsolidationRow_RetainsDataConsolidationAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-data-consolidation-001");
+        AssertWorksheetDataConsolidation(source, "generated-worksheet-data-consolidation-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-data-consolidation-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-data-consolidation-001");
+        AssertWorksheetDataConsolidation(saved, "generated-worksheet-data-consolidation-001 saved");
+    }
+
+    private static void AssertWorksheetDataConsolidation(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var dataConsolidate = worksheetXml.Root!.Element(worksheetNs + "dataConsolidate");
+        dataConsolidate.Should().NotBeNull(because);
+        dataConsolidate!.Attribute("function")!.Value.Should().Be("sum", because);
+        dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1", because);
+        dataConsolidate.Attribute("topLabels")!.Value.Should().Be("1", because);
+        dataConsolidate.Attribute("link")!.Value.Should().Be("1", because);
+        dataConsolidate.Attribute("customDataConsolidationFlag")!.Value.Should().Be("keep", because);
+
+        var dataRef = dataConsolidate
+            .Element(worksheetNs + "dataRefs")!
+            .Elements(worksheetNs + "dataRef")
+            .Should()
+            .ContainSingle(because)
+            .Subject;
+        dataRef.Attribute("ref")!.Value.Should().Be("A1:B2", because);
+        dataRef.Attribute("sheet")!.Value.Should().Be("Data", because);
+        dataRef.Attribute("customDataRefFlag")!.Value.Should().Be("keep", because);
     }
 
     private static void AssertWorksheetSortState(Stream package, string because)
