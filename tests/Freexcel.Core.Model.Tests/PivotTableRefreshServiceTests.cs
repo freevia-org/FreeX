@@ -221,6 +221,115 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_SkipsValueFieldNumberFormatWhenApplyNumberFormatsIsFalse()
+    {
+        var workbook = new Workbook("PivotApplyNumberFormatsFalseTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ApplyNumberFormats = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", NumberFormatId: 4));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).NumberFormat.Should().Be(CellStyle.Default.NumberFormat);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).NumberFormat.Should().Be(CellStyle.Default.NumberFormat);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_SuppressesPivotStyleFontComponentsWhenApplyFontFormatsIsFalse()
+    {
+        var workbook = new Workbook("PivotApplyFontFormatsFalseTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ApplyFontFormats = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        headerStyle.Bold.Should().BeFalse();
+        headerStyle.FontColor.Should().Be(CellColor.Black);
+        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
+    }
+
+    [Fact]
+    public void Refresh_SuppressesPivotStylePatternComponentsWhenApplyPatternFormatsIsFalse()
+    {
+        var workbook = new Workbook("PivotApplyPatternFormatsFalseTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ShowRowStripes = true,
+            ApplyPatternFormats = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        headerStyle.FillColor.Should().BeNull();
+        headerStyle.Bold.Should().BeTrue();
+        headerStyle.FontColor.Should().Be(CellColor.White);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId).FillColor.Should().BeNull();
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_SuppressesPivotStyleBorderComponentsWhenApplyBorderFormatsIsFalse()
+    {
+        var workbook = new Workbook("PivotApplyBorderFormatsFalseTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ApplyBorderFormats = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.None);
+        headerStyle.Bold.Should().BeTrue();
+        headerStyle.FontColor.Should().Be(CellColor.White);
+        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+    }
+
+    [Fact]
     public void Refresh_AppliesNamedPivotStyleFamilyToSubtotalsAndGrandTotalsSeparately()
     {
         var workbook = new Workbook("PivotStyleFamilyRenderTest");
