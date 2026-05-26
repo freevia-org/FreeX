@@ -1795,6 +1795,42 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddTimelineCommand_RejectsNonDateSourceField()
+    {
+        var workbook = new Workbook("AddTimelineNonDateFieldTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("Services"));
+        sheet.SetCell(Addr(sheet, "B3"), new NumberValue(30));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddTimelineCommand("Category Timeline", "PivotTable1", "Category").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline source field must contain dates.");
+        workbook.Timelines.Should().BeEmpty();
+
+        outcome = new AddTimelineCommand("Amount Timeline", "PivotTable1", "Amount").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be("Timeline source field must contain dates.");
+        workbook.Timelines.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AddTimelineCommand_RejectsProtectedPivotSheetWithoutUsePivotReportsPermission()
     {
         var workbook = new Workbook("AddTimelineProtectionTest");
