@@ -159,6 +159,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTypeGalleries_DoubleClickAcceptsSelectedSubtype()
+    {
+        var source = ReadChartTypeDialogSource();
+
+        source.Should().Contain("_recommendedGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => Accept();");
+        source.Should().Contain("private void Accept()");
+        source.Should().Contain("_subtypeGallery.MouseDoubleClick += (_, _) => AcceptSelectedChartType();");
+        source.Should().Contain("private void AcceptSelectedChartType()");
+    }
+
+    [Fact]
     public void ChangeChartTypeDialog_PreselectsCurrentTypeAndBuildsResult()
     {
         StaTestRunner.Run(() =>
@@ -376,6 +388,8 @@ public sealed class ChartDialogTests
         source.Should().Contain("_Add series");
         source.Should().Contain("_Edit series");
         source.Should().Contain("_Edit Axis Labels");
+        source.Should().Contain("_seriesList.MouseDoubleClick += EditSeriesButton_Click;");
+        source.Should().Contain("_axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;");
         source.Should().Contain("Name and values are inferred from the selected chart range.");
     }
 
