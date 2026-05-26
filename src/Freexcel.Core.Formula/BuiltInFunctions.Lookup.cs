@@ -374,7 +374,7 @@ public static partial class BuiltInFunctions
         if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
             return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
 
-        if (useA1 && sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
+        if (sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
         {
             var namedSheetName = ctx.TryGetSheetName(namedRange.Start.Sheet);
             return namedSheetName is null

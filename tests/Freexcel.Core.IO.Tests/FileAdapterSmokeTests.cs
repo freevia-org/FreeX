@@ -15059,7 +15059,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesModeledScenarioNativeMetadataWithoutDuplicates()
+    public void XlsxAdapter_LoadedWorkbookSaveWithoutEdits_PreservesScenarioPackageBytes()
     {
         var workbook = new Workbook("ScenarioMetadataMergeTest");
         var sheet = workbook.AddSheet("Data");
@@ -15070,25 +15070,15 @@ public partial class FileAdapterSmokeTests
         adapter.Save(workbook, source);
         source.Position = 0;
         AddMinimalWorksheetScenarios(source);
+        var sourceBytes = source.ToArray();
 
         source.Position = 0;
         var loaded = adapter.Load(source);
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
-        saved.Position = 0;
 
-        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios")!;
-        scenarios.Attribute("current").Should().BeNull();
-        scenarios.Attribute("show").Should().BeNull();
-        var scenario = scenarios.Elements(worksheetNs + "scenario")
-            .Single(element => element.Attribute("name")?.Value == "BestCase");
-        scenario.Attribute("locked")!.Value.Should().Be("1");
-        scenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
-        scenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
+        saved.ToArray().Should().Equal(sourceBytes);
     }
 
     [Fact]

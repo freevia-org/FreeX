@@ -153,6 +153,80 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_PrintsVisibleTextBoxWithSelectableTextOverlay()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Text box print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Anchor"));
+            sheet.TextBoxes.Add(new TextBoxModel
+            {
+                Anchor = new CellAddress(sheet.Id, 2, 2),
+                Text = "Printable callout",
+                Width = 96,
+                Height = 42,
+                FillColor = new CellColor(200, 220, 240),
+                OutlineColor = new CellColor(20, 70, 120)
+            });
+            sheet.TextBoxes.Add(new TextBoxModel
+            {
+                Anchor = new CellAddress(sheet.Id, 2, 2),
+                Text = "Hidden callout",
+                IsVisible = false
+            });
+            sheet.TextBoxes.Add(new TextBoxModel
+            {
+                Anchor = new CellAddress(sheet.Id, 25, 25),
+                Text = "Off-page callout"
+            });
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page);
+
+            overlays.Should().ContainEquivalentOf(new
+            {
+                Text = "Printable callout",
+                X = 52.0,
+                Y = 52.0,
+                FontSize = 9.0,
+                Bold = false
+            });
+            overlays.Select(overlay => overlay.Text).Should().NotContain("Hidden callout");
+            overlays.Select(overlay => overlay.Text).Should().NotContain("Off-page callout");
+            CountApproximateRgbPixels(page, 200, 220, 240).Should().BeGreaterThan(100);
+        });
+    }
+
+    [Fact]
+    public void RenderWorksheet_BoundsLongTextBoxOverlayBeforeHiddenTail()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Long text box print");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Anchor"));
+            sheet.TextBoxes.Add(new TextBoxModel
+            {
+                Anchor = new CellAddress(sheet.Id, 2, 2),
+                Text = $"{new string('x', 300)} hidden-tail-token",
+                Width = 72,
+                Height = 24
+            });
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var page = document.Pages[0].GetPageRoot(forceReload: false)!;
+            var overlays = PdfTextOverlayExtractor.Extract(page)
+                .Select(overlay => overlay.Text)
+                .ToList();
+
+            overlays.Should().NotContain(text => text.Contains("hidden-tail-token", StringComparison.Ordinal));
+            overlays.Should().Contain(text => text.EndsWith("\u2026", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
     public void RenderWorksheet_DraftQualityKeepsCommentsAtEnd()
     {
         StaTestRunner.Run(() =>
@@ -217,6 +291,38 @@ public sealed class PrintRendererPageSetupTests
             var isCommentFill = red > 240 && green > 240 && blue is >= 190 and < 240;
             if (isCommentIndicator || isCommentFill)
                 count++;
+        }
+
+        return count;
+    }
+
+    private static int CountApproximateRgbPixels(FrameworkElement page, byte expectedRed, byte expectedGreen, byte expectedBlue)
+    {
+        var width = Math.Max(1, (int)Math.Ceiling(page.Width));
+        var height = Math.Max(1, (int)Math.Ceiling(page.Height));
+        var size = new Size(width, height);
+        page.Measure(size);
+        page.Arrange(new Rect(size));
+        page.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(page);
+        var pixels = new byte[width * height * 4];
+        bitmap.CopyPixels(pixels, width * 4, 0);
+
+        var count = 0;
+        for (var i = 0; i < pixels.Length; i += 4)
+        {
+            var blue = pixels[i];
+            var green = pixels[i + 1];
+            var red = pixels[i + 2];
+
+            if (Math.Abs(red - expectedRed) <= 3 &&
+                Math.Abs(green - expectedGreen) <= 3 &&
+                Math.Abs(blue - expectedBlue) <= 3)
+            {
+                count++;
+            }
         }
 
         return count;
