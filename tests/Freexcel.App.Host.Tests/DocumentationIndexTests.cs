@@ -12,7 +12,7 @@ public sealed partial class DocumentationIndexTests
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var readme = File.ReadAllText(Path.Combine(docsDirectory, "README.md"));
         var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
-            .Select(Path.GetFileName)
+            .Select(path => Path.GetFileName(path)!)
             .Order(StringComparer.Ordinal)
             .Last();
         var statusReportCount = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md").Length;
@@ -70,15 +70,27 @@ public sealed partial class DocumentationIndexTests
     }
 
     [Fact]
-    public void CurrentDocs_LocalMarkdownLinksResolve()
+    public void CurrentPlanningDocs_LocalMarkdownLinksResolve()
     {
         var docsDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("docs", "README.md"))!;
         var newestStatusReport = Directory.GetFiles(docsDirectory, "PROJECT_STATUS_REPORT_*.md")
+            .Select(path => Path.GetFileName(path)!)
             .Order(StringComparer.Ordinal)
             .Last();
+        var currentDocs = new[]
+        {
+            "README.md",
+            newestStatusReport,
+            "OUTSTANDING_BUILD.md",
+            "NEXT_PHASES_PLAN.md",
+            "UI_TEST_CATALOG.md",
+            "SHORTCUT_PARITY_MATRIX.md",
+            "COMMAND_SURFACE_PARITY.md",
+            "MENU_TOOLBAR_PARITY.md"
+        };
 
-        AssertLocalMarkdownLinksResolve(Path.Combine(docsDirectory, "README.md"), docsDirectory);
-        AssertLocalMarkdownLinksResolve(newestStatusReport, docsDirectory);
+        foreach (var doc in currentDocs)
+            AssertLocalMarkdownLinksResolve(Path.Combine(docsDirectory, doc), docsDirectory);
     }
 
     private static void AssertLocalMarkdownLinksResolve(string sourcePath, string docsDirectory)
