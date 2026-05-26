@@ -98,7 +98,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public void Dispose()
         {
-            _window.Close();
+            MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
             PumpDispatcher();
         }
     }
