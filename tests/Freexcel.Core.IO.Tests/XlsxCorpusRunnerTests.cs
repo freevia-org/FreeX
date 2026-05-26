@@ -245,7 +245,7 @@ public class XlsxCorpusRunnerTests
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
-        rows.Should().HaveCount(33, "the generated metadata-pass manifest currently declares thirty-three deterministic package-retention rows");
+        rows.Should().HaveCount(34, "the generated metadata-pass manifest currently declares thirty-four deterministic package-retention rows");
         rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
@@ -751,6 +751,24 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedWorksheetHeaderFooterNativeRow_RetainsHeaderFooterAfterModelEdit()
+    {
+        using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-header-footer-native-001");
+        AssertWorksheetHeaderFooterNative(source, "generated-worksheet-header-footer-native-001 source");
+
+        source.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(source);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freexcel-header-footer-edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-worksheet-header-footer-native-001");
+        AssertWorksheetHeaderFooterNative(saved, "generated-worksheet-header-footer-native-001 saved");
+    }
+
+    [Fact]
     public void GeneratedWorksheetPhoneticPropertiesRow_RetainsPhoneticPropertiesAfterModelEdit()
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-phonetic-properties-001");
@@ -1185,6 +1203,20 @@ public class XlsxCorpusRunnerTests
         pageSetup.Attribute("copies")!.Value.Should().Be("3", because);
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native", because);
         pageSetup.Element(worksheetNs + "nativePageSetupChild")!
+            .Attribute("value")!.Value.Should().Be("kept", because);
+    }
+
+    private static void AssertWorksheetHeaderFooterNative(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var headerFooter = worksheetXml.Root!.Element(worksheetNs + "headerFooter");
+        headerFooter.Should().NotBeNull(because);
+        headerFooter!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept", because);
+        headerFooter.Element(worksheetNs + "oddHeader")!.Value.Should().Contain("Center", because);
+        headerFooter.Element(worksheetNs + "nativeHeaderFooterChild")!
             .Attribute("value")!.Value.Should().Be("kept", because);
     }
 
