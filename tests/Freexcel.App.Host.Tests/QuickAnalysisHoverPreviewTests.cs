@@ -41,6 +41,7 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline");
         source.Should().Contain("QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart");
         source.Should().Contain("QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart");
+        source.Should().Contain("QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart");
     }
 
     [Theory]
@@ -53,6 +54,7 @@ public sealed class QuickAnalysisHoverPreviewTests
     [InlineData(QuickAnalysisPreviewVisualKind.WinLossSparkline, GridQuickAnalysisPreviewVisualKind.WinLossSparkline)]
     [InlineData(QuickAnalysisPreviewVisualKind.ColumnChart, GridQuickAnalysisPreviewVisualKind.ColumnChart)]
     [InlineData(QuickAnalysisPreviewVisualKind.LineChart, GridQuickAnalysisPreviewVisualKind.LineChart)]
+    [InlineData(QuickAnalysisPreviewVisualKind.BarChart, GridQuickAnalysisPreviewVisualKind.BarChart)]
     public void MapQuickAnalysisPreviewVisual_MapsLightweightPreviewFamilies(
         QuickAnalysisPreviewVisualKind hostKind,
         GridQuickAnalysisPreviewVisualKind expectedGridKind)
@@ -63,7 +65,6 @@ public sealed class QuickAnalysisHoverPreviewTests
     [Theory]
     [InlineData(QuickAnalysisPreviewVisualKind.StackedColumnChart)]
     [InlineData(QuickAnalysisPreviewVisualKind.PieChart)]
-    [InlineData(QuickAnalysisPreviewVisualKind.BarChart)]
     [InlineData(QuickAnalysisPreviewVisualKind.AreaChart)]
     [InlineData(QuickAnalysisPreviewVisualKind.ScatterChart)]
     public void MapQuickAnalysisPreviewVisual_LeavesUnsupportedChartFamiliesWithoutGridVisual(
