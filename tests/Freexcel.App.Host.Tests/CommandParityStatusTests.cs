@@ -17,7 +17,7 @@ public sealed class CommandParityStatusTests
             ("Cut (Ctrl+X)", "Implemented"),
             ("Copy (Ctrl+C)", "Implemented"),
             ("Paste (Ctrl+V)", "Implemented"),
-            ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture)", "Implemented"),
+            ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture/text)", "Implemented"),
             ("Format Painter", "Implemented"),
             ("Distributed/Justify alignment", "Implemented"),
             ("Shrink to Fit", "Implemented"),
@@ -40,6 +40,18 @@ public sealed class CommandParityStatusTests
                 row => row.FirstCell == expected.Command && row.Status == expected.Status,
                 $"COMMAND_SURFACE_PARITY.md should contain a markdown table row for {expected.Command} with status {expected.Status}");
         }
+    }
+
+    [Fact]
+    public void FormatPainterKeyboardEvidence_IsTrackedInUiTestCatalog()
+    {
+        var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+
+        var tableRows = ParseMarkdownTableRows(doc);
+
+        tableRows.Should().Contain(
+            row => row.FirstCell == "UI-CMD-HOME-CLIP-003" && row.Status == "In Progress",
+            "Format Painter has implementation and keyboard Escape evidence, so the UI catalog should not leave it as Not Started");
     }
 
     private static IReadOnlyList<CommandTableRow> ParseMarkdownTableRows(string doc)
