@@ -207,6 +207,20 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void WindowResize_SchedulesRibbonFallbackCompactionBeforeRender()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorkbookUiState.cs"));
+
+        var method = source.Substring(
+            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal),
+            source.IndexOf("private string FormatCellReference", StringComparison.Ordinal) -
+            source.IndexOf("private void MainWindow_SizeChanged", StringComparison.Ordinal));
+
+        method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange");
+        method.Should().NotContain("UpdateRibbonCompactMode();");
+    }
+
+    [Fact]
     public void CollapsedRibbonMenuItems_MirrorSourceMenuStateAndOpenedUpdates()
     {
         StaTestRunner.Run(() =>
