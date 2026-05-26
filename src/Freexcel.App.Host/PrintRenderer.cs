@@ -107,7 +107,16 @@ public static partial class PrintRenderer
 
         if (sheet.PrintComments == WorksheetPrintComments.AtEnd &&
             (sheet.Comments.Count > 0 || sheet.ThreadedComments.Count > 0))
-            AddCommentSummaryPage();
+        {
+            foreach (var commentsForPage in BuildCommentSummaryPages(
+                         sheet.Comments,
+                         sheet.ThreadedComments,
+                         pageH,
+                         marginTop))
+            {
+                AddCommentSummaryPage(commentsForPage);
+            }
+        }
 
         void AddPrintPage(PrintPageRowPlan rowPlan, PrintPageColumnPlan columnPlan)
         {
@@ -167,15 +176,14 @@ public static partial class PrintRenderer
             doc.Pages.Add(pageContent);
         }
 
-        void AddCommentSummaryPage()
+        void AddCommentSummaryPage(IReadOnlyList<KeyValuePair<CellAddress, string>> commentsForPage)
         {
             var visual = RenderCommentSummaryPageVisual(
                 pageW,
                 pageH,
                 marginLeft,
                 marginTop,
-                sheet.Comments,
-                sheet.ThreadedComments);
+                commentsForPage);
 
             var container = new VisualHost { Visual = visual };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
