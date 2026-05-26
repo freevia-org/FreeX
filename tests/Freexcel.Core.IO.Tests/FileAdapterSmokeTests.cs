@@ -14162,10 +14162,13 @@ public partial class FileAdapterSmokeTests
         loadedSheet.PageSetupMetadata.Should().NotBeNull();
         loadedSheet.PageSetupMetadata!.NativeAttributes.Should().Contain("customAttr", "page-setup-native");
         loadedSheet.PageSetupMetadata.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("nativePageSetupChild", StringComparison.Ordinal));
+        loadedSheet.PageSetupMetadata.NativeAttributes["invalid pageSetup attr"] = "skip";
         loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
-        adapter.Save(loaded, saved);
+        var save = () => adapter.Save(loaded, saved);
+
+        save.Should().NotThrow();
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
@@ -14176,6 +14179,7 @@ public partial class FileAdapterSmokeTests
         pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
         pageSetup.Attribute("copies")!.Value.Should().Be("3");
         pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().NotContain("invalid ");
         pageSetup.Element(worksheetNs + "nativePageSetupChild").Should().NotBeNull();
         pageSetup.Element(worksheetNs + "nativePageSetupChild")!
             .Attribute("value")!
