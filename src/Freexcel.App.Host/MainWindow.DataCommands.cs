@@ -242,7 +242,12 @@ public partial class MainWindow
         var selected = SheetGrid.SelectedRange;
         var defaultSource = selected?.ToString() ?? "A1:B2";
         var defaultDestination = selected?.Start.ToA1() ?? "A1";
-        var dialog = new ConsolidateDialog(_currentSheetId, defaultSource, defaultDestination) { Owner = this };
+        ConsolidateDialog? dialog = null;
+        dialog = new ConsolidateDialog(
+            _currentSheetId,
+            defaultSource,
+            defaultDestination,
+            request => ApplyConsolidateRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var outcome = _commandBus.ExecuteRepeatable(
@@ -264,6 +269,33 @@ public partial class MainWindow
         SetActiveCell(dialog.Result.DestinationCell);
         EnsureCellVisible(dialog.Result.DestinationCell);
         UpdateViewport();
+    }
+
+    private void ApplyConsolidateRangeSelection(
+        ConsolidateDialog? dialog,
+        ConsolidateRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var rangeText = request.Target == ConsolidateRangeSelectionTarget.DestinationCell
+            ? FormatCellReference(selectedRange.Start)
+            : FormatWorkbookRange(selectedRange);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(request.Target, rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
     }
 
     // ── What-If Analysis ─────────────────────────────────────────────────────
