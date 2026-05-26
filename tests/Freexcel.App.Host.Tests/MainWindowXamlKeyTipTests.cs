@@ -66,9 +66,10 @@ public sealed class MainWindowXamlKeyTipTests
         fontSizeBox.Attribute("KeyDown")?.Value.Should().Be("FontSizeBox_KeyDown");
         source.Should().Contain("private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)");
         source.Should().Contain("if (e.Key != Key.Enter) return;");
-        source.Should().Contain("private void CommitFontSizeBoxText()");
-        source.Should().Contain("WorksheetSizeInputParser.TryParsePositiveSize(FontSizeBox.Text, out var size)");
-        source.Should().Contain("ApplyStyleDiff(new StyleDiff(FontSize: size));");
+        source.Should().Contain("private void CommitFontSizeBoxText(bool preferSelectedItem = false)");
+        source.Should().Contain("var text = preferSelectedItem ? GetSelectedFontSizeText() : FontSizeBox.Text;");
+        source.Should().Contain("WorksheetSizeInputParser.TryParsePositiveSize(text, out var size)");
+        source.Should().Contain("ApplyFontSizeAndFitRows(size);");
     }
 
     [Fact]

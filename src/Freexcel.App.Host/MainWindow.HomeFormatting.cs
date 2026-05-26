@@ -170,7 +170,7 @@ public partial class MainWindow
     private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        CommitFontSizeBoxText();
+        CommitFontSizeBoxText(preferSelectedItem: true);
     }
 
     private void FontSizeBox_KeyDown(object sender, KeyEventArgs e)
@@ -188,11 +188,15 @@ public partial class MainWindow
         CommitFontSizeBoxText();
     }
 
-    private void CommitFontSizeBoxText()
+    private void CommitFontSizeBoxText(bool preferSelectedItem = false)
     {
-        if (WorksheetSizeInputParser.TryParsePositiveSize(FontSizeBox.Text, out var size))
-            ApplyStyleDiff(new StyleDiff(FontSize: size));
+        var text = preferSelectedItem ? GetSelectedFontSizeText() : FontSizeBox.Text;
+        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
+            ApplyFontSizeAndFitRows(size);
     }
+
+    private string GetSelectedFontSizeText() =>
+        FontSizeBox.SelectedItem as string ?? FontSizeBox.Text;
 
     private void FontColorBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -280,6 +284,7 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
+        RefreshToolbar();
     }
 
     // ── Border picker ────────────────────────────────────────────────────────

@@ -580,17 +580,19 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
         var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
-        var dlg = new FormatCellsDialog(currentStyle, initialTab) { Owner = this };
+        var mergeCells = FormatCellsMergePlanner.IsSelectionMerged(sheet, range);
+        var dlg = new FormatCellsDialog(currentStyle, initialTab, mergeCells) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
-        ApplyFormatCellsDialogResult(range, dlg.ResultDiff, dlg.ResultBorderSelection);
+        ApplyFormatCellsDialogResult(range, dlg.ResultDiff, dlg.ResultBorderSelection, dlg.ResultMergeCells);
     }
 
     private void ApplyFormatCellsDialogResult(
         GridRange range,
         StyleDiff diff,
-        FormatCellsBorderSelection borderSelection)
+        FormatCellsBorderSelection borderSelection,
+        bool? mergeCells)
     {
-        if (!borderSelection.HasRangeOperations)
+        if (!borderSelection.HasRangeOperations && mergeCells is null)
         {
             ApplyStyleDiff(diff);
             return;
@@ -607,9 +609,13 @@ public partial class MainWindow
         IWorkbookCommand CreateSheetCommand(SheetId sheetId)
         {
             var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            var sheet = _workbook.GetSheet(sheetId);
             var commands = new List<IWorkbookCommand>
             {
-                new ApplyStyleCommand(sheetId, sheetRange, nonBorderDiff)
+                new ApplyStyleCommand(
+                    sheetId,
+                    sheetRange,
+                    borderSelection.HasRangeOperations ? nonBorderDiff : diff)
             };
 
             if (borderSelection.Clear)
@@ -640,6 +646,9 @@ public partial class MainWindow
                         inside.Style,
                         inside.Color)));
             }
+
+            if (mergeCells is { } shouldMerge && sheet is not null)
+                commands.AddRange(FormatCellsMergePlanner.CreateMergeCommands(sheet, sheetId, sheetRange, shouldMerge));
 
             return commands.Count == 1
                 ? commands[0]
