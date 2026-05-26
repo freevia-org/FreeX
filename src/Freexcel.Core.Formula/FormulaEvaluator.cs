@@ -423,7 +423,7 @@ public sealed class FormulaEvaluator
 
         // Expand range arguments into individual values for aggregate functions,
         // or wrap as RangeValue for structured functions that need 2-D access.
-        var expandedArgs = new List<ScalarValue>();
+        var expandedArgs = new List<ScalarValue>(node.Arguments.Count);
         for (var argIndex = 0; argIndex < node.Arguments.Count; argIndex++)
         {
             var arg = node.Arguments[argIndex];
@@ -588,10 +588,20 @@ public sealed class FormulaEvaluator
 
     private static void AddRangeValues(List<ScalarValue> expandedArgs, IReadOnlyList<ScalarValue> values, string functionName)
     {
+        var finalCount = (long)expandedArgs.Count + values.Count;
+        if (finalCount <= int.MaxValue)
+            expandedArgs.EnsureCapacity((int)finalCount);
+
         if (IsReferenceProvenanceAggregate(functionName))
-            expandedArgs.AddRange(values.Select(v => new ReferencedScalarValue(v)));
+        {
+            foreach (var value in values)
+                expandedArgs.Add(new ReferencedScalarValue(value));
+        }
         else
-            expandedArgs.AddRange(values);
+        {
+            foreach (var value in values)
+                expandedArgs.Add(value);
+        }
     }
 
     private static bool IsSingleDirectRangeFastAggregate(string functionName)
@@ -1420,9 +1430,9 @@ public sealed class FormulaEvaluator
 
         public IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var values = new List<ScalarValue>();
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            var values = CreateRangeValueList(r0, c0, r1, c1);
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(_sheet.GetValue(r, c));
@@ -1433,13 +1443,21 @@ public sealed class FormulaEvaluator
         {
             var target = _workbook?.GetSheet(sheetName);
             if (target is null) return [ErrorValue.Ref];
-            var values = new List<ScalarValue>();
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            var values = CreateRangeValueList(r0, c0, r1, c1);
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(target.GetValue(r, c));
             return values;
+        }
+
+        private static List<ScalarValue> CreateRangeValueList(uint startRow, uint startCol, uint endRow, uint endCol)
+        {
+            var count = ((long)endRow - startRow + 1) * ((long)endCol - startCol + 1);
+            return count <= int.MaxValue
+                ? new List<ScalarValue>((int)count)
+                : [];
         }
 
         public Freexcel.Core.Model.GridRange? TryResolveNamedRange(string name)

@@ -45,6 +45,31 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
+    [Fact]
+    public void MultiRangeAggregateExpansion_AvoidsExcessAllocationChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+        const string formula = "=SUM(A1:A100000,A1:A100000)";
+        const double expected = 10_000_100_000d;
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(11_500_000);
+    }
+
     [Theory]
     [InlineData("=SUMIF(B1:B100000,\"A\",A1:A100000)", 2_500_050_000d, 2_500_000)]
     [InlineData("=COUNTIF(B1:B100000,\"A\")", 50_000d, 1_500_000)]
