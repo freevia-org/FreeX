@@ -1463,6 +1463,29 @@ public class ShortCircuitEvaluationTests
         result.Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void SUM_RangeOnlyFastPath_PreservesLeftToRightErrorPrecedenceBeforeMissingSheet()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.NA);
+
+        var result = _evaluator.Evaluate("=SUM(A1:A1,Missing!A1:A1)", sheet, wb);
+
+        result.Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void AVERAGE_RangeOnlyFastPath_DoesNotLetFinalizationErrorOutrankMissingSheet()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+
+        var result = _evaluator.Evaluate("=AVERAGE(A1:A1,Missing!A1:A1)", sheet, wb);
+
+        result.Should().Be(ErrorValue.Ref);
+    }
+
     // ── Parser row-bounds protection ──────────────────────────────────────
 
     [Fact]

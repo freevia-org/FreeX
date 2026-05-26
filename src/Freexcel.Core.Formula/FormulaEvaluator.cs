@@ -627,24 +627,37 @@ public sealed class FormulaEvaluator
         if (!TryGetFastAggregateKind(functionName, out var kind))
             return false;
 
-        var ranges = new FastAggregateRange[arguments.Count];
-        ErrorValue? referenceError = null;
+        var ranges = new List<FastAggregateRange>(arguments.Count);
         for (var index = 0; index < arguments.Count; index++)
         {
-            var resolution = TryResolveFastAggregateRange(arguments[index], context, out ranges[index], out var error);
+            var resolution = TryResolveFastAggregateRange(arguments[index], context, out var range, out var error);
             if (resolution == FastAggregateRangeResolution.Unsupported)
                 return false;
 
-            referenceError ??= error;
+            if (error is not null)
+            {
+                if (ranges.Count > 0 &&
+                    TryFindFastRangeOnlyImmediateError(kind, ranges, context, out var priorError))
+                    result = priorError;
+                else
+                    result = error;
+
+                return true;
+            }
+
+            ranges.Add(range);
         }
 
-        if (referenceError is not null)
-        {
-            result = referenceError;
-            return true;
-        }
+        result = EvaluateFastRangeOnlyAggregate(kind, ranges, context);
+        return true;
+    }
 
-        result = kind switch
+    private static ScalarValue EvaluateFastRangeOnlyAggregate(
+        FastAggregateKind kind,
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context)
+    {
+        return kind switch
         {
             FastAggregateKind.Sum => EvaluateFastRangeOnlySum(ranges, context),
             FastAggregateKind.Average => EvaluateFastRangeOnlyAverage(ranges, context),
@@ -653,7 +666,63 @@ public sealed class FormulaEvaluator
             FastAggregateKind.CountBlank => EvaluateFastRangeOnlyCountBlank(ranges, context),
             _ => EvaluateFastRangeOnlyCount(ranges, context)
         };
-        return true;
+    }
+
+    private static bool TryFindFastRangeOnlyImmediateError(
+        FastAggregateKind kind,
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context,
+        out ErrorValue error)
+    {
+        error = null!;
+        if (kind is FastAggregateKind.Count or FastAggregateKind.CountBlank)
+            return false;
+
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null)
+                {
+                    error = ErrorValue.Ref;
+                    return true;
+                }
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        _ = TryDirectRangeNumber(sheet.GetValue(row, col), out _, out var cellError);
+                        if (cellError is not null)
+                        {
+                            error = cellError;
+                            return true;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        _ = TryDirectRangeNumber(value, out _, out var cellError);
+                        if (cellError is not null)
+                        {
+                            error = cellError;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private static ScalarValue EvaluateFastRangeOnlySum(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
