@@ -248,6 +248,48 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void PageLayoutBreaksMenuKeyTips_UpdateSheetPageBreaks()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(5, 3, 5, 3);
+            harness.ActiveSheetRowPageBreaks.Should().BeEmpty();
+            harness.ActiveSheetColumnPageBreaks.Should().BeEmpty();
+
+            harness.OpenRibbonMenu(Key.P, Key.B, Key.K);
+            harness.ActiveMenuItemGestureText("Insert Page Break").Should().Be("I");
+            harness.HandleKeyTip(Key.I);
+
+            harness.ActiveSheetRowPageBreaks.Should().Equal(5u);
+            harness.ActiveSheetColumnPageBreaks.Should().Equal(3u);
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.P, Key.B, Key.K);
+            harness.ActiveMenuItemGestureText("Remove Page Break").Should().Be("R");
+            harness.HandleKeyTip(Key.R);
+
+            harness.ActiveSheetRowPageBreaks.Should().BeEmpty();
+            harness.ActiveSheetColumnPageBreaks.Should().BeEmpty();
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+
+            harness.OpenRibbonMenu(Key.P, Key.B, Key.K);
+            harness.HandleKeyTip(Key.I);
+            harness.OpenRibbonMenu(Key.P, Key.B, Key.K);
+            harness.ActiveMenuItemGestureText("Reset All Page Breaks").Should().Be("A");
+            harness.HandleKeyTip(Key.A);
+
+            harness.ActiveSheetRowPageBreaks.Should().BeEmpty();
+            harness.ActiveSheetColumnPageBreaks.Should().BeEmpty();
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void ViewZoomCommandKeyTips_ResetAndFitSelection()
     {
         RunSta(() =>
@@ -893,6 +935,10 @@ public sealed class MainWindowRibbonKeyTipTests
             (_window.FindName("FormulaBarBorder") as FrameworkElement)?.Visibility == Visibility.Visible;
 
         public WorksheetViewMode ActiveSheetViewMode => _workbook.Sheets[0].ViewMode;
+
+        public IReadOnlyList<uint> ActiveSheetRowPageBreaks => _workbook.Sheets[0].RowPageBreaks.ToList();
+
+        public IReadOnlyList<uint> ActiveSheetColumnPageBreaks => _workbook.Sheets[0].ColumnPageBreaks.ToList();
 
         public (uint FrozenRows, uint FrozenCols) ActiveSheetFrozenPanes
         {
