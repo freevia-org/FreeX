@@ -734,6 +734,30 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Aggregate_Sum_Option5IgnoresHiddenRows()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        sheet.HiddenRows.Add(2);
+
+        _eval.Evaluate("=AGGREGATE(9,5,A1:A3)", sheet, wb).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Aggregate_Sum_Option4IncludesHiddenRows()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        sheet.HiddenRows.Add(2);
+
+        _eval.Evaluate("=AGGREGATE(9,4,A1:A3)", sheet, wb).Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
     public void Aggregate_Sum_IgnoresErrorsWhenOption6()
     {
         var (wb, sheet) = MakeWb(

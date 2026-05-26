@@ -51,6 +51,7 @@ public sealed class SpellCheckDialog : Window
             if (_suggestionsBox.SelectedItem is string selected)
                 _replacementBox.Text = selected;
         };
+        _suggestionsBox.MouseDoubleClick += (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text));
 
         Content = CreateSpellCheckContent(word);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -110,7 +111,7 @@ public sealed class SpellCheckDialog : Window
         var actionButtons = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Ignore", Width = 90 }, (_, _) => Accept(CreateIgnoreResult())));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Ignore _All", Width = 90 }, (_, _) => Accept(CreateIgnoreAllResult())));
-        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Change", Width = 90 }, (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Change", Width = 90, IsDefault = true }, (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Change A_ll", Width = 90 }, (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
         actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Add", Width = 90 }, (_, _) => Accept(CreateAddResult(word))));
         actionButtons.Children.Add(new Button { Content = "_Cancel", Width = 90, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) });

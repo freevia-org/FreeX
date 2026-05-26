@@ -425,6 +425,8 @@ public sealed class MainWindowAdaptiveRibbonTests
 
     private sealed class MainWindowHarness : IDisposable
     {
+        private static MainWindow? SharedWindow;
+
         private readonly MainWindow _window;
         private readonly MethodInfo _updateRibbonCompactMode;
 
@@ -671,6 +673,24 @@ public sealed class MainWindowAdaptiveRibbonTests
 
         public static MainWindowHarness Create()
         {
+            var window = SharedWindow ??= CreateSharedWindow();
+            if (!window.IsVisible)
+                window.Show();
+
+            window.WindowState = WindowState.Normal;
+            window.Width = 1280;
+            window.Height = 720;
+            if (window.FindName("RibbonTabs") is TabControl tabs)
+                tabs.SelectedIndex = 1;
+            window.UpdateLayout();
+            PumpDispatcher();
+            var harness = new MainWindowHarness(window);
+            harness.ResetUiState();
+            return harness;
+        }
+
+        private static MainWindow CreateSharedWindow()
+        {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
@@ -689,12 +709,23 @@ public sealed class MainWindowAdaptiveRibbonTests
             window.Height = 720;
             window.Show();
             PumpDispatcher();
-            return new MainWindowHarness(window);
+            return window;
         }
 
         public void Dispose()
         {
-            _window.Close();
+            ResetUiState();
+        }
+
+        private void ResetUiState()
+        {
+            foreach (var menu in CollapsedRibbonGroupMenus)
+                menu.IsOpen = false;
+            if (VisibleOrCollapsedRibbonButton("Find & Select") is { } findSelect)
+                findSelect.IsEnabled = true;
+            if (_window.FindName("RibbonTabs") is TabControl tabs)
+                tabs.SelectedIndex = 1;
+            _window.UpdateLayout();
             PumpDispatcher();
         }
 

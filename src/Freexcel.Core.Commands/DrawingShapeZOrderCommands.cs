@@ -23,19 +23,8 @@ public sealed class BringDrawingShapeForwardCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var index = sheet.DrawingShapes.FindIndex(shape => shape.Id == _shapeId);
-        if (index < 0)
-            return new CommandOutcome(false, "Drawing shape was not found.");
-
-        if (index >= sheet.DrawingShapes.Count - 1)
-            return new CommandOutcome(true);
-
-        _fromIndex = index;
-        _toIndex = index + 1;
-        (sheet.DrawingShapes[_fromIndex], sheet.DrawingShapes[_toIndex]) =
-            (sheet.DrawingShapes[_toIndex], sheet.DrawingShapes[_fromIndex]);
-
-        return new CommandOutcome(true, AffectedCells: [sheet.DrawingShapes[_toIndex].Anchor]);
+        var outcome = DrawingShapeCommandGuards.TryMoveZOrder(sheet, _shapeId, direction: 1, out _fromIndex, out _toIndex);
+        return outcome;
     }
 
     public void Revert(ICommandContext ctx)
@@ -44,8 +33,7 @@ public sealed class BringDrawingShapeForwardCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        (sheet.DrawingShapes[_fromIndex], sheet.DrawingShapes[_toIndex]) =
-            (sheet.DrawingShapes[_toIndex], sheet.DrawingShapes[_fromIndex]);
+        DrawingShapeCommandGuards.SwapZOrder(sheet, _fromIndex, _toIndex);
         _fromIndex = -1;
         _toIndex = -1;
     }
@@ -72,19 +60,8 @@ public sealed class SendDrawingShapeBackwardCommand : IWorkbookCommand
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        var index = sheet.DrawingShapes.FindIndex(shape => shape.Id == _shapeId);
-        if (index < 0)
-            return new CommandOutcome(false, "Drawing shape was not found.");
-
-        if (index == 0)
-            return new CommandOutcome(true);
-
-        _fromIndex = index;
-        _toIndex = index - 1;
-        (sheet.DrawingShapes[_fromIndex], sheet.DrawingShapes[_toIndex]) =
-            (sheet.DrawingShapes[_toIndex], sheet.DrawingShapes[_fromIndex]);
-
-        return new CommandOutcome(true, AffectedCells: [sheet.DrawingShapes[_toIndex].Anchor]);
+        var outcome = DrawingShapeCommandGuards.TryMoveZOrder(sheet, _shapeId, direction: -1, out _fromIndex, out _toIndex);
+        return outcome;
     }
 
     public void Revert(ICommandContext ctx)
@@ -93,8 +70,7 @@ public sealed class SendDrawingShapeBackwardCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        (sheet.DrawingShapes[_fromIndex], sheet.DrawingShapes[_toIndex]) =
-            (sheet.DrawingShapes[_toIndex], sheet.DrawingShapes[_fromIndex]);
+        DrawingShapeCommandGuards.SwapZOrder(sheet, _fromIndex, _toIndex);
         _fromIndex = -1;
         _toIndex = -1;
     }
