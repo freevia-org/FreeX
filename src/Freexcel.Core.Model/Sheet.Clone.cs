@@ -158,17 +158,7 @@ public sealed partial class Sheet
         };
 
         CopyLayoutCollectionsTo(copy);
-
-        // Cells (deep copy)
-        foreach (var (address, cell) in EnumerateCells())
-            copy.SetCell(RemapAddress(address, newId), cell.Clone());
-
-        // Style-only overrides for empty cells
-        foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
-            copy.SetStyleOnly(row, col, styleId);
-
-        // Merged regions
-        copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
+        CopyCellContentTo(copy, newId);
 
         // Comments and hyperlinks
         foreach (var (address, comment) in Comments)
@@ -388,10 +378,17 @@ public sealed partial class Sheet
         // left empty here. The caller must copy those drawing collections separately.
 
         return copy;
+    }
 
-        static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
-        static GridRange   RemapRange         (GridRange   r, SheetId id) =>
-            new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    private void CopyCellContentTo(Sheet copy, SheetId newId)
+    {
+        foreach (var (address, cell) in EnumerateCells())
+            copy.SetCell(RemapAddress(address, newId), cell.Clone());
+
+        foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
+            copy.SetStyleOnly(row, col, styleId);
+
+        copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
     }
 
     private void CopyLayoutCollectionsTo(Sheet copy)
@@ -470,4 +467,10 @@ public sealed partial class Sheet
             }).ToList()
         };
     }
+
+    private static CellAddress RemapAddress(CellAddress address, SheetId id) =>
+        new(id, address.Row, address.Col);
+
+    private static GridRange RemapRange(GridRange range, SheetId id) =>
+        new(RemapAddress(range.Start, id), RemapAddress(range.End, id));
 }
