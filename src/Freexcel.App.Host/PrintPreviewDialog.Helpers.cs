@@ -74,32 +74,13 @@ public sealed partial class PrintPreviewDialog
         PrintPreviewPageRangeMode pageRangeMode,
         int currentPage,
         ExportPageRange? pageRange = null) =>
-        pageRangeMode switch
-        {
-            PrintPreviewPageRangeMode.CurrentPage => new PageRangeDocumentPaginator(
-                document.DocumentPaginator,
-                new ExportPageRange(currentPage, currentPage)),
-            PrintPreviewPageRangeMode.Pages when pageRange is not null => new PageRangeDocumentPaginator(
-                document.DocumentPaginator,
-                pageRange),
-            _ => document.DocumentPaginator
-        };
+        PrintPreviewToolbarPlanner.ResolvePrintPaginator(document, pageRangeMode, currentPage, pageRange);
 
     internal static Duplexing ResolvePrintTicketDuplexing(PrintPreviewSidesMode mode) =>
-        mode switch
-        {
-            PrintPreviewSidesMode.TwoSidedLongEdge => Duplexing.TwoSidedLongEdge,
-            PrintPreviewSidesMode.TwoSidedShortEdge => Duplexing.TwoSidedShortEdge,
-            _ => Duplexing.OneSided
-        };
+        PrintPreviewToolbarPlanner.ResolvePrintTicketDuplexing(mode);
 
     private static PrintPreviewSidesMode ResolveSelectedSidesMode(ComboBox sidesBox) =>
-        sidesBox.SelectedIndex switch
-        {
-            1 => PrintPreviewSidesMode.TwoSidedLongEdge,
-            2 => PrintPreviewSidesMode.TwoSidedShortEdge,
-            _ => PrintPreviewSidesMode.OneSided
-        };
+        PrintPreviewToolbarPlanner.ResolveSelectedSidesMode(sidesBox.SelectedIndex);
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
@@ -173,15 +154,12 @@ public sealed partial class PrintPreviewDialog
 
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
     {
-        var copyText = TryParseCopyCount(copiesBox.Text, out var copies)
-            ? copies == 1 ? "1 copy" : $"{copies} copies"
-            : "invalid copies";
-        var pages = totalPages == 1 ? "1 page" : $"{totalPages} pages";
+        var validCopies = TryParseCopyCount(copiesBox.Text, out var copies);
         var printerName = printerBox.SelectedItem is PrintQueue queue
             ? queue.FullName
-            : "Windows print dialog";
+            : null;
 
-        statusText.Text = $"Ready: {printerName}; {copyText}; {pages}";
+        statusText.Text = PrintPreviewToolbarPlanner.CreateStatusText(printerName, validCopies ? copies : null, totalPages);
     }
 
     private void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
