@@ -875,23 +875,23 @@ public static partial class BuiltInFunctions
     private static ScalarValue Accrint(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double issue         = ToNumber(args[0]);
-        double firstInterest = ToNumber(args[1]);
-        double settlement    = ToNumber(args[2]);
-        double par           = ToNumber(args[4]);
-        double frequency     = ToNumber(args[5]);
-        if (args[3] is RangeValue rateRange) return MapUnaryTextRange(rateRange, value => AccrintScalar(issue, firstInterest, settlement, value, par, frequency, args));
-        return AccrintScalar(issue, firstInterest, settlement, args[3], par, frequency, args);
+        var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AccrintScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
     }
 
-    private static ScalarValue AccrintScalar(double issue, double firstInterest, double settlement, ScalarValue rateValue, double par, double frequency, IReadOnlyList<ScalarValue> args)
+    private static ScalarValue AccrintScalar(ScalarValue issueValue, ScalarValue firstInterestValue, ScalarValue settlementValue, ScalarValue rateValue, ScalarValue parValue, ScalarValue frequencyValue, ScalarValue basisValue)
     {
+        double issue = ToNumber(issueValue);
+        double firstInterest = ToNumber(firstInterestValue);
+        double settlement = ToNumber(settlementValue);
+        double par = ToNumber(parValue);
+        double frequency = ToNumber(frequencyValue);
         _ = firstInterest;
         double rate = ToNumber(rateValue);
         if (!double.IsFinite(issue) || !double.IsFinite(settlement) || !double.IsFinite(rate) ||
             !double.IsFinite(par) || !double.IsFinite(frequency))
             return ErrorValue.Num;
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
         if (rate <= 0 || par <= 0 || frequency <= 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(issue, out DateTime sd) ||
             !TryGetFinancialDate(settlement, out DateTime sett)) return ErrorValue.Num;
