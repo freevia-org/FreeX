@@ -802,12 +802,12 @@ public sealed class PivotWorkflowDialogTests
 
         foreach (var content in new[]
         {
-            "Layout & Format",
-            "Totals & Filters",
-            "Display",
-            "Data",
-            "Printing",
-            "Alt Text",
+            "_Layout & Format",
+            "_Totals & Filters",
+            "_Display",
+            "_Data",
+            "_Printing",
+            "_Alt Text",
             "_emptyCellsBox",
             "_compactIndentBox",
             "_autofitColumnsBox",
