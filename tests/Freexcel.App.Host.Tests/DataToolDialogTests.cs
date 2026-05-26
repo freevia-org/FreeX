@@ -196,6 +196,45 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void MainWindow_WiresTextToColumnsDestinationPickerToCurrentSelection()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new TextToColumnsDialog(");
+        source.Should().Contain("request => ApplyTextToColumnsRangeSelection(dialog, request)");
+        source.Should().Contain("private void ApplyTextToColumnsRangeSelection(");
+        source.Should().Contain("TextToColumnsRangeSelectionRequest request");
+        source.Should().Contain("if (request.CollapseDialog)");
+        source.Should().Contain("dialog.Hide();");
+        source.Should().Contain("dialog.ApplyRangeSelection(selectedRange.Start);");
+        source.Should().Contain("dialog.Show();");
+        source.Should().Contain("dialog.Activate();");
+    }
+
+    [Fact]
+    public void TextToColumnsApplyRangeSelection_UpdatesDestinationBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var dialog = new TextToColumnsDialog(["East,42"], new CellAddress(sheetId, 2, 6));
+            dialog.Show();
+            try
+            {
+                dialog.ApplyRangeSelection(new CellAddress(sheetId, 4, 8));
+
+                FindVisualChildren<TextBox>(dialog)
+                    .Single(box => box.Text == "H4")
+                    .Text.Should().Be("H4");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void TextToColumnsDialog_ExposesAllExcelDateColumnFormats()
     {
         var dialogSource = ReadTextToColumnsDialogSources();

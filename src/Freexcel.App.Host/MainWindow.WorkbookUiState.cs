@@ -60,7 +60,7 @@ public partial class MainWindow
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        UpdateRibbonCompactMode();
+        NormalizeRibbonSurfaceAfterLayoutChange();
         UpdateViewport();
     }
 
