@@ -38,6 +38,7 @@ public sealed partial class FindReplaceDialog : Window
         {
             FindReplaceTabs.SelectedItem = ReplaceTab;
         }
+        UpdateReplaceButtonVisibility();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -58,6 +59,15 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void FindReplaceTabs_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateReplaceButtonVisibility();
+
+    private void UpdateReplaceButtonVisibility()
+    {
+        var visibility = FindReplaceTabs.SelectedItem == ReplaceTab ? Visibility.Visible : Visibility.Collapsed;
+        ReplaceBtn.Visibility = visibility;
+        ReplaceAllBtn.Visibility = visibility;
+    }
+
     private void FindResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (FindResultsGrid.SelectedItem is FindResultRow row)

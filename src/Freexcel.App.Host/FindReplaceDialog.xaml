@@ -16,7 +16,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl x:Name="FindReplaceTabs" Grid.Row="0" Margin="0,0,0,10">
+        <TabControl x:Name="FindReplaceTabs" Grid.Row="0" Margin="0,0,0,10" SelectionChanged="FindReplaceTabs_SelectionChanged">
             <TabItem x:Name="FindTab" Header="_Find">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -144,8 +144,8 @@
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="FindAllBtn" Content="Find _All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
             <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
-            <Button x:Name="ReplaceBtn" Content="_Replace" Width="76" Margin="0,0,8,0" Click="Replace_Click"/>
-            <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
+            <Button x:Name="ReplaceBtn" Content="_Replace" Width="76" Margin="0,0,8,0" Visibility="Collapsed" Click="Replace_Click"/>
+            <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Visibility="Collapsed" Click="ReplaceAll_Click"/>
             <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
         </StackPanel>
     </Grid>
