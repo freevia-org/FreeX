@@ -65,6 +65,8 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("_(EUR* #,##0.00_);_(EUR* (#,##0.00);_(EUR* \"-\"??_);_(@_)", 1234.5, "EUR 1,234.50")]
     [InlineData("_(GBP* #,##0.00_);_(GBP* (#,##0.00);_(GBP* \"-\"??_);_(@_)", 0, "GBP -")]
+    [InlineData("_(\u20B4* #,##0.00_);_(\u20B4* (#,##0.00);_(\u20B4* \"-\"??_);_(@_)", 1234.5, "\u20B4 1,234.50")]
+    [InlineData("_(\u20B9* #,##0.00_);_(\u20B9* (#,##0.00);_(\u20B9* \"-\"??_);_(@_)", 0, "\u20B9 -")]
     public void AccountingSubset_PreservesRawMultiCharacterSymbolFillGap(
         string format,
         double value,

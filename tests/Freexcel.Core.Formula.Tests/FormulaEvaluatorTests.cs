@@ -415,6 +415,53 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
+    public void RangeOnlyAggregates_WithDirectAndNamedRanges_PreserveRangeCoercionSemantics()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("ignored"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new DateTimeValue(10));
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue(""));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(4));
+        workbook.DefineNamedRange("OtherInputs", new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 5, 2)));
+
+        _evaluator.Evaluate("=SUM(A1:A5,OtherInputs)", sheet, workbook).Should().Be(new NumberValue(19));
+        _evaluator.Evaluate("=AVERAGE(A1:A5,OtherInputs)", sheet, workbook).Should().Be(new NumberValue(4.75));
+        _evaluator.Evaluate("=MIN(A1:A5,OtherInputs)", sheet, workbook).Should().Be(new NumberValue(2));
+        _evaluator.Evaluate("=MAX(A1:A5,OtherInputs)", sheet, workbook).Should().Be(new NumberValue(10));
+        _evaluator.Evaluate("=COUNT(A1:A5,OtherInputs)", sheet, workbook).Should().Be(new NumberValue(4));
+        _evaluator.Evaluate("=COUNTBLANK(OtherInputs)", sheet, workbook).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void RangeOnlyAggregates_PreserveErrorsAndFallbackCases()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.NA);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
+        workbook.DefineNamedRange("ProblemInputs", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1)));
+
+        _evaluator.Evaluate("=SUM(ProblemInputs,A2:A2)", sheet, workbook).Should().Be(ErrorValue.NA);
+        _evaluator.Evaluate("=AVERAGE(ProblemInputs,A2:A2)", sheet, workbook).Should().Be(ErrorValue.NA);
+        _evaluator.Evaluate("=MIN(ProblemInputs,A2:A2)", sheet, workbook).Should().Be(ErrorValue.NA);
+        _evaluator.Evaluate("=MAX(ProblemInputs,A2:A2)", sheet, workbook).Should().Be(ErrorValue.NA);
+        _evaluator.Evaluate("=COUNT(ProblemInputs,A2:A2)", sheet, workbook).Should().Be(new NumberValue(1));
+
+        _evaluator.Evaluate("=SUM(A2:A2,\"4\")", sheet, workbook).Should().Be(new NumberValue(6));
+        _evaluator.Evaluate("=SUM(MissingInputs)", sheet, workbook).Should().Be(ErrorValue.Name);
+    }
+
+    [Fact]
     public void CountA_CountsNonBlanks()
     {
         var (sheet, a1, a2, _) = SetupSheet();
@@ -1414,6 +1461,29 @@ public class ShortCircuitEvaluationTests
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
         var result = _evaluator.Evaluate("=SUM()", sheet, wb);
         result.Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void SUM_RangeOnlyFastPath_PreservesLeftToRightErrorPrecedenceBeforeMissingSheet()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), ErrorValue.NA);
+
+        var result = _evaluator.Evaluate("=SUM(A1:A1,Missing!A1:A1)", sheet, wb);
+
+        result.Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void AVERAGE_RangeOnlyFastPath_DoesNotLetFinalizationErrorOutrankMissingSheet()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+
+        var result = _evaluator.Evaluate("=AVERAGE(A1:A1,Missing!A1:A1)", sheet, wb);
+
+        result.Should().Be(ErrorValue.Ref);
     }
 
     // ── Parser row-bounds protection ──────────────────────────────────────
