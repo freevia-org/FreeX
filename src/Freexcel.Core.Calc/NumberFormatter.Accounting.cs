@@ -308,7 +308,7 @@ public static partial class NumberFormatter
     }
 
     private static bool IsCurrencySymbol(char c)
-        => c is '$' or '\u00A3' or '\u20AC' or '\u00A5';
+        => char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.CurrencySymbol;
 
     private static bool TryReadAccountingFillSymbol(
         string format,
