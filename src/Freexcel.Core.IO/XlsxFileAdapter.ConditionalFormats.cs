@@ -77,6 +77,7 @@ public sealed partial class XlsxFileAdapter
                         FormatIfTrue = formatIfTrue
                     };
                     format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));
+                    format.IconOverrides.AddRange(ReadCfIconOverrides(iconSet, worksheetNs));
                     ApplyNativeConditionalFormatPayloadMetadata(format, iconSet, worksheetNs);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
@@ -298,7 +299,7 @@ public sealed partial class XlsxFileAdapter
         {
             CfRuleType.ColorScale => [worksheetNs + "cfvo", worksheetNs + "color"],
             CfRuleType.DataBar => [],
-            CfRuleType.IconSet => [worksheetNs + "cfvo"],
+            CfRuleType.IconSet => [worksheetNs + "cfvo", worksheetNs + "cfIcon"],
             _ => []
         };
         return payload.Elements()
@@ -476,6 +477,17 @@ public sealed partial class XlsxFileAdapter
                 element.Attribute("val")?.Value))
             .ToList();
 
+    private static IEnumerable<CfIconOverride> ReadCfIconOverrides(XElement iconSet, XNamespace worksheetNs)
+    {
+        foreach (var cfIcon in iconSet.Elements(worksheetNs + "cfIcon"))
+        {
+            var iconSetAttr = cfIcon.Attribute("iconSet")?.Value;
+            var iconId = ReadIntAttribute(cfIcon, "iconId") ?? 0;
+            if (iconSetAttr is not null)
+                yield return new CfIconOverride(iconSetAttr, iconId);
+        }
+    }
+
     private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId)
     {
         var format = new ConditionalFormat
@@ -531,6 +543,7 @@ public sealed partial class XlsxFileAdapter
             NativeContainerChildXmls = source.NativeContainerChildXmls
         };
         format.IconSetThresholds.AddRange(source.IconSetThresholds);
+        format.IconOverrides.AddRange(source.IconOverrides);
         return format;
     }
 }
