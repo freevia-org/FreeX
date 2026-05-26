@@ -40,14 +40,16 @@ public class XlsxCorpusScaffoldTests
         rows.Should().HaveCountGreaterThanOrEqualTo(11, "the corpus starts with a header plus 10 generated fixture rows");
         rows[0].Split(',').Should().Equal(ExpectedManifestHeader);
 
-        var generatedRows = rows.Skip(1)
+        var manifestRows = rows.Skip(1)
             .Select(line => line.Split(','))
             .Where(columns => columns.Length == ExpectedManifestHeader.Length)
+            .ToArray();
+        var generatedRows = manifestRows
             .Where(columns => columns[2] == "generated")
             .ToArray();
 
         generatedRows.Should().HaveCountGreaterThanOrEqualTo(10);
-        generatedRows.Should().OnlyContain(columns => AllowedStatuses.Contains(columns[8]));
+        manifestRows.Should().OnlyContain(columns => AllowedStatuses.Contains(columns[8]));
     }
 
     [Fact]
@@ -147,6 +149,19 @@ public class XlsxCorpusScaffoldTests
             .Where(row => row.ExpectedStatus == "supported-known-gap")
             .Should()
             .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings) && !string.IsNullOrWhiteSpace(row.Notes));
+    }
+
+    [Fact]
+    public void CorpusReport_StatesLocalPrivateKnownGapWarningsAreDeclared()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows
+            .Where(row => row.SourceType == "local-private" && row.ExpectedStatus == "supported-known-gap")
+            .Should()
+            .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings));
+        report.Should().Contain("known-gap warning expectations are declared for optional private rows");
     }
 
     [Fact]
