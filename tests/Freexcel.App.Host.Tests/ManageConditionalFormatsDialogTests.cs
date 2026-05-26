@@ -372,12 +372,14 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
-    public void NewRuleCommand_OpensSingleExcelStyleRuleDialogEntryPoint()
+    public void NewRuleCommand_OpensExcelStyleRuleTypeShellOnFirstCategory()
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
         source.Should().Contain("Content = \"_New Rule...\"");
-        source.Should().Contain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
+        source.Should().Contain("DefaultNewRuleType = \"Data Bar\"");
+        source.Should().Contain("new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange)");
+        source.Should().NotContain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("_newRuleTypeBox");
         source.Should().NotContain("toolBar.Children.Add(_newRuleTypeBox)");

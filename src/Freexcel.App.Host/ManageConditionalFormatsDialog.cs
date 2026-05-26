@@ -42,6 +42,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
+    private const string DefaultNewRuleType = "Data Bar";
 
     public ConditionalFormatAppliesToRangeSelectionRequest? AppliesToRangeSelectionRequest { get; private set; }
 
@@ -208,7 +209,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 new CellAddress(_sheet.Id, 1, 1),
                 new CellAddress(_sheet.Id, 1, 1));
 
-        var dlg = new NewConditionalFormatRuleDialog("Greater Than", defaultRange);
+        var dlg = new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange);
         dlg.Owner = this;
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
