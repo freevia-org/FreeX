@@ -413,6 +413,19 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_BetweenAndTopBottomCriteriaLabelsTargetInputs()
+    {
+        var source = ReadAutoFilterDialogSources();
+
+        source.Should().Contain("new Label { Content = \"_Minimum:\", Target = _betweenMinBox");
+        source.Should().Contain("new Label { Content = \"And _maximum:\", Target = _betweenMaxBox");
+        source.Should().Contain("new Label { Content = \"_Show:\", Target = _topBottomCountBox");
+        source.Should().NotContain("new TextBlock { Text = \"_Minimum:\"");
+        source.Should().NotContain("new TextBlock { Text = \"And _maximum:\"");
+        source.Should().NotContain("new TextBlock { Text = \"_Show:\"");
+    }
+
+    [Fact]
     public void DialogControls_RenderFilterFamilyAsNestedMenuCommands()
     {
         var source = ReadAutoFilterDialogSources();

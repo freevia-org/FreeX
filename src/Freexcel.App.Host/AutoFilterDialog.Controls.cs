@@ -101,9 +101,9 @@ public sealed partial class AutoFilterDialog
         var panel = _betweenCriteriaPanel;
         panel.Orientation = Orientation.Horizontal;
         panel.Margin = new Thickness(0, 4, 0, 4);
-        panel.Children.Add(new TextBlock { Text = "_Minimum:", Margin = new Thickness(0, 3, 6, 0) });
+        panel.Children.Add(new Label { Content = "_Minimum:", Target = _betweenMinBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 6, 0) });
         panel.Children.Add(_betweenMinBox);
-        panel.Children.Add(new TextBlock { Text = "And _maximum:", Margin = new Thickness(10, 3, 6, 0) });
+        panel.Children.Add(new Label { Content = "And _maximum:", Target = _betweenMaxBox, Padding = new Thickness(0), Margin = new Thickness(10, 3, 6, 0) });
         panel.Children.Add(_betweenMaxBox);
         return panel;
     }
@@ -114,7 +114,7 @@ public sealed partial class AutoFilterDialog
         var panel = _topBottomCriteriaPanel;
         panel.Orientation = Orientation.Horizontal;
         panel.Margin = new Thickness(0, 4, 0, 4);
-        panel.Children.Add(new TextBlock { Text = "_Show:", Margin = new Thickness(0, 3, 6, 0) });
+        panel.Children.Add(new Label { Content = "_Show:", Target = _topBottomCountBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 6, 0) });
         panel.Children.Add(_topBottomCountBox);
         panel.Children.Add(_topBottomUnitText);
         return panel;
