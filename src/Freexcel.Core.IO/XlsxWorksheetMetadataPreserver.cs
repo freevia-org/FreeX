@@ -642,6 +642,15 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (sourceBlockName == workbookNs + "dataConsolidate")
             return sheet.DataConsolidation is null;
 
+        if (sourceBlockName == workbookNs + "singleXmlCells")
+            return sheet.SingleXmlCells is null;
+
+        if (sourceBlockName == workbookNs + "smartTags")
+            return sheet.SmartTags is null;
+
+        if (sourceBlockName == workbookNs + "legacyDrawingHF")
+            return !XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
+
         return false;
     }
 }

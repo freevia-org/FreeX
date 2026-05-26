@@ -518,7 +518,10 @@ public class PhaseCFinancialTests
             (1, 6, 7.0), (2, 6, 12.0),
             (1, 7, 0.0), (2, 7, 1.0),
             (1, 8, 1.0), (2, 8, 2.0),
-            (1, 9, 0.0), (2, 9, 1.0)
+            (1, 9, 0.0), (2, 9, 1.0),
+            (1, 10, 43831.0), (2, 10, 43862.0),
+            (1, 11, 44197.0), (2, 11, 44228.0),
+            (1, 12, 0.2), (2, 12, 0.25)
         };
 
         AssertApproxColumn(EvalWithData("SLN(A1:A2,B1:B2,C1:C2)", cells), Calc("SLN(2400,300,10)"), Calc("SLN(3000,500,12)"));
@@ -526,8 +529,11 @@ public class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("DDB(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2)", cells), Calc("DDB(2400,300,10,1,2)"), Calc("DDB(3000,500,12,2,1.5)"));
         AssertApproxColumn(EvalWithData("DB(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2)", cells), Calc("DB(2400,300,10,1,7)"), Calc("DB(3000,500,12,2,12)"));
         AssertApproxColumn(EvalWithData("VDB(A1:A2,B1:B2,C1:C2,G1:G2,H1:H2,E1:E2,I1:I2)", cells), Calc("VDB(2400,300,10,0,1,2,0)"), Calc("VDB(3000,500,12,1,2,1.5,1)"));
+        AssertApproxColumn(EvalWithData("AMORDEGRC(A1:A2,J1:J2,K1:K2,B1:B2,D1:D2,L1:L2,I1:I2)", cells), Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORDEGRC(3000,43862,44228,500,2,0.25,1)"));
+        AssertApproxColumn(EvalWithData("AMORLINC(A1:A2,J1:J2,K1:K2,B1:B2,D1:D2,L1:L2,I1:I2)", cells), Calc("AMORLINC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORLINC(3000,43862,44228,500,2,0.25,1)"));
 
         EvalWithData("DDB(A1:A2,B1:C1,10,1)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("AMORLINC(A1:A2,J1:K1,44197,300,1,0.2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

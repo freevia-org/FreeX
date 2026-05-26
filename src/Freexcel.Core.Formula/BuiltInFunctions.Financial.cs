@@ -101,7 +101,15 @@ public static partial class BuiltInFunctions
         basis = 0;
         if (args.Count <= index || args[index] is BlankValue) return true;
 
-        double rawBasis = ToNumber(args[index]);
+        return TryGetFinancialBasis(args[index], out basis);
+    }
+
+    private static bool TryGetFinancialBasis(ScalarValue value, out int basis)
+    {
+        basis = 0;
+        if (value is BlankValue) return true;
+
+        double rawBasis = ToNumber(value);
         if (!double.IsFinite(rawBasis)) return false;
         basis = (int)Math.Truncate(rawBasis);
         return basis is >= 0 and <= 4;
@@ -636,14 +644,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Amordegrc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost          = ToNumber(args[0]);
-        double datePurchased = ToNumber(args[1]);
-        double firstPeriod   = ToNumber(args[2]);
-        double salvage       = ToNumber(args[3]);
-        double rate          = ToNumber(args[5]);
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
-        if (args[4] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => AmordegrcScalar(cost, datePurchased, firstPeriod, salvage, value, rate, basis));
-        return AmordegrcScalar(cost, datePurchased, firstPeriod, salvage, args[4], rate, basis);
+        var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AmordegrcScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue AmordegrcScalar(ScalarValue costValue, ScalarValue datePurchasedValue, ScalarValue firstPeriodValue, ScalarValue salvageValue, ScalarValue periodValue, ScalarValue rateValue, ScalarValue basisValue)
+    {
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        double cost = ToNumber(costValue);
+        double datePurchased = ToNumber(datePurchasedValue);
+        double firstPeriod = ToNumber(firstPeriodValue);
+        double salvage = ToNumber(salvageValue);
+        double rate = ToNumber(rateValue);
+        return AmordegrcScalar(cost, datePurchased, firstPeriod, salvage, periodValue, rate, basis);
     }
 
     private static ScalarValue AmordegrcScalar(double cost, double datePurchased, double firstPeriod, double salvage, ScalarValue periodValue, double rate, int basis)
@@ -686,14 +699,19 @@ public static partial class BuiltInFunctions
     private static ScalarValue Amorlinc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        double cost          = ToNumber(args[0]);
-        double datePurchased = ToNumber(args[1]);
-        double firstPeriod   = ToNumber(args[2]);
-        double salvage       = ToNumber(args[3]);
-        double rate          = ToNumber(args[5]);
-        if (!TryGetFinancialBasis(args, 6, out int basis)) return ErrorValue.Num;
-        if (args[4] is RangeValue periodRange) return MapUnaryTextRange(periodRange, value => AmorlincScalar(cost, datePurchased, firstPeriod, salvage, value, rate, basis));
-        return AmorlincScalar(cost, datePurchased, firstPeriod, salvage, args[4], rate, basis);
+        var basisArg = args.Count > 6 ? args[6] : BlankValue.Instance;
+        return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], args[5], basisArg], values => AmorlincScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
+    }
+
+    private static ScalarValue AmorlincScalar(ScalarValue costValue, ScalarValue datePurchasedValue, ScalarValue firstPeriodValue, ScalarValue salvageValue, ScalarValue periodValue, ScalarValue rateValue, ScalarValue basisValue)
+    {
+        if (!TryGetFinancialBasis(basisValue, out int basis)) return ErrorValue.Num;
+        double cost = ToNumber(costValue);
+        double datePurchased = ToNumber(datePurchasedValue);
+        double firstPeriod = ToNumber(firstPeriodValue);
+        double salvage = ToNumber(salvageValue);
+        double rate = ToNumber(rateValue);
+        return AmorlincScalar(cost, datePurchased, firstPeriod, salvage, periodValue, rate, basis);
     }
 
     private static ScalarValue AmorlincScalar(double cost, double datePurchased, double firstPeriod, double salvage, ScalarValue periodValue, double rate, int basis)
