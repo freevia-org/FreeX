@@ -454,6 +454,24 @@ public sealed class MainWindowRibbonKeyTipTests
 
             harness.HandleKeyTip(Key.U);
 
+            harness.ActiveSheetViewOptions.Should().Be((false, false, true), "Excel leaves Ruler unavailable outside Page Layout view");
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.P);
+
+            harness.ActiveSheetViewMode.Should().Be(WorksheetViewMode.PageLayout);
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+            harness.HandleKeyTip(Key.R);
+
+            harness.KeyTipScope.Should().Be("Commands", "R is the prefix for the Ruler keytip RU");
+            harness.ActiveSheetViewOptions.Should().Be((false, false, true));
+
+            harness.HandleKeyTip(Key.U);
+
             harness.ActiveSheetViewOptions.Should().Be((false, false, false));
             harness.KeyTipScope.Should().Be("None");
 

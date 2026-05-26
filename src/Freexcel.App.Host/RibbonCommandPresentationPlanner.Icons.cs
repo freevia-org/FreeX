@@ -39,6 +39,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.EndsWith('%')) return new(RibbonCommandIconKind.Percent);
         if (name.Contains("comma style")) return new(RibbonCommandIconKind.Comma);
         if (name.Contains("selection pane")) return new(RibbonCommandIconKind.Window);
+        if (name is "hide" or "unhide") return new(RibbonCommandIconKind.Window);
         if (name.Contains("find") || name.Contains("select")) return new(RibbonCommandIconKind.Search);
         if (name.Contains("increase decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);

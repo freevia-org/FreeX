@@ -53,7 +53,7 @@ public sealed class EvaluateFormulaDialog : Window
         _stepInButton = new Button { Content = "Step _In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _stepInButton.Click += (_, _) =>
         {
-            _session.MoveNext();
+            _session.StepIn();
             Refresh();
         };
         buttons.Children.Add(_stepInButton);
@@ -153,14 +153,14 @@ public sealed class EvaluateFormulaDialog : Window
 
         _stepOutButton.IsEnabled = _session.CurrentStep is not null;
         _nextButton.IsEnabled = _session.CanMoveNext;
-        _stepInButton.IsEnabled = _session.CanMoveNext;
+        _stepInButton.IsEnabled = _session.CanStepIn;
     }
 
     private void ShowFormulaHelp()
     {
         MessageBox.Show(
             this,
-            "Evaluate Formula shows the selected formula one calculation step at a time. Use Evaluate or Step In to advance, Step Out to return to the previous step, and Restart to begin again.",
+            "Evaluate Formula shows the selected formula one calculation step at a time. Use Evaluate to advance, Step In when a nested formula can be inspected, Step Out to return to the previous step, and Restart to begin again.",
             "Evaluate Formula Help",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
