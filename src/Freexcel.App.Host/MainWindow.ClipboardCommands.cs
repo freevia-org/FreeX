@@ -171,11 +171,15 @@ public partial class MainWindow
         if (mode == PasteMode.Formats || mode == PasteMode.Formulas)
             return;
 
-        if (mode == PasteMode.All && TryPasteClipboardImage(range.Start))
+        var text = currentClipboardTextRead ? currentClipboardText : TryGetClipboardText();
+        if (ClipboardPastePlanner.ShouldPasteClipboardImageForNormalPaste(
+                mode,
+                text,
+                TryClipboardContainsImage()) &&
+            TryPasteClipboardImage(range.Start))
             return;
 
         // Fallback: external clipboard (plain text)
-        var text = currentClipboardTextRead ? currentClipboardText : TryGetClipboardText();
         if (string.IsNullOrEmpty(text)) return;
 
         var rows = ClipboardSerializer.Deserialize(text);
@@ -211,6 +215,12 @@ public partial class MainWindow
     {
         try { return System.Windows.Clipboard.GetText(); }
         catch { return null; }
+    }
+
+    private static bool TryClipboardContainsImage()
+    {
+        try { return System.Windows.Clipboard.ContainsImage(); }
+        catch { return false; }
     }
 
     private void ExecuteInsertCopiedCells()

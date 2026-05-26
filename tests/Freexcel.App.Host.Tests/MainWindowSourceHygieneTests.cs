@@ -1690,6 +1690,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void Selection_UpdatesVisibleCommentPreviewForSelectionAndHover()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        source.Should().Contain("UpdateCommentPreview(addr)");
+        source.Should().Contain("UpdateCommentPreview(hitAddr.Value)");
+        source.Should().Contain("ClearCommentPreview()");
+        source.Should().Contain("CommentNavigationPlanner.FormatCellCommentPreview(");
+        source.Should().Contain("SheetGrid.ToolTip = preview");
+    }
+
+    [Fact]
+    public void FontSizeDropdown_UsesSharedFontSizeApplyPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        source.Should().Contain("GetSelectedFontSizeText()");
+        source.Should().Contain("ApplyFontSizeAndFitRows(size)");
+        source.Should().NotContain("FontSizeBox.Text;\r\n        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))\r\n            ApplyStyleDiff(new StyleDiff(FontSize: size));");
+        source.Should().Contain("RefreshToolbar();");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));

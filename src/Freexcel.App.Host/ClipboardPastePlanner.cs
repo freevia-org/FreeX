@@ -20,6 +20,11 @@ public static class ClipboardPastePlanner
         currentClipboardText is null ||
         string.Equals(internalClipboardText, currentClipboardText, StringComparison.Ordinal);
 
+    public static bool ShouldPasteClipboardImageForNormalPaste(PasteMode mode, string? clipboardText, bool hasImage) =>
+        mode == PasteMode.All &&
+        hasImage &&
+        string.IsNullOrWhiteSpace(clipboardText);
+
     public static bool ShouldClearCutSourceAfterPaste(
         bool isCut,
         GridRange sourceRange,

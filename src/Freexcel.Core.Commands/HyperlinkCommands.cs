@@ -45,6 +45,10 @@ public sealed class SetHyperlinkCommand : IWorkbookCommand
         var newCell = Cell.FromValue(new TextValue(_displayText));
         if (_oldCell is not null)
             newCell.StyleId = _oldCell.StyleId;
+        var hyperlinkStyle = ctx.Workbook.GetStyle(newCell.StyleId);
+        hyperlinkStyle.Underline = true;
+        hyperlinkStyle.FontColor = ctx.Workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Hyperlink);
+        newCell.StyleId = ctx.Workbook.RegisterStyle(hyperlinkStyle);
         sheet.SetCell(_address, newCell);
         sheet.Hyperlinks[_address] = _target;
         sheet.HyperlinkMetadata[_address] = _metadata;
