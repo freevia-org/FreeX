@@ -139,6 +139,17 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusManifest_KnownGapRowsDeclareWarningsAndNotes()
+    {
+        var manifestRows = ReadManifestRows();
+
+        manifestRows
+            .Where(row => row.ExpectedStatus == "supported-known-gap")
+            .Should()
+            .OnlyContain(row => !string.IsNullOrWhiteSpace(row.ExpectedWarnings) && !string.IsNullOrWhiteSpace(row.Notes));
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();
@@ -202,7 +213,7 @@ public class XlsxCorpusScaffoldTests
     {
         var columns = line.Split(',');
         columns.Should().HaveCount(ExpectedManifestHeader.Length);
-        return new ManifestRow(columns[1], columns[2], columns[8]);
+        return new ManifestRow(columns[1], columns[2], columns[7], columns[8], columns[9]);
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
@@ -235,5 +246,10 @@ public class XlsxCorpusScaffoldTests
         throw new DirectoryNotFoundException($"Could not locate workspace directory: {Path.Combine(relativeParts)}");
     }
 
-    private sealed record ManifestRow(string Path, string SourceType, string ExpectedStatus);
+    private sealed record ManifestRow(
+        string Path,
+        string SourceType,
+        string ExpectedWarnings,
+        string ExpectedStatus,
+        string Notes);
 }
