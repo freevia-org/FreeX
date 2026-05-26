@@ -1962,7 +1962,11 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_Unselect All");
         source.Should().Contain("_My data has headers");
         source.Should().Contain("_columnsPanel");
-        source.Should().Contain("Columns:");
+        source.Should().Contain("Content = \"_Columns:\"");
+        source.Should().Contain("Target = _columnsPanel");
+        source.Should().Contain("_columnsPanel.Focusable = true");
+        source.Should().Contain("_columnsPanel.GotKeyboardFocus");
+        source.Should().NotContain("new TextBlock { Text = \"Columns:\"");
         source.Should().Contain("SelectAllButton_Click");
         source.Should().Contain("UnselectAllButton_Click");
         source.Should().Contain("RefreshColumnLabels");
