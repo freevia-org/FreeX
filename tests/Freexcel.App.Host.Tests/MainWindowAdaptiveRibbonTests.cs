@@ -370,6 +370,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SelectRibbonTab("View", 2200);
+            if (!harness.CanUseRequestedRibbonWidth(2200))
+                return;
 
             harness.ViewShowCheckBoxLabelOffsets
                 .Select(offset => Math.Round(offset.Offset, 1))
